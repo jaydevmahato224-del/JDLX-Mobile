@@ -12,3 +12,4 @@ razorpay
 Authlib
 mcp[cli]
 gunicorn
+pdfplumber

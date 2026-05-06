@@ -122,9 +122,10 @@ def send_review_thank_you_email(to_email, user_name, product_name, rating, custo
     if custom_body:
         # Simple placeholder replacement if body is provided from DB template
         body_content = custom_body.replace('{user_name}', user_name).replace('{product_name}', product_name).replace('{stars}', stars)
+        body_content_html = body_content.replace('\n', '<br/>')
         body = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            {body_content.replace('\n', '<br/>')}
+            {body_content_html}
             <br/><br/>
             <p style="font-size: 12px; color: #9CA3AF;">Best Regards,<br/>JDLX Mobile Team</p>
         </div>
@@ -370,10 +371,11 @@ def send_individual_email(to_email, user_name, subject, message):
     msg['To'] = to_email
     msg['Subject'] = f"JDLX Mobile: {subject}"
     
+    message_html = message.replace('\n', '<br/>')
     body = f"""
     <h2>Hello {user_name},</h2>
     <div style="padding: 15px; border-left: 4px solid #001f3f; background: #f9f9f9; font-style: italic;">
-        {message.replace('\n', '<br/>')}
+        {message_html}
     </div>
     <br/>
     <p>Best Regards,<br/>JDLX Mobile Team</p>
@@ -425,10 +427,11 @@ def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, re
         <p>{body_text}</p>
     """
     if reason:
+        reason_html = reason.replace('\n', '<br/>')
         body += f"""
         <div style="background: #f8f9fa; padding: 15px; border-left: 4px solid {color}; margin: 20px 0;">
             <p style="margin: 0; font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase;">Admin Message:</p>
-            <p style="margin: 10px 0 0 0; font-style: italic;">{reason}</p>
+            <p style="margin: 10px 0 0 0; font-style: italic;">{reason_html}</p>
         </div>
         """
     
@@ -469,11 +472,12 @@ def send_bulk_notification_email(recipient_emails, subject, message):
             msg['To'] = to_email
             msg['Subject'] = f"JDLX Mobile: {subject}"
             
+            message_html = message.replace('\n', '<br/>')
             body = f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
                 <h1 style="color: #001f3f; border-bottom: 2px solid #001f3f; padding-bottom: 10px;">JDLX Announcement</h1>
                 <div style="margin-top: 20px; line-height: 1.6;">
-                    {message.replace('\n', '<br/>')}
+                    {message_html}
                 </div>
                 <hr style="margin-top: 40px; border: 0; border-top: 1px solid #eee;"/>
                 <p style="font-size: 12px; color: #777;">You are receiving this because you are a registered user of JDLX Mobile.</p>

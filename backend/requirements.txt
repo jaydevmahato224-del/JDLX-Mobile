@@ -1,0 +1,14 @@
+flask
+flask-cors
+PyJWT
+google-auth
+requests
+python-dotenv
+flask-limiter
+flask-talisman
+flask-caching
+APScheduler
+razorpay
+Authlib
+mcp[cli]
+gunicorn

@@ -1,0 +1,42 @@
+{
+  "short_name": "JDLX",
+  "name": "JDLX MOBILE: Hyperlocal Quick Commerce",
+  "description": "Premium hyperlocal delivery for fresh groceries and daily essentials in under 30 minutes.",
+  "categories": ["shopping", "food", "lifestyle"],
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./",
+  "display": "standalone",
+  "theme_color": "#0F172A",
+  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "shortcuts": [
+    {
+      "name": "My Orders",
+      "url": "/orders",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Search",
+      "url": "/search",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
+}

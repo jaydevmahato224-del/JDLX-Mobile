@@ -1,0 +1,65 @@
+{
+  "id": null,
+  "title": "JDLX Infrastructure Monitoring",
+  "tags": ["jdlx", "infra"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Server Status",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "avg(probe_success{job=\"blackbox_http\"})", "refId": "A" }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "API Response Time (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "avg_over_time(probe_duration_seconds{job=\"blackbox_http\"}[5m])", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "System CPU Load (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "(sum(rate(container_cpu_usage_seconds_total{name=~\".*jdlx-backend.*\"}[2m])) / sum(machine_cpu_cores)) * 100", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "System Memory Usage (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "(sum(container_memory_working_set_bytes{name=~\".*jdlx-backend.*\"}) / sum(machine_memory_bytes)) * 100", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Count (NGINX)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "rate(nginx_http_requests_total[1m])", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "(1 - avg_over_time(probe_success{job=\"blackbox_http\"}[5m])) * 100", "refId": "A" }
+      ]
+    }
+  ],
+  "templating": { "list": [] },
+  "annotations": { "list": [] }
+}
+

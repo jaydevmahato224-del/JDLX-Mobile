@@ -1,0 +1,27 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: jdlx-backend-keda
+spec:
+  scaleTargetRef:
+    name: jdlx-backend
+  minReplicaCount: 3
+  maxReplicaCount: 12
+  cooldownPeriod: 300
+  pollingInterval: 30
+  triggers:
+    # Request rate metric (requests/second)
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+        metricName: jdlx_request_rate_rps
+        threshold: "150"
+        query: sum(rate(http_requests_total{service="jdlx-backend"}[1m]))
+    # Response time metric (milliseconds)
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+        metricName: jdlx_response_time_ms
+        threshold: "500"
+        query: histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket{service="jdlx-backend"}[2m])) by (le))
+

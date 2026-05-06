@@ -1,0 +1,196 @@
+/* ==============================================================================
+   JDLX MOBILE — Premium Design System v2.1
+   Based on Stitch "Digital Concierge" Aesthetic
+   ============================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------------------
+   1. CORE THEME & TOKENS
+   ------------------------------------------------------------------------------ */
+@theme {
+  --color-primary: #0D1B2A;
+  --color-primary-rgb: 13, 27, 42;
+  --color-primary-container: #0f1c2c;
+  --color-on-primary: #ffffff;
+  --color-secondary: #415A77;
+  --color-secondary-rgb: 65, 90, 119;
+  --color-secondary-container: #c2dcff;
+  --color-tertiary: #00B4D8;
+  --color-tertiary-container: #001f27;
+  --color-surface: #f8f9fa;
+  --color-surface-low: #f3f4f5;
+  --color-surface-container: #edeeef;
+  --color-surface-high: #e7e8e9;
+  --color-surface-highest: #e1e3e4;
+  --color-surface-white: #ffffff;
+  --color-surface-white-rgb: 255, 255, 255;
+  --color-on-surface: #191c1d;
+  --color-on-surface-variant: #44474c;
+  --color-outline: #74777d;
+  --color-outline-variant: rgba(196, 198, 204, 0.18);
+  --color-error: #EF4444;
+  --color-on-error: #ffffff;
+  --color-amber: #f59e0b;
+  --color-nav-inactive: #6B7280;
+  --color-nav-active: #ffffff;
+}
+
+:root {
+  color-scheme: light;
+  --app-header-height: 64px;
+  --app-ticker-height: 32px;
+  --app-header-offset: calc(var(--app-ticker-height) + 12px + var(--app-header-height) + 12px);
+  --app-bottom-nav-height: 72px;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-stroke: rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --glass-blur-standard: 16px;
+  --glass-blur-heavy: 40px;
+
+  /* Spacing & Motion */
+  --spacing-1: 8px; --spacing-2: 12px; --spacing-3: 16px; --spacing-4: 20px;
+  --spacing-5: 24px; --spacing-6: 32px; --spacing-8: 48px;
+  --transition-speed: 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Shadows */
+  --luxury-shadow: 0 40px 100px -20px rgba(13, 27, 42, 0.12);
+  --liquid-glass-shadow: 0 22px 55px rgba(148, 163, 184, 0.18);
+}
+
+.dark {
+  color-scheme: dark;
+  --color-primary: #8AB4F8;
+  --color-primary-container: #1b263b;
+  --color-surface: #0a0c10;
+  --color-surface-white: #11141d;
+  --color-on-surface: #f1f3f4;
+  --glass-bg: rgba(17, 20, 29, 0.72);
+  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ------------------------------------------------------------------------------
+   2. RESET & GLOBAL UTILITIES
+   ------------------------------------------------------------------------------ */
+html { min-height: 100%; scroll-behavior: smooth; }
+body {
+  margin: 0; min-height: 100dvh; background-color: var(--color-surface);
+  color: var(--color-on-surface); font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(at 0% 0%, rgba(var(--color-primary-rgb), 0.03) 0px, transparent 50%),
+              radial-gradient(at 50% 0%, rgba(0, 180, 216, 0.04) 0px, transparent 50%);
+  filter: blur(80px); pointer-events: none;
+}
+
+/* Utilities */
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.container-standard { @apply mx-auto w-full max-w-[1400px] px-6 md:px-8; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.bottom-bar-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+/* Semantic Colors */
+.text-primary { color: var(--color-primary); }
+.text-secondary { color: var(--color-secondary); }
+.text-amber { color: var(--color-amber); }
+.bg-amber { background-color: var(--color-amber); }
+
+/* ------------------------------------------------------------------------------
+   3. TYPOGRAPHY
+   ------------------------------------------------------------------------------ */
+:where(h1, h2, h3, h4) { font-family: 'Manrope', sans-serif; font-weight: 800; color: var(--color-on-surface); }
+:where(h1) { font-size: clamp(28px, 5vw, 40px); }
+:where(p) { line-height: 1.6; margin-bottom: var(--spacing-3); color: var(--color-on-surface-variant); }
+
+.ui-h1 { @apply text-3xl font-black tracking-tighter sm:text-4xl md:text-5xl; }
+.ui-label { @apply text-[10px] font-black uppercase tracking-[0.25em] text-slate-500; }
+
+/* ------------------------------------------------------------------------------
+   4. COMPONENTS (CARDS, BUTTONS, NAVIGATION)
+   ------------------------------------------------------------------------------ */
+
+/* Cards */
+.ui-card-premium { @apply rounded-[32px] border border-white/40 bg-white/70 backdrop-blur-xl shadow-xl; }
+.card-standard, .ui-card-standard {
+  background: rgba(255, 255, 255, 0.65); backdrop-filter: blur(28px);
+  border: 1.5px solid rgba(255, 255, 255, 0.4); border-radius: 28px;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); overflow: hidden;
+}
+.card-standard:hover { transform: translateY(-8px) scale(1.02); border-color: var(--color-primary); }
+
+.glass-card, .card-glass { @apply bg-white/45 backdrop-blur-md border border-white/30 rounded-3xl p-5 shadow-lg; }
+.glass-luxury { @apply bg-white/65 backdrop-blur-xl border-white/60 shadow-2xl; }
+
+/* Buttons & Chips */
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full font-bold transition-all px-6 h-11;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-primary-container));
+  color: white;
+}
+.category-chip { @apply inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all border border-slate-200 bg-white; }
+.category-chip.active { @apply bg-slate-900 text-white border-slate-900; }
+
+/* Concierge Navigation */
+.concierge-nav-wrapper { @apply fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-6 pt-2 pointer-events-none; }
+.concierge-nav-container {
+  @apply w-full max-w-[480px] h-[68px] rounded-[36px] flex items-center relative pointer-events-auto shadow-2xl;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.5);
+  overflow: hidden;
+}
+.concierge-nav-indicator {
+  @apply absolute top-[6px] h-14 rounded-[28px] transition-all duration-300;
+  background: var(--color-primary);
+  z-index: 1;
+  pointer-events: none;
+}
+.concierge-nav-item {
+  @apply flex flex-col items-center justify-center h-full flex-1 relative z-20 no-underline;
+  color: var(--color-nav-inactive, #6B7280);
+  min-width: 0;
+}
+.concierge-nav-item.active { color: var(--color-nav-active, #ffffff); }
+.concierge-nav-label { @apply text-[9px] font-black uppercase tracking-wide mt-0.5; }
+.concierge-badge {
+  @apply absolute -top-1.5 -right-2 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center px-1;
+}
+
+/* Specialty UI */
+.hero-banner { @apply rounded-3xl overflow-hidden relative; background: linear-gradient(135deg, #0f1c2c 0%, #1a2e45 100%); }
+.product-card-stitch { @apply bg-white rounded-2xl overflow-hidden shadow-sm transition-all hover:-translate-y-1 hover:shadow-md; }
+.perf-card { contain: layout style paint; content-visibility: auto; }
+
+/* ------------------------------------------------------------------------------
+   5. ANIMATIONS
+   ------------------------------------------------------------------------------ */
+@keyframes float-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+.animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
+.animate-marquee { display: flex; width: max-content; animation: marquee 30s linear infinite; }
+
+.reveal-staggered > * { opacity: 0; transform: translateY(20px); animation: reveal-in 0.8s forwards; }
+.reveal-staggered > *:nth-child(1) { animation-delay: 0.1s; }
+.reveal-staggered > *:nth-child(2) { animation-delay: 0.2s; }
+
+@keyframes reveal-in { to { opacity: 1; transform: translateY(0); } }
+
+/* ------------------------------------------------------------------------------
+   6. RESPONSIVE
+   ------------------------------------------------------------------------------ */
+@media (max-width: 640px) {
+  .ui-h1 { font-size: 1.75rem; }
+  .container-standard { @apply px-4; }
+  .reveal-staggered > * { opacity: 1; transform: none; animation: none; }
+}
+
+

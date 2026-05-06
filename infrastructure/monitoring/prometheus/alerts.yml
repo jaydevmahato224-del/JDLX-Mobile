@@ -1,0 +1,48 @@
+groups:
+  - name: infrastructure-alerts
+    rules:
+      - alert: BackendDown
+        expr: probe_success{job="blackbox_http"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server crash or backend unavailable"
+          description: "Health probe to /api/health is failing."
+
+      - alert: HighCPUUsage
+        expr: (sum(rate(container_cpu_usage_seconds_total{name=~".*jdlx-backend.*"}[2m])) / sum(machine_cpu_cores)) * 100 > 70
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "Backend CPU usage is above 70%."
+
+      - alert: HighMemoryUsage
+        expr: (sum(container_memory_working_set_bytes{name=~".*jdlx-backend.*"}) / sum(machine_memory_bytes)) * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Backend memory usage is above 80%."
+
+      - alert: HighErrorRate
+        expr: (1 - avg_over_time(probe_success{job="blackbox_http"}[5m])) * 100 > 20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "More than 20% health-check failures in last 5 minutes."
+
+      - alert: HighResponseTime
+        expr: avg_over_time(probe_duration_seconds{job="blackbox_http"}[5m]) > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "Average health endpoint response time is high."
+

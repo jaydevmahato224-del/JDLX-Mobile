@@ -1,0 +1,87 @@
+{
+  "history": [
+    {
+      "daily_orders": 16,
+      "daily_revenue": 7555,
+      "date": "2026-03-10"
+    },
+    {
+      "daily_orders": 35,
+      "daily_revenue": 10534,
+      "date": "2026-03-11"
+    },
+    {
+      "daily_orders": 31,
+      "daily_revenue": 11080,
+      "date": "2026-03-12"
+    },
+    {
+      "daily_orders": 15,
+      "daily_revenue": 9269,
+      "date": "2026-03-13"
+    },
+    {
+      "daily_orders": 23,
+      "daily_revenue": 11997,
+      "date": "2026-03-14"
+    },
+    {
+      "daily_orders": 35,
+      "daily_revenue": 9094,
+      "date": "2026-03-15"
+    },
+    {
+      "daily_orders": 34,
+      "daily_revenue": 6948,
+      "date": "2026-03-16"
+    },
+    {
+      "daily_orders": 27,
+      "daily_revenue": 7562,
+      "date": "2026-03-17"
+    },
+    {
+      "daily_orders": 26,
+      "daily_revenue": 7167,
+      "date": "2026-03-18"
+    },
+    {
+      "daily_orders": 34,
+      "daily_revenue": 11730,
+      "date": "2026-03-19"
+    },
+    {
+      "daily_orders": 14,
+      "daily_revenue": 12773,
+      "date": "2026-03-20"
+    },
+    {
+      "daily_orders": 10,
+      "daily_revenue": 14361,
+      "date": "2026-03-21"
+    },
+    {
+      "daily_orders": 31,
+      "daily_revenue": 14606,
+      "date": "2026-03-22"
+    },
+    {
+      "daily_orders": 28,
+      "daily_revenue": 5795,
+      "date": "2026-03-23"
+    }
+  ],
+  "is_demo": true,
+  "stats": {
+    "orders": {
+      "avg": 25.6,
+      "max": 35,
+      "min": 10
+    },
+    "sales": {
+      "avg": 10033.64,
+      "max": 14606,
+      "min": 5795
+    }
+  }
+}

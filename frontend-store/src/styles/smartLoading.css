@@ -1,0 +1,437 @@
+/**
+ * Smart Product Loading System - CSS Utilities
+ * Animations and utilities for smooth loading experience
+ * 
+ * Add these styles to your App.css or index.css
+ */
+
+/* ===========================
+   BLUR-UP IMAGE ANIMATIONS
+   =========================== */
+
+@keyframes blurIn {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes placeholder-shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* ===========================
+   SKELETON LOADING
+   =========================== */
+
+.skeleton-base {
+  background-color: #e0e0e0;
+  border-radius: 0.5rem;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #e0e0e0 25%,
+    #f0f0f0 50%,
+    #e0e0e0 75%
+  );
+  background-size: 1000px 100%;
+  animation: placeholder-shimmer 2s infinite;
+}
+
+/* ===========================
+   FADE-IN ANIMATIONS
+   =========================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ===========================
+   PRODUCT CARD ANIMATIONS
+   =========================== */
+
+@keyframes productCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.product-card-enter {
+  animation: productCardEnter 0.4s ease-out backwards;
+}
+
+/* ===========================
+   SCROLL ANIMATIONS
+   =========================== */
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out;
+}
+
+/* ===========================
+   RIPPLE EFFECT (for buttons)
+   =========================== */
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.ripple-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-button::before {
+  --ripple-x: 50%;
+  --ripple-y: 50%;
+
+  content: '';
+  position: absolute;
+  top: var(--ripple-y);
+  left: var(--ripple-x);
+  width: 1rem;
+  height: 1rem;
+  background-color: currentColor;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.ripple-button.ripple-active::before {
+  animation: ripple 0.6s ease-out;
+}
+
+/* ===========================
+   GLASS MORPHISM CARDS
+   =========================== */
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 1rem;
+}
+
+/* ===========================
+   LOADING STATES
+   =========================== */
+
+.loading-spinner {
+  display: inline-block;
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: currentColor;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===========================
+   PULSE EFFECT
+   =========================== */
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ===========================
+   SMOOTH TRANSITIONS
+   =========================== */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===========================
+   SCROLL BEHAVIOR
+   =========================== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ===========================
+   WILL-CHANGE OPTIMIZATION
+   =========================== */
+
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}
+
+/* ===========================
+   MOBILE-SPECIFIC OPTIMIZATIONS
+   =========================== */
+
+@media (max-width: 768px) {
+  /* Reduce motion for mobile devices */
+  .product-card-enter {
+    animation-duration: 0.2s;
+  }
+
+  /* Optimize animations for lower-end devices */
+  .skeleton-shimmer {
+    animation-duration: 1.5s;
+  }
+
+  /* Disable some animations on very slow devices */
+  @media (prefers-reduced-motion) {
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+/* ===========================
+   SCROLLBAR CUSTOMIZATION
+   =========================== */
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* ===========================
+   IMAGE LOADING STATES
+   =========================== */
+
+.image-loading {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.image-loaded {
+  animation: blurIn 0.6s ease-out;
+}
+
+.image-error {
+  background-color: #f5f5f5;
+}
+
+/* ===========================
+   PERFORMANCE: CONTAINMENT
+   =========================== */
+
+.product-grid {
+  contain: layout style paint;
+}
+
+.product-card {
+  contain: layout style paint;
+}
+
+/* ===========================
+   RESPONSIVE TYPOGRAPHY
+   =========================== */
+
+@media (max-width: 640px) {
+  /* Reduce text size on mobile */
+  .text-lg {
+    font-size: 1rem;
+  }
+
+  .text-xl {
+    font-size: 1.125rem;
+  }
+}
+
+/* ===========================
+   ACCESSIBILITY
+   =========================== */
+
+/* Focus styles for keyboard navigation */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* Visible focus indicator for accessibility */
+.sr-focus:focus-visible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ===========================
+   UTILITY HELPERS
+   =========================== */
+
+.bg-white\/50 {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.bg-white\/40 {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+.text-gray-800 {
+  color: #1f2937;
+}
+
+.text-gray-600 {
+  color: #4b5563;
+}
+
+.text-primary {
+  color: #4f46e5;
+}
+
+/* ===========================
+   LOADING STATE OVERLAY
+   =========================== */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+  z-index: 50;
+}
+
+.loading-overlay.hidden {
+  display: none;
+}
+
+/* ===========================
+   ERROR STATE DISPLAY
+   =========================== */
+
+.error-message {
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  color: #dc2626;
+  margin: 1rem 0;
+}
+
+.error-message p {
+  margin: 0;
+}
+
+/* ===========================
+   SUCCESS STATE DISPLAY
+   =========================== */
+
+.success-message {
+  background-color: #dcfce7;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  color: #16a34a;
+  margin: 1rem 0;
+}
+
+/* ===========================
+   PRINT STYLES
+   =========================== */
+
+@media print {
+  .no-print {
+    display: none;
+  }
+
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

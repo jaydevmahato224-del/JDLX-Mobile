@@ -1,0 +1,476 @@
+/* ============================================================
+   JDLX MOBILE — Design System v2
+   Based on Stitch "Digital Concierge" design system
+   Primary: #0D1B2A (Navy)  Surface: #f8f9fa
+   Fonts: Manrope (headlines) + Inter (body)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ---------- Design tokens ---------- */
+:root {
+  color-scheme: light;
+
+  /* Primary palette — Navy */
+  --color-primary:            #0D1B2A;
+  --color-primary-container:  #0f1c2c;
+  --color-on-primary:         #ffffff;
+
+  /* Secondary */
+  --color-secondary:          #415A77;
+  --color-secondary-container:#c2dcff;
+
+  /* Tertiary — cyan accent */
+  --color-tertiary:           #00B4D8;
+  --color-tertiary-container: #001f27;
+
+  /* Surfaces */
+  --color-surface:            #f8f9fa;
+  --color-surface-low:        #f3f4f5;
+  --color-surface-container:  #edeeef;
+  --color-surface-high:       #e7e8e9;
+  --color-surface-highest:    #e1e3e4;
+  --color-surface-white:      #ffffff;
+  --color-surface-white-rgb:  255, 255, 255;
+
+  /* On-surface text */
+  --color-on-surface:         #0D1B2A;
+  --color-on-surface-variant: #415A77;
+
+  /* Outline */
+  --color-outline:            #74777d;
+  --color-outline-variant:    rgba(13, 27, 42, 0.12);
+
+  /* Error */
+  --color-error:              #ba1a1a;
+
+  /* Amber accent (preserved from v1 for TopLoader + badges) */
+  --color-amber:              #f59e0b;
+
+  /* Glassmorphism */
+  --glass-bg:     rgba(255,255,255,0.72);
+  --glass-stroke: rgba(255,255,255,0.5);
+  --glass-shadow: 0 12px 40px rgba(15,28,44,0.07);
+
+  /* Spacing scale */
+  --app-bg: var(--color-surface);
+}
+
+/* ---------- Base ---------- */
+html {
+  min-height: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Headline font applied to headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  font-weight: 800;
+}
+
+/* ---------- Reset tap highlight ---------- */
+a, button, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148,163,184,0.45) transparent;
+}
+
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148,163,184,0.5);
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  max-height: 100dvh;
+}
+
+.app-main {
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Utility classes ---------- */
+
+/* Glassmorphism surface */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+
+.glass-card,
+.glass-header {
+  background: rgba(var(--color-surface-white-rgb, 255, 255, 255), 0.72);
+  border: 1px solid rgba(var(--color-surface-white-rgb, 255, 255, 255), 0.4);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  color: inherit;
+}
+
+.dark .glass-card,
+.dark .glass-header {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.glass-header {
+  border-bottom: 1px solid rgba(var(--color-outline-variant), 0.2);
+}
+
+/* Navy CTA gradient (Stitch signature texture) */
+.gradient-navy {
+  background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary-container) 100%);
+}
+
+/* Tonal surface card — white lift on grey bg */
+.surface-card {
+  background: var(--color-surface-white);
+  box-shadow: 0 2px 12px rgba(15,28,44,0.05);
+}
+
+/* Primary text */
+.text-primary { color: var(--color-primary); }
+.text-secondary { color: var(--color-secondary); }
+.text-on-surface { color: var(--color-on-surface); }
+.text-on-surface-variant { color: var(--color-on-surface-variant); }
+
+/* Legacy amber class (for TopLoader, badges) */
+.text-amber { color: var(--color-amber); }
+.bg-amber { background-color: var(--color-amber); }
+
+/* CTA button — navy fill */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  height: 44px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-primary-container));
+  color: var(--color-on-primary);
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-primary:hover { opacity: 0.88; }
+
+/* ---------- Floating nav (Stitch spec) ---------- */
+.floating-nav {
+  background: rgba(255,255,255,0.88);
+  border: 1px solid rgba(196,198,204,0.25);
+  box-shadow: 0 12px 40px rgba(15,28,44,0.10);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ---------- Hero banner ---------- */
+.hero-banner {
+  background: linear-gradient(135deg, var(--color-primary-container) 0%, #1a2e45 60%, #0a1628 100%);
+  border-radius: 24px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------- Section label (Manrope) ---------- */
+.section-eyebrow {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+}
+
+.section-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-on-surface);
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Category chip ---------- */
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: var(--color-surface-white);
+  border: 1px solid var(--color-surface-high);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  box-shadow: 0 1px 4px rgba(15,28,44,0.05);
+}
+.category-chip.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.category-chip:not(.active):hover {
+  background: var(--color-surface-container);
+}
+
+/* ---------- Product card (Stitch tonal no-border style) ---------- */
+.product-card-stitch {
+  background: var(--color-surface-white);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(15,28,44,0.06);
+  transition: transform 0.2s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s;
+}
+.product-card-stitch:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15,28,44,0.10);
+}
+
+/* ---------- Bottom bar (fixed area) ---------- */
+.bottom-bar-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* ---------- prefers-reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Legacy compatibility classes (keep existing pages working) ---------- */
+.liquid-glass {
+  background: linear-gradient(135deg, rgba(255,255,255,0.68), rgba(255,255,255,0.35));
+  border: 1px solid rgba(255,255,255,0.4);
+  box-shadow: 0 22px 55px rgba(148,163,184,0.18);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+/* ---------- Dynamic Animations ---------- */
+
+@keyframes bike-ride {
+  0% { transform: translateX(-20px) translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(80px) translateY(0); opacity: 0; }
+}
+
+@keyframes rain-fall {
+  0% { transform: translateY(-20px); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(40px); opacity: 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+@keyframes cloud-float {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(15px); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-bike {
+  animation: bike-ride 4s ease-in-out infinite;
+}
+
+.animate-rain {
+  animation: rain-fall 1.5s linear infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.5s ease-in-out infinite;
+}
+
+.animate-cloud {
+  animation: cloud-float 5s ease-in-out infinite alternate;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 12s linear infinite;
+}
+
+.rain-drop {
+  width: 2px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 99px;
+  position: absolute;
+}
+
+
+/* ================================================================
+   PROFESSIONAL BOTTOM NAVIGATION
+   Design: floating glassmorphism pill, sliding indicator underline
+   NO overflow:hidden — no clipping ever
+   ================================================================ */
+
+.concierge-nav-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 0 20px 18px 20px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.concierge-nav-container {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 440px;
+  height: 68px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.10),
+    0 1px 4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border-radius: 34px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  position: relative;
+  /* NO overflow:hidden — prevents text clipping */
+}
+
+/* ── Sliding pill indicator ─────────────────────────── */
+.concierge-nav-indicator {
+  position: absolute;
+  top: 8px;
+  height: 52px;
+  width: calc(25% - 16px); /* Each column is 25%, leave 8px margin each side */
+  background: #0D1B2A;
+  border-radius: 26px;
+  box-shadow: 0 4px 16px rgba(13, 27, 42, 0.28);
+  /* Smooth slide + squish */
+  transition: left 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 1;
+  pointer-events: none;
+  transform-origin: center center;
+}
+
+/* Squish animations */
+.concierge-nav-indicator.squish-right {
+  animation: nav-squish 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.concierge-nav-indicator.squish-left {
+  animation: nav-squish 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes nav-squish {
+  0%   { transform: scaleX(1)    scaleY(1); }
+  28%  { transform: scaleX(1.22) scaleY(0.80); }
+  60%  { transform: scaleX(0.92) scaleY(1.10); }
+  80%  { transform: scaleX(1.04) scaleY(0.97); }
+  100% { transform: scaleX(1)    scaleY(1); }
+}
+
+/* ── Nav items ─────────────────────────────────────── */
+.concierge-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+  text-decoration: none;
+  color: #6B7280;
+  transition: color 0.3s ease;
+  position: relative;
+  z-index: 2;
+  padding: 0 4px;
+}
+
+.concierge-nav-item.active {
+  color: #ffffff;
+}
+
+.concierge-nav-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.concierge-nav-item.active .concierge-nav-icon-wrapper {
+  transform: translateY(-1px);
+}
+
+.concierge-nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.01em;
+  color: inherit;
+  white-space: nowrap;
+  text-transform: none; /* No uppercase — prevents overflow */
+}
+
+/* ── Badge ─────────────────────────────────────────── */
+.concierge-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  background: #EF4444;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  height: 15px;
+  min-width: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  z-index: 4;
+}

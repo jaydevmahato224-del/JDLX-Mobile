@@ -1,0 +1,184 @@
+/* ============================================================
+   ProductCardSkeleton.css — v2 (Low-end device optimized)
+
+   KEY CHANGES vs v1:
+   - Shimmer now uses transform: translateX instead of
+     background-position. translateX is composited on the GPU
+     (no layout/paint recalc), which is 2-5x cheaper on
+     low-end Android Chrome.
+   - will-change: transform added only on shimmer slabs so the
+     layer is promoted before animation starts.
+   - prefers-reduced-motion disables all animation for users/
+     devices that request reduced motion (also helps battery).
+   - pcs-card gets contain: layout style paint so the browser
+     can skip layout/paint recalc for the whole page when a
+     single card changes.
+   - content-visibility: auto on pcs-card lets Chrome skip
+     rendering off-screen skeleton cards entirely (big win
+     for long lists on low-end devices).
+   - contain-intrinsic-size prevents scroll-height jank when
+     content-visibility skips offscreen cards.
+   ============================================================ */
+
+/* ---------- GPU-accelerated shimmer ---------- */
+/*
+   Instead of animating background-position (triggers GPU upload
+   every frame), we use a pseudo-element that slides via
+   translateX — pure compositor work, no CPU involvement.
+*/
+@keyframes pcs-shimmer-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.pcs-shimmer {
+  display: block;
+  border-radius: 12px;
+  background: var(--color-surface-highest);
+  opacity: 0.5;
+  position: relative;
+  overflow: hidden;
+  will-change: transform;       /* promote to its own compositor layer */
+}
+
+/* Sliding highlight via pseudo-element — single GPU layer */
+.pcs-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  animation: pcs-shimmer-slide 1.5s linear infinite;
+  will-change: transform;
+}
+
+/* ---------- Card shell ---------- */
+.pcs-card {
+  overflow: hidden;
+  border-radius: 28px;
+  background: rgba(var(--color-surface-white-rgb, 255, 255, 255), 0.65);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--color-outline-variant);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+
+  /*
+    contain: layout style paint
+    Tells the browser this card is an independent rendering unit.
+    Changes inside it never trigger relayout of sibling cards.
+  */
+  contain: layout style paint;
+
+  /*
+    content-visibility: auto
+    Off-screen cards are not painted at all until they scroll near
+    the viewport. Huge perf win for 20+ card grids on low-end.
+  */
+  content-visibility: auto;
+
+  /*
+    contain-intrinsic-size prevents scroll height collapse when
+    content-visibility skips rendering.
+    Value = approx card height (image 224 + content ~180 = ~404px).
+  */
+  contain-intrinsic-size: 0 404px;
+}
+
+.dark .pcs-card {
+  background: rgba(25, 29, 41, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- Image region ---------- */
+.pcs-image-region {
+  padding: 16px;
+  background: var(--color-surface-low);
+  opacity: 0.8;
+}
+
+/* ---------- Badge row ---------- */
+.pcs-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pcs-badge-pill {
+  height: 24px;
+  width: 90px;
+  border-radius: 9999px;
+}
+.pcs-badge-pill--short { width: 64px; }
+
+/* ---------- Image block ---------- */
+.pcs-image-block {
+  height: 224px;
+  border-radius: 22px;
+  margin-top: 16px;
+}
+
+/* ---------- Content ---------- */
+.pcs-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pcs-line            { height: 12px; }
+.pcs-line--xs        { width: 60%;  height: 10px; }
+.pcs-line--md        { width: 75%;  height: 12px; }
+.pcs-line--lg        { width: 90%;  height: 20px; border-radius: 8px; }
+.pcs-line--sm        { width: 55%;  height: 10px; }
+.pcs-line--price     { width: 40%;  height: 28px; border-radius: 8px; }
+
+/* ---------- Footer ---------- */
+.pcs-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.pcs-price-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.pcs-btn-block {
+  width: 112px;
+  height: 48px;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+
+/* ---------- Real card fade-in ---------- */
+/*
+  Reduced from 0.35s to 0.2s — less wall-clock animation time
+  means the browser finishes the compositor work sooner.
+  translateY reduced from 8px to 4px — subtle, not janky.
+*/
+.pcs-fade-in {
+  animation: pcs-fadein 0.2s ease both;
+}
+@keyframes pcs-fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- prefers-reduced-motion ---------- */
+/*
+  On devices with reduce-motion enabled (or very old Android
+  WebViews that toggle this via battery saver), kill all
+  animation entirely. Static skeletons are still meaningful.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .pcs-shimmer::after       { animation: none; }
+  .pcs-fade-in              { animation: none; }
+}

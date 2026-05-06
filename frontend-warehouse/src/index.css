@@ -1,0 +1,144 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme {
+  --color-primary: #FFC107;
+  --color-secondary: #FFFFFF;
+  --color-surface: rgba(255, 255, 255, 0.7);
+  --radius-xl: 14px;
+}
+
+@layer base {
+  :root {
+    --app-header-height: 64px;
+    --app-bottom-nav-height: 64px;
+    
+    /* Warehouse theme specific */
+    --accent: #fbbf24;
+    --bg-card: rgba(15, 23, 42, 0.4);
+    --bg-card-hover: rgba(30, 41, 59, 0.6);
+    --text-primary: #f8fafc;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    height: auto;
+    min-height: 100%;
+  }
+
+  body, #root {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  body {
+    background: #020617;
+    color: #f8fafc;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  /* ---------- Warehouse Design System (scoped names; no Store mixing) ---------- */
+  .wh-ui-h1 {
+    @apply text-3xl font-black tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl lg:leading-[1.1];
+  }
+
+  .wh-ui-h2 {
+    @apply text-xl font-bold tracking-tight sm:text-2xl;
+  }
+
+  .wh-ui-label {
+    @apply text-[10px] font-black uppercase tracking-[0.32em] text-slate-400/80;
+  }
+
+  .wh-container {
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    max-width: 1400px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .wh-container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  /* ---------- Warehouse Specific UI ---------- */
+  .warehouse-page-content {
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    max-width: 1400px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    min-height: 100vh;
+    background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.05), transparent 400px),
+                radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.05), transparent 400px);
+  }
+  @media (min-width: 768px) {
+    .warehouse-page-content {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  .warehouse-panel {
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(40px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .warehouse-subtle-card {
+    border-radius: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(2, 6, 23, 0.4);
+    backdrop-filter: blur(24px);
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+
+  .card-glass {
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(40px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  /* Category Badges for Accessibility */
+  .wh-badge-category {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-black uppercase tracking-wider text-[10px];
+    background: rgba(245, 158, 11, 0.12); /* Amber 500 at 12% for better contrast */
+    border: 1.5px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24; /* Amber 400 */
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.2);
+  }
+
+  .wh-badge-category svg {
+    @apply text-amber-500;
+  }
+}

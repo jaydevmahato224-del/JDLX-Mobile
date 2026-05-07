@@ -342,9 +342,14 @@ def init_db():
             gradient TEXT DEFAULT 'bg-slate-900',
             link_url TEXT,
             is_active INTEGER DEFAULT 1,
+            overlay_opacity REAL DEFAULT 0.5,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    cursor.execute("PRAGMA table_info(banners)")
+    existing_banner_cols = [row[1] for row in cursor.fetchall()]
+    if 'overlay_opacity' not in existing_banner_cols:
+        safe_execute_ddl("ALTER TABLE banners ADD COLUMN overlay_opacity REAL DEFAULT 0.5")
 
     # Multi-admin Table
     cursor.execute('''

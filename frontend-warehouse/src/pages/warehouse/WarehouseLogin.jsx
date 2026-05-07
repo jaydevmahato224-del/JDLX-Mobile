@@ -45,7 +45,7 @@ function WarehouseLogin() {
         if (flowType === 'warehouse_login') setLoading(true)
         if (flowType === 'delivery_login') setDeliveryLoading(true)
         
-        window.location.href = `${API_ORIGIN}/login/google?flow=${flowType}`
+        window.location.href = `${API_ORIGIN}/partner/login/google?flow=${flowType}`
     }
 
     return (

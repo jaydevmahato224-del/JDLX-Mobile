@@ -446,7 +446,7 @@ function DeliveryRequest() {
 
     const handleGoogleLogin = () => {
         setGoogleLoading(true)
-        window.location.href = `${API_ORIGIN}/login/google?flow=delivery_request`
+        window.location.href = `${API_ORIGIN}/partner/login/google?flow=delivery_request`
     }
 
     const fetchStores = async (currentLocation = null) => {

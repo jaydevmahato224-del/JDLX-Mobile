@@ -624,19 +624,19 @@ def partner_login_google():
     """Initiate server-side Google OAuth for partners."""
     flow = request.args.get("flow", "warehouse_login")
     redirect_uri = os.environ.get("PARTNER_GOOGLE_REDIRECT_URI") or url_for("warehouse.partner_auth_google_callback", _external=True)
-    oauth = current_app.config["OAUTH_CLIENT"]
+    oauth = current_app.config.get("PARTNER_OAUTH_CLIENT") or current_app.config["OAUTH_CLIENT"]
 
     # Keep the requested business flow in the Flask session and let Authlib
     # manage its own CSRF state token for the OAuth round-trip.
     session["partner_oauth_flow"] = flow
     print(f"DEBUG: Initiating partner OAuth with session flow: {flow}")
-    return oauth.google.authorize_redirect(redirect_uri)
+    return oauth.google_partner.authorize_redirect(redirect_uri)
 
 
 @warehouse_bp.route("/partner/auth/google/callback")
 def partner_auth_google_callback():
     """Handle server-side Google callback for partners."""
-    oauth = current_app.config["OAUTH_CLIENT"]
+    oauth = current_app.config.get("PARTNER_OAUTH_CLIENT") or current_app.config["OAUTH_CLIENT"]
     
     # Redirection Origins
     admin_frontend = os.environ.get("ADMIN_FRONTEND_URL", "http://localhost:5174").rstrip("/")
@@ -644,8 +644,8 @@ def partner_auth_google_callback():
     
     try:
         # Use Authlib for robust token exchange
-        token_data = oauth.google.authorize_access_token()
-        user_info = token_data.get("userinfo") or oauth.google.userinfo()
+        token_data = oauth.google_partner.authorize_access_token()
+        user_info = token_data.get("userinfo") or oauth.google_partner.userinfo()
         email = user_info.get("email", "").lower().strip()
         name = user_info.get("name", "").strip()
         print(f"DEBUG Success: Authlib verified email: {email}")

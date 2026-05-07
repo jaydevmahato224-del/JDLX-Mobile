@@ -147,7 +147,7 @@ function WarehouseRequest() {
 
     const handleGoogleLogin = () => {
         setGoogleLoading(true)
-        window.location.href = `${API_ORIGIN}/login/google?flow=warehouse_request`
+        window.location.href = `${API_ORIGIN}/partner/login/google?flow=warehouse_request`
     }
 
     const checkRequestStatus = async (emailToCheck) => {

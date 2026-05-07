@@ -320,6 +320,11 @@ ADMIN_GOOGLE_REDIRECT_URI = os.environ.get("ADMIN_GOOGLE_REDIRECT_URI", "http://
 ADMIN_FRONTEND_URL = os.environ.get("ADMIN_FRONTEND_URL", "http://localhost:5174").rstrip("/")
 WAREHOUSE_FRONTEND_URL = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
 
+# Partner Portal OAuth Credentials (Warehouse / Delivery)
+PARTNER_GOOGLE_CLIENT_ID = os.environ.get("PARTNER_GOOGLE_CLIENT_ID", GOOGLE_CLIENT_ID)
+PARTNER_GOOGLE_CLIENT_SECRET = os.environ.get("PARTNER_GOOGLE_CLIENT_SECRET", GOOGLE_CLIENT_SECRET)
+PARTNER_GOOGLE_REDIRECT_URI = os.environ.get("PARTNER_GOOGLE_REDIRECT_URI", "http://localhost:5000/partner/auth/google/callback")
+
 DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "jdlx.db")
 INITIAL_SUPER_ADMIN_EMAIL = os.environ.get("INITIAL_SUPER_ADMIN_EMAIL", "").strip().lower()
 DEFAULT_ADMIN_PERMISSIONS = [
@@ -371,8 +376,22 @@ oauth_admin.register(
     client_kwargs={'scope': 'openid email profile', 'leeway': 30},
 )
 
+# 3. Partner Portal OAuth client (dedicated credentials for warehouse/delivery)
+oauth_partner = OAuth(app)
+oauth_partner.register(
+    name='google_partner',
+    client_id=PARTNER_GOOGLE_CLIENT_ID,
+    client_secret=PARTNER_GOOGLE_CLIENT_SECRET,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    access_token_url='https://oauth2.googleapis.com/token',
+    userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',
+    jwks_uri='https://www.googleapis.com/oauth2/v3/certs',
+    client_kwargs={'scope': 'openid email profile', 'leeway': 30},
+)
+
 # Make oauth accessible to blueprints (e.g., warehouse_routes)
 app.config["OAUTH_CLIENT"] = oauth
+app.config["PARTNER_OAUTH_CLIENT"] = oauth_partner
 
 # --- Helpers ---
 

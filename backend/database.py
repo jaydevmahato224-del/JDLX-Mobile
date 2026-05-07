@@ -104,11 +104,22 @@ if TURSO_URL and TURSO_TOKEN:
 else:
     USE_TURSO = False
 
+_turso_raw_conn = None
+
 def get_db():
+    global _turso_raw_conn
     if USE_TURSO:
-        # Remote-only connection over HTTP to avoid file locks and blocking syncs in Gunicorn workers
-        raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
-        conn = LibsqlConnectionWrapper(raw_conn)
+        # Use a global connection for the embedded replica to avoid syncing on every request
+        # which causes 502 Bad Gateway timeouts.
+        if _turso_raw_conn is None:
+            replica_path = os.path.join(os.path.dirname(DATABASE_PATH), 'turso_replica.db')
+            _turso_raw_conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN, check_same_thread=False)
+            try:
+                _turso_raw_conn.sync()
+            except Exception as e:
+                print(f"WARNING: Turso sync failed: {e}")
+                
+        conn = LibsqlConnectionWrapper(_turso_raw_conn)
         conn.row_factory = LibsqlRow
     else:
         conn = sqlite3.connect(DATABASE_PATH)

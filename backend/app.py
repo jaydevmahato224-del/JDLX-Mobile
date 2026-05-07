@@ -247,18 +247,10 @@ def server_error(e):
 
 @app.errorhandler(Exception)
 def handle_exception(e):
-    import traceback
-    tb = traceback.format_exc()
-    logger.error(f"Unhandled Exception: {str(e)}\n{tb}", exc_info=True)
+    logger.error(f"Unhandled Exception: {str(e)}", exc_info=True)
     if hasattr(e, 'code'):
         return error_response(str(e), e.code)
-    # Include traceback for debugging (revert this later!)
-    return jsonify({
-        "success": False,
-        "error": "Unexpected error",
-        "message": str(e),
-        "traceback": tb
-    }), 500
+    return error_response("Unexpected error", 500)
 
 
 # ==============================================================================

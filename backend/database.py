@@ -4,14 +4,39 @@ import os
 DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jdlx.db')
 VALID_ROLES = ('user', 'admin', 'super_admin')
 
+TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
+TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
+
+if TURSO_URL and TURSO_TOKEN:
+    try:
+        import libsql_experimental as libsql
+        USE_TURSO = True
+    except ImportError:
+        print("WARNING: libsql-experimental not installed. Falling back to local sqlite3.")
+        USE_TURSO = False
+else:
+    USE_TURSO = False
+
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
+    if USE_TURSO:
+        # Use embedded replica for maximum performance and compatibility
+        replica_path = os.path.join(os.path.dirname(DATABASE_PATH), 'turso_replica.db')
+        conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
+        try:
+            conn.sync()
+        except Exception as e:
+            print(f"WARNING: Turso sync failed: {e}")
+    else:
+        conn = sqlite3.connect(DATABASE_PATH)
+    
+    # Use standard sqlite3.Row for dict-like row access
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
+
 
     def safe_execute_ddl(sql: str) -> None:
         try:

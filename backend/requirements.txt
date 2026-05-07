@@ -13,3 +13,4 @@ Authlib
 gunicorn
 pdfplumber
 psutil
+libsql-experimental

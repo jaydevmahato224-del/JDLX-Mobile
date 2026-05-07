@@ -105,15 +105,18 @@ else:
     USE_TURSO = False
 
 _turso_raw_conn = None
+_turso_conn_pid = None
 
 def get_db():
-    global _turso_raw_conn
+    global _turso_raw_conn, _turso_conn_pid
     if USE_TURSO:
-        # Use a global connection for the embedded replica to avoid syncing on every request
-        # which causes 502 Bad Gateway timeouts.
-        if _turso_raw_conn is None:
+        current_pid = os.getpid()
+        # Ensure connection is created per-process to avoid Gunicorn fork crashes,
+        # but keep it global within the worker to avoid 502 timeouts from syncing per-request.
+        if _turso_raw_conn is None or _turso_conn_pid != current_pid:
             replica_path = os.path.join(os.path.dirname(DATABASE_PATH), 'turso_replica.db')
             _turso_raw_conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN, check_same_thread=False)
+            _turso_conn_pid = current_pid
             try:
                 _turso_raw_conn.sync()
             except Exception as e:

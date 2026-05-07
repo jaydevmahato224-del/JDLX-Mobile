@@ -7,6 +7,90 @@ VALID_ROLES = ('user', 'admin', 'super_admin')
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
 
+class LibsqlRow:
+    def __init__(self, cursor, tuple_row):
+        self._tuple = tuple_row
+        self._keys = [col[0] for col in cursor.description]
+
+    def keys(self):
+        return self._keys
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._tuple[key]
+        try:
+            return self._tuple[self._keys.index(key)]
+        except ValueError:
+            raise KeyError(key)
+
+    def __len__(self):
+        return len(self._tuple)
+
+    def __iter__(self):
+        return iter(self._tuple)
+
+class LibsqlCursorWrapper:
+    def __init__(self, cursor, row_factory=None):
+        self._cursor = cursor
+        self.row_factory = row_factory
+
+    def _wrap_row(self, row):
+        if row is None:
+            return None
+        if self.row_factory:
+            return self.row_factory(self._cursor, row)
+        return row
+
+    def fetchone(self):
+        return self._wrap_row(self._cursor.fetchone())
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if self.row_factory:
+            return [self.row_factory(self._cursor, row) for row in rows]
+        return rows
+
+    def execute(self, sql, parameters=()):
+        self._cursor.execute(sql, parameters)
+        return self
+
+    def executemany(self, sql, seq_of_parameters):
+        self._cursor.executemany(sql, seq_of_parameters)
+        return self
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+    def __iter__(self):
+        for row in self._cursor:
+            yield self._wrap_row(row)
+
+class LibsqlConnectionWrapper:
+    def __init__(self, conn):
+        self._conn = conn
+        self.row_factory = None
+
+    def cursor(self):
+        return LibsqlCursorWrapper(self._conn.cursor(), self.row_factory)
+
+    def execute(self, sql, parameters=()):
+        cursor = self.cursor()
+        cursor.execute(sql, parameters)
+        return cursor
+
+    def commit(self):
+        self._conn.commit()
+        
+    def rollback(self):
+        self._conn.rollback()
+        
+    def close(self):
+        self._conn.close()
+        
+    def sync(self):
+        if hasattr(self._conn, 'sync'):
+            self._conn.sync()
+
 if TURSO_URL and TURSO_TOKEN:
     try:
         import libsql_experimental as libsql
@@ -21,16 +105,17 @@ def get_db():
     if USE_TURSO:
         # Use embedded replica for maximum performance and compatibility
         replica_path = os.path.join(os.path.dirname(DATABASE_PATH), 'turso_replica.db')
-        conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
+        raw_conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
         try:
-            conn.sync()
+            raw_conn.sync()
         except Exception as e:
             print(f"WARNING: Turso sync failed: {e}")
+            
+        conn = LibsqlConnectionWrapper(raw_conn)
+        conn.row_factory = LibsqlRow
     else:
         conn = sqlite3.connect(DATABASE_PATH)
-    
-    # Use standard sqlite3.Row for dict-like row access
-    conn.row_factory = sqlite3.Row
+        conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():

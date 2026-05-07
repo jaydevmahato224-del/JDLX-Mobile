@@ -108,21 +108,11 @@ _turso_raw_conn = None
 _turso_conn_pid = None
 
 def get_db():
-    global _turso_raw_conn, _turso_conn_pid
     if USE_TURSO:
-        current_pid = os.getpid()
-        # Ensure connection is created per-process to avoid Gunicorn fork crashes,
-        # but keep it global within the worker to avoid 502 timeouts from syncing per-request.
-        if _turso_raw_conn is None or _turso_conn_pid != current_pid:
-            replica_path = os.path.join(os.path.dirname(DATABASE_PATH), 'turso_replica.db')
-            _turso_raw_conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN, check_same_thread=False)
-            _turso_conn_pid = current_pid
-            try:
-                _turso_raw_conn.sync()
-            except Exception as e:
-                print(f"WARNING: Turso sync failed: {e}")
-                
-        conn = LibsqlConnectionWrapper(_turso_raw_conn)
+        # Remote-only HTTP connection. This completely avoids Gunicorn master/worker 
+        # process locking issues and embedded replica sync timeouts!
+        raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
+        conn = LibsqlConnectionWrapper(raw_conn)
         conn.row_factory = LibsqlRow
     else:
         conn = sqlite3.connect(DATABASE_PATH)
@@ -133,18 +123,20 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
 
-
     def safe_execute_ddl(sql: str) -> None:
         try:
             cursor.execute(sql)
-        except sqlite3.OperationalError as e:
+        except Exception as e:
             msg = str(e).lower()
             if "duplicate column name" in msg or "already exists" in msg:
                 return
-            raise
+            print(f"Ignored DDL error: {e}")
     
-    # Enable Write-Ahead Logging for better concurrency
-    cursor.execute('PRAGMA journal_mode=WAL;')
+    try:
+        # Enable Write-Ahead Logging for better concurrency (fails on Turso HTTP)
+        cursor.execute('PRAGMA journal_mode=WAL;')
+    except Exception as e:
+        print(f"Skipping PRAGMA (safe for Turso): {e}")
 
     # Users Table
     cursor.execute('''

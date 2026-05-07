@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X, Smartphone, Zap } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { API_BASE_URL } from '../config';
 
 /**
  * PWAInstallBanner - A premium glassmorphism banner to prompt app installation.
@@ -20,7 +21,6 @@ const PWAInstallBanner = () => {
   const shouldShowBanner = (isInstallable || isPreview) && !isInstalled && !isDismissed && config.enabled;
 
   useEffect(() => {
-    const API_BASE_URL = window.location.origin.includes('localhost') ? 'http://localhost:5000/api' : '/api';
     fetch(`${API_BASE_URL}/settings`)
       .then(res => res.json())
       .then(json => {

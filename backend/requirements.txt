@@ -12,3 +12,4 @@ razorpay
 Authlib
 gunicorn
 pdfplumber
+psutil

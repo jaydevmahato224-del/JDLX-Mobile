@@ -13,4 +13,3 @@ Authlib
 mcp[cli]
 gunicorn
 pdfplumber
-psutil

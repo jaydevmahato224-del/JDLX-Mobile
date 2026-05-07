@@ -124,6 +124,7 @@ else:
         r"^http://10\.0\.2\.2:517[3-5]$",
         r"^http://192\.168\.\d+\.\d+:517[3-5]$",
         r"^http://10\.\d+\.\d+\.\d+:517[3-5]$",
+        r"^https://jdlx-mobile-wearhouse\.vercel\.app$",
     ]
 
 CORS(

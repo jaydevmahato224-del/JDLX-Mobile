@@ -56,7 +56,7 @@ if USER_SITE not in sys.path:
 # Configuration and Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, "jdlx.db")
-WAREHOUSE_REQUEST_UPLOAD_DIR = os.path.join("static", "uploads", "warehouse_requests")
+WAREHOUSE_REQUEST_UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "warehouse_requests")
 PRODUCT_IMAGES_UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads", "product_images")
 ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 

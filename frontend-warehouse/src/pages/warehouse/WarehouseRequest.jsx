@@ -156,7 +156,7 @@ function WarehouseRequest() {
         try {
             const response = await fetch(`${API_BASE_URL}/warehouse/request-status?email=${encodeURIComponent(emailToCheck)}`)
             const data = await response.json()
-            if (!response.ok) throw new Error(data.error || 'Could not fetch request status.')
+            if (!response.ok) throw new Error(data.message || data.error || 'Could not fetch request status.')
             setStatusData(data)
             if (data.verification_status === 'pending') setShowWaitingModal(true)
         } catch (statusError) {
@@ -289,7 +289,7 @@ function WarehouseRequest() {
                 body: payload,
             })
             const data = await response.json()
-            if (!response.ok) throw new Error(data.error || 'Warehouse request could not be submitted.')
+            if (!response.ok) throw new Error(data.message || data.error || 'Warehouse request could not be submitted.')
             setSuccessMessage(data.message || 'Warehouse request submitted successfully.')
             await checkRequestStatus(formData.email)
         } catch (submitError) {

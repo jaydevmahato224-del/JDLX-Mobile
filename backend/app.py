@@ -611,7 +611,7 @@ def google_auth():
 @app.route('/login/google', methods=['GET'])
 def login_google():
     """Redirects to Google for customer authentication."""
-    redirect_uri = url_for("google_callback", _external=True)
+    redirect_uri = GOOGLE_REDIRECT_URI
     flow = request.args.get('flow', 'user')
     session['oauth_flow'] = flow
     return oauth.google.authorize_redirect(redirect_uri, prompt='select_account')

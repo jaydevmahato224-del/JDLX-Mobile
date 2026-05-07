@@ -106,14 +106,8 @@ else:
 
 def get_db():
     if USE_TURSO:
-        # Use embedded replica for maximum performance and compatibility
-        replica_path = os.path.join(os.path.dirname(DATABASE_PATH), 'turso_replica.db')
-        raw_conn = libsql.connect(replica_path, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
-        try:
-            raw_conn.sync()
-        except Exception as e:
-            print(f"WARNING: Turso sync failed: {e}")
-            
+        # Remote-only connection over HTTP to avoid file locks and blocking syncs in Gunicorn workers
+        raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
         conn = LibsqlConnectionWrapper(raw_conn)
         conn.row_factory = LibsqlRow
     else:

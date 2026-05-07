@@ -51,10 +51,13 @@ class LibsqlCursorWrapper:
         return rows
 
     def execute(self, sql, parameters=()):
+        if isinstance(parameters, list):
+            parameters = tuple(parameters)
         self._cursor.execute(sql, parameters)
         return self
 
     def executemany(self, sql, seq_of_parameters):
+        seq_of_parameters = [tuple(p) if isinstance(p, list) else p for p in seq_of_parameters]
         self._cursor.executemany(sql, seq_of_parameters)
         return self
 

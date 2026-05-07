@@ -10,6 +10,5 @@ flask-caching
 APScheduler
 razorpay
 Authlib
-mcp[cli]
 gunicorn
 pdfplumber

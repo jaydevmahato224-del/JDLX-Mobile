@@ -12,6 +12,15 @@ def get_db():
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
+
+    def safe_execute_ddl(sql: str) -> None:
+        try:
+            cursor.execute(sql)
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "duplicate column name" in msg or "already exists" in msg:
+                return
+            raise
     
     # Enable Write-Ahead Logging for better concurrency
     cursor.execute('PRAGMA journal_mode=WAL;')
@@ -53,7 +62,7 @@ def init_db():
     ]
     for col, definition in extra_cols:
         if col not in existing_cols:
-            cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+            safe_execute_ddl(f"ALTER TABLE users ADD COLUMN {col} {definition}")
 
 
     # Backfill role for older DBs created before RBAC migration.
@@ -132,40 +141,40 @@ def init_db():
     cursor.execute("PRAGMA table_info(products)")
     existing_product_cols = [row[1] for row in cursor.fetchall()]
     if 'barcode' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN barcode TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN barcode TEXT")
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
     if 'global_sku_code' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN global_sku_code TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN global_sku_code TEXT")
     if 'description' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN description TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN description TEXT")
     if 'sub_category' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN sub_category TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN sub_category TEXT")
     if 'brand' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN brand TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN brand TEXT")
     if 'units_per_pack' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN units_per_pack TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN units_per_pack TEXT")
     if 'material_type' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN material_type TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN material_type TEXT")
     if 'weight' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN weight TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN weight TEXT")
     if 'dimensions' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN dimensions TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN dimensions TEXT")
     if 'is_fragile' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN is_fragile BOOLEAN DEFAULT 0")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN is_fragile BOOLEAN DEFAULT 0")
     if 'is_temp_sensitive' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN is_temp_sensitive BOOLEAN DEFAULT 0")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN is_temp_sensitive BOOLEAN DEFAULT 0")
     if 'is_perishable' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN is_perishable BOOLEAN DEFAULT 0")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN is_perishable BOOLEAN DEFAULT 0")
     if 'is_featured' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN is_featured BOOLEAN DEFAULT 0")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN is_featured BOOLEAN DEFAULT 0")
     if 'expiry_date' not in existing_product_cols:
-        cursor.execute("ALTER TABLE products ADD COLUMN expiry_date TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN expiry_date TEXT")
     
     # (Old delivery_partners definition removed, moved to bottom with more fields)
     
     # Ensure return_policy exists in products
     if 'return_policy' not in product_columns:
-        cursor.execute("ALTER TABLE products ADD COLUMN return_policy TEXT")
+        safe_execute_ddl("ALTER TABLE products ADD COLUMN return_policy TEXT")
 
     # Categories Table
     cursor.execute('''
@@ -183,11 +192,11 @@ def init_db():
     cursor.execute("PRAGMA table_info(categories)")
     existing_cat_cols = [row[1] for row in cursor.fetchall()]
     if 'important_note' not in existing_cat_cols:
-        cursor.execute("ALTER TABLE categories ADD COLUMN important_note TEXT")
+        safe_execute_ddl("ALTER TABLE categories ADD COLUMN important_note TEXT")
     if 'return_policy' not in existing_cat_cols:
-        cursor.execute("ALTER TABLE categories ADD COLUMN return_policy TEXT DEFAULT '7 Days Return Policy'")
+        safe_execute_ddl("ALTER TABLE categories ADD COLUMN return_policy TEXT DEFAULT '7 Days Return Policy'")
     if 'device_customization_enabled' not in existing_cat_cols:
-        cursor.execute("ALTER TABLE categories ADD COLUMN device_customization_enabled INTEGER DEFAULT 0")
+        safe_execute_ddl("ALTER TABLE categories ADD COLUMN device_customization_enabled INTEGER DEFAULT 0")
 
     # Brands Table
     cursor.execute('''

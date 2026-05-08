@@ -33,7 +33,7 @@ from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # --- Local Module Imports ---
-from database import init_db
+from database import init_db, get_db as _database_get_db
 from notifier import (
     send_order_email, 
     send_user_status_update_email, 
@@ -143,10 +143,8 @@ app.register_blueprint(delivery_bp)
 # ==============================================================================
 
 def get_db():
-    """Returns a connection to the SQLite database."""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Returns a connection to the database (Turso in production, local sqlite3 in dev)."""
+    return _database_get_db()
 def get_client_ip():
     """Extracts the client's IP address, accounting for proxy headers."""
     forwarded = request.headers.get("X-Forwarded-For")

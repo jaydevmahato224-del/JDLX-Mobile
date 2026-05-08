@@ -36,6 +36,7 @@ from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
 # Local imports
+from database import get_db as _db_get_db
 from utils.response_utils import success_response, error_response
 from notifier import (
     send_warehouse_application_email, 
@@ -67,10 +68,8 @@ warehouse_bp = Blueprint("warehouse", __name__)
 # ── DB helper ────────────────────────────────────────────────────────────────
 
 def get_db():
-    """Returns a sqlite3 connection with Row factory."""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Returns a database connection (Turso in production, local sqlite3 in dev)."""
+    return _db_get_db()
 
 
 def generate_unique_partner_id(cursor):

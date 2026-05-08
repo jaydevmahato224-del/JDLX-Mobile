@@ -13,4 +13,4 @@ COPY backend /app
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "python seed_production.py && gunicorn -w 2 -b 0.0.0.0:${PORT} app:app"]
+CMD ["sh", "-c", "python seed_production.py && gunicorn -w 2 -b 0.0.0.0:${PORT} --timeout 120 app:app"]

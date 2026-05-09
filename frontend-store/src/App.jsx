@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { Suspense, lazy, useEffect, useLayoutEffect } from 'react'
 import Home from './pages/user/Home'
 import Login from './pages/user/Login'
@@ -192,6 +193,7 @@ function App() {
       <ThemeLoader />
       {/* Amber top progress bar — shows on every fetch + route change */}
       <TopLoader />
+      <Toaster position="top-center" reverseOrder={false} />
       <Router>
         <RouteChangeTracker />
         <Suspense fallback={<PageLoader />}>

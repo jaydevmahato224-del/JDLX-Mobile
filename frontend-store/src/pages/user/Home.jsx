@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Heart, Zap, Star } from 'lucide-react'
+import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Heart, Zap, Star, Truck, ShieldCheck } from 'lucide-react'
 
 import BlurImage from '../../components/BlurImage'
 import PaginationLoader from '../../components/PaginationLoader'
@@ -170,27 +170,27 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     }
   }
 
+  const discount = product.mrp > product.price 
+    ? Math.round(((product.mrp - product.price) / product.mrp) * 100) 
+    : 0;
+
   return (
-    <article className="card-standard group relative flex flex-col h-full hover:border-primary/30 transition-all duration-300">
-      <Link to={`/product/${product.id}`} className="relative block aspect-[1.1] overflow-hidden bg-slate-50">
-        <div className="absolute top-3 left-3 z-20 flex flex-col gap-2">
-          {outOfStock ? (
-            (Number(product.is_featured) === 1 || product.is_featured === true) ? (
-              <span className="rounded-full bg-indigo-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-200 animate-pulse">
-                Coming Soon
-              </span>
-            ) : (
-              <span className="rounded-full bg-red-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-600 border border-red-200">
-                Sold Out
-              </span>
-            )
-          ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-600 border border-amber-200">
-              Only {availableStock} left
+    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-2xl overflow-hidden border border-[var(--color-surface-high)] transition-all duration-300 hover:shadow-xl hover:border-primary/20">
+      <Link to={`/product/${product.id}`} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/50">
+        {/* Badges Overlay */}
+        <div className="absolute top-2 left-2 z-20 flex flex-col gap-1.5">
+          {discount > 0 && !outOfStock && (
+            <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter">
+              {discount}% OFF
             </span>
-          ) : (Number(product.is_featured) === 1 || product.is_featured === true) && (
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-100 shadow-sm">
-              Featured
+          )}
+          {outOfStock ? (
+            <span className="bg-slate-200 text-slate-600 text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter">
+              Sold Out
+            </span>
+          ) : availableStock <= LOW_STOCK_LIMIT && (
+            <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter border border-amber-200">
+              Only {availableStock} left
             </span>
           )}
         </div>
@@ -198,108 +198,98 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         {/* Wishlist Button */}
         <button 
           onClick={handleWishlistToggle}
-          className={`absolute top-3 right-3 z-30 h-8 w-8 rounded-full flex items-center justify-center transition-all ${
-            isInWishlist ? 'bg-red-50 text-red-500 shadow-sm' : 'bg-white/80 backdrop-blur-sm text-slate-400 hover:text-red-500'
+          className={`absolute top-2 right-2 z-30 h-8 w-8 rounded-full flex items-center justify-center transition-all ${
+            isInWishlist ? 'text-red-500' : 'text-slate-400 hover:text-red-500'
           }`}
         >
-          <Heart size={16} fill={isInWishlist ? 'currentColor' : 'none'} />
+          <Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} />
         </button>
 
-        <div className="h-full w-full p-6 transition-transform duration-700 group-hover:scale-110">
+        <div className="h-full w-full p-4 transition-transform duration-700 group-hover:scale-105">
           <BlurImage
             src={getProductImage(product)}
             alt={product?.name}
-            className="h-full w-full object-contain drop-shadow-2xl"
+            className="h-full w-full object-contain mix-blend-multiply"
           />
         </div>
       </Link>
 
-      <div className="p-4 flex-1 flex flex-col">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                {product?.category || 'Curated'}
-              </div>
-              {deliveryMode === 'quick' && (
-                <div className="flex items-center gap-1 text-emerald-500 text-[10px] font-black uppercase tracking-widest">
-                  <Zap size={10} fill="currentColor" />
-                  Quick
-                </div>
-              )}
-            </div>
-            <Link to={`/product/${product.id}`} className="block">
-              <h3 className="mt-1 line-clamp-1 text-base font-black tracking-tight text-slate-900 hover:text-primary">
-                {product?.name || 'Untitled'}
-              </h3>
-            </Link>
-            
-            {product.average_rating > 0 && (
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <div className="flex items-center gap-0.5 text-amber-400">
-                  <Star size={12} fill="currentColor" />
-                </div>
-                <span className="text-[11px] font-black text-slate-700">
-                  {Number(product.average_rating).toFixed(1)}
-                </span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                  ({product.total_reviews} Reviews)
-                </span>
-              </div>
-            )}
+      <div className="p-3 md:p-4 flex-1 flex flex-col gap-1.5">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+            {product?.category || 'General'}
           </div>
-          <div className="text-right">
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">MRP</div>
-            <div className="text-lg font-black tracking-tight text-slate-900">₹{product?.price ?? 0}</div>
+          <Link to={`/product/${product.id}`}>
+            <h3 className="line-clamp-2 text-xs md:text-sm font-bold text-[var(--color-on-surface)] leading-snug min-h-[2.4em]">
+              {product?.name || 'Untitled Product'}
+            </h3>
+          </Link>
+        </div>
+        
+        {/* Rating Section */}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center bg-emerald-600 text-white text-[9px] font-black px-1 rounded-sm gap-0.5">
+            {Number(product.average_rating || 0).toFixed(1)}
+            <Star size={8} fill="currentColor" />
           </div>
+          <span className="text-[10px] text-slate-400 font-bold">
+            ({product.total_reviews || 0})
+          </span>
         </div>
 
-        <div className="mt-auto pt-4 flex items-center justify-between gap-3">
-          <Link
-            to={`/product/${product.id}`}
-            className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-700 hover:bg-slate-200 active:scale-95 transition-all"
-          >
-            View
-            <ChevronRight className="h-4 w-4" />
-          </Link>
+        {/* Price Section */}
+        <div className="flex flex-col">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base md:text-lg font-black text-[var(--color-on-surface)]">
+              ₹{product?.price ?? 0}
+            </span>
+            {product.mrp > product.price && (
+              <span className="text-[10px] md:text-xs text-slate-400 line-through font-medium">
+                ₹{product.mrp}
+              </span>
+            )}
+          </div>
+          {deliveryMode === 'quick' && (
+            <div className="flex items-center gap-1 text-emerald-600 text-[9px] font-black uppercase tracking-tighter">
+              <Zap size={10} fill="currentColor" />
+              Delivery by Today
+            </div>
+          )}
+        </div>
 
+        {/* Action Button */}
+        <div className="mt-auto pt-2">
           {quantity > 0 ? (
-            <div className="flex items-center gap-1 rounded-full bg-slate-900 p-1 shadow-lg shadow-slate-900/10">
+            <div className="flex items-center justify-between bg-slate-100 rounded-lg p-0.5">
               <button
-                type="button"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (quantity === 1) {
-                    removeFromCart(product.id)
-                  } else {
-                    updateQuantity(product.id, quantity - 1)
-                  }
+                  if (quantity === 1) removeFromCart(product.id)
+                  else updateQuantity(product.id, quantity - 1)
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white hover:bg-white/10 active:scale-90 transition-all"
+                className="h-7 w-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-md transition-colors"
               >
-                <Minus className="h-4 w-4" />
+                <Minus size={14} />
               </button>
-              <span className="min-w-[24px] text-center text-sm font-black text-white">
-                {isSyncing ? <RefreshCw className="h-3 w-3 animate-spin mx-auto" /> : quantity}
+              <span className="text-xs font-black text-slate-900">
+                {isSyncing ? <RefreshCw size={10} className="animate-spin" /> : quantity}
               </span>
               <button
-                type="button"
                 disabled={isSyncing || quantity >= availableStock}
                 onClick={handleIncrease}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 transition-all"
+                className="h-7 w-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
               >
-                {isSyncing ? <div className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Plus className="h-4 w-4" />}
+                <Plus size={14} />
               </button>
             </div>
           ) : (
             <button
-              type="button"
               disabled={disabled || outOfStock || isSyncing}
               onClick={handleAddToCartWithCheck}
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-slate-800 active:scale-90 active:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-slate-900/10"
+              className="w-full h-8 md:h-9 flex items-center justify-center gap-1.5 bg-yellow-400 hover:bg-yellow-500 text-slate-900 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all disabled:opacity-50 shadow-sm active:scale-95"
             >
-              {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
-              {isSyncing ? 'Checking...' : 'Add'}
+              {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+              {isSyncing ? '...' : 'Add to Cart'}
             </button>
           )}
         </div>
@@ -634,12 +624,12 @@ export default function Home() {
       <section className="space-y-2">
         <div className="flex items-center gap-2">
            <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-           <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">JDLX Store</span>
+           <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--color-on-surface)]/40">JDLX Store</span>
         </div>
-        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-slate-900">
+        <h1 className="text-3xl md:text-5xl font-black tracking-tighter text-[var(--color-on-surface)]">
           {getGreeting()}, <span className="text-primary">{getFirstName(user)}</span>
         </h1>
-        <p className="max-w-xl text-slate-500 font-medium leading-relaxed">
+        <p className="max-w-xl text-[var(--color-on-surface-variant)] font-medium leading-relaxed">
           Browse curated essentials. Fast delivery, reliable stock, and a clean shopping experience.
         </p>
       </section>
@@ -686,58 +676,62 @@ export default function Home() {
         )}
       </section>
 
-      {/* 3. Availability Indicator (Refined) */}
-      {availability && (
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="glass-card p-4 flex items-center gap-4">
-              <div className={`h-10 w-10 rounded-2xl flex items-center justify-center ${availability.ordering_enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                 {availability.ordering_enabled ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
+      {/* 3. Modern Trust & Info Cards */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Reliable Delivery */}
+          <div className="group relative overflow-hidden rounded-[32px] bg-[var(--color-surface-white)] p-6 border border-[var(--color-surface-high)] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-500 cursor-default">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center gap-5">
+              <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform duration-500">
+                <Truck size={28} />
               </div>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</div>
-                <div className="text-sm font-black text-slate-900">
-                  {availability.ordering_enabled ? (
-                    <span className="flex items-center gap-1.5">
-                      Operational
-                      {availability.quick_mode_enabled && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-100 text-[9px] text-emerald-700 animate-pulse">
-                          <Zap size={8} fill="currentColor" />
-                          QUICK
-                        </span>
-                      )}
-                    </span>
-                  ) : 'Store Closed'}
-                </div>
+                <h3 className="text-sm font-black tracking-tight text-[var(--color-on-surface)] mb-1">Reliable Delivery</h3>
+                <p className="text-[12px] font-bold text-[var(--color-on-surface)]/50 leading-tight">Safe & trusted order fulfillment</p>
               </div>
             </div>
-           <div className="glass-card p-4 flex items-center gap-4">
-             <div className="h-10 w-10 rounded-2xl bg-primary/5 flex items-center justify-center text-primary">
-                <Package size={20} />
-             </div>
-             <div>
-               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ready to Ship</div>
-               <div className="text-sm font-black text-slate-900">{availability.active_products || 0} Products</div>
-             </div>
-           </div>
-           <div className="glass-card p-4 flex items-center gap-4">
-             <div className="h-10 w-10 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
-                <RefreshCw size={18} className="animate-spin-slow" />
-             </div>
-             <div>
-               <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Last Sync</div>
-               <div className="text-sm font-black text-slate-900">Just now</div>
-             </div>
-           </div>
-        </section>
-      )}
+            {/* Subtle border glow on hover */}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          </div>
+
+          {/* Card 2: Trending Products */}
+          <div className="group relative overflow-hidden rounded-[32px] bg-[var(--color-surface-white)] p-6 border border-[var(--color-surface-high)] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-500 cursor-default">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center gap-5">
+              <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-orange-500/10 text-orange-500 group-hover:scale-110 transition-transform duration-500">
+                <Zap size={28} fill="currentColor" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black tracking-tight text-[var(--color-on-surface)] mb-1">Trending Products</h3>
+                <p className="text-[12px] font-bold text-[var(--color-on-surface)]/50 leading-tight">Top accessories picked for you</p>
+              </div>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-orange-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          </div>
+
+          {/* Card 3: Secure Checkout */}
+          <div className="group relative overflow-hidden rounded-[32px] bg-[var(--color-surface-white)] p-6 border border-[var(--color-surface-high)] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-500 cursor-default">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center gap-5">
+              <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-emerald-500/10 text-emerald-500 group-hover:scale-110 transition-transform duration-500">
+                <ShieldCheck size={28} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black tracking-tight text-[var(--color-on-surface)] mb-1">Secure Checkout</h3>
+                <p className="text-[12px] font-bold text-[var(--color-on-surface)]/50 leading-tight">Safe payments & smooth ordering</p>
+              </div>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          </div>
+      </section>
 
       {/* 5. Personalized Section: Best Picks For You */}
       {recommendations.length > 0 && (
         <section className="space-y-8 animate-in fade-in duration-700">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <h2 className="text-2xl font-black tracking-tight text-slate-900">Best Picks For You</h2>
-              <p className="text-sm text-slate-500 font-medium italic">Handpicked based on your recent searches & interests</p>
+              <h2 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]">Best Picks For You</h2>
+              <p className="text-sm text-[var(--color-on-surface)]/60 font-medium italic">Handpicked based on your recent searches & interests</p>
             </div>
             <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center text-primary">
               <Zap size={20} fill="currentColor" className="animate-pulse" />
@@ -764,14 +758,14 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-8 w-1 bg-primary rounded-full" />
-            <h2 className="text-2xl font-black tracking-tight text-slate-900">Popular Essentials</h2>
+            <h2 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]">Popular Essentials</h2>
           </div>
         </div>
 
         {initialLoading && !hasLoadedOnce ? (
           <ProductLoadingGrid count={8} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-6">
             {(featuredProducts.length > 4 ? featuredProducts.slice(4, 12) : regularProducts.slice(0, 8)).map((p) => (
               <ProductCard
                 key={p.id}

@@ -5,6 +5,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 /* ------------------------------------------------------------------------------
    1. CORE THEME & TOKENS
@@ -66,10 +67,22 @@
   --color-primary: #8AB4F8;
   --color-primary-container: #1b263b;
   --color-surface: #0a0c10;
+  --color-surface-low: #11141d;
   --color-surface-white: #11141d;
+  --color-surface-high: #1a1d26;
   --color-on-surface: #f1f3f4;
   --glass-bg: rgba(17, 20, 29, 0.72);
   --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.dark .glass-card, .dark .card-glass {
+  background: rgba(17, 20, 29, 0.65);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .glass-luxury {
+  background: rgba(13, 27, 42, 0.8);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 /* ------------------------------------------------------------------------------
@@ -110,7 +123,7 @@ body::before {
 :where(p) { line-height: 1.6; margin-bottom: var(--spacing-3); color: var(--color-on-surface-variant); }
 
 .ui-h1 { @apply text-3xl font-black tracking-tighter sm:text-4xl md:text-5xl; }
-.ui-label { @apply text-[10px] font-black uppercase tracking-[0.25em] text-slate-500; }
+.ui-label { @apply text-[10px] font-black uppercase tracking-[0.25em] text-[var(--color-on-surface-variant)]; }
 
 /* ------------------------------------------------------------------------------
    4. COMPONENTS (CARDS, BUTTONS, NAVIGATION)
@@ -119,9 +132,12 @@ body::before {
 /* Cards */
 .ui-card-premium { @apply rounded-[32px] border border-white/40 bg-white/70 backdrop-blur-xl shadow-xl; }
 .card-standard, .ui-card-standard {
-  background: rgba(255, 255, 255, 0.65); backdrop-filter: blur(28px);
-  border: 1.5px solid rgba(255, 255, 255, 0.4); border-radius: 28px;
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); overflow: hidden;
+  background: var(--color-surface-white); 
+  backdrop-filter: blur(28px);
+  border: 1.5px solid var(--color-surface-high); 
+  border-radius: 28px;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); 
+  overflow: hidden;
 }
 .card-standard:hover { transform: translateY(-8px) scale(1.02); border-color: var(--color-primary); }
 
@@ -134,8 +150,15 @@ body::before {
   background: linear-gradient(135deg, var(--color-secondary), var(--color-primary-container));
   color: white;
 }
-.category-chip { @apply inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all border border-slate-200 bg-white; }
-.category-chip.active { @apply bg-slate-900 text-white border-slate-900; }
+.category-chip { 
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all border border-[var(--color-surface-high)] bg-[var(--color-surface-white)]; 
+  color: var(--color-on-surface);
+}
+.category-chip.active { 
+  background: var(--color-primary); 
+  color: white; 
+  border-color: var(--color-primary); 
+}
 
 /* Concierge Navigation */
 .concierge-nav-wrapper { @apply fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-6 pt-2 pointer-events-none; }

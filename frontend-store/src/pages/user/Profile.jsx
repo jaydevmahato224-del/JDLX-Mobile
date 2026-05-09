@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
-import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText } from 'lucide-react'
+import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download } from 'lucide-react'
+import { usePWAInstall } from '../../hooks/usePWAInstall'
+import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 
 function Profile() {
@@ -14,6 +16,7 @@ function Profile() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [imageFailed, setImageFailed] = useState(false);
+    const { isInstallable, isInstalled, handleInstallClick } = usePWAInstall();
 
     useEffect(() => {
         if (!user) {
@@ -58,6 +61,36 @@ function Profile() {
         { icon: Info, label: 'About Us', path: '/profile/about-site', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
         { icon: FileText, label: 'Terms', path: '/profile/terms', color: 'text-slate-700', bg: 'bg-slate-700/10' },
         { icon: HelpCircle, label: 'Support', path: '/profile/support', color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+        { 
+            icon: Download, 
+            label: 'Download App', 
+            onClick: () => {
+                if (isInstalled) {
+                    toast.success('JDLX Mobile is already installed!', {
+                        icon: '🚀',
+                        style: { borderRadius: '16px', background: 'var(--color-surface-high)', color: 'var(--color-on-surface)', fontWeight: 'bold' }
+                    });
+                } else if (isInstallable) {
+                    handleInstallClick();
+                } else {
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                    if (isIOS) {
+                        toast('Tap the Share icon and "Add to Home Screen" to install.', {
+                            duration: 5000,
+                            icon: '📲',
+                            style: { borderRadius: '16px', background: 'var(--color-surface-high)', color: 'var(--color-on-surface)', fontWeight: 'bold' }
+                        });
+                    } else {
+                        toast('Use Chrome or Edge to install JDLX Mobile directly.', {
+                            icon: 'ℹ️',
+                            style: { borderRadius: '16px', background: 'var(--color-surface-high)', color: 'var(--color-on-surface)', fontWeight: 'bold' }
+                        });
+                    }
+                }
+            }, 
+            color: 'text-indigo-600', 
+            bg: 'bg-indigo-600/10' 
+        },
     ];
 
     return (
@@ -133,18 +166,36 @@ function Profile() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {navigationItems.map((item) => {
                     const Icon = item.icon;
-                    return (
-                        <Link 
-                            key={item.label}
-                            to={item.path}
-                            className="glass-card p-5 group flex flex-col items-center gap-3 transition-all hover:-translate-y-1.5 hover:shadow-2xl border border-[var(--color-surface-high)]"
-                        >
+                    const content = (
+                        <>
                             <div className={`p-3 rounded-2xl ${item.bg} ${item.color} group-hover:scale-110 transition-transform`}>
                                 <Icon className="w-5 h-5" />
                             </div>
                             <span className="text-[11px] font-black text-[var(--color-on-surface)] uppercase tracking-[0.12em] text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
                                 {item.label}
                             </span>
+                        </>
+                    );
+
+                    if (item.onClick) {
+                        return (
+                            <button 
+                                key={item.label}
+                                onClick={item.onClick}
+                                className="glass-card p-5 group flex flex-col items-center gap-3 transition-all hover:-translate-y-1.5 hover:shadow-2xl border border-[var(--color-surface-high)]"
+                            >
+                                {content}
+                            </button>
+                        )
+                    }
+
+                    return (
+                        <Link 
+                            key={item.label}
+                            to={item.path}
+                            className="glass-card p-5 group flex flex-col items-center gap-3 transition-all hover:-translate-y-1.5 hover:shadow-2xl border border-[var(--color-surface-high)]"
+                        >
+                            {content}
                         </Link>
                     )
                 })}

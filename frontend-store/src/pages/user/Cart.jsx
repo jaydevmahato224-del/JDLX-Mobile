@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowRight, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info } from 'lucide-react'
+import { ArrowRight, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2 } from 'lucide-react'
 import { resolveMediaUrl, API_BASE_URL } from '../../config'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
@@ -58,10 +58,12 @@ function Cart() {
         sync();
     }, [syncCartWithInventory]);
 
-    const availableItems = cart.filter(item => !item.removedFromInventory && (item.stock ?? 0) > 0);
-    const hasUnavailableItems = cart.some(item => item.removedFromInventory || (item.stock ?? 0) <= 0);
+    // Robust ID matching and numeric conversions
+    const availableItems = cart.filter(item => !item.removedFromInventory && Number(item.stock || 0) > 0);
+    const hasUnavailableItems = cart.some(item => item.removedFromInventory || Number(item.stock || 0) <= 0);
     const hasStickerMissingDevice = cart.some(item => isStickerProduct(item) && !getDeviceModelValue(item.device_model));
-    const totalAmount = availableItems.reduce((sum, item) => sum + (Number(item.price || 0) * item.qty), 0);
+    
+    const subtotal = availableItems.reduce((sum, item) => sum + (Number(item.price || 0) * item.qty), 0);
     const fittingTotal = availableItems.reduce((sum, item) => {
         if (item.fitting) {
             const charge = item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40;
@@ -70,8 +72,13 @@ function Cart() {
         return sum;
     }, 0);
 
+    const freeDeliveryThreshold = Number(availability?.free_delivery_threshold || 199);
+    const deliveryFee = subtotal >= freeDeliveryThreshold ? 0 : Number(availability?.delivery_fee || 49);
+    const platformFee = Number(availability?.platform_fee || 7);
+    const finalToPay = subtotal + fittingTotal + deliveryFee + platformFee;
+
     const removeUnavailable = () => {
-        const unavailableIds = cart.filter(item => item.removedFromInventory || (item.stock ?? 0) <= 0).map(i => i.id);
+        const unavailableIds = cart.filter(item => item.removedFromInventory || Number(item.stock || 0) <= 0).map(i => i.id);
         unavailableIds.forEach(id => removeFromCart(id));
     };
 
@@ -85,242 +92,252 @@ function Cart() {
                     <h2 className="text-3xl font-black tracking-tighter text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Your cart is empty</h2>
                     <p className="mt-2 text-sm text-[var(--color-on-surface-variant)]">Add some essentials to see them here!</p>
                 </div>
-                <Link to="/" className="btn-primary px-8">Start Shopping</Link>
+                <Link to="/" className="btn-primary px-8 shadow-xl shadow-primary/20">Start Shopping</Link>
             </div>
         )
     }
 
-    const deliveryFee = totalAmount >= (availability?.free_delivery_threshold || 199) ? 0 : (availability?.delivery_fee || 49);
-    const platformFee = availability?.platform_fee || 7;
-    const finalToPay = totalAmount + fittingTotal + deliveryFee + platformFee;
-
     return (
-        <div className="container-standard py-6 flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <div className="flex items-center justify-between px-2">
-                <h1 className="text-3xl font-black tracking-tighter text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Your Cart</h1>
-                <div className="flex items-center gap-4">
+        <div className="container-standard py-8 flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-2">
+                <div>
+                    <h1 className="text-4xl font-black tracking-tighter text-[var(--color-on-surface)] mb-1" style={{ fontFamily: 'Manrope, sans-serif' }}>Your Cart</h1>
+                    <p className="text-sm font-bold text-[var(--color-on-surface-variant)] flex items-center gap-2">
+                        {availableItems.length} items available {isSyncing && <span className="inline-flex items-center gap-1 text-primary animate-pulse ml-2"><Info size={14} /> Syncing prices...</span>}
+                    </p>
+                </div>
+                <div className="flex items-center gap-3">
                     {hasUnavailableItems && (
-                        <button onClick={removeUnavailable} className="text-[11px] font-black text-red-500 hover:text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-100 transition-colors">
-                            Clear Unavailable
+                        <button onClick={removeUnavailable} className="text-[11px] font-black text-red-500 hover:text-white hover:bg-red-500 bg-red-50 px-4 py-2 rounded-xl border border-red-100 transition-all flex items-center gap-2">
+                            <Trash2 size={14} /> Clear Unavailable
                         </button>
                     )}
-                    {isSyncing && <div className="text-xs font-bold text-primary animate-pulse">Syncing Inventory...</div>}
                 </div>
-            </div>
+            </header>
 
-            <div className="glass-card overflow-hidden divide-y divide-[var(--color-surface-high)]">
-                {cart.map(item => {
-                    const isRemoved = item.removedFromInventory;
-                    const isSoldOut = !isRemoved && (item.stock ?? 0) <= 0;
-                    const isUnavailable = isRemoved || isSoldOut;
+            <div className="grid lg:grid-cols-[1fr,380px] gap-8 items-start">
+                <div className="space-y-4">
+                    {cart.map(item => {
+                        const isRemoved = item.removedFromInventory;
+                        const stockCount = Number(item.stock || 0);
+                        const isSoldOut = !isRemoved && stockCount <= 0;
+                        const isUnavailable = isRemoved || isSoldOut;
+                        const atMaxStock = item.qty >= stockCount && !isUnavailable;
 
-                    return (
-                        <div key={item.id} className={`p-5 flex gap-5 items-center transition-colors ${isUnavailable ? 'bg-red-50/10' : 'hover:bg-primary/[0.02]'}`}>
-                            <div className={`w-20 h-20 rounded-2xl bg-[var(--color-surface-low)] overflow-hidden flex-shrink-0 border border-[var(--color-surface-high)] ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
-                                <img src={getProductImage(item)} alt={item.name} className="w-full h-full object-contain p-2 transition-transform hover:scale-110" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className={`font-bold text-[var(--color-on-surface)] text-[15px] leading-tight truncate ${isUnavailable ? 'opacity-50' : ''}`} style={{ fontFamily: 'Manrope, sans-serif' }}>{item.name}</h3>
-                                <div className="flex items-center gap-3 mt-1">
-                                    <p className={`font-black text-primary text-[16px] ${isUnavailable ? 'opacity-50' : ''}`}>₹{item.price}</p>
-                                    
-                                    {!isUnavailable && (item.stock ?? 0) > 0 && (item.stock ?? 0) <= 3 && (
-                                        <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-tight">
-                                                Only {(item.stock ?? 0)} Left
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                {isRemoved && (
-                                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-black text-red-600 bg-red-100/50 px-3 py-1 rounded-lg w-fit">
-                                        <AlertCircle className="w-3.5 h-3.5" />
-                                        This item has been removed from inventory
-                                    </div>
-                                )}
-                                
-                                {isSoldOut && (
-                                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-black text-amber-600 bg-amber-100/50 px-3 py-1 rounded-lg w-fit">
-                                        <AlertCircle className="w-3.5 h-3.5" />
-                                        Sold out, this item cannot be purchased
-                                    </div>
-                                )}
-
-                                {isStickerProduct(item) && (
-                                    <DeviceModelSelector
-                                        compact
-                                        value={item.device_model || ''}
-                                        onChange={(value) => updateDeviceModel(item.id, value)}
-                                        required
-                                    />
-                                )}
-
-                                {/* Fitting Service Logic for Screen Protectors */}
-                                {item.category_id === 7 && deliveryMode === 'quick' && (
-                                    <div className="mt-3 p-3 rounded-2xl bg-primary/5 border border-primary/10 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                                    <Truck className="w-4 h-4 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">Professional Fitting</p>
-                                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Doorstep Installation</p>
-                                                </div>
+                        return (
+                            <div key={item.id} className={`group relative glass-card p-0 overflow-hidden transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] ${isUnavailable ? 'bg-red-50/20' : ''}`}>
+                                <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                                    {/* Image Section */}
+                                    <div className={`relative w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-white p-3 flex-shrink-0 border border-[var(--color-surface-high)] shadow-sm transition-transform group-hover:rotate-2 ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
+                                        <img src={getProductImage(item)} alt={item.name} className="w-full h-full object-contain transition-transform group-hover:scale-110 duration-500" />
+                                        {isUnavailable && (
+                                            <div className="absolute inset-0 bg-red-900/5 backdrop-blur-[2px] rounded-3xl flex items-center justify-center">
+                                                <X className="text-red-600 w-8 h-8" />
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[12px] font-black text-primary">₹{item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40}</span>
-                                                <button
-                                                    onClick={() => toggleFittingService(item.id)}
-                                                    className={`w-10 h-6 rounded-full transition-all relative ${item.fitting ? 'bg-primary' : 'bg-slate-200'}`}
-                                                >
-                                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${item.fitting ? 'right-1' : 'left-1'}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {item.fitting && (
-                                            <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit">
-                                                ✓ Expert technician will apply this at your home
-                                            </p>
                                         )}
                                     </div>
-                                )}
-                            </div>
 
-                            <div className="flex flex-col items-center gap-1">
-                                <div className="flex items-center gap-4 bg-[var(--color-surface-low)] rounded-2xl p-1.5 border border-[var(--color-surface-high)] shadow-sm">
-                                    <button
-                                        onClick={() => item.qty > 1 ? updateQuantity(item.id, item.qty - 1) : removeFromCart(item.id)}
-                                        className="w-9 h-9 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all hover:shadow-md"
-                                    >
-                                        {item.qty === 1 ? <Trash2 className="w-4 h-4 text-red-500" /> : <Minus className="w-4 h-4" />}
-                                    </button>
-                                    <span className="w-5 text-center text-[14px] font-black">{item.qty}</span>
-                                    <button
-                                        onClick={() => updateQuantity(item.id, item.qty + 1)}
-                                        className="w-9 h-9 flex items-center justify-center text-primary hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all hover:shadow-md disabled:opacity-20"
-                                        disabled={isUnavailable || item.qty >= (item.stock ?? 0)}
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                    </button>
+                                    {/* Content Section */}
+                                    <div className="flex-1 min-w-0 py-1">
+                                        <div className="flex flex-col gap-1">
+                                            <h3 className={`font-black text-[17px] md:text-xl text-[var(--color-on-surface)] leading-tight tracking-tight ${isUnavailable ? 'opacity-50' : ''}`} style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                {item.name}
+                                            </h3>
+                                            <div className="flex items-center gap-3">
+                                                <p className={`font-black text-xl text-primary ${isUnavailable ? 'opacity-50' : ''}`}>₹{item.price}</p>
+                                                
+                                                {/* Smart Stock Badge - Merged and improved logic */}
+                                                {!isUnavailable && stockCount > 0 && stockCount <= 3 && (
+                                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-colors ${atMaxStock ? 'bg-red-50 border-red-100 text-red-600' : 'bg-amber-50 border-amber-100 text-amber-600'}`}>
+                                                        <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${atMaxStock ? 'bg-red-500' : 'bg-amber-500'}`} />
+                                                        <span className="text-[10px] font-black uppercase tracking-wider">
+                                                            {atMaxStock ? 'Max Stock Reached' : `Only ${stockCount} Left`}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {isRemoved && (
+                                            <p className="mt-3 text-[11px] font-black text-red-600 bg-red-100/50 px-3 py-1.5 rounded-xl w-fit flex items-center gap-2">
+                                                <AlertCircle className="w-4 h-4" /> This item is no longer in inventory
+                                            </p>
+                                        )}
+                                        {isSoldOut && (
+                                            <p className="mt-3 text-[11px] font-black text-amber-600 bg-amber-100/50 px-3 py-1.5 rounded-xl w-fit flex items-center gap-2">
+                                                <AlertCircle className="w-4 h-4" /> Sold out and currently unavailable
+                                            </p>
+                                        )}
+
+                                        {isStickerProduct(item) && (
+                                            <div className="mt-4">
+                                                <DeviceModelSelector
+                                                    compact
+                                                    value={item.device_model || ''}
+                                                    onChange={(value) => updateDeviceModel(item.id, value)}
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {item.category_id === 7 && deliveryMode === 'quick' && (
+                                            <div className="mt-4 p-4 rounded-[24px] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] flex items-center justify-between group/fitting transition-all hover:bg-[var(--color-surface-white)] hover:shadow-md">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${item.fitting ? 'bg-primary text-[var(--color-on-primary)] scale-110 shadow-lg shadow-primary/20' : 'bg-[var(--color-surface-white)] text-[var(--color-on-surface-variant)]'}`}>
+                                                        <Truck className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[12px] font-black text-[var(--color-on-surface)] uppercase tracking-tight">Professional Fitting</p>
+                                                        <p className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">₹{item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => toggleFittingService(item.id)}
+                                                    className={`w-12 h-7 rounded-full transition-all relative p-1 ${item.fitting ? 'bg-primary' : 'bg-[var(--color-surface-highest)]'}`}
+                                                >
+                                                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-all transform ${item.fitting ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action Section */}
+                                    <div className="flex flex-col items-center gap-2 self-stretch justify-center md:border-l border-[var(--color-surface-high)] md:pl-8">
+                                        <div className="flex items-center gap-4 bg-[var(--color-surface-white)] rounded-2xl p-1 border border-[var(--color-surface-high)] shadow-sm">
+                                            <button
+                                                onClick={() => item.qty > 1 ? updateQuantity(item.id, item.qty - 1) : removeFromCart(item.id)}
+                                                className="w-10 h-10 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                            >
+                                                {item.qty === 1 ? <Trash2 className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+                                            </button>
+                                            <span className="w-6 text-center text-[16px] font-black text-[var(--color-on-surface)]">{item.qty}</span>
+                                            <button
+                                                onClick={() => updateQuantity(item.id, item.qty + 1)}
+                                                className="w-10 h-10 flex items-center justify-center text-primary hover:bg-[var(--color-surface-low)] rounded-xl transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                                                disabled={isUnavailable || atMaxStock}
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                {item.qty >= (item.stock ?? 0) && !isUnavailable && (
-                                    <span className="text-[9px] font-black text-amber-600 uppercase tracking-tighter">Max Stock reached</span>
-                                )}
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            <div className="glass-card p-6 mt-2 mb-20 md:mb-0 shadow-xl">
-                {hasUnavailableItems && (
-                    <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-[13px] font-bold flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                        <div>
-                            Some products are currently unavailable. Please remove them from your cart to proceed with checkout.
-                        </div>
-                    </div>
-                )}
-                {hasStickerMissingDevice && (
-                    <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-[13px] font-bold flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                        <div>Select Your Device Model for every sticker item before checkout.</div>
-                    </div>
-                )}
-                
-                <h3 className="text-lg font-black text-[var(--color-on-surface)] mb-4" style={{ fontFamily: 'Manrope, sans-serif' }}>Order Summary</h3>
-                <div className="space-y-3">
-                    <div className="flex justify-between text-[14px] font-medium text-[var(--color-on-surface-variant)]">
-                        <span>Items Subtotal (Available)</span>
-                        <span className="font-bold text-[var(--color-on-surface)]">₹{totalAmount.toLocaleString()}</span>
-                    </div>
-
-                    {fittingTotal > 0 && (
-                        <div className="flex justify-between text-[14px] font-medium text-[var(--color-on-surface-variant)]">
-                            <span>Fitting Service Total</span>
-                            <span className="font-bold text-primary">₹{fittingTotal.toLocaleString()}</span>
-                        </div>
-                    )}
-                    
-                    <div className="flex justify-between text-[14px] font-medium text-[var(--color-on-surface-variant)]">
-                        <span>Delivery Fee</span>
-                        {deliveryFee === 0 ? (
-                            <span className="text-emerald-500 font-black uppercase tracking-widest text-[10px]">Free</span>
-                        ) : (
-                            <span className="text-slate-900 font-bold">₹{deliveryFee}</span>
-                        )}
-                    </div>
-                    
-                    {totalAmount < (availability?.free_delivery_threshold || 199) && totalAmount > 0 && (
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100">
-                            <Info size={12} />
-                            Add ₹{(availability?.free_delivery_threshold || 199) - totalAmount} more for FREE delivery
-                        </div>
-                    )}
-
-                    <div className="flex justify-between text-[14px] font-medium text-[var(--color-on-surface-variant)] pb-4 border-b border-[var(--color-surface-high)]">
-                        <span>Platform Fee</span>
-                        <span className="text-slate-900 font-bold">₹{platformFee}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2">
-                        <span className="text-[17px] font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>To Pay</span>
-                        <span className="text-2xl font-black text-primary tracking-tighter" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                            ₹{finalToPay.toLocaleString()}
-                        </span>
-                    </div>
+                        );
+                    })}
                 </div>
 
-                <button
-                    disabled={isSyncing || totalAmount <= 0 || hasStickerMissingDevice}
-                    onClick={async () => {
-                        if (totalAmount <= 0) return;
+                {/* Sidebar Summary */}
+                <aside className="sticky top-24 space-y-6">
+                    <div className="glass-card p-8 shadow-2xl relative overflow-hidden">
+                        {/* Decorative background element */}
+                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl" />
                         
-                        // LOGIN CHECK
-                        if (!token) {
-                            setShowLoginModal(true);
-                            return;
-                        }
+                        <h3 className="text-xl font-black text-[var(--color-on-surface)] mb-6 flex items-center gap-2" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                            Order Summary
+                        </h3>
 
-                        setIsSyncing(true);
-                        await syncCartWithInventory();
-                        setIsSyncing(false);
+                        <div className="space-y-4">
+                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80">
+                                <span>Items Subtotal</span>
+                                <span className="text-[var(--color-on-surface)]">₹{subtotal.toLocaleString()}</span>
+                            </div>
+
+                            {fittingTotal > 0 && (
+                                <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80">
+                                    <span>Fitting Service</span>
+                                    <span className="text-primary">₹{fittingTotal.toLocaleString()}</span>
+                                </div>
+                            )}
+                            
+                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80">
+                                <span>Delivery Fee</span>
+                                {deliveryFee === 0 ? (
+                                    <span className="text-[#00E676] flex items-center gap-1.5 font-black uppercase tracking-widest text-[10px]"><CheckCircle2 size={14} /> FREE</span>
+                                ) : (
+                                    <span className="text-[var(--color-on-surface)]">₹{deliveryFee}</span>
+                                )}
+                            </div>
+                            
+                            {subtotal < freeDeliveryThreshold && subtotal > 0 && (
+                                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[10px] font-black text-amber-500 flex items-center gap-2">
+                                    <Info size={14} /> ADD ₹{freeDeliveryThreshold - subtotal} MORE FOR FREE DELIVERY
+                                </div>
+                            )}
+
+                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80 pb-6 border-b border-[var(--color-surface-high)]">
+                                <span>Platform Fee</span>
+                                <span className="text-[var(--color-on-surface)]">₹{platformFee}</span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2">
+                                <span className="text-lg font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Total Amount</span>
+                                <div className="text-right">
+                                    <span className="text-3xl font-black text-primary tracking-tighter block" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                        ₹{finalToPay.toLocaleString()}
+                                    </span>
+                                    <p className="text-[9px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">All taxes included</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            disabled={isSyncing || subtotal <= 0 || hasStickerMissingDevice}
+                            onClick={async () => {
+                                if (subtotal <= 0) return;
+                                if (!token) { setShowLoginModal(true); return; }
+
+                                setIsSyncing(true);
+                                await syncCartWithInventory();
+                                setIsSyncing(false);
+                                
+                                const state = useStore.getState();
+                                if (state.cart.some(item => item.removedFromInventory || Number(item.stock || 0) <= 0)) {
+                                    alert("Some items in your cart are no longer available.");
+                                } else if (state.cart.some(item => isStickerProduct(item) && !getDeviceModelValue(item.device_model))) {
+                                    alert("Please select a device model for all stickers.");
+                                } else {
+                                    navigate('/checkout');
+                                }
+                            }}
+                            className={`w-full mt-8 flex justify-between items-center group h-16 rounded-2xl px-6 transition-all active:scale-[0.98] ${subtotal <= 0 || isSyncing || hasStickerMissingDevice
+                                ? 'bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200' 
+                                : 'bg-slate-900 text-white shadow-2xl shadow-slate-900/20 hover:bg-slate-800'
+                            }`}
+                        >
+                            <span className="font-black uppercase tracking-[0.2em] text-[11px]">{isSyncing ? 'Verifying...' : 'Checkout'}</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl font-black">₹{finalToPay.toLocaleString()}</span>
+                                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                        </button>
                         
-                        // Check after sync
-                        const state = useStore.getState();
-                        const stillHasUnavailable = state.cart.some(item => item.removedFromInventory || (item.stock ?? 0) <= 0);
-                        const stillMissingDevice = state.cart.some(item => isStickerProduct(item) && !getDeviceModelValue(item.device_model));
-                        if (stillHasUnavailable) {
-                            alert("Some items in your cart are no longer available. Please remove them before proceeding.");
-                        } else if (stillMissingDevice) {
-                            alert("Select Your Device Model for every sticker item before checkout.");
-                        } else {
-                            navigate('/checkout');
-                        }
-                    }}
-                    className={`w-full mt-6 flex justify-between items-center group h-14 rounded-2xl px-6 transition-all active:scale-[0.98] ${totalAmount <= 0 || isSyncing || hasStickerMissingDevice
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                        : 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800'
-                    }`}
-                >
-                    <span className="font-black uppercase tracking-widest text-[12px]">{isSyncing ? 'Verifying...' : 'Proceed to Checkout'}</span>
-                    <div className="flex items-center gap-3">
-                        <span className="text-lg font-black">
-                            ₹{finalToPay.toLocaleString()}
-                        </span>
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        {hasStickerMissingDevice && !isSyncing && (
+                            <p className="mt-4 text-center text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center justify-center gap-2">
+                                <AlertCircle size={12} /> Select Device Model(s) to proceed
+                            </p>
+                        )}
+                        
+                        {subtotal <= 0 && !isSyncing && cart.length > 0 && (
+                            <p className="mt-4 text-center text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center justify-center gap-2">
+                                <AlertCircle size={12} /> Add available items to proceed
+                            </p>
+                        )}
                     </div>
-                </button>
-                
-                {totalAmount <= 0 && cart.length > 0 && (
-                    <p className="mt-4 text-center text-[12px] font-bold text-red-500">
-                        At least one available item is required for checkout.
-                    </p>
-                )}
+
+                    <div className="glass-card p-6 bg-primary/[0.02] border-primary/5">
+                        <div className="flex gap-4 items-start">
+                            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center flex-shrink-0 text-primary">
+                                <CheckCircle2 />
+                            </div>
+                            <div>
+                                <h4 className="font-black text-sm text-slate-900 mb-1">Safe & Secure</h4>
+                                <p className="text-xs font-medium text-slate-500 leading-relaxed">Your order is protected by our super-fast hyperlocal delivery network and 100% genuine product guarantee.</p>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
             </div>
+
             {/* Login Required Modal */}
             {showLoginModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -336,7 +353,7 @@ function Cart() {
                             <X className="w-5 h-5 text-slate-400" />
                         </button>
 
-                        <div className="w-20 h-20 bg-primary/10 text-primary rounded-3xl flex items-center justify-center mb-6 shadow-inner rotate-3">
+                        <div className="w-20 h-20 bg-primary/10 text-primary rounded-[32px] flex items-center justify-center mb-6 shadow-inner rotate-3">
                             <LogIn className="w-10 h-10" />
                         </div>
 
@@ -344,7 +361,7 @@ function Cart() {
                             Login Required
                         </h2>
                         <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8 px-2">
-                            Please sign in to experience our <span className="text-primary font-bold">Better Experience</span> and continue with your order process.
+                            Please sign in to continue with your premium checkout experience.
                         </p>
 
                         <div className="flex flex-col w-full gap-3">
@@ -356,7 +373,7 @@ function Cart() {
                             </button>
                             <button 
                                 onClick={() => setShowLoginModal(false)}
-                                className="h-14 w-full text-sm font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest"
+                                className="h-14 w-full text-[11px] font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest"
                             >
                                 Maybe Later
                             </button>
@@ -364,6 +381,9 @@ function Cart() {
                     </div>
                 </div>
             )}
+            
+            {/* Bottom spacing for mobile nav */}
+            <div className="h-20 lg:hidden" />
         </div>
     )
 }

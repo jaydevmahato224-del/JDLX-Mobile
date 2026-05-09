@@ -23,28 +23,30 @@ export default function DeviceModelSelector({ value, onChange, required = false,
   }, []);
 
   return (
-    <div className={compact ? 'mt-3 w-full max-w-md' : 'rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm'}>
-      <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500">
-        Select Your Device Model {required && <span className="text-red-500">*</span>}
+    <div className={compact ? 'w-full' : 'rounded-3xl border border-[var(--color-surface-high)] bg-[var(--color-surface-white)] p-5 shadow-lg backdrop-blur-md'}>
+      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface)]/70 mb-2">
+        Select Your Device Model {required && <span className="text-red-500 font-bold">*</span>}
       </label>
-      <input
-        required={required}
-        type="text"
-        list={listId}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Search or type your device model"
-        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-      />
-      <datalist id={listId}>
-        {models.map((model) => (
-          <option
-            key={model.id}
-            value={model.name}
-            label={[model.brand, model.type].filter(Boolean).join(' • ')}
-          />
-        ))}
-      </datalist>
+      <div className="relative group">
+        <input
+          required={required}
+          type="text"
+          list={listId}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Search or type your device model"
+          className="w-full rounded-2xl border border-[var(--color-surface-high)] bg-[var(--color-surface-white)] px-5 py-4 text-[14px] font-bold text-[var(--color-on-surface)] outline-none transition-all duration-300 focus:border-primary focus:ring-4 focus:ring-primary/5 placeholder:text-[var(--color-on-surface-variant)]/40 shadow-sm"
+        />
+        <datalist id={listId}>
+          {models.map((model) => (
+            <option
+              key={model.id}
+              value={model.name}
+              label={[model.brand, model.type].filter(Boolean).join(' • ')}
+            />
+          ))}
+        </datalist>
+      </div>
     </div>
   );
 }

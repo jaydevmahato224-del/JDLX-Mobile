@@ -268,7 +268,7 @@ export default function ProductDetails() {
                 </span>
               </div>
 
-              <div className="overflow-hidden bg-white">
+              <div className="overflow-hidden bg-[var(--color-surface-low)]">
                 <img
                   src={getProductImages(product)[activeImageIndex]}
                   alt={product.name}
@@ -279,7 +279,7 @@ export default function ProductDetails() {
               {/* Multi-Image Thumbnails */}
               {getProductImages(product).length > 1 && (
                 <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center gap-2 px-6">
-                  <div className="flex gap-2 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-black/10 backdrop-blur-md border border-white/10">
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-[var(--color-surface)]/10 backdrop-blur-md border border-[var(--color-surface-high)]">
                     {getProductImages(product).map((img, idx) => (
                       <button
                         key={idx}
@@ -302,12 +302,12 @@ export default function ProductDetails() {
                 <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
                   <Truck className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]" style={{ fontFamily: 'Inter, sans-serif' }}>Delivery</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface)]/60" style={{ fontFamily: 'Inter, sans-serif' }}>Delivery</span>
               </div>
               <div className="mt-4 text-[17px] font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>
                 {deliveryTimeDisplay}
               </div>
-              <p className="mt-2 text-[13px] font-medium leading-relaxed text-[var(--color-on-surface-variant)]">{deliveryNoteDisplay}</p>
+              <p className="mt-2 text-[13px] font-medium leading-relaxed text-[var(--color-on-surface)]/60">{deliveryNoteDisplay}</p>
             </div>
 
             <div className="glass-card p-6 transition-transform hover:-translate-y-1">
@@ -315,10 +315,10 @@ export default function ProductDetails() {
                 <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-500">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]" style={{ fontFamily: 'Inter, sans-serif' }}>Quality</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface)]/60" style={{ fontFamily: 'Inter, sans-serif' }}>Quality</span>
               </div>
               <div className="mt-4 text-[17px] font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Freshly packed</div>
-              <p className="mt-2 text-[13px] font-medium leading-relaxed text-[var(--color-on-surface-variant)]">Stored and packed from managed inventory batches.</p>
+              <p className="mt-2 text-[13px] font-medium leading-relaxed text-[var(--color-on-surface)]/60">Stored and packed from managed inventory batches.</p>
             </div>
 
             <div className="glass-card p-6 transition-transform hover:-translate-y-1">
@@ -326,10 +326,10 @@ export default function ProductDetails() {
                 <div className="p-2.5 rounded-2xl bg-sky-500/10 text-sky-500">
                   <Store className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]" style={{ fontFamily: 'Inter, sans-serif' }}>Availability</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface)]/60" style={{ fontFamily: 'Inter, sans-serif' }}>Availability</span>
               </div>
               <div className="mt-4 text-[17px] font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>{stock} units</div>
-              <p className="mt-2 text-[13px] font-medium leading-relaxed text-[var(--color-on-surface-variant)]">Exact inventory shown before cart and checkout.</p>
+              <p className="mt-2 text-[13px] font-medium leading-relaxed text-[var(--color-on-surface)]/60">Exact inventory shown before cart and checkout.</p>
             </div>
           </div>
         </div>
@@ -367,7 +367,7 @@ export default function ProductDetails() {
 
             <div className="mt-8 flex flex-wrap items-center gap-5">
               <div className="text-4xl font-black tracking-tighter text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>₹{product.price}</div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider text-emerald-600 border border-emerald-500/20">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#00E676]/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider text-[#00E676] border border-[#00E676]/20">
                 <BadgePercent className="h-4 w-4" />
                 Best Local Pricing
               </div>
@@ -385,15 +385,15 @@ export default function ProductDetails() {
             )}
 
             {/* Improved Return Policy Section */}
-            <div className="mt-6 overflow-hidden rounded-[2rem] border border-emerald-100 bg-emerald-50/50 shadow-sm transition-all hover:shadow-md">
-              <div className="flex items-center justify-between bg-emerald-50 px-6 py-4 border-b border-emerald-100">
+            <div className="mt-6 overflow-hidden rounded-[2rem] border border-[var(--color-surface-high)] bg-[var(--color-surface-low)] shadow-sm transition-all hover:shadow-md">
+              <div className="flex items-center justify-between bg-[var(--color-surface)] px-6 py-4 border-b border-[var(--color-surface-high)]">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-white p-2 text-emerald-600 shadow-sm">
+                  <div className="rounded-xl bg-[var(--color-surface-white)] p-2 text-emerald-500 shadow-sm">
                     <Undo2 className="w-4 h-4" />
                   </div>
-                  <h4 className="text-[11px] font-black uppercase tracking-[0.1em] text-emerald-800">Return & Replacement</h4>
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.1em] text-[var(--color-on-surface)]/80">Return & Replacement</h4>
                 </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[9px] font-black uppercase text-emerald-700">Verified</span>
+                <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase text-emerald-500">Verified</span>
               </div>
               
               <div className="p-6">
@@ -643,12 +643,12 @@ export default function ProductDetails() {
 
             {activeTab === 'overview' ? (
               <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                <div className="rounded-[2rem] p-6 bg-emerald-50/40 border border-emerald-100 flex flex-col gap-4">
+                <div className="rounded-[2rem] p-6 bg-emerald-500/5 border border-emerald-500/10 flex flex-col gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shadow-sm">
                        <Undo2 className="w-5 h-5" />
                     </div>
-                    <h4 className="text-[11px] font-black text-emerald-800 uppercase tracking-widest">Return Policy</h4>
+                    <h4 className="text-[11px] font-black text-emerald-500 uppercase tracking-widest">Return Policy</h4>
                   </div>
                   <div className="space-y-2">
                     {(product.final_return_policy || '7 Days Return Policy')
@@ -660,30 +660,30 @@ export default function ProductDetails() {
                         return (
                           <div key={i} className="flex items-start gap-2.5">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                            <p className="text-[13px] font-bold text-emerald-900/80 leading-tight line-clamp-1">{cleanPoint}</p>
+                            <p className="text-[13px] font-bold text-[var(--color-on-surface)]/70 leading-tight line-clamp-1">{cleanPoint}</p>
                           </div>
                         );
                       })}
                     <button 
                         onClick={() => setShowPolicyModal(true)}
-                        className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                        className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:underline"
                     >
                         + See More Details
                     </button>
                   </div>
                 </div>
                 
-                <div className="rounded-[2rem] p-6 bg-blue-50/40 border border-blue-100 flex flex-col gap-4">
+                <div className="rounded-[2rem] p-6 bg-blue-500/5 border border-blue-500/10 flex flex-col gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shadow-sm">
                        <Truck className="w-5 h-5" />
                     </div>
-                    <h4 className="text-[11px] font-black text-blue-800 uppercase tracking-widest">Delivery Time</h4>
+                    <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-widest">Delivery Time</h4>
                   </div>
-                  <p className="text-sm font-black text-blue-900 bg-white/50 px-4 py-2 rounded-xl border border-blue-100/50 inline-block">
+                  <p className="text-sm font-black text-[var(--color-on-surface)] bg-[var(--color-surface-white)] px-4 py-2 rounded-xl border border-[var(--color-surface-high)] inline-block">
                     {deliveryTimeDisplay}
                   </p>
-                  <p className="text-[11px] font-bold text-blue-700/60 leading-relaxed uppercase tracking-tight italic">
+                  <p className="text-[11px] font-bold text-blue-500/60 leading-relaxed uppercase tracking-tight italic">
                     {deliveryMode === 'quick' ? 'Hyperlocal dispatch from the active dark store.' : 'Reliable fulfillment from our central warehouse.'}
                   </p>
                 </div>

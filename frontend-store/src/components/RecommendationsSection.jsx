@@ -112,17 +112,17 @@ const RecommendedCard = memo(({ product, onAddToCart }) => {
         </button>
       </div>
       <div className="p-5">
-        <span className="text-[10px] font-black uppercase tracking-widest text-primary/60 mb-1 block">
+        <span className="text-[10px] font-black uppercase tracking-widest text-primary/80 mb-1 block">
           {product.category || 'Featured Deal'}
         </span>
-        <h3 className="text-sm font-bold text-slate-900 mb-2 line-clamp-1 group-hover:text-primary transition-colors">
+        <h3 className="text-sm font-bold text-[var(--color-on-surface)] mb-2 line-clamp-1 group-hover:text-primary transition-colors">
           {product.name}
         </h3>
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-lg font-black text-slate-900">₹{product.price}</span>
+            <span className="text-lg font-black text-[var(--color-on-surface)]">₹{product.price}</span>
             {product.mrp > product.price && (
-              <span className="text-[10px] text-slate-400 line-through">₹{product.mrp}</span>
+              <span className="text-[10px] text-[var(--color-on-surface)]/40 line-through">₹{product.mrp}</span>
             )}
           </div>
           <div className="flex items-center gap-1 text-[10px] font-bold text-red-500">
@@ -195,9 +195,9 @@ export default function RecommendationsSection() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Zap size={16} className="text-amber-500 fill-amber-500" />
-              <span className="ui-label text-amber-600">Limited Time Offers</span>
+              <span className="ui-label text-amber-500">Limited Time Offers</span>
             </div>
-            <h2 className="ui-h2 text-slate-900">Best Deals For You</h2>
+            <h2 className="ui-h2 text-[var(--color-on-surface)]">Best Deals For You</h2>
           </div>
           <Link to="/search" className="hidden sm:flex items-center gap-2 text-sm font-bold text-primary group">
             Explore All Deals <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />

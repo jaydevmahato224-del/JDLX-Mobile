@@ -62,7 +62,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
   return (
     <article className="card-standard group relative flex flex-col h-full hover:border-primary/30 transition-all duration-300">
-      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-[1.1] overflow-hidden bg-slate-50 cursor-pointer">
+      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-[1.1] overflow-hidden bg-[var(--color-surface-low)] cursor-pointer transition-colors">
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-2">
           {outOfStock ? (
             (Number(product.is_featured) === 1 || product.is_featured === true) ? (
@@ -96,16 +96,16 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">
+          <span className="text-[10px] font-black uppercase tracking-widest text-primary/80">
             {product.category || 'Product'}
           </span>
           <div className="flex items-center gap-1">
-             <span className="text-[10px] font-black text-slate-400">MRP</span>
-             <span className="text-[10px] font-black text-slate-400 line-through">₹{product.mrp || product.price}</span>
+             <span className="text-[10px] font-black text-[var(--color-on-surface)]/30">MRP</span>
+             <span className="text-[10px] font-black text-[var(--color-on-surface)]/30 line-through">₹{product.mrp || product.price}</span>
           </div>
         </div>
         
-        <h3 className="mb-1 line-clamp-2 text-sm font-black tracking-tight text-slate-900 group-hover:text-primary transition-colors">
+        <h3 className="mb-1 line-clamp-2 text-sm font-black tracking-tight text-[var(--color-on-surface)] group-hover:text-primary transition-colors">
           {product.name}
         </h3>
 
@@ -114,10 +114,10 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
             <div className="flex items-center gap-0.5 text-amber-400">
               <Star size={12} fill="currentColor" />
             </div>
-            <span className="text-[11px] font-black text-slate-700">
+            <span className="text-[11px] font-black text-[var(--color-on-surface)]/80">
               {Number(product.average_rating).toFixed(1)}
             </span>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+            <span className="text-[10px] text-[var(--color-on-surface)]/40 font-bold uppercase tracking-tight">
               ({product.total_reviews} Reviews)
             </span>
           </div>
@@ -125,7 +125,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
         <div className="mt-auto flex items-center justify-between gap-4">
           <div className="flex flex-col">
-            <span className="text-lg font-black text-slate-900">₹{product.price}</span>
+            <span className="text-lg font-black text-[var(--color-on-surface)]">₹{product.price}</span>
           </div>
 
           {quantity > 0 ? (
@@ -170,7 +170,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
                 onAddToCart(product);
                 toast.success('Added to cart');
               }}
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-slate-800 active:scale-90 active:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-slate-900/10"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:opacity-90 active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20"
             >
               <ShoppingBag className="h-4 w-4" />
               Add
@@ -206,16 +206,16 @@ function CategoryChips({ categories, selected, onSelect }) {
 
 function FiltersBar({ inputRef, query, onQueryChange, stockFilter, onStockFilterChange, sortBy, onSortByChange, hasActiveFilters, onClear }) {
   return (
-    <div className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between border-t border-slate-100">
+    <div className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between border-t border-[var(--color-surface-high)]">
       <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-on-surface)]/40" />
         <input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search items by name or category..."
-          className="w-full h-12 rounded-2xl bg-slate-50 pl-11 pr-4 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+          className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] pl-11 pr-4 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-[var(--color-on-surface)]/30"
         />
       </div>
 
@@ -346,13 +346,13 @@ export default function SearchPage() {
         <div className="flex items-center gap-4">
            <button 
              onClick={() => navigate('/')}
-             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all active:scale-90"
+             className="p-2 rounded-xl bg-[var(--color-surface-high)] hover:bg-[var(--color-surface-white)] transition-all active:scale-90 text-[var(--color-on-surface)]"
            >
              <ChevronRight size={20} className="rotate-180" />
            </button>
            <div className="space-y-1">
-             <h1 className="text-3xl font-black tracking-tight text-slate-900">Explore Catalog</h1>
-             <p className="text-sm text-slate-500 font-medium">
+             <h1 className="text-3xl font-black tracking-tight text-[var(--color-on-surface)]">Explore Catalog</h1>
+             <p className="text-sm text-[var(--color-on-surface)]/60 font-medium">
                {debouncedQuery ? `Showing results for "${debouncedQuery}"` : (query ? 'Searching...' : 'Discover our full range of essentials')}
              </p>
            </div>
@@ -377,9 +377,9 @@ export default function SearchPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-8 w-1 bg-primary rounded-full" />
-            <h2 className="text-xl font-black tracking-tight text-slate-900">
+            <h2 className="text-xl font-black tracking-tight text-[var(--color-on-surface)]">
               {selectedCategory === 'All' ? (debouncedQuery ? 'Search Results' : 'All Products') : `${categories.find(c => c.id === selectedCategory)?.name || 'Filtered'} Selection`}
-              {displayProducts.length > 0 && <span className="ml-2 text-sm font-medium text-slate-400">({displayProducts.length})</span>}
+              {displayProducts.length > 0 && <span className="ml-2 text-sm font-medium text-[var(--color-on-surface)]/40">({displayProducts.length})</span>}
             </h2>
           </div>
           {(pageRefreshing || (loading && hasLoadedOnce)) && (

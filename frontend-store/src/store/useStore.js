@@ -26,7 +26,8 @@ const syncCartWithServer = async (productId, quantity, action = 'add') => {
 
 const getAvailableStock = (product) => {
     if (!product) return 0;
-    const physical = Number(product.physical_stock ?? product.stock ?? 0);
+    // Standardize stock field - preferring 'stock' as per refactoring but keeping fallbacks
+    const physical = Number(product.stock ?? product.physical_stock ?? product.stock_quantity ?? 0);
     const hardReserved = Number(product.hard_reserved ?? 0);
     return Math.max(0, physical - hardReserved);
 }
@@ -115,8 +116,9 @@ export const useStore = create((set) => ({
     },
     addToCart: (product) => set((state) => {
         const deviceModel = getDeviceModelValue(product?.device_model);
-        const existing = state.cart.find(item => item.id === product.id);
+        const existing = state.cart.find(item => String(item.id) === String(product.id));
         const availableStock = getAvailableStock(product)
+        
         if (availableStock <= 0) {
             return state
         }
@@ -127,7 +129,7 @@ export const useStore = create((set) => ({
                 return state
             }
             newCart = state.cart.map(item =>
-                item.id === product.id ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: item.qty + 1 } : item
+                String(item.id) === String(product.id) ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: item.qty + 1 } : item
             );
         } else {
             newCart = [
@@ -148,7 +150,7 @@ export const useStore = create((set) => ({
         return { cart: newCart };
     }),
     removeFromCart: (productId) => set((state) => {
-        const newCart = state.cart.filter(item => item.id !== productId);
+        const newCart = state.cart.filter(item => String(item.id) !== String(productId));
         localStorage.setItem('cart', JSON.stringify(newCart));
         syncCartWithServer(productId, 0, 'remove');
         return { cart: newCart };
@@ -156,7 +158,7 @@ export const useStore = create((set) => ({
     updateQuantity: (productId, qty) => set((state) => {
         let finalQty = qty;
         const newCart = state.cart.map(item => {
-            if (item.id !== productId) return item;
+            if (String(item.id) !== String(productId)) return item;
             const maxQty = getAvailableStock(item);
             finalQty = Math.max(1, Math.min(qty, maxQty));
             return { ...item, qty: finalQty };
@@ -168,14 +170,14 @@ export const useStore = create((set) => ({
     updateDeviceModel: (productId, deviceModel) => set((state) => {
         const normalizedDeviceModel = getDeviceModelValue(deviceModel);
         const newCart = state.cart.map(item =>
-            item.id === productId ? { ...item, device_model: normalizedDeviceModel || null } : item
+            String(item.id) === String(productId) ? { ...item, device_model: normalizedDeviceModel || null } : item
         );
         localStorage.setItem('cart', JSON.stringify(newCart));
         return { cart: newCart };
     }),
     toggleFittingService: (productId) => set((state) => {
         const newCart = state.cart.map(item =>
-            item.id === productId ? { ...item, fitting: !item.fitting } : item
+            String(item.id) === String(productId) ? { ...item, fitting: !item.fitting } : item
         );
         localStorage.setItem('cart', JSON.stringify(newCart));
         return { cart: newCart };
@@ -257,7 +259,9 @@ export const useStore = create((set) => ({
                         return { ...item, removedFromInventory: true, stock: 0 };
                     }
                     const freshProduct = await res.json();
-                    const physical = Number(freshProduct.physical_stock ?? freshProduct.stock ?? 0);
+                    
+                    // Standardize stock field matching the refactor
+                    const physical = Number(freshProduct.stock ?? freshProduct.physical_stock ?? freshProduct.stock_quantity ?? 0);
                     const hardReserved = Number(freshProduct.hard_reserved ?? 0);
                     const available = Math.max(0, physical - hardReserved);
                     
@@ -308,7 +312,7 @@ export const useStore = create((set) => ({
             return;
         }
 
-        const isInWishlist = state.wishlist.some(item => item.id === product.id);
+        const isInWishlist = state.wishlist.some(item => String(item.id) === String(product.id));
         
         try {
             if (isInWishlist) {
@@ -317,7 +321,7 @@ export const useStore = create((set) => ({
                     headers: { 'Authorization': `Bearer ${state.token}` }
                 });
                 if (res.ok) {
-                    const newWishlist = state.wishlist.filter(item => item.id !== product.id);
+                    const newWishlist = state.wishlist.filter(item => String(item.id) !== String(product.id));
                     set({ wishlist: newWishlist });
                     localStorage.setItem('wishlist', JSON.stringify(newWishlist));
                 }

@@ -8,6 +8,23 @@ function AdminLogin() {
     const navigate = useNavigate();
     const setUser = useStore(state => state.setUser);
     const adminUser = useStore(state => state.adminUser);
+    const [errorMessage, setErrorMessage] = useState(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const error = params.get('error');
+        const details = params.get('details');
+        if (error) {
+            console.error('OAuth Error:', error, details);
+            if (error === 'not_authorized') {
+                setErrorMessage("You are not authorized to access the admin panel.");
+            } else if (error === 'oauth_failed') {
+                setErrorMessage("Google Sign-In failed. Session mismatch or cookie issue. Try incognito mode.");
+            } else {
+                setErrorMessage(`Login failed: ${error} ${details ? '(' + details + ')' : ''}`);
+            }
+        }
+    }, []);
 
     // Auto-redirect if already logged in as admin
     useEffect(() => {
@@ -19,7 +36,8 @@ function AdminLogin() {
     // Same logic as before, using backend OAuth URL
     const backendOrigin = API_BASE_URL
         .replace(/\/api\/?$/, '');
-    const oauthLoginUrl = `${backendOrigin}/admin/login/google`;
+    const frontendUrl = encodeURIComponent(window.location.origin);
+    const oauthLoginUrl = `${backendOrigin}/admin/login/google?frontend_url=${frontendUrl}`;
 
     return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -38,6 +56,12 @@ function AdminLogin() {
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight text-center">JDLX Official Admin Panel</h1>
                     <p className="text-sm text-slate-500 mt-1">Authorized personnel only.</p>
                 </div>
+
+                {errorMessage && (
+                    <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-medium text-center">
+                        {errorMessage}
+                    </div>
+                )}
 
                 <div className="w-full mt-4 flex justify-center mb-6">
                     <a

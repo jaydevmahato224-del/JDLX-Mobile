@@ -38,6 +38,7 @@ function AdminLayout({ children }) {
         { path: '/admin/activity-logs', icon: FileText, label: 'Activity Logs', allowedRoles: ['super_admin', 'admin'] },
         { path: '/admin/audit-logs', icon: FileText, label: 'Audit Logs', allowedRoles: ['super_admin'] },
         { path: '/admin/backups', icon: Database, label: 'Backups', allowedRoles: ['super_admin'] },
+        { path: '/admin/database', icon: Database, label: 'Database Explorer', allowedRoles: ['super_admin'], extraStyle: 'text-amber-400 font-bold' },
         { path: '/admin/recovery', icon: RefreshCcw, label: 'Data Recovery', extraStyle: 'text-red-600 bg-red-50', allowedRoles: ['super_admin'] },
     ];
 

@@ -49,6 +49,7 @@ from auth.role_guard import normalize_role, require_admin, require_super_admin
 from auth.permission_guard import require_permission
 from warehouse_routes import warehouse_bp, issue_warehouse_token
 from delivery_routes import delivery_bp
+from admin_db import admin_db_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location
@@ -136,6 +137,7 @@ CORS(
 # --- Blueprint Registration ---
 app.register_blueprint(warehouse_bp)
 app.register_blueprint(delivery_bp)
+app.register_blueprint(admin_db_bp)
 
 
 # ==============================================================================
@@ -363,8 +365,7 @@ oauth.register(
 )
 
 # 2. Admin Panel OAuth client (dedicated credentials for admin login at port 5174)
-oauth_admin = OAuth(app)
-oauth_admin.register(
+oauth.register(
     name='google_admin',
     client_id=ADMIN_GOOGLE_CLIENT_ID,
     client_secret=ADMIN_GOOGLE_CLIENT_SECRET,
@@ -376,8 +377,7 @@ oauth_admin.register(
 )
 
 # 3. Partner Portal OAuth client (dedicated credentials for warehouse/delivery)
-oauth_partner = OAuth(app)
-oauth_partner.register(
+oauth.register(
     name='google_partner',
     client_id=PARTNER_GOOGLE_CLIENT_ID,
     client_secret=PARTNER_GOOGLE_CLIENT_SECRET,
@@ -390,7 +390,7 @@ oauth_partner.register(
 
 # Make oauth accessible to blueprints (e.g., warehouse_routes)
 app.config["OAUTH_CLIENT"] = oauth
-app.config["PARTNER_OAUTH_CLIENT"] = oauth_partner
+app.config["PARTNER_OAUTH_CLIENT"] = oauth
 
 # --- Helpers ---
 
@@ -619,24 +619,77 @@ def login_google():
 @app.route('/admin/login/google', methods=['GET'])
 def admin_login_google():
     """Redirects to Google using the dedicated Admin OAuth client."""
-    return oauth_admin.google_admin.authorize_redirect(ADMIN_GOOGLE_REDIRECT_URI, prompt='select_account')
+    frontend_url = request.args.get('frontend_url')
+    if not frontend_url:
+        referer = request.headers.get('Referer')
+        if referer:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+    
+    if not frontend_url:
+        frontend_url = ADMIN_FRONTEND_URL
+
+    # Build manual redirect URL to bypass Authlib and use stateless frontend URL passing
+    from urllib.parse import urlencode
+    params = {
+        'client_id': ADMIN_GOOGLE_CLIENT_ID,
+        'redirect_uri': ADMIN_GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid email profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+        'prompt': 'select_account',
+        'state': frontend_url
+    }
+    auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
+    return redirect(auth_url)
 
 
 @app.route('/admin/auth/google/callback', methods=['GET'])
 def admin_google_callback():
     """Callback for admin authentication; enforces admin role requirements."""
+    # Retrieve the dynamic frontend URL passed through the state parameter
+    state = request.args.get('state')
+    frontend_url = state if state and state.startswith('http') else ADMIN_FRONTEND_URL
+    
     try:
-        token = oauth_admin.google_admin.authorize_access_token()
+        # Bypassing Authlib's strict session state validation which often fails on localhost
+        # due to cross-site cookie dropping (SameSite/Secure restrictions).
+        code = request.args.get('code')
+        if not code:
+            return redirect(f"{frontend_url}/admin/login?error=oauth_failed&details=Missing authorization code")
+
+        # 1. Exchange code for token directly
+        import requests
+        token_resp = requests.post(
+            'https://oauth2.googleapis.com/token',
+            data={
+                'client_id': ADMIN_GOOGLE_CLIENT_ID,
+                'client_secret': ADMIN_GOOGLE_CLIENT_SECRET,
+                'code': code,
+                'grant_type': 'authorization_code',
+                'redirect_uri': ADMIN_GOOGLE_REDIRECT_URI
+            }
+        ).json()
+
+        if 'error' in token_resp:
+            logger.error(f"Token exchange error: {token_resp}")
+            return redirect(f"{frontend_url}/admin/login?error=oauth_failed&details={token_resp.get('error_description', token_resp['error'])}")
+
+        access_token = token_resp.get('access_token')
+        
+        # 2. Fetch userinfo
+        userinfo = requests.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            headers={'Authorization': f'Bearer {access_token}'}
+        ).json()
+
+        if 'error' in userinfo or 'email' not in userinfo:
+            logger.error(f"Userinfo error: {userinfo}")
+            return redirect(f"{frontend_url}/admin/login?error=userinfo_failed")
+            
     except Exception as exc:
         logger.error(f"Admin Google OAuth callback failed: {str(exc)}")
-        return redirect(f"{ADMIN_FRONTEND_URL}/admin/login?error=oauth_failed")
-
-    userinfo = token.get('userinfo')
-    if not userinfo:
-        try:
-            userinfo = oauth_admin.google_admin.get('https://www.googleapis.com/oauth2/v3/userinfo').json()
-        except Exception:
-            return redirect(f"{ADMIN_FRONTEND_URL}/admin/login?error=userinfo_failed")
+        return redirect(f"{frontend_url}/admin/login?error=oauth_failed&details={str(exc)}")
 
     google_id = userinfo.get('sub')
     email = (userinfo.get('email') or '').strip().lower()
@@ -644,11 +697,11 @@ def admin_google_callback():
     picture = userinfo.get('picture', '')
 
     if not google_id or not email:
-        return redirect(f"{ADMIN_FRONTEND_URL}/admin/login?error=incomplete_profile")
+        return redirect(f"{frontend_url}/admin/login?error=incomplete_profile")
 
     ip_address = get_client_ip()
     if is_account_locked(email):
-        return redirect(f"{ADMIN_FRONTEND_URL}/admin/login?error=account_locked")
+        return redirect(f"{frontend_url}/admin/login?error=account_locked")
 
     user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
     user_role = (user_data.get('role') or '').lower()
@@ -656,10 +709,10 @@ def admin_google_callback():
     admin_roles = {'admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'}
     if user_role not in admin_roles:
         logger.warning(f"Non-admin login attempt via admin OAuth: {email} (role={user_role})")
-        return redirect(f"{ADMIN_FRONTEND_URL}/admin/login?error=unauthorized")
+        return redirect(f"{frontend_url}/admin/login?error=unauthorized")
 
     encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
-    return redirect(f"{ADMIN_FRONTEND_URL}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
+    return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
 
 
 @app.route('/google/callback', methods=['GET'])

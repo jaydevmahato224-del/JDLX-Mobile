@@ -132,11 +132,12 @@ def init_db():
                 return
             print(f"Ignored DDL error: {e}")
     
-    try:
-        # Enable Write-Ahead Logging for better concurrency (fails on Turso HTTP)
-        cursor.execute('PRAGMA journal_mode=WAL;')
-    except Exception as e:
-        print(f"Skipping PRAGMA (safe for Turso): {e}")
+    if not USE_TURSO:
+        try:
+            # Enable Write-Ahead Logging for better concurrency (only for local SQLite)
+            cursor.execute('PRAGMA journal_mode=WAL;')
+        except Exception as e:
+            print(f"Skipping PRAGMA: {e}")
 
     # Users Table
     cursor.execute('''

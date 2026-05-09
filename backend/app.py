@@ -686,33 +686,35 @@ def admin_google_callback():
         if 'error' in userinfo or 'email' not in userinfo:
             logger.error(f"Userinfo error: {userinfo}")
             return redirect(f"{frontend_url}/admin/login?error=userinfo_failed")
+
+        google_id = userinfo.get('sub')
+        email = (userinfo.get('email') or '').strip().lower()
+        name = userinfo.get('name', '')
+        picture = userinfo.get('picture', '')
+
+        if not google_id or not email:
+            return redirect(f"{frontend_url}/admin/login?error=incomplete_profile")
+
+        ip_address = get_client_ip()
+        if is_account_locked(email):
+            return redirect(f"{frontend_url}/admin/login?error=account_locked")
+
+        user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
+        user_role = (user_data.get('role') or '').lower()
+
+        admin_roles = {'admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'}
+        if user_role not in admin_roles:
+            logger.warning(f"Non-admin login attempt via admin OAuth: {email} (role={user_role})")
+            return redirect(f"{frontend_url}/admin/login?error=unauthorized")
+
+        encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
+        return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
             
     except Exception as exc:
-        logger.error(f"Admin Google OAuth callback failed: {str(exc)}")
-        return redirect(f"{frontend_url}/admin/login?error=oauth_failed&details={str(exc)}")
-
-    google_id = userinfo.get('sub')
-    email = (userinfo.get('email') or '').strip().lower()
-    name = userinfo.get('name', '')
-    picture = userinfo.get('picture', '')
-
-    if not google_id or not email:
-        return redirect(f"{frontend_url}/admin/login?error=incomplete_profile")
-
-    ip_address = get_client_ip()
-    if is_account_locked(email):
-        return redirect(f"{frontend_url}/admin/login?error=account_locked")
-
-    user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
-    user_role = (user_data.get('role') or '').lower()
-
-    admin_roles = {'admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'}
-    if user_role not in admin_roles:
-        logger.warning(f"Non-admin login attempt via admin OAuth: {email} (role={user_role})")
-        return redirect(f"{frontend_url}/admin/login?error=unauthorized")
-
-    encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
-    return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
+        logger.error(f"Admin Google OAuth callback failed: {str(exc)}", exc_info=True)
+        # We use a broader try-except to ensure any DB or logic errors redirect back to the login page 
+        # with the error details instead of crashing into a JSON response.
+        return redirect(f"{frontend_url}/admin/login?error=auth_error&details={quote(str(exc))}")
 
 
 @app.route('/google/callback', methods=['GET'])

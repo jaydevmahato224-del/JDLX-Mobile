@@ -126,6 +126,10 @@ else:
         r"^http://192\.168\.\d+\.\d+:517[3-5]$",
         r"^http://10\.\d+\.\d+\.\d+:517[3-5]$",
         r"^https://jdlx-mobile-wearhouse\.vercel\.app$",
+        r"^https://jdlx-mobile-warehouse\.vercel\.app$",
+        r"^https://jdlx-mobile\.vercel\.app$",
+        r"^https://jdlx-admin\.vercel\.app$",
+        r"^https://jdlx-official-admin\.vercel\.app$",
     ]
 
 CORS(

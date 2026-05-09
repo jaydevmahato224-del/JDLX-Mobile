@@ -1,14 +1,13 @@
-import sqlite3
+from database import get_db
 
 
-DATABASE_PATH = "jdlx.db"
 FAILED_LOGIN_LIMIT = 5
 LOCKOUT_MINUTES = 10
 
 
 def record_login_attempt(email, ip_address, status):
     normalized_email = (email or "unknown").strip().lower()
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''
@@ -23,8 +22,7 @@ def record_login_attempt(email, ip_address, status):
 
 def get_failed_attempt_count(email):
     normalized_email = (email or "unknown").strip().lower()
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''
@@ -36,7 +34,8 @@ def get_failed_attempt_count(email):
         ''',
         (normalized_email, f"-{LOCKOUT_MINUTES} minutes"),
     )
-    count = cursor.fetchone()["count"]
+    row = cursor.fetchone()
+    count = row["count"] if row else 0
     conn.close()
     return count
 
@@ -47,8 +46,7 @@ def is_account_locked(email):
 
 
 def get_recent_failed_logins(limit=50):
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''

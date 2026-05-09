@@ -1,18 +1,11 @@
 from functools import wraps
-import os
-import sqlite3
-
 from flask import jsonify, request
-
+from database import get_db
 from auth.role_guard import _current_user_claims
 
 
-DATABASE_PATH = os.environ.get("DATABASE_PATH", "jdlx.db")
-
-
 def _has_permission(user_id, permission_name):
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''

@@ -1,11 +1,6 @@
-import sqlite3
-
 from flask import request
-
+from database import get_db
 from utils.logger import logger
-
-
-DATABASE_PATH = "jdlx.db"
 
 
 def log_admin_event(admin_id, action_type, entity, entity_id=None, description=""):
@@ -19,7 +14,7 @@ def log_admin_event(admin_id, action_type, entity, entity_id=None, description="
         ip_address = None
 
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
             '''

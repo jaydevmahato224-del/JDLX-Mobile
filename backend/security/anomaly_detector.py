@@ -1,14 +1,10 @@
-import sqlite3
-
+from database import get_db
 from security.login_guard import get_failed_attempt_count, LOCKOUT_MINUTES
 from security.rate_limiter import force_block_ip
 
 
-DATABASE_PATH = "jdlx.db"
-
-
 def create_security_alert(alert_type, message, severity="medium", admin_id=None, ip_address=None):
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''
@@ -35,8 +31,7 @@ def detect_failed_login_anomaly(email, ip_address):
 
 
 def detect_admin_activity_anomaly(admin_id, action_type, ip_address=None):
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -48,7 +43,8 @@ def detect_admin_activity_anomaly(admin_id, action_type, ip_address=None):
         ''',
         (admin_id,),
     )
-    recent_actions = cursor.fetchone()["count"]
+    row = cursor.fetchone()
+    recent_actions = row["count"] if row else 0
     if recent_actions >= 30:
         create_security_alert(
             "suspicious_admin_activity",
@@ -71,7 +67,8 @@ def detect_admin_activity_anomaly(admin_id, action_type, ip_address=None):
             ''',
             (admin_id,),
         )
-        cancel_count = cursor.fetchone()["count"]
+        row = cursor.fetchone()
+        cancel_count = row["count"] if row else 0
         if cancel_count >= 5:
             create_security_alert(
                 "unusual_order_cancellations",
@@ -92,7 +89,8 @@ def detect_admin_activity_anomaly(admin_id, action_type, ip_address=None):
             ''',
             (admin_id,),
         )
-        inventory_changes = cursor.fetchone()["count"]
+        row = cursor.fetchone()
+        inventory_changes = row["count"] if row else 0
         if inventory_changes >= 20:
             create_security_alert(
                 "inventory_abuse",
@@ -113,7 +111,8 @@ def detect_admin_activity_anomaly(admin_id, action_type, ip_address=None):
             ''',
             (ip_address,),
         )
-        distinct_admin_logins = cursor.fetchone()["count"]
+        row = cursor.fetchone()
+        distinct_admin_logins = row["count"] if row else 0
         if distinct_admin_logins >= 3:
             create_security_alert(
                 "multiple_admin_logins",
@@ -128,8 +127,7 @@ def detect_admin_activity_anomaly(admin_id, action_type, ip_address=None):
 
 
 def get_security_overview(blocked_ips, failed_login_limit=20, alert_limit=50):
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
 
     cursor.execute(

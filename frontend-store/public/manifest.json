@@ -1,7 +1,7 @@
 {
-  "short_name": "JDLX",
-  "name": "JDLX MOBILE: Hyperlocal Quick Commerce",
-  "description": "Premium hyperlocal delivery for fresh groceries and daily essentials in under 30 minutes.",
+  "short_name": "JDLX Mobile",
+  "name": "JDLX MOBILE: Premium Online Store",
+  "description": "Premium delivery for daily essentials and high-end accessories.",
   "categories": ["shopping", "food", "lifestyle"],
   "icons": [
     {

@@ -208,48 +208,31 @@ export default function ProductReviews({ productId }) {
                                     </div>
                                 </div>
 
-                                <p className="text-sm font-medium leading-relaxed text-slate-600 pl-[3.25rem]">
+                                <p className="text-sm font-medium leading-relaxed text-slate-600 md:pl-[3.25rem]">
                                     {rev.review_text}
                                 </p>
 
-                                <div className="pl-[3.25rem] flex items-center gap-4">
+                                <div className="md:pl-[3.25rem] flex items-center gap-4">
                                     <button 
                                         onClick={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
-                                            console.log('[HELPFUL] Button element clicked for review:', rev.id);
+                                            if (!token) return toast.error('Please login to like reviews');
                                             
-                                            if (!token) {
-                                                console.log('[HELPFUL] No token found, showing toast');
-                                                return toast.error('Please login to like reviews');
-                                            }
-
-                                            // Start the async process
                                             (async () => {
                                                 try {
-                                                    console.log('[HELPFUL] Starting fetch for review:', rev.id);
                                                     const res = await fetch(`${API_BASE_URL}/review/helpful/${rev.id}`, { 
                                                         method: 'POST',
                                                         headers: { 'Authorization': `Bearer ${token}` }
                                                     });
                                                     const data = await res.json();
-                                                    console.log('[HELPFUL] Fetch result:', res.status, data);
-
                                                     if (res.ok) {
                                                         const isUnliking = data.data?.action === 'unliked';
                                                         const newCount = data.data?.count ?? (isUnliking ? Math.max(0, rev.helpful_count - 1) : rev.helpful_count + 1);
-                                                        
-                                                        setReviews(prev => prev.map(r => r.id === rev.id ? { 
-                                                            ...r, 
-                                                            helpful_count: newCount, 
-                                                            user_has_liked: isUnliking ? 0 : 1 
-                                                        } : r));
+                                                        setReviews(prev => prev.map(r => r.id === rev.id ? { ...r, helpful_count: newCount, user_has_liked: isUnliking ? 0 : 1 } : r));
                                                         toast.success(data.message);
-                                                    } else {
-                                                        toast.error(data.error || data.message || 'Failed to update');
                                                     }
                                                 } catch (err) {
-                                                    console.error('[HELPFUL] Critical Error:', err);
                                                     toast.error('Connection error');
                                                 }
                                             })();

@@ -134,7 +134,7 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
                       <Icon
                         size={active ? 24 : 22}
                         strokeWidth={active ? 2.5 : 2}
-                        style={{ color: active ? '#ffffff' : '#4B5563' }}
+                        style={{ color: active ? 'var(--color-on-primary)' : 'var(--color-nav-inactive)' }}
                       />
                       {item.badge > 0 && (
                         <span className="concierge-badge">{item.badge}</span>
@@ -147,7 +147,7 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
                 ) : (
                   isExplore && (
                     <div className="w-full h-full flex items-center px-4 gap-3 animate-in fade-in slide-in-from-left-4 duration-500">
-                      <Search size={20} className="text-slate-900" />
+                      <Search size={20} className="text-[var(--color-on-surface)]" />
                       <input 
                         ref={searchInputRef}
                         type="text"
@@ -159,7 +159,7 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
                           }
                         }}
                         placeholder="Search products..."
-                        className="flex-1 bg-transparent border-none outline-none text-slate-900 font-bold text-[15px]"
+                        className="flex-1 bg-transparent border-none outline-none text-[var(--color-on-surface)] font-bold text-[16px]"
                       />
                       <button 
                         onClick={(e) => {
@@ -167,7 +167,7 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
                           setIsSearching(false);
                           setGlobalSearchQuery('');
                         }}
-                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-900 active:scale-90 transition-transform"
+                        className="w-10 h-10 rounded-full bg-[var(--color-surface-container)] flex items-center justify-center text-[var(--color-on-surface)] active:scale-90 transition-transform"
                       >
                          <div className="text-lg">×</div>
                       </button>

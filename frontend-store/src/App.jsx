@@ -145,49 +145,83 @@ function OperationalRedirect() {
 function ThemeLoader() {
   useEffect(() => {
     const hexToRgb = (hex) => {
-      // Remove '#' if present
+      if (!hex) return null;
       hex = hex.replace(/^#/, '');
-      if (hex.length === 3) {
-        hex = hex.split('').map(char => char + char).join('');
-      }
+      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
       if (hex.length !== 6) return null;
       const bigint = parseInt(hex, 16);
-      const r = (bigint >> 16) & 255;
-      const g = (bigint >> 8) & 255;
-      const b = bigint & 255;
-      return `${r}, ${g}, ${b}`;
+      return `${(bigint >> 16) & 255}, ${(bigint >> 8) & 255}, ${bigint & 255}`;
+    };
+
+    const getContrastColor = (hex) => {
+      if (!hex) return '#0f172a';
+      hex = hex.replace(/^#/, '');
+      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      return (yiq >= 128) ? '#0f172a' : '#ffffff';
+    };
+
+    const applyThemeColor = (root, key, color) => {
+      if (!color) return;
+      
+      let finalColor = color;
+      
+      // Strict Brand Protection: Ignore dark/blue defaults for primary to keep the "Yellow" theme
+      const isDark = (hex) => {
+        hex = hex.replace(/^#/, '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        return yiq < 128;
+      };
+
+      if (key === 'primary' && isDark(color)) {
+        finalColor = '#f59e0b'; // Forced Amber
+      }
+      
+      root.style.setProperty(`--color-${key}`, finalColor);
+      const rgb = hexToRgb(finalColor);
+      if (rgb) root.style.setProperty(`--color-${key}-rgb`, rgb);
+      if (key === 'primary') {
+        root.style.setProperty('--color-on-primary', getContrastColor(finalColor));
+      }
     };
 
     fetch(`${API_BASE_URL}/settings`)
       .then(res => res.json())
       .then(json => {
-        if (json?.data) {
+        if (json?.success && json.data) {
           const root = document.documentElement;
-          if (json.data.theme_primary_color) {
-            root.style.setProperty('--color-primary', json.data.theme_primary_color);
-            const rgb = hexToRgb(json.data.theme_primary_color);
-            if (rgb) root.style.setProperty('--color-primary-rgb', rgb);
-          }
-          if (json.data.theme_secondary_color) {
-            root.style.setProperty('--color-secondary', json.data.theme_secondary_color);
-            const rgb = hexToRgb(json.data.theme_secondary_color);
-            if (rgb) root.style.setProperty('--color-secondary-rgb', rgb);
-          }
-          if (json.data.theme_tertiary_color) {
-            root.style.setProperty('--color-tertiary', json.data.theme_tertiary_color);
-            const rgb = hexToRgb(json.data.theme_tertiary_color);
-            if (rgb) root.style.setProperty('--color-tertiary-rgb', rgb);
-          }
+          const { theme_primary_color, theme_secondary_color, theme_tertiary_color } = json.data;
+          applyThemeColor(root, 'primary', theme_primary_color);
+          applyThemeColor(root, 'secondary', theme_secondary_color);
+          applyThemeColor(root, 'tertiary', theme_tertiary_color);
         }
       })
-      .catch(err => console.error('Failed to load theme settings:', err));
+      .catch(err => console.error('ThemeLoader failed:', err));
   }, []);
-  
+
   return null;
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 function App() {
+  const token = useStore((state) => state.token);
+  const fetchCart = useStore((state) => state.fetchCart);
+  const fetchWishlist = useStore((state) => state.fetchWishlist);
+
+  useEffect(() => {
+    if (token) {
+      fetchCart();
+      fetchWishlist();
+    }
+  }, [token, fetchCart, fetchWishlist]);
+
   return (
     <ErrorBoundary>
       <ThemeLoader />

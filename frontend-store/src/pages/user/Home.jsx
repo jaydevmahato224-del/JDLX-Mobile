@@ -30,7 +30,7 @@ function getGreeting() {
 }
 
 function getProductImage(product) {
-  let images = 
+  let images =
     product?.image_url ||
     product?.images ||
     product?.image ||
@@ -70,6 +70,8 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const cart = useStore((state) => state.cart)
   const wishlist = useStore((state) => state.wishlist)
   const toggleWishlist = useStore((state) => state.toggleWishlist)
+  const updateQuantity = useStore((state) => state.updateQuantity)
+  const removeFromCart = useStore((state) => state.removeFromCart)
   const nearestStoreId = useStore((state) => state.nearestStoreId)
   const deliveryMode = useStore((state) => state.deliveryMode)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -110,10 +112,10 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock${storeId ? `?store_id=${storeId}` : ''}`);
       const data = await res.json();
-      
+
       if (res.ok) {
         if (data.available <= quantity) {
-          toast.error(`Sorry, only ${data.available} units available right now`, {
+          toast.error('No more units available', {
             icon: '⚠️',
             style: { borderRadius: '15px', background: '#333', color: '#fff', fontSize: '12px', fontWeight: 'bold' }
           });
@@ -146,7 +148,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock${storeId ? `?store_id=${storeId}` : ''}`);
       const data = await res.json();
-      
+
       if (res.ok) {
         if (data.available <= 0) {
           toast.error(`Sorry, this item just went out of stock`, {
@@ -170,8 +172,8 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     }
   }
 
-  const discount = product.mrp > product.price 
-    ? Math.round(((product.mrp - product.price) / product.mrp) * 100) 
+  const discount = product.mrp > product.price
+    ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
     : 0;
 
   return (
@@ -196,11 +198,10 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         </div>
 
         {/* Wishlist Button */}
-        <button 
+        <button
           onClick={handleWishlistToggle}
-          className={`absolute top-2 right-2 z-30 h-8 w-8 rounded-full flex items-center justify-center transition-all ${
-            isInWishlist ? 'text-red-500' : 'text-slate-400 hover:text-red-500'
-          }`}
+          className={`absolute top-2 right-2 z-30 h-8 w-8 rounded-full flex items-center justify-center transition-all ${isInWishlist ? 'text-red-500' : 'text-slate-400 hover:text-red-500'
+            }`}
         >
           <Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} />
         </button>
@@ -225,7 +226,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
             </h3>
           </Link>
         </div>
-        
+
         {/* Rating Section */}
         <div className="flex items-center gap-1">
           <div className="flex items-center bg-emerald-600 text-white text-[9px] font-black px-1 rounded-sm gap-0.5">
@@ -286,7 +287,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
             <button
               disabled={disabled || outOfStock || isSyncing}
               onClick={handleAddToCartWithCheck}
-              className="w-full h-8 md:h-9 flex items-center justify-center gap-1.5 bg-yellow-400 hover:bg-yellow-500 text-slate-900 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all disabled:opacity-50 shadow-sm active:scale-95"
+              className="w-full h-8 md:h-9 btn-primary"
             >
               {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
               {isSyncing ? '...' : 'Add to Cart'}
@@ -385,6 +386,7 @@ export default function Home() {
       fetchWishlist();
     }
   }, [token, fetchWishlist]);
+
   const storeBlocked = useStore((state) => state.storeBlocked)
   const deliveryMode = useStore((state) => state.deliveryMode)
   const nearestStoreId = useStore((state) => state.nearestStoreId)
@@ -407,26 +409,20 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [stockFilter, setStockFilter] = useState('all')
   const [sortBy, setSortBy] = useState('recommended')
+
   const handleBannerClick = (url) => {
     if (!url) return;
-    
-    // Normalize URL
     let finalUrl = url.trim();
-    
-    // Check if it's an external domain or has a protocol
     const isExternal = /^(https?:\/\/)?(www\.)?(youtube\.com|instagram\.com|facebook\.com|twitter\.com|t\.me|googl\.com|linktr\.ee)/i.test(finalUrl);
     
     if (isExternal) {
-      if (!/^https?:\/\//i.test(finalUrl)) {
-        finalUrl = `https://${finalUrl}`;
-      }
+      if (!/^https?:\/\//i.test(finalUrl)) finalUrl = `https://${finalUrl}`;
       window.open(finalUrl, '_blank');
     } else if (finalUrl.startsWith('/')) {
       navigate(finalUrl);
     } else if (finalUrl.startsWith('http')) {
       window.open(finalUrl, '_blank');
     } else {
-      // Fallback for domains like "google.com"
       window.open(`https://${finalUrl}`, '_blank');
     }
   };
@@ -436,25 +432,18 @@ export default function Home() {
   
   const globalSearchQuery = useStore((state) => state.globalSearchQuery)
   const setGlobalSearchQuery = useStore((state) => state.setGlobalSearchQuery)
-  
   const query = globalSearchQuery || ''
-  const setQuery = setGlobalSearchQuery
-
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [availability, setAvailability] = useState(null)
-
   const [recommendations, setRecommendations] = useState([])
-  const [recLoading, setRecLoading] = useState(false)
 
   const logInteraction = useCallback(async (type, targetId, category) => {
     try {
       const sessionId = localStorage.getItem('jdlx_session_id')
-      const userId = user?.user_id
       await fetch(`${API_BASE_URL}/user/interactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: userId,
+          user_id: user?.user_id,
           session_id: sessionId,
           interaction_type: type,
           target_id: String(targetId),
@@ -462,51 +451,36 @@ export default function Home() {
         })
       })
     } catch (e) {
-      console.error('Failed to log interaction:', e)
+      console.error('Interaction logging failed:', e)
     }
   }, [user])
 
   const fetchRecommendations = useCallback(async () => {
-    setRecLoading(true)
     try {
       let sessionId = localStorage.getItem('jdlx_session_id')
       if (!sessionId) {
         sessionId = Math.random().toString(36).substring(7)
         localStorage.setItem('jdlx_session_id', sessionId)
       }
-      
-      const userId = user?.user_id
       const params = new URLSearchParams()
-      if (userId) params.append('user_id', userId)
+      if (user?.user_id) params.append('user_id', user.user_id)
       if (sessionId) params.append('session_id', sessionId)
       
       const res = await fetch(`${API_BASE_URL}/user/recommendations?${params.toString()}`)
       const json = await res.json()
       if (json.success) setRecommendations(json.data)
     } catch (e) {
-      console.error('Failed to load recommendations:', e)
-    } finally {
-      setRecLoading(false)
+      console.error('Recommendations failed:', e)
     }
   }, [user])
 
   const featuredProducts = useMemo(() => products.filter(p => Number(p.is_featured) === 1 || p.is_featured === true), [products])
   const regularProducts = useMemo(() => products.filter(p => !p.is_featured), [products])
 
-  const bestDeals = products
-    .filter(p => p.mrp > p.price)
-    .sort((a, b) => ((b.mrp - b.price) / b.mrp) - ((a.mrp - a.price) / a.mrp))
-    .slice(0, 6)
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query)
-      if (query && query.length > 2) {
-        logInteraction('search', query)
-      }
-    }, 800)
+    const timer = setTimeout(() => setDebouncedQuery(query), 800)
     return () => clearTimeout(timer)
-  }, [query, logInteraction])
+  }, [query])
 
   useEffect(() => {
     fetchRecommendations()
@@ -516,33 +490,16 @@ export default function Home() {
     fetch(`${API_BASE_URL}/categories`)
       .then((res) => res.json())
       .then((json) => setCategories(json.data || []))
-      .catch((err) => console.error('Failed to load categories:', err))
-  }, [])
+      .catch((err) => console.error('Categories failed:', err))
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/warehouse/availability`)
-      .then((r) => r.json())
-      .then((data) => setAvailability(data))
-      .catch((e) => console.error('Failed to load availability:', e))
-
-    // Fetch Banners
     fetch(`${API_BASE_URL}/banners`)
       .then((r) => r.json())
-      .then((json) => {
-        if (json.success && json.data) {
-          setBanners(json.data)
-        }
-      })
-      .catch((e) => console.error('Failed to load banners:', e))
+      .then((json) => json.success && setBanners(json.data))
+      .catch((e) => console.error('Banners failed:', e))
   }, [])
 
   const allBanners = useMemo(() => {
-    const apiBanners = banners.map(b => ({
-      ...b,
-      image: resolveMediaUrl(b.image_url),
-      type: 'promo'
-    }));
-
+    const apiBanners = banners.map(b => ({ ...b, image: resolveMediaUrl(b.image_url), type: 'promo' }));
     const productBanners = featuredProducts.slice(0, 3).map(p => ({
       id: `prod-${p.id}`,
       title: p.name,
@@ -550,15 +507,13 @@ export default function Home() {
       cta_text: "Shop Now",
       image: getProductImage(p),
       badge_text: "Featured",
-      gradient: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
       link_url: `/product/${p.id}`,
       type: 'product'
     }));
-
     return [...apiBanners, ...productBanners];
   }, [banners, featuredProducts]);
 
-  // Auto-slide effect for multiple banners
   useEffect(() => {
     if (allBanners.length <= 1) return
     const interval = setInterval(() => {
@@ -581,204 +536,97 @@ export default function Home() {
       },
       { threshold: 0.1, rootMargin: '200px' }
     )
-
     if (observerRef.current) observer.observe(observerRef.current)
     return () => observer.disconnect()
   }, [hasMore, paginationLoading, initialLoading, loadMoreProducts])
-
-  const filteredProducts = useMemo(() => {
-    let list = [...products]
-
-    if (stockFilter === 'in-stock') {
-      list = list.filter((p) => (Number(p.stock) - Number(p.reserved_stock)) > 0)
-    } else if (stockFilter === 'low-stock') {
-      list = list.filter((p) => {
-        const avail = Number(p.stock) - Number(p.reserved_stock)
-        return avail > 0 && avail <= LOW_STOCK_LIMIT
-      })
-    }
-
-    if (sortBy === 'price-low') list.sort((a, b) => a.price - b.price)
-    if (sortBy === 'price-high') list.sort((a, b) => b.price - a.price)
-    if (sortBy === 'newest') list.sort((a, b) => b.id - a.id)
-
-    return list
-  }, [products, stockFilter, sortBy])
-
-  const hasActiveFilters = selectedCategory !== 'All' || query.trim() !== '' || stockFilter !== 'all' || sortBy !== 'recommended'
-
-  const clearFilters = () => {
-    setSelectedCategory('All')
-    setQuery('')
-    setStockFilter('all')
-    setSortBy('recommended')
-  }
 
   if (hasError && !hasLoadedOnce) {
     return <ProductErrorState message={errorMessage} onRetry={retryLoad} />
   }
 
   return (
-    <div className="space-y-12 pb-20 reveal-staggered">
-      {/* 1. Header & Greeting */}
-      <section className="space-y-2">
+    <div className="space-y-16 pb-24 reveal-staggered">
+      {/* 1. Brand Greeting */}
+      <section className="space-y-3">
         <div className="flex items-center gap-2">
-           <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-           <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--color-on-surface)]/40">JDLX Store</span>
+          <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
+          <span className="text-[11px] font-black uppercase tracking-[0.4em] text-[var(--color-on-surface)]/30">JDLX Mobile Elite</span>
         </div>
-        <h1 className="text-3xl md:text-5xl font-black tracking-tighter text-[var(--color-on-surface)]">
+        <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-[var(--color-on-surface)]">
           {getGreeting()}, <span className="text-primary">{getFirstName(user)}</span>
         </h1>
-        <p className="max-w-xl text-[var(--color-on-surface-variant)] font-medium leading-relaxed">
-          Browse curated essentials. Fast delivery, reliable stock, and a clean shopping experience.
+        <p className="max-w-2xl text-[var(--color-on-surface-variant)] text-lg font-medium leading-relaxed">
+          {deliveryMode === 'quick' 
+            ? 'Premium hyper-local mobile commerce. Experience the gold standard of shopping.' 
+            : 'Explore our premium collection of mobile essentials. Experience the gold standard of shopping.'}
         </p>
       </section>
 
-      {/* 2. Promo & Availability Carousel */}
-      <section className="relative group overflow-hidden rounded-[40px]">
+      {/* 2. Dynamic Banner Carousel */}
+      <section className="relative overflow-hidden rounded-[40px] shadow-2xl shadow-primary/5">
         {allBanners.length > 0 ? (
           <div className="relative">
-            <div 
-              className="flex transition-transform duration-1000 ease-out" 
-              style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
-            >
-              {allBanners.map((b, idx) => (
+            <div className="flex transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1)" style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}>
+              {allBanners.map((b) => (
                 <div key={b.id} className="w-full flex-shrink-0">
-                  <PromoBanner 
-                    title={b.title}
-                    subtitle={b.subtitle}
-                    cta={b.cta_text}
-                    image={b.image}
-                    badge={b.badge_text}
-                    gradient={b.gradient}
-                    overlay_opacity={b.overlay_opacity}
-                    onClick={() => handleBannerClick(b.link_url)}
-                  />
+                  <PromoBanner {...b} cta={b.cta_text} onClick={() => handleBannerClick(b.link_url)} />
                 </div>
               ))}
             </div>
-
-            {/* Carousel Indicators */}
             {allBanners.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2.5 z-20">
                 {allBanners.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentBannerIndex(idx)}
-                    className={`h-1.5 rounded-full transition-all duration-500 ${currentBannerIndex === idx ? 'w-8 bg-white' : 'w-1.5 bg-white/40'}`}
-                  />
+                  <button key={idx} onClick={() => setCurrentBannerIndex(idx)} 
+                    className={`h-1.5 rounded-full transition-all duration-500 ${currentBannerIndex === idx ? 'w-10 bg-white' : 'w-1.5 bg-white/30'}`} />
                 ))}
               </div>
             )}
           </div>
-        ) : (
-          <PromoBanner />
-        )}
+        ) : <PromoBanner />}
       </section>
 
-      {/* 3. Modern Trust & Info Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Reliable Delivery */}
-          <div className="group relative overflow-hidden rounded-[32px] bg-[var(--color-surface-white)] p-6 border border-[var(--color-surface-high)] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-500 cursor-default">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center gap-5">
-              <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform duration-500">
-                <Truck size={28} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black tracking-tight text-[var(--color-on-surface)] mb-1">Reliable Delivery</h3>
-                <p className="text-[12px] font-bold text-[var(--color-on-surface)]/50 leading-tight">Safe & trusted order fulfillment</p>
-              </div>
-            </div>
-            {/* Subtle border glow on hover */}
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          </div>
-
-          {/* Card 2: Trending Products */}
-          <div className="group relative overflow-hidden rounded-[32px] bg-[var(--color-surface-white)] p-6 border border-[var(--color-surface-high)] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-500 cursor-default">
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center gap-5">
-              <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-orange-500/10 text-orange-500 group-hover:scale-110 transition-transform duration-500">
-                <Zap size={28} fill="currentColor" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black tracking-tight text-[var(--color-on-surface)] mb-1">Trending Products</h3>
-                <p className="text-[12px] font-bold text-[var(--color-on-surface)]/50 leading-tight">Top accessories picked for you</p>
-              </div>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-orange-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          </div>
-
-          {/* Card 3: Secure Checkout */}
-          <div className="group relative overflow-hidden rounded-[32px] bg-[var(--color-surface-white)] p-6 border border-[var(--color-surface-high)] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-500 cursor-default">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center gap-5">
-              <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-emerald-500/10 text-emerald-500 group-hover:scale-110 transition-transform duration-500">
-                <ShieldCheck size={28} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black tracking-tight text-[var(--color-on-surface)] mb-1">Secure Checkout</h3>
-                <p className="text-[12px] font-bold text-[var(--color-on-surface)]/50 leading-tight">Safe payments & smooth ordering</p>
-              </div>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          </div>
-      </section>
-
-      {/* 5. Personalized Section: Best Picks For You */}
+      {/* 3. Personalized Recommendations */}
       {recommendations.length > 0 && (
-        <section className="space-y-8 animate-in fade-in duration-700">
-          <div className="flex items-center justify-between">
+        <section className="space-y-10">
+          <div className="flex items-end justify-between">
             <div className="space-y-1">
-              <h2 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]">Best Picks For You</h2>
-              <p className="text-sm text-[var(--color-on-surface)]/60 font-medium italic">Handpicked based on your recent searches & interests</p>
+              <h2 className="text-3xl font-black tracking-tight">Best Picks For You</h2>
+              <p className="text-slate-400 font-bold italic">Curated based on your preferences</p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-primary/5 flex items-center justify-center text-primary">
-              <Zap size={20} fill="currentColor" className="animate-pulse" />
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+              <Zap size={24} fill="currentColor" className="animate-pulse" />
             </div>
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {recommendations.slice(0, 4).map(p => (
               <div key={p.id} onClick={() => logInteraction('view', p.id, p.category)}>
-                <ProductCard 
-                  product={p} 
-                  onAddToCart={addToCart}
-                  disabled={storeBlocked}
-                />
+                <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
               </div>
             ))}
           </div>
         </section>
       )}
 
-
-      {/* 6. Popular Essentials */}
-      <section className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-1 bg-primary rounded-full" />
-            <h2 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]">Popular Essentials</h2>
-          </div>
+      {/* 4. Main Catalog */}
+      <section className="space-y-10">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-1.5 bg-primary rounded-full shadow-[0_0_15px_rgba(245,158,11,0.4)]" />
+          <h2 className="text-3xl font-black tracking-tight">Elite Collection</h2>
         </div>
-
+        
         {initialLoading && !hasLoadedOnce ? (
           <ProductLoadingGrid count={8} />
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-6">
-            {(featuredProducts.length > 4 ? featuredProducts.slice(4, 12) : regularProducts.slice(0, 8)).map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onAddToCart={addToCart}
-                disabled={storeBlocked}
-              />
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
+            {(featuredProducts.length > 4 ? featuredProducts.slice(4, 12) : regularProducts.slice(0, 12)).map((p) => (
+              <ProductCard key={p.id} product={p} onAddToCart={addToCart} disabled={storeBlocked} />
             ))}
           </div>
         )}
+        
+        {hasMore && <div ref={observerRef} className="py-10 flex justify-center"><PaginationLoader /></div>}
       </section>
 
-      {/* 7. Recommendations (Footer Section) */}
       <RecommendationsSection />
     </div>
   )

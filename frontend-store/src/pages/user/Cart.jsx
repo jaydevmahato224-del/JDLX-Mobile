@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowRight, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2 } from 'lucide-react'
 import { resolveMediaUrl, API_BASE_URL } from '../../config'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
@@ -84,15 +84,53 @@ function Cart() {
 
     if (cart.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-in fade-in zoom-in duration-500">
-                <div className="w-28 h-28 bg-[var(--color-surface-low)] rounded-full flex items-center justify-center text-[var(--color-on-surface-variant)] shadow-inner">
-                    <Trash2 className="w-12 h-12 opacity-20" />
+            <div className="relative flex flex-col items-center justify-center min-h-[70vh] px-6 overflow-hidden">
+                {/* Background Decoration */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+                
+                <div className="relative glass-card max-w-sm w-full py-12 flex flex-col items-center gap-8 animate-in fade-in zoom-in slide-in-from-bottom-10 duration-700 shadow-2xl border-white/10">
+                    {/* Icon with Glow */}
+                    <div className="relative group">
+                        <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-150 group-hover:scale-110 transition-transform duration-700" />
+                        <div className="relative w-24 h-24 bg-gradient-to-br from-primary to-primary-container rounded-[32px] flex items-center justify-center text-slate-950 shadow-2xl rotate-3 group-hover:rotate-6 transition-transform duration-500">
+                            <ShoppingBag className="w-10 h-10" strokeWidth={2.5} />
+                            {/* Floating decorative dots */}
+                            <div className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full border-4 border-white dark:border-slate-900 animate-bounce" />
+                        </div>
+                    </div>
+
+                    <div className="text-center space-y-3 px-4">
+                        <h2 className="text-3xl font-black tracking-tighter text-[var(--color-on-surface)] leading-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                            Your cart feels <span className="text-primary">too light</span>
+                        </h2>
+                        <p className="text-sm font-medium text-[var(--color-on-surface-variant)] leading-relaxed">
+                            Looks like you haven't added any premium accessories yet. Let's find something perfect for you!
+                        </p>
+                    </div>
+
+                    <div className="w-full px-8 flex flex-col gap-3">
+                        <Link 
+                            to="/" 
+                            className="btn-primary h-14 w-full text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-primary/30 flex items-center justify-center gap-2"
+                        >
+                            Explore Essentials
+                            <ArrowRight size={16} />
+                        </Link>
+                        <button 
+                            onClick={() => navigate(-1)}
+                            className="h-12 w-full text-[10px] font-black text-[var(--color-on-surface-variant)] uppercase tracking-[0.2em] hover:text-[var(--color-on-surface)] transition-colors"
+                        >
+                            Go Back
+                        </button>
+                    </div>
                 </div>
-                <div className="text-center">
-                    <h2 className="text-3xl font-black tracking-tighter text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Your cart is empty</h2>
-                    <p className="mt-2 text-sm text-[var(--color-on-surface-variant)]">Add some essentials to see them here!</p>
-                </div>
-                <Link to="/" className="btn-primary px-8 shadow-xl shadow-primary/20">Start Shopping</Link>
+
+                {/* Trust Signal */}
+                <p className="mt-12 text-[10px] font-black text-[var(--color-on-surface-variant)]/40 uppercase tracking-[0.3em] flex items-center gap-3">
+                    <div className="h-px w-8 bg-current opacity-20" />
+                    JDLX Premium {deliveryMode === 'quick' ? 'Hyperlocal' : 'Essentials'}
+                    <div className="h-px w-8 bg-current opacity-20" />
+                </p>
             </div>
         )
     }
@@ -259,8 +297,20 @@ function Cart() {
                             </div>
                             
                             {subtotal < freeDeliveryThreshold && subtotal > 0 && (
-                                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[10px] font-black text-amber-500 flex items-center gap-2">
-                                    <Info size={14} /> ADD ₹{freeDeliveryThreshold - subtotal} MORE FOR FREE DELIVERY
+                                <div className="space-y-3">
+                                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-amber-600">
+                                        <span>Delivery Goal</span>
+                                        <span>₹{freeDeliveryThreshold - subtotal} to go</span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-amber-100 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-amber-500 transition-all duration-1000" 
+                                            style={{ width: `${(subtotal / freeDeliveryThreshold) * 100}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-[9px] font-bold text-amber-600/60 uppercase tracking-tighter">
+                                        Add ₹{freeDeliveryThreshold - subtotal} more for free express delivery
+                                    </p>
                                 </div>
                             )}
 
@@ -270,12 +320,12 @@ function Cart() {
                             </div>
 
                             <div className="flex justify-between items-center pt-2">
-                                <span className="text-lg font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Total Amount</span>
+                                <span className="text-lg font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>To Pay</span>
                                 <div className="text-right">
                                     <span className="text-3xl font-black text-primary tracking-tighter block" style={{ fontFamily: 'Manrope, sans-serif' }}>
                                         ₹{finalToPay.toLocaleString()}
                                     </span>
-                                    <p className="text-[9px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">All taxes included</p>
+                                    <p className="text-[9px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Inclusive of all taxes</p>
                                 </div>
                             </div>
                         </div>
@@ -292,16 +342,16 @@ function Cart() {
                                 
                                 const state = useStore.getState();
                                 if (state.cart.some(item => item.removedFromInventory || Number(item.stock || 0) <= 0)) {
-                                    alert("Some items in your cart are no longer available.");
+                                    toast.error("Some items in your cart are no longer available.");
                                 } else if (state.cart.some(item => isStickerProduct(item) && !getDeviceModelValue(item.device_model))) {
-                                    alert("Please select a device model for all stickers.");
+                                    toast.error("Please select a device model for all stickers.");
                                 } else {
                                     navigate('/checkout');
                                 }
                             }}
                             className={`w-full mt-8 flex justify-between items-center group h-16 rounded-2xl px-6 transition-all active:scale-[0.98] ${subtotal <= 0 || isSyncing || hasStickerMissingDevice
                                 ? 'bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200' 
-                                : 'bg-slate-900 text-white shadow-2xl shadow-slate-900/20 hover:bg-slate-800'
+                                : 'bg-primary text-slate-950 shadow-2xl shadow-primary/20 hover:bg-primary/90'
                             }`}
                         >
                             <span className="font-black uppercase tracking-[0.2em] text-[11px]">{isSyncing ? 'Verifying...' : 'Checkout'}</span>
@@ -331,7 +381,7 @@ function Cart() {
                             </div>
                             <div>
                                 <h4 className="font-black text-sm text-slate-900 mb-1">Safe & Secure</h4>
-                                <p className="text-xs font-medium text-slate-500 leading-relaxed">Your order is protected by our super-fast hyperlocal delivery network and 100% genuine product guarantee.</p>
+                                <p className="text-xs font-medium text-slate-500 leading-relaxed">Your order is protected by our {deliveryMode === 'quick' ? 'super-fast hyperlocal' : 'secure express'} delivery network and 100% genuine product guarantee.</p>
                             </div>
                         </div>
                     </div>

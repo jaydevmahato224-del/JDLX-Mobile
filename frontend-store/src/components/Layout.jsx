@@ -22,7 +22,7 @@ function Layout({ children }) {
 
   const cartItemCount = useMemo(() => cart.reduce((acc, item) => acc + item.qty, 0), [cart])
 
-  const [tickerText, setTickerText] = useState('Free delivery on orders above ₹499 • Better experience with fast delivery')
+  const [tickerText, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
   const [loadingSettings, setLoadingSettings] = useState(true)
 
   useEffect(() => {
@@ -46,27 +46,16 @@ function Layout({ children }) {
     <div className={`min-h-[100dvh] bg-[var(--color-surface)] text-[var(--color-on-surface)] transition-all duration-500 ${theme}`}>
       {/* Top chrome (no fixed overlays) */}
       <div className="sticky top-0 z-50">
-        <div className="h-[var(--app-ticker-height)] bg-slate-900 text-white">
-          <div className="container-standard flex h-full items-center justify-center">
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-[10px] font-black uppercase tracking-[0.25em] text-white/80">
-               {tickerText.split('•').map((part, i) => (
-                 <React.Fragment key={i}>
-                   <span>{part.trim()}</span>
-                   {i < tickerText.split('•').length - 1 && <span className="hidden sm:inline">•</span>}
-                 </React.Fragment>
-               ))}
-            </div>
-          </div>
-        </div>
+        {/* Ticker Banner Removed */}
 
-        <header className="border-b border-slate-200/70 bg-[var(--color-surface-white)]/90 backdrop-blur transition-all duration-500">
+        <header className="border-b border-[var(--color-surface-high)] bg-[var(--color-surface-white)]/90 backdrop-blur transition-all duration-500">
           <div className="container-standard grid grid-cols-3 h-[var(--app-header-height)] items-center gap-4">
             {/* Left side empty for balance or secondary actions */}
             <div className="flex items-center">
               {location.pathname !== '/' ? (
                 <button
                   onClick={() => navigate(-1)}
-                  className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2"
+                  className="grid h-10 w-10 place-items-center rounded-xl hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2"
                   aria-label="Go back"
                 >
                   <ChevronLeft className="h-6 w-6 text-[var(--color-on-surface)] group-hover:-translate-x-0.5 transition-transform" />
@@ -85,7 +74,7 @@ function Layout({ children }) {
                     ? 'bg-amber-50 border-amber-200 text-amber-600 animate-pulse'
                     : deliveryMode === 'quick' 
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                    : 'bg-slate-50 border-slate-200 text-slate-500'
+                    : 'bg-[var(--color-surface-low)] border-[var(--color-surface-high)] text-[var(--color-on-surface-variant)]'
                   }`}>
                     {isCheckingLocation ? (
                       <RefreshCw size={10} className="animate-spin" />
@@ -109,7 +98,7 @@ function Layout({ children }) {
                   JDLX MOBILE
                 </div>
                 <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">
-                  Hyperlocal Quick Commerce
+                  {deliveryMode === 'quick' ? 'Hyperlocal Quick Commerce' : 'Premium Mobile Store'}
                 </div>
               </Link>
             </div>
@@ -118,10 +107,10 @@ function Layout({ children }) {
             <div className="flex items-center justify-end gap-3 px-1">
               <Link
                 to="/profile/wishlist"
-                className="relative h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-50 transition-all active:scale-90"
+                className="relative h-10 w-10 flex items-center justify-center rounded-full hover:bg-[var(--color-surface-low)] transition-all active:scale-90"
                 aria-label="Wishlist"
               >
-                <Heart size={20} className={wishlist.length > 0 ? "text-red-500" : "text-slate-400"} fill={wishlist.length > 0 ? "currentColor" : "none"} />
+                <Heart size={20} className={wishlist.length > 0 ? "text-red-500" : "text-[var(--color-on-surface-variant)]"} fill={wishlist.length > 0 ? "currentColor" : "none"} />
                 {wishlist.length > 0 && (
                   <span className="absolute top-1.5 right-1.5 h-4 min-w-[16px] px-1 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                     {wishlist.length}
@@ -133,7 +122,7 @@ function Layout({ children }) {
 
               <Link
                 to={user ? '/profile' : '/login'}
-                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-slate-50 dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
+                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
               >
                 <User className="h-4 w-4" />
                 <span>{user ? 'Account' : 'Login'}</span>

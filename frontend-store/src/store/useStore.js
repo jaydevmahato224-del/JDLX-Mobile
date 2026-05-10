@@ -1,3 +1,4 @@
+import toast from "react-hot-toast"
 import { create } from 'zustand'
 import { API_BASE_URL } from '../config'
 import { getDeviceModelValue } from '../utils/stickerCustomization'
@@ -53,15 +54,36 @@ export const useStore = create((set) => ({
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
     cart: safeParse('cart') || [],
     theme: localStorage.getItem('theme') || 'light',
+    fetchCart: async () => {
+        const state = useStore.getState();
+        if (!state.token) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/cart`, {
+                headers: { 'Authorization': `Bearer ${state.token}` }
+            });
+            const json = await res.json();
+            if (res.ok && json.success) {
+                const normalizedCart = Array.isArray(json.data) ? json.data : [];
+                set({ cart: normalizedCart });
+                localStorage.setItem('cart', JSON.stringify(normalizedCart));
+            }
+        } catch (e) {
+            console.error('Failed to fetch cart:', e);
+        }
+    },
     setUser: (user, token) => {
         if (user && token) {
             localStorage.setItem('user', JSON.stringify(user));
             localStorage.setItem('token', token);
+            // Auto-fetch cart and wishlist after login
+            set({ user, token });
+            useStore.getState().fetchCart();
+            useStore.getState().fetchWishlist();
         } else {
             localStorage.removeItem('user');
             localStorage.removeItem('token');
+            set({ user, token });
         }
-        set({ user, token });
     },
     logout: () => {
         localStorage.removeItem('user');
@@ -308,7 +330,7 @@ export const useStore = create((set) => ({
     toggleWishlist: async (product) => {
         const state = useStore.getState();
         if (!state.token) {
-            alert('Please login to use wishlist');
+            toast.error('Please login to use wishlist');
             return;
         }
 

@@ -27,7 +27,7 @@ function AboutSite() {
       icon: Info,
       title: 'About JDLX MOBILE',
       points: [
-        'Hyperlocal quick commerce platform for daily essentials.',
+        'Premium mobile commerce platform for daily essentials.',
         'Designed for fast discovery, reliable stock, and smooth checkout.',
         'Single account experience across shopping, tracking, wallet, and support.',
       ],

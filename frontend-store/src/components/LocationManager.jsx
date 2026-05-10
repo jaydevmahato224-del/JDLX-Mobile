@@ -181,7 +181,7 @@ const LocationManager = () => {
         <div className="flex justify-center">
           <div className="relative">
             <div className={`absolute inset-0 rounded-full blur-2xl animate-pulse ${status === 'error' ? 'bg-rose-500/20' : 'bg-primary/20'}`} />
-            <div className={`relative h-20 w-20 rounded-3xl flex items-center justify-center text-white shadow-2xl rotate-12 transition-colors duration-500 ${status === 'error' ? 'bg-rose-500 shadow-rose-500/40' : 'bg-primary shadow-primary/40'}`}>
+            <div className={`relative h-20 w-20 rounded-3xl flex items-center justify-center text-[var(--color-on-primary)] shadow-2xl rotate-12 transition-colors duration-500 ${status === 'error' ? 'bg-rose-500 shadow-rose-500/40 text-white' : 'bg-primary shadow-primary/40'}`}>
               {status === 'error' ? <AlertCircle size={40} /> : <MapPin size={40} />}
             </div>
           </div>
@@ -235,7 +235,7 @@ const LocationManager = () => {
           ) : (
             <button
               onClick={() => handleGetLocation()}
-              className="w-full h-14 rounded-2xl bg-primary text-white font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all"
+              className="w-full h-14 rounded-2xl bg-primary text-[var(--color-on-primary)] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all"
             >
               <Navigation size={20} />
               Check Eligibility

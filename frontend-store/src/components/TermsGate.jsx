@@ -150,7 +150,7 @@ function TermsGate() {
                 <div className="space-y-4">
                   {(termsContent || `# JDLX Terms of Service
 - By using JDLX MOBILE, you agree to our Terms & Conditions.
-- We provide hyperlocal quick commerce and scheduled delivery services.
+- We provide premium mobile commerce and reliable delivery services.
 - Accuracy of delivery location is your responsibility.
 # Orders & Payments
 - Prices and stock availability may change without notice.

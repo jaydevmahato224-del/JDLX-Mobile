@@ -1,3 +1,4 @@
+import toast from "react-hot-toast"
 import React, { useState, useEffect } from 'react';
 import { Download, X, Smartphone, Zap } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -56,7 +57,7 @@ const PWAInstallBanner = () => {
       <div className="mx-auto max-w-lg overflow-hidden rounded-[32px] border-4 border-white bg-white p-1 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] ring-1 ring-slate-200/50">
         <div className="flex items-center gap-4 p-4 bg-gradient-to-br from-white to-slate-50/50">
           {/* App Icon Glow */}
-          <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 shadow-lg shadow-indigo-500/20">
+          <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 to-violet-700 shadow-lg shadow-primary-500/20">
             <Smartphone className="text-white" size={28} />
             <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-amber-950 shadow-sm">
               <Zap size={10} fill="currentColor" />
@@ -76,7 +77,7 @@ const PWAInstallBanner = () => {
           {/* Actions */}
           <div className="flex flex-col gap-2">
             <button
-              onClick={isPreview ? () => alert('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClick}
+              onClick={isPreview ? () => toast.error('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClick}
               className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-slate-900/20 transition-all hover:bg-slate-800 active:scale-95"
             >
               <Download size={14} />
@@ -93,7 +94,7 @@ const PWAInstallBanner = () => {
         </div>
         
         {/* Subtle bottom accent line */}
-        <div className="h-1 w-full bg-gradient-to-r from-transparent via-indigo-500/30 to-transparent" />
+        <div className="h-1 w-full bg-gradient-to-r from-transparent via-primary-500/30 to-transparent" />
       </div>
     </div>
   );

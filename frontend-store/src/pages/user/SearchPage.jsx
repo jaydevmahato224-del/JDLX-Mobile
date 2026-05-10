@@ -61,118 +61,95 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const outOfStock = availableStock <= 0
 
   return (
-    <article className="card-standard group relative flex flex-col h-full hover:border-primary/30 transition-all duration-300">
-      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-[1.1] overflow-hidden bg-[var(--color-surface-low)] cursor-pointer transition-colors">
-        <div className="absolute top-3 left-3 z-20 flex flex-col gap-2">
+    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-2xl overflow-hidden border border-[var(--color-surface-high)] transition-all duration-300 hover:shadow-xl hover:border-primary/20">
+      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/50 cursor-pointer">
+        {/* Badges Overlay */}
+        <div className="absolute top-2 left-2 z-20 flex flex-col gap-1.5">
           {outOfStock ? (
-            (Number(product.is_featured) === 1 || product.is_featured === true) ? (
-              <span className="rounded-full bg-indigo-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-200 animate-pulse">
-                Coming Soon
-              </span>
-            ) : (
-              <span className="rounded-full bg-red-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-600 border border-red-200">
-                Sold Out
-              </span>
-            )
-          ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-600 border border-amber-200">
-              Only {availableStock} left
+            <span className="bg-slate-200 text-slate-600 text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter">
+              Sold Out
             </span>
-          ) : (Number(product.is_featured) === 1 || product.is_featured === true) && (
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-100 shadow-sm">
-              Featured
+          ) : availableStock <= LOW_STOCK_LIMIT && (
+            <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter border border-amber-200">
+              Only {availableStock} left
             </span>
           )}
         </div>
 
-        <div className="h-full w-full p-6 transition-transform duration-700 group-hover:scale-110">
+        <div className="h-full w-full p-4 transition-transform duration-700 group-hover:scale-105">
           <BlurImage
             src={getProductImage(product)}
             alt={product.name}
-            className="h-full w-full object-contain"
+            className="h-full w-full object-contain mix-blend-multiply"
           />
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-primary/80">
-            {product.category || 'Product'}
-          </span>
-          <div className="flex items-center gap-1">
-             <span className="text-[10px] font-black text-[var(--color-on-surface)]/30">MRP</span>
-             <span className="text-[10px] font-black text-[var(--color-on-surface)]/30 line-through">₹{product.mrp || product.price}</span>
+      <div className="p-3 md:p-4 flex-1 flex flex-col gap-1.5">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+            {product.category || 'General'}
           </div>
+          <h3 className="line-clamp-2 text-xs md:text-sm font-bold text-[var(--color-on-surface)] leading-snug min-h-[2.4em]">
+            {product.name}
+          </h3>
         </div>
-        
-        <h3 className="mb-1 line-clamp-2 text-sm font-black tracking-tight text-[var(--color-on-surface)] group-hover:text-primary transition-colors">
-          {product.name}
-        </h3>
 
-        {product.average_rating > 0 && (
-          <div className="mb-4 flex items-center gap-1.5">
-            <div className="flex items-center gap-0.5 text-amber-400">
-              <Star size={12} fill="currentColor" />
-            </div>
-            <span className="text-[11px] font-black text-[var(--color-on-surface)]/80">
-              {Number(product.average_rating).toFixed(1)}
-            </span>
-            <span className="text-[10px] text-[var(--color-on-surface)]/40 font-bold uppercase tracking-tight">
-              ({product.total_reviews} Reviews)
-            </span>
+        {/* Rating Section */}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center bg-emerald-600 text-white text-[9px] font-black px-1 rounded-sm gap-0.5">
+            {Number(product.average_rating || 0).toFixed(1)}
+            <Star size={8} fill="currentColor" />
           </div>
-        )}
+          <span className="text-[10px] text-slate-400 font-bold">
+            ({product.total_reviews || 0})
+          </span>
+        </div>
 
-        <div className="mt-auto flex items-center justify-between gap-4">
+        <div className="mt-auto pt-2 flex items-center justify-between gap-2">
           <div className="flex flex-col">
-            <span className="text-lg font-black text-[var(--color-on-surface)]">₹{product.price}</span>
+             <span className="text-base font-black text-[var(--color-on-surface)]">₹{product.price}</span>
+             {product.mrp > product.price && (
+               <span className="text-[10px] text-slate-400 line-through font-medium">₹{product.mrp}</span>
+             )}
           </div>
 
           {quantity > 0 ? (
-            <div className="flex items-center gap-2 rounded-full bg-slate-900 p-1 shadow-lg shadow-slate-900/10">
+            <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
               <button
-                type="button"
-                onClick={(e) => {
-                   e.preventDefault();
-                   updateQuantity(product.id, quantity - 1)
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white hover:bg-white/10 active:scale-90 transition-all"
+                onClick={(e) => { e.preventDefault(); updateQuantity(product.id, quantity - 1); }}
+                className="h-7 w-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-md transition-colors"
               >
-                <Minus className="h-4 w-4" />
+                <Minus size={14} />
               </button>
-              <span className="min-w-[24px] text-center text-sm font-black text-white">
+              <span className="min-w-[20px] text-center text-[11px] font-black text-slate-900">
                 {quantity}
               </span>
               <button
-                type="button"
                 disabled={quantity >= availableStock}
-                onClick={(e) => {
-                  e.preventDefault();
-                  updateQuantity(product.id, quantity + 1)
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 transition-all"
+                onClick={(e) => { e.preventDefault(); updateQuantity(product.id, quantity + 1); }}
+                className="h-7 w-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
               >
-                <Plus className="h-4 w-4" />
+                <Plus size={14} />
               </button>
             </div>
           ) : (
             <button
-              type="button"
               disabled={disabled || outOfStock}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (isStickerProduct(product)) {
-                  toast('Select your device model on the product page');
+                  toast('Select device on product page');
                   navigate(`/product/${product.id}`);
                   return;
                 }
                 onAddToCart(product);
-                toast.success('Added to cart');
+                toast.success('Added');
               }}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:opacity-90 active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20"
+              className="h-8 px-3 btn-primary text-[10px]"
             >
-              <ShoppingBag className="h-4 w-4" />
+              <Plus size={12} />
               Add
             </button>
           )}
@@ -395,7 +372,7 @@ export default function SearchPage() {
         ) : displayProducts.length === 0 && !loading ? (
           <ProductEmptyState onClear={clearFilters} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
             {displayProducts.map((p) => (
               <ProductCard
                 key={p.id}

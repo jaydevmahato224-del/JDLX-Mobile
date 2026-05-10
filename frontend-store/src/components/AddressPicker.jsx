@@ -1,3 +1,4 @@
+import toast from "react-hot-toast"
 import { useState, useEffect } from 'react'
 import { MapPin, Navigation, X, Check, Search, Save } from 'lucide-react'
 import { API_BASE_URL } from '../config'
@@ -23,7 +24,7 @@ function AddressPicker({ onSelect, onClose }) {
                 setLoading(false);
             });
         } else {
-            alert("Geolocation is not supported by this browser.");
+            toast.error("Geolocation is not supported by this browser.");
             setLoading(false);
         }
     };

@@ -1,3 +1,4 @@
+import toast from "react-hot-toast"
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { API_BASE_URL } from '../../config'
@@ -26,7 +27,7 @@ function Login() {
             navigate('/'); // redirect home
         } catch (error) {
             console.error('Google Login Error:', error);
-            alert("Login failed. Please try again.");
+            toast.error("Login failed. Please try again.");
         }
     };
 

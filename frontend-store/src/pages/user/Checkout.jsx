@@ -119,13 +119,13 @@ function Checkout() {
 
         // Validate login
         if (!user) {
-            alert("Please login via Google before placing an order!");
+            toast.error("Please login via Google before placing an order!");
             navigate('/login');
             return;
         }
 
         if (hasOutOfStockItems) {
-            alert("One or more cart items are out of stock. Remove them before checkout.");
+            toast.error("One or more cart items are out of stock. Remove them before checkout.");
             return;
         }
 
@@ -221,7 +221,7 @@ function Checkout() {
             }, 3000);
         } catch (error) {
             console.error('Checkout Error:', error);
-            alert(error.message);
+            toast.error(error.message);
         } finally {
             setIsProcessing(false);
         }

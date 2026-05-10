@@ -58,7 +58,7 @@ function Profile() {
         { icon: Bell, label: 'Alerts', path: '/profile/notifications', color: 'text-amber-500', bg: 'bg-amber-500/10' },
         { icon: Lock, label: 'Security', path: '/profile/security', color: 'text-slate-500', bg: 'bg-slate-500/10' },
         { icon: Gift, label: 'Coupons', path: '/profile/coupons', color: 'text-pink-500', bg: 'bg-pink-500/10' },
-        { icon: Info, label: 'About Us', path: '/profile/about-site', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+        { icon: Info, label: 'About Us', path: '/profile/about-site', color: 'text-primary-500', bg: 'bg-primary-500/10' },
         { icon: FileText, label: 'Terms', path: '/profile/terms', color: 'text-slate-700', bg: 'bg-slate-700/10' },
         { icon: HelpCircle, label: 'Support', path: '/profile/support', color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
         { 
@@ -88,8 +88,8 @@ function Profile() {
                     }
                 }
             }, 
-            color: 'text-indigo-600', 
-            bg: 'bg-indigo-600/10' 
+            color: 'text-primary-600', 
+            bg: 'bg-primary-600/10' 
         },
     ];
 
@@ -102,7 +102,7 @@ function Profile() {
                     className="glass-icon-btn p-3 rounded-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-lg border border-[var(--color-surface-high)]"
                     aria-label="Toggle Theme"
                 >
-                    {theme === 'light' ? <Moon className="w-5 h-5 text-indigo-600" /> : <Sun className="w-5 h-5 text-amber-400" />}
+                    {theme === 'light' ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-amber-400" />}
                 </button>
             </header>
 

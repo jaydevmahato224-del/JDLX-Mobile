@@ -308,6 +308,15 @@ export const useStore = create((set) => ({
         }
     },
     
+    recentlyViewed: safeParse('recentlyViewed') || [],
+    addToRecentlyViewed: (product) => set((state) => {
+        if (!product || !product.id) return state;
+        const filtered = state.recentlyViewed.filter(item => String(item.id) !== String(product.id));
+        const newList = [product, ...filtered].slice(0, 10);
+        localStorage.setItem('recentlyViewed', JSON.stringify(newList));
+        return { recentlyViewed: newList };
+    }),
+    
     // Wishlist Logic
     wishlist: safeParse('wishlist') || [],
     fetchWishlist: async () => {

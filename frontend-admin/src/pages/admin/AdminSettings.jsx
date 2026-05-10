@@ -10,9 +10,9 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState({
-    theme_primary_color: '#0D1B2A',
-    theme_secondary_color: '#415A77',
-    theme_tertiary_color: '#00B4D8',
+    theme_primary_color: '#f59e0b',
+    theme_secondary_color: '#fbbf24',
+    theme_tertiary_color: '#10b981',
     pwa_install_prompt_enabled: 'true',
     pwa_banner_title: 'Install JDLX Mobile',
     pwa_banner_description: 'Get the full premium experience on your home screen.',
@@ -28,6 +28,15 @@ export default function AdminSettings() {
     shiprocket_pickup_location: 'Primary',
     global_return_policy: '7 Days Return Policy',
 
+    // Footer & Brand Identity
+    footer_email: 'support@jdlxmobile.com',
+    footer_phone: '+91 98765 43210',
+    footer_address: 'JDLX Premium Hub, Digital Estate, New Delhi',
+    footer_insta_url: '',
+    footer_twitter_url: '',
+    footer_fb_url: '',
+    footer_brand_story: 'Redefining mobile luxury with curated accessories and premium electronics. The gold standard for modern device enthusiasts.',
+    
     // Content Pages (Storefront)
     about_us_content: '',
     terms_and_conditions_content: '',
@@ -81,14 +90,17 @@ export default function AdminSettings() {
   }
 
   const handleReset = () => {
-    setSettings({
-      theme_primary_color: '#0D1B2A',
-      theme_secondary_color: '#415A77',
-      theme_tertiary_color: '#00B4D8',
-      pwa_install_prompt_enabled: 'true',
-      pwa_banner_title: 'Install JDLX Mobile',
-      pwa_banner_description: 'Get the full premium experience on your home screen.'
-    })
+    if (window.confirm('Reset all theme settings to Amber Brand defaults?')) {
+      setSettings(prev => ({
+        ...prev,
+        theme_primary_color: '#f59e0b',
+        theme_secondary_color: '#fbbf24',
+        theme_tertiary_color: '#10b981',
+        pwa_install_prompt_enabled: 'true',
+        pwa_banner_title: 'Install JDLX Mobile',
+        pwa_banner_description: 'Get the full premium experience on your home screen.'
+      }))
+    }
   }
 
   const handleChange = (key, value) => {
@@ -135,145 +147,7 @@ export default function AdminSettings() {
       </div>
 
       <div className="grid gap-10">
-        {/* Theme Settings Section */}
-        <section className="ui-card-standard p-6 md:p-10">
-          <div className="mb-10">
-            <h2 className="text-2xl font-black text-slate-900">Frontend Theme System</h2>
-            <p className="text-slate-500 font-medium mt-1">Configure your brand identity and real-time storefront aesthetics.</p>
-          </div>
-          
-          <div className="grid gap-12 lg:grid-cols-2">
-            {/* Color Pickers */}
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Primary Identity</label>
-                    <span className="text-[10px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded-full">Core Brand</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="relative group">
-                      <input
-                        type="color"
-                        value={settings.theme_primary_color || '#0D1B2A'}
-                        onChange={(e) => handleChange('theme_primary_color', e.target.value)}
-                        className="w-16 h-16 rounded-2xl cursor-pointer border-4 border-white shadow-md transition-transform hover:scale-105"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={settings.theme_primary_color || '#0D1B2A'}
-                        onChange={(e) => handleChange('theme_primary_color', e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono font-bold text-slate-700 outline-none focus:bg-white focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all"
-                      />
-                      <p className="mt-2 text-[11px] font-medium text-slate-400 leading-relaxed">
-                        Changes: **Buttons, Active Navigation, and main branding elements.**
-                      </p>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Secondary / Gradients</label>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="color"
-                      value={settings.theme_secondary_color || '#415A77'}
-                      onChange={(e) => handleChange('theme_secondary_color', e.target.value)}
-                      className="w-16 h-16 rounded-2xl cursor-pointer border-4 border-white shadow-md transition-transform hover:scale-105"
-                    />
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={settings.theme_secondary_color || '#415A77'}
-                        onChange={(e) => handleChange('theme_secondary_color', e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono font-bold text-slate-700 outline-none focus:bg-white focus:ring-4 focus:ring-secondary/5 focus:border-primary transition-all"
-                      />
-                      <p className="mt-2 text-[11px] font-medium text-slate-400 leading-relaxed">
-                        Changes: **Header background gradients, decorative blurs, and secondary cards.**
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Accent / Highlights</label>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="color"
-                      value={settings.theme_tertiary_color || '#00B4D8'}
-                      onChange={(e) => handleChange('theme_tertiary_color', e.target.value)}
-                      className="w-16 h-16 rounded-2xl cursor-pointer border-4 border-white shadow-md transition-transform hover:scale-105"
-                    />
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={settings.theme_tertiary_color || '#00B4D8'}
-                        onChange={(e) => handleChange('theme_tertiary_color', e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono font-bold text-slate-700 outline-none focus:bg-white focus:ring-4 focus:ring-tertiary/5 focus:border-primary transition-all"
-                      />
-                      <p className="mt-2 text-[11px] font-medium text-slate-400 leading-relaxed">
-                        Changes: **Product badges, category icons, and special promotional highlights.**
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Mockup Preview */}
-            <div className="bg-slate-50/50 rounded-[2.5rem] p-8 border border-slate-100">
-              <div className="mb-6 text-center">
-                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Live Mockup Preview</h3>
-                <p className="text-xs text-slate-500 mt-1">See how colors interact in the real Store UI</p>
-              </div>
-
-              <div className="bg-white rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden max-w-[280px] mx-auto scale-110">
-                {/* Mockup Header */}
-                <div className="p-4 border-b border-slate-100 flex items-center justify-between" 
-                     style={{ background: `linear-gradient(135deg, ${settings.theme_primary_color}0a 0%, ${settings.theme_secondary_color}1a 100%)` }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-[10px]" 
-                       style={{ backgroundColor: settings.theme_primary_color }}>JX</div>
-                  <div className="flex gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-slate-200"></div>
-                    <div className="w-2 h-2 rounded-full bg-slate-200"></div>
-                  </div>
-                </div>
-
-                {/* Mockup Card */}
-                <div className="p-4">
-                  <div className="relative aspect-square rounded-2xl bg-slate-50 mb-4 overflow-hidden border border-slate-100 flex items-center justify-center">
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[7px] font-black uppercase text-white shadow-sm" 
-                         style={{ backgroundColor: settings.theme_tertiary_color }}>NEW ARRIVAL</div>
-                    <div className="w-12 h-12 rounded-full opacity-20" style={{ backgroundColor: settings.theme_primary_color }}></div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="h-3 w-3/4 rounded-full bg-slate-100"></div>
-                    <div className="h-2 w-1/2 rounded-full bg-slate-50"></div>
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="h-4 w-12 rounded bg-slate-100"></div>
-                      <div className="w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white" 
-                           style={{ backgroundColor: settings.theme_primary_color }}>+</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mockup Nav */}
-                <div className="p-3 bg-white/80 backdrop-blur border-t border-slate-100 flex justify-around">
-                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: settings.theme_primary_color }}></div>
-                   <div className="w-4 h-4 rounded-full bg-slate-200 opacity-50"></div>
-                   <div className="w-4 h-4 rounded-full bg-slate-200 opacity-50"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Logistics & Delivery Section */}
         <section className="ui-card-standard p-6 md:p-10">
@@ -530,6 +404,108 @@ export default function AdminSettings() {
                     <p className="text-[10px] text-slate-400 font-medium">This text scrolls at the very top of the storefront. Use "•" to separate points.</p>
                  </div>
                </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer & Brand Identity Section */}
+        <section className="ui-card-standard p-6 md:p-10">
+          <div className="mb-10">
+            <h2 className="text-2xl font-black text-slate-900">Footer & Social Identity</h2>
+            <p className="text-slate-500 font-medium mt-1">Manage contact details, social links, and brand storytelling in the storefront footer.</p>
+          </div>
+
+          <div className="grid gap-10 lg:grid-cols-2">
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-6 bg-primary rounded-full"></div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Contact Information</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Support Email</label>
+                  <input
+                    type="email"
+                    value={settings.footer_email || ''}
+                    onChange={(e) => handleChange('footer_email', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={settings.footer_phone || ''}
+                    onChange={(e) => handleChange('footer_phone', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Physical Address</label>
+                  <textarea
+                    value={settings.footer_address || ''}
+                    onChange={(e) => handleChange('footer_address', e.target.value)}
+                    rows={2}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Social Media Links</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Instagram URL</label>
+                  <input
+                    type="text"
+                    value={settings.footer_insta_url || ''}
+                    onChange={(e) => handleChange('footer_insta_url', e.target.value)}
+                    placeholder="https://instagram.com/jdlxmobile"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Twitter URL</label>
+                  <input
+                    type="text"
+                    value={settings.footer_twitter_url || ''}
+                    onChange={(e) => handleChange('footer_twitter_url', e.target.value)}
+                    placeholder="https://twitter.com/jdlxmobile"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Facebook URL</label>
+                  <input
+                    type="text"
+                    value={settings.footer_fb_url || ''}
+                    onChange={(e) => handleChange('footer_fb_url', e.target.value)}
+                    placeholder="https://facebook.com/jdlxmobile"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10 pt-10 border-t border-slate-100 space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1.5 h-6 bg-slate-900 rounded-full"></div>
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Brand Storytelling</h3>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase tracking-widest text-slate-400">Short Brand Description</label>
+              <textarea
+                value={settings.footer_brand_story || ''}
+                onChange={(e) => handleChange('footer_brand_story', e.target.value)}
+                rows={3}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-600 outline-none focus:bg-white focus:border-primary transition-all resize-none"
+              />
+              <p className="text-[10px] text-slate-400 font-medium italic">Appears below the logo in the footer. Keep it under 200 characters for best results.</p>
             </div>
           </div>
         </section>

@@ -8,6 +8,7 @@ import LiquidBottomNav from './LiquidBottomNav'
 import PWAInstallBanner from './PWAInstallBanner'
 import LocationManager from './LocationManager'
 import TermsGate from './TermsGate'
+import Footer from './Footer'
 
 function Layout({ children }) {
   const location = useLocation()
@@ -132,9 +133,11 @@ function Layout({ children }) {
         </header>
       </div>
 
-      <main className="container-standard py-8 pb-[calc(var(--app-bottom-nav-height)+32px)]">
+      <main className="container-standard py-8">
         {children}
       </main>
+
+      <Footer />
 
       {/* Bottom Navigation (Mobile) */}
       <div className="fixed bottom-0 left-0 right-0 z-50">

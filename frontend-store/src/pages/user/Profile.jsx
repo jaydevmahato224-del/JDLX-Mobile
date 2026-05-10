@@ -102,7 +102,7 @@ function Profile() {
                     className="glass-icon-btn p-3 rounded-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-lg border border-[var(--color-surface-high)]"
                     aria-label="Toggle Theme"
                 >
-                    {theme === 'light' ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-amber-400" />}
+                    {theme === 'light' ? <Moon className="w-5 h-5 text-primary" /> : <Sun className="w-5 h-5 text-amber-400" />}
                 </button>
             </header>
 

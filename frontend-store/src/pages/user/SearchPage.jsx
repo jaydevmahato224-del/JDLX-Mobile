@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Star } from 'lucide-react'
+import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Star, ShieldCheck } from 'lucide-react'
 
 import BlurImage from '../../components/BlurImage'
 import PaginationLoader from '../../components/PaginationLoader'
@@ -61,52 +61,66 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const outOfStock = availableStock <= 0
 
   return (
-    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-2xl overflow-hidden border border-[var(--color-surface-high)] transition-all duration-300 hover:shadow-xl hover:border-primary/20">
-      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/50 cursor-pointer">
-        {/* Badges Overlay */}
-        <div className="absolute top-2 left-2 z-20 flex flex-col gap-1.5">
+    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-xl hover:-translate-y-1.5 hover:border-primary/20">
+      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
+        {/* Dynamic Badges Overlay */}
+        <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">
           {outOfStock ? (
-            <span className="bg-slate-200 text-slate-600 text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter">
+            <span className="bg-slate-900/90 backdrop-blur text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
               Sold Out
             </span>
-          ) : availableStock <= LOW_STOCK_LIMIT && (
-            <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-tighter border border-amber-200">
-              Only {availableStock} left
+          ) : availableStock <= LOW_STOCK_LIMIT ? (
+            <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
+              Low Stock
+            </span>
+          ) : (Number(product.is_featured) === 1 || product.is_featured === true) ? (
+            <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-soft-glow">
+              Premium
+            </span>
+          ) : product.average_rating >= 4.5 ? (
+            <span className="bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
+              Best Seller
+            </span>
+          ) : (
+            <span className="bg-blue-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
+              New
             </span>
           )}
         </div>
 
-        <div className="h-full w-full p-4 transition-transform duration-700 group-hover:scale-105">
+        <div className="h-full w-full p-6 transition-transform duration-1000 group-hover:scale-110">
           <BlurImage
             src={getProductImage(product)}
             alt={product.name}
-            className="h-full w-full object-contain mix-blend-multiply"
+            className="h-full w-full object-contain drop-shadow-lg"
           />
         </div>
       </div>
 
-      <div className="p-3 md:p-4 flex-1 flex flex-col gap-1.5">
-        <div className="flex flex-col gap-0.5">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
-            {product.category || 'General'}
+      <div className="p-4 flex-1 flex flex-col gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              {product.category || 'General'}
+            </span>
+            {product.average_rating > 0 ? (
+              <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
+                <Star size={8} fill="currentColor" className="text-emerald-500" />
+                <span className="text-[9px] font-black text-emerald-700">{Number(product.average_rating).toFixed(1)}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100">
+                <ShieldCheck size={8} className="text-blue-500" />
+                <span className="text-[8px] font-black text-blue-700 uppercase">Verified</span>
+              </div>
+            )}
           </div>
-          <h3 className="line-clamp-2 text-xs md:text-sm font-bold text-[var(--color-on-surface)] leading-snug min-h-[2.4em]">
+          <h3 className="line-clamp-2 text-xs md:text-sm font-bold text-[var(--color-on-surface)] leading-tight min-h-[2.4em]">
             {product.name}
           </h3>
         </div>
 
-        {/* Rating Section */}
-        <div className="flex items-center gap-1">
-          <div className="flex items-center bg-emerald-600 text-white text-[9px] font-black px-1 rounded-sm gap-0.5">
-            {Number(product.average_rating || 0).toFixed(1)}
-            <Star size={8} fill="currentColor" />
-          </div>
-          <span className="text-[10px] text-slate-400 font-bold">
-            ({product.total_reviews || 0})
-          </span>
-        </div>
-
-        <div className="mt-auto pt-2 flex items-center justify-between gap-2">
+        <div className="mt-auto flex items-end justify-between gap-2">
           <div className="flex flex-col">
              <span className="text-base font-black text-[var(--color-on-surface)]">₹{product.price}</span>
              {product.mrp > product.price && (
@@ -147,7 +161,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
                 onAddToCart(product);
                 toast.success('Added');
               }}
-              className="h-8 px-3 btn-primary text-[10px]"
+              className="h-8 px-3 btn-primary text-[10px] rounded-xl"
             >
               <Plus size={12} />
               Add

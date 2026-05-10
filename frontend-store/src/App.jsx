@@ -141,75 +141,6 @@ function OperationalRedirect() {
   return <PageLoader />
 }
 
-// ─── Dynamic Theme Loader ─────────────────────────────────────────────────────
-function ThemeLoader() {
-  useEffect(() => {
-    const hexToRgb = (hex) => {
-      if (!hex) return null;
-      hex = hex.replace(/^#/, '');
-      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-      if (hex.length !== 6) return null;
-      const bigint = parseInt(hex, 16);
-      return `${(bigint >> 16) & 255}, ${(bigint >> 8) & 255}, ${bigint & 255}`;
-    };
-
-    const getContrastColor = (hex) => {
-      if (!hex) return '#0f172a';
-      hex = hex.replace(/^#/, '');
-      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-      return (yiq >= 128) ? '#0f172a' : '#ffffff';
-    };
-
-    const applyThemeColor = (root, key, color) => {
-      if (!color) return;
-      
-      let finalColor = color;
-      
-      // Strict Brand Protection: Ignore dark/blue defaults for primary to keep the "Yellow" theme
-      const isDark = (hex) => {
-        hex = hex.replace(/^#/, '');
-        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-        return yiq < 128;
-      };
-
-      if (key === 'primary' && isDark(color)) {
-        finalColor = '#f59e0b'; // Forced Amber
-      }
-      
-      root.style.setProperty(`--color-${key}`, finalColor);
-      const rgb = hexToRgb(finalColor);
-      if (rgb) root.style.setProperty(`--color-${key}-rgb`, rgb);
-      if (key === 'primary') {
-        root.style.setProperty('--color-on-primary', getContrastColor(finalColor));
-      }
-    };
-
-    fetch(`${API_BASE_URL}/settings`)
-      .then(res => res.json())
-      .then(json => {
-        if (json?.success && json.data) {
-          const root = document.documentElement;
-          const { theme_primary_color, theme_secondary_color, theme_tertiary_color } = json.data;
-          applyThemeColor(root, 'primary', theme_primary_color);
-          applyThemeColor(root, 'secondary', theme_secondary_color);
-          applyThemeColor(root, 'tertiary', theme_tertiary_color);
-        }
-      })
-      .catch(err => console.error('ThemeLoader failed:', err));
-  }, []);
-
-  return null;
-}
-
-// ─── App ──────────────────────────────────────────────────────────────────────
 function App() {
   const token = useStore((state) => state.token);
   const fetchCart = useStore((state) => state.fetchCart);
@@ -224,7 +155,6 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <ThemeLoader />
       {/* Amber top progress bar — shows on every fetch + route change */}
       <TopLoader />
       <Toaster position="top-center" reverseOrder={false} />

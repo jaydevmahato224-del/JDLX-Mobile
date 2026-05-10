@@ -1,53 +1,50 @@
 import { useState, useEffect } from 'react';
+import { useStore } from '../store/useStore';
 
 /**
  * Hook to manage PWA installation prompt logic.
- * Listens for 'beforeinstallprompt' and provides status/trigger.
+ * Uses the global store to access the 'beforeinstallprompt' event.
  */
 export function usePWAInstall() {
-  const [installPrompt, setInstallPrompt] = useState(null);
-  const [isInstallable, setIsInstallable] = useState(false);
+  const installPrompt = useStore((state) => state.pwaInstallPrompt);
+  const clearPwaInstallPrompt = useStore((state) => state.clearPwaInstallPrompt);
+  
   const [isInstalled, setIsInstalled] = useState(() => {
     if (typeof window === 'undefined') {
       return false;
     }
-
     return window.matchMedia('(display-mode: standalone)').matches;
   });
 
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-      setIsInstallable(true);
-    };
+  const isInstallable = !!installPrompt;
 
+  useEffect(() => {
     const handleAppInstalled = () => {
       setIsInstalled(true);
-      setIsInstallable(false);
-      setInstallPrompt(null);
+      clearPwaInstallPrompt();
       console.log('JDLX App was installed');
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
-
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [clearPwaInstallPrompt]);
 
   const handleInstallClick = async () => {
     if (!installPrompt) return;
 
-    installPrompt.prompt();
-
-    const { outcome } = await installPrompt.userChoice;
-    console.log(`User response to install prompt: ${outcome}`);
-
-    setInstallPrompt(null);
-    setIsInstallable(false);
+    try {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      console.log(`User response to install prompt: ${outcome}`);
+      
+      if (outcome === 'accepted') {
+        clearPwaInstallPrompt();
+      }
+    } catch (err) {
+      console.error('Installation failed:', err);
+    }
   };
 
   return { isInstallable, isInstalled, handleInstallClick };

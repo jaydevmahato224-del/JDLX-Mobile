@@ -374,5 +374,10 @@ export const useStore = create((set) => ({
         } catch (e) {
             console.error('Wishlist toggle failed:', e);
         }
-    }
+    },
+
+    // PWA Install Prompt State
+    pwaInstallPrompt: null,
+    setPwaInstallPrompt: (prompt) => set({ pwaInstallPrompt: prompt }),
+    clearPwaInstallPrompt: () => set({ pwaInstallPrompt: null })
 }))

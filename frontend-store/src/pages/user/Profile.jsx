@@ -65,6 +65,7 @@ function Profile() {
             icon: Download, 
             label: 'Download App', 
             onClick: () => {
+                console.log('Download App Clicked. Status:', { isInstalled, isInstallable });
                 if (isInstalled) {
                     toast.success('JDLX Mobile is already installed!', {
                         icon: '🚀',
@@ -75,13 +76,14 @@ function Profile() {
                 } else {
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
                     if (isIOS) {
-                        toast('Tap the Share icon and "Add to Home Screen" to install.', {
-                            duration: 5000,
+                        toast('Tap the "Share" icon and then "Add to Home Screen" to install JDLX.', {
+                            duration: 6000,
                             icon: '📲',
                             style: { borderRadius: '16px', background: 'var(--color-surface-high)', color: 'var(--color-on-surface)', fontWeight: 'bold' }
                         });
                     } else {
-                        toast('Use Chrome or Edge to install JDLX Mobile directly.', {
+                        toast('To install, use Chrome/Edge and look for the "Install App" option in the browser menu.', {
+                            duration: 5000,
                             icon: 'ℹ️',
                             style: { borderRadius: '16px', background: 'var(--color-surface-high)', color: 'var(--color-on-surface)', fontWeight: 'bold' }
                         });

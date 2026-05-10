@@ -153,6 +153,8 @@ function App() {
     }
   }, [token, fetchCart, fetchWishlist]);
 
+  // Global PWA Install Prompt Listener (Moved to main.jsx for earlier capture)
+
   return (
     <ErrorBoundary>
       {/* Amber top progress bar — shows on every fetch + route change */}

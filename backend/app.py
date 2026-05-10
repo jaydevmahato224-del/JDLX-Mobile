@@ -613,11 +613,34 @@ def google_auth():
 
 @app.route('/login/google', methods=['GET'])
 def login_google():
-    """Redirects to Google for customer authentication."""
-    redirect_uri = GOOGLE_REDIRECT_URI
+    """Redirects to Google for customer authentication using a stateless flow."""
     flow = request.args.get('flow', 'user')
-    session['oauth_flow'] = flow
-    return oauth.google.authorize_redirect(redirect_uri, prompt='select_account')
+    frontend_url = request.args.get('frontend_url')
+    
+    if not frontend_url:
+        referer = request.headers.get('Referer')
+        if referer:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+    
+    if not frontend_url:
+        frontend_url = FRONTEND_BASE_URL
+
+    # Encode both flow and frontend_url into the state parameter
+    state_payload = f"{flow}|{frontend_url}"
+    
+    from urllib.parse import urlencode
+    params = {
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'prompt': 'select_account',
+        'state': state_payload
+    }
+    auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
+    return redirect(auth_url)
 
 
 @app.route('/admin/login/google', methods=['GET'])
@@ -723,143 +746,172 @@ def admin_google_callback():
 
 @app.route('/google/callback', methods=['GET'])
 def google_callback():
-    """General Google OAuth callback; dispatches to user, warehouse, or delivery flows."""
+    """General Google OAuth callback; dispatches based on state-encoded flow."""
+    state_payload = request.args.get('state', '')
+    if '|' in state_payload:
+        flow, frontend_url = state_payload.split('|', 1)
+    else:
+        flow = 'user'
+        frontend_url = state_payload if state_payload.startswith('http') else FRONTEND_BASE_URL
+
+    code = request.args.get('code')
+    if not code:
+        logger.error("Missing code in Google OAuth callback")
+        return error_response("Missing authorization code", 400)
+
     try:
-        token = oauth.google.authorize_access_token()
+        # 1. Exchange code for token directly (Stateless)
+        import requests
+        token_resp = requests.post(
+            'https://oauth2.googleapis.com/token',
+            data={
+                'client_id': GOOGLE_CLIENT_ID,
+                'client_secret': GOOGLE_CLIENT_SECRET,
+                'code': code,
+                'grant_type': 'authorization_code',
+                'redirect_uri': GOOGLE_REDIRECT_URI
+            }
+        ).json()
+
+        if 'error' in token_resp:
+            logger.error(f"Token exchange error: {token_resp}")
+            return error_response(f"Token exchange failed: {token_resp.get('error_description', token_resp['error'])}", 400)
+
+        access_token = token_resp.get('access_token')
+        
+        # 2. Fetch userinfo
+        userinfo = requests.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            headers={'Authorization': f'Bearer {access_token}'}
+        ).json()
+
+        google_id = userinfo.get('sub')
+        email = (userinfo.get('email') or '').strip().lower()
+        name = userinfo.get('name', '')
+        picture = userinfo.get('picture', '')
+
+        if not google_id or not email:
+            logger.error(f"Incomplete Google user profile: {userinfo}")
+            return redirect(f"{frontend_url}/login?error=incomplete_profile")
+
+        ip_address = get_client_ip()
+        if is_account_locked(email):
+            create_security_alert(
+                "multiple_failed_logins",
+                f"Locked login attempt blocked for {email}.",
+                severity="high",
+                ip_address=ip_address,
+            )
+            return redirect(f"{frontend_url}/login?error=account_locked")
+
+        # 3. Process Login
+        user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
+        
+        # Store in session as a backup (though we're moving towards stateless)
+        session['oauth_user_id'] = user_data['id']
+        session['oauth_email'] = user_data['email']
+
+        encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
+
+        if flow in ('warehouse_login', 'warehouse'):
+            from warehouse_routes import get_db as wh_get_db
+            wh_conn = wh_get_db()
+            try:
+                wh = wh_conn.execute(
+                    """SELECT w.*, ds.id AS store_id, ds.store_code 
+                       FROM warehouses w 
+                       LEFT JOIN dark_stores ds ON w.warehouse_name = ds.name 
+                       WHERE w.email = ?""", 
+                    (email,)
+                ).fetchone()
+            finally:
+                wh_conn.close()
+
+            if not wh:
+                return redirect(f"{frontend_url}/warehouse/login?error=not_authorized")
+
+            wh_token = issue_warehouse_token(wh['id'], email, wh['warehouse_role'])
+            wh_user = {
+                'id': wh['id'],
+                'store_id': wh['store_id'],
+                'partner_id': wh['partner_id'],
+                'store_code': wh['store_code'],
+                'warehouse_name': wh['warehouse_name'],
+                'owner_name': wh['owner_name'],
+                'email': wh['email'],
+                'warehouse_role': wh['warehouse_role'],
+                'role': wh['warehouse_role'],
+                'address': wh['address'],
+                'pincode': wh['pincode'],
+                'warehouse_capacity': wh['warehouse_capacity'],
+                'operations_status': wh['operations_status'],
+                'weather_status': wh['weather_status'],
+                'service_radius_km': wh['service_radius_km'],
+            }
+            encoded_wh_user = quote(json.dumps(wh_user, separators=(',', ':')))
+            return redirect(f"{frontend_url}/oauth/callback?oauth_token={wh_token}&oauth_user={encoded_wh_user}")
+
+        if flow in ('delivery_login', 'delivery'):
+            conn = get_db()
+            try:
+                dp = conn.execute("SELECT * FROM delivery_partners WHERE email = ?", (email,)).fetchone()
+            finally:
+                conn.close()
+
+            if not dp:
+                return redirect(f"{frontend_url}/warehouse/login?error=not_authorized&role=delivery")
+
+            payload = {
+                "partner_id": dp["id"],
+                "email": email,
+                "type": "delivery",
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7),
+            }
+            dp_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+            dp_user = {
+                'id': dp['id'],
+                'partner_id': dp['partner_id'],
+                'name': dp['name'],
+                'email': dp['email'],
+                'role': 'delivery',
+                'status': dp['status']
+            }
+            encoded_dp_user = quote(json.dumps(dp_user, separators=(',', ':')))
+            return redirect(f"{frontend_url}/oauth/callback?oauth_token={dp_token}&oauth_user={encoded_dp_user}")
+
+        if flow in ('warehouse_request', 'warehouse_partner_request'):
+            req_payload = {
+                'email': email,
+                'name': name,
+                'type': 'warehouse_request',
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=2),
+            }
+            req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
+            req_user = {'email': email, 'name': name}
+            encoded_req_user = quote(json.dumps(req_user, separators=(',', ':')))
+            return redirect(f"{frontend_url}/warehouse/request?oauth_token={req_token}&oauth_user={encoded_req_user}")
+
+        if flow == 'delivery_request':
+            req_payload = {
+                'email': email,
+                'name': name,
+                'type': 'delivery_request',
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=2),
+            }
+            req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
+            req_user = {'email': email, 'name': name}
+            encoded_req_user = quote(json.dumps(req_user, separators=(',', ':')))
+            return redirect(f"{frontend_url}/warehouse/request-delivery?oauth_token={req_token}&oauth_user={encoded_req_user}")
+
+        if flow == 'admin':
+            return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
+
+        # Default: User Flow
+        return redirect(f"{frontend_url}/?oauth_token={jwt_token}&oauth_user={encoded_user}")
+
     except Exception as exc:
-        logger.error(f"Google OAuth callback validation failed: {str(exc)}")
-        return error_response("OAuth callback validation failed", 400)
-
-    userinfo = token.get('userinfo')
-    if not userinfo:
-        userinfo = oauth.google.get('userinfo').json()
-
-    google_id = userinfo.get('sub')
-    email = (userinfo.get('email') or '').strip().lower()
-    name = userinfo.get('name', '')
-    picture = userinfo.get('picture', '')
-
-    if not google_id or not email:
-        return error_response("Incomplete Google user profile", 400)
-
-    ip_address = get_client_ip()
-    if is_account_locked(email):
-        create_security_alert(
-            "multiple_failed_logins",
-            f"Locked login attempt blocked for {email}.",
-            severity="high",
-            ip_address=ip_address,
-        )
-        return error_response("Account temporarily locked. Try again later.", 423)
-
-    user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
-    session['oauth_user_id'] = user_data['id']
-    session['oauth_email'] = user_data['email']
-
-    encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
-    flow = session.pop('oauth_flow', 'user')
-
-    if flow in ('warehouse_login', 'warehouse'):
-        from warehouse_routes import get_db as wh_get_db
-        wh_conn = wh_get_db()
-        try:
-            wh = wh_conn.execute(
-                """SELECT w.*, ds.id AS store_id, ds.store_code 
-                   FROM warehouses w 
-                   LEFT JOIN dark_stores ds ON w.warehouse_name = ds.name 
-                   WHERE w.email = ?""", 
-                (email,)
-            ).fetchone()
-        finally:
-            wh_conn.close()
-
-        if not wh:
-            warehouse_frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
-            return redirect(f"{warehouse_frontend_url}/warehouse/login?error=not_authorized")
-
-        wh_token = issue_warehouse_token(wh['id'], email, wh['warehouse_role'])
-        wh_user = {
-            'id': wh['id'],
-            'store_id': wh['store_id'],
-            'partner_id': wh['partner_id'],
-            'store_code': wh['store_code'],
-            'warehouse_name': wh['warehouse_name'],
-            'owner_name': wh['owner_name'],
-            'email': wh['email'],
-            'warehouse_role': wh['warehouse_role'],
-            'role': wh['warehouse_role'],
-            'address': wh['address'],
-            'pincode': wh['pincode'],
-            'warehouse_capacity': wh['warehouse_capacity'],
-            'operations_status': wh['operations_status'],
-            'weather_status': wh['weather_status'],
-            'service_radius_km': wh['service_radius_km'],
-        }
-        encoded_wh_user = quote(json.dumps(wh_user, separators=(',', ':')))
-        warehouse_frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
-        return redirect(f"{warehouse_frontend_url}/oauth/callback?oauth_token={wh_token}&oauth_user={encoded_wh_user}")
-
-    if flow in ('delivery_login', 'delivery'):
-        conn = get_db()
-        try:
-            dp = conn.execute("SELECT * FROM delivery_partners WHERE email = ?", (email,)).fetchone()
-        finally:
-            conn.close()
-
-        if not dp:
-            warehouse_frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
-            return redirect(f"{warehouse_frontend_url}/warehouse/login?error=not_authorized&role=delivery")
-
-        payload = {
-            "partner_id": dp["id"],
-            "email": email,
-            "type": "delivery",
-            "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7),
-        }
-        dp_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-        dp_user = {
-            'id': dp['id'],
-            'partner_id': dp['partner_id'],
-            'name': dp['name'],
-            'email': dp['email'],
-            'role': 'delivery',
-            'status': dp['status']
-        }
-        encoded_dp_user = quote(json.dumps(dp_user, separators=(',', ':')))
-        warehouse_frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
-        return redirect(f"{warehouse_frontend_url}/oauth/callback?oauth_token={dp_token}&oauth_user={encoded_dp_user}")
-
-    if flow in ('warehouse_request', 'warehouse_partner_request'):
-        req_payload = {
-            'email': email,
-            'name': name,
-            'type': 'warehouse_request',
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=2),
-        }
-        req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
-        req_user = {'email': email, 'name': name}
-        encoded_req_user = quote(json.dumps(req_user, separators=(',', ':')))
-        warehouse_frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
-        return redirect(f"{warehouse_frontend_url}/warehouse/request?oauth_token={req_token}&oauth_user={encoded_req_user}")
-
-    if flow == 'delivery_request':
-        req_payload = {
-            'email': email,
-            'name': name,
-            'type': 'delivery_request',
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=2),
-        }
-        req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
-        req_user = {'email': email, 'name': name}
-        encoded_req_user = quote(json.dumps(req_user, separators=(',', ':')))
-        warehouse_frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
-        return redirect(f"{warehouse_frontend_url}/warehouse/request-delivery?oauth_token={req_token}&oauth_user={encoded_req_user}")
-
-    if flow == 'admin':
-        admin_frontend_url = os.environ.get("ADMIN_FRONTEND_URL", "http://localhost:5174").rstrip("/")
-        return redirect(f"{admin_frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
-
-    return redirect(f"{FRONTEND_BASE_URL}/?oauth_token={jwt_token}&oauth_user={encoded_user}")
+        logger.error(f"Google OAuth callback failed: {str(exc)}", exc_info=True)
+        return redirect(f"{frontend_url}/?error=auth_error&details={quote(str(exc))}")
 
 
 # ==============================================================================

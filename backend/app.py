@@ -116,27 +116,24 @@ app = Flask(__name__)
 # - Android emulator can't reach host via `localhost` (uses `10.0.2.2`).
 # - Vite dev servers are often accessed via LAN IP (e.g. `192.168.x.x`).
 cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
+cors_origins = [
+    r"^http://localhost:517[3-5]$",
+    r"^http://127\.0\.0\.1:517[3-5]$",
+    r"^http://10\.0\.2\.2:517[3-5]$",
+    r"^https?://(.*)jdlxmobile\.in$",
+    r"^https?://(.*)vercel\.app$",
+]
 if cors_origins_env:
-    cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
-else:
-    cors_origins = [
-        r"^http://localhost:517[3-5]$",
-        r"^http://127\.0\.0\.1:517[3-5]$",
-        r"^http://10\.0\.2\.2:517[3-5]$",
-        r"^http://192\.168\.\d+\.\d+:517[3-5]$",
-        r"^http://10\.\d+\.\d+\.\d+:517[3-5]$",
-        r"^https://jdlx-mobile-wearhouse\.vercel\.app$",
-        r"^https://jdlx-mobile-warehouse\.vercel\.app$",
-        r"^https://jdlx-mobile\.vercel\.app$",
-        r"^https://jdlx-admin\.vercel\.app$",
-        r"^https://jdlx-official-admin\.vercel\.app$",
-        r"^https://jdlxmobile\.in$",
-        r"^https://www\.jdlxmobile\.in$",
-    ]
+    extra_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    cors_origins.extend(extra_origins)
 
 CORS(
     app,
-    resources={r"/api/*": {"origins": cors_origins}},
+    resources={r"/api/*": {
+        "origins": cors_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+    }},
     supports_credentials=True,
 )
 
@@ -5339,11 +5336,24 @@ def warehouse_availability():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Basic health check endpoint for monitoring."""
-    return jsonify({
-        "status": "healthy",
-        "timestamp": datetime.datetime.now().isoformat(),
-        "version": "1.0.0"
-    }), 200
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        return jsonify({
+            "status": "healthy",
+            "database": "connected",
+            "allowed_origins": cors_origins,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "version": "1.0.0"
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "database": "error",
+            "error": str(e),
+            "allowed_origins": cors_origins
+        }), 500
 
 
 # ==============================================================================

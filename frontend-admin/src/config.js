@@ -1,15 +1,9 @@
-function getDefaultApiBaseUrl() {
-  if (typeof window === 'undefined') return 'http://localhost:5000/api';
-  const hostname = window.location.hostname;
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-  
-  if (hostname.includes('vercel.app') || hostname.includes('jdlxmobile.in')) {
-    return `${protocol}//${hostname}/api`;
-  }
-  return `${protocol}//${hostname}:5000/api`;
-}
+const PROD_BACKEND_URL = "https://your-backend.onrender.com/api";
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || getDefaultApiBaseUrl();
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? getDefaultApiBaseUrl() 
+    : PROD_BACKEND_URL);
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export function resolveMediaUrl(value) {

@@ -115,7 +115,7 @@ function OperationalRedirect() {
     let target = ''
     if (isProduction) {
       // PROD: Use subdomains or specific Vercel URLs
-      const targetDomain = isWarehouse ? 'jdlx-mobile-warehouse.vercel.app' : 'jdlx-official-admin.vercel.app'
+      const targetDomain = isWarehouse ? 'jdlx-mobile-wearhouse.vercel.app' : 'jdlx-official-admin.vercel.app'
       target = `https://${targetDomain}${location.pathname}${location.search}${location.hash}`
     } else {
       // LOCAL: Use port-based redirection

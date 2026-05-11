@@ -22,7 +22,12 @@ function getDefaultApiBaseUrl() {
   return `${protocol}//${resolvedHost}:5000/api`;
 }
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || getDefaultApiBaseUrl();
+const PROD_BACKEND_URL = "https://your-backend.onrender.com/api";
+
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? getDefaultApiBaseUrl() 
+    : PROD_BACKEND_URL);
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export function resolveMediaUrl(value) {

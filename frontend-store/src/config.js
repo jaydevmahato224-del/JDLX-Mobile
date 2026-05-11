@@ -30,10 +30,15 @@ function getDefaultApiBaseUrl() {
 
 const PROD_BACKEND_URL = "https://jdlx-mobile.onrender.com/api"; // Your Actual Render URL
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? getDefaultApiBaseUrl() 
-    : PROD_BACKEND_URL);
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 
+    (window.location.hostname === 'localhost' || 
+     window.location.hostname === '127.0.0.1' || 
+     window.location.hostname === '0.0.0.0' ||
+     window.location.hostname.startsWith('192.168.')
+      ? getDefaultApiBaseUrl() 
+      : PROD_BACKEND_URL);
+
+  export { API_BASE_URL };
 
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 

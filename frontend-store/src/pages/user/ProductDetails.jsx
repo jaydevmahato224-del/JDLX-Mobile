@@ -66,12 +66,11 @@ export default function ProductDetails() {
 
   useEffect(() => {
     if (storeProducts?.length) return;
-    fetch(`${API_BASE_URL}/api/products`)
+    fetch(`${API_BASE_URL}/products`)
       .then(r => r.json())
       .then(payload => setRemoteProducts(normalizeProductsPayload(payload)))
       .catch(() => {});
   }, [storeProducts?.length]);
-
   useEffect(() => {
     if (cartItem?.device_model) setDeviceModel(cartItem.device_model);
   }, [cartItem?.device_model]);

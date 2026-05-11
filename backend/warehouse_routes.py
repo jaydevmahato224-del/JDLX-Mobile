@@ -1468,18 +1468,18 @@ def create_direct_purchase():
             # 3. Update Inventory immediately
             # Check if item exists in inventory
             inv = cursor.execute(
-                "SELECT stock_quantity FROM warehouse_inventory WHERE store_id = ? AND product_id = ?", 
+                "SELECT stock_quantity FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?", 
                 (store_id, item['product_id'])
             ).fetchone()
             
             if inv:
                 cursor.execute(
-                    "UPDATE warehouse_inventory SET stock_quantity = stock_quantity + ? WHERE store_id = ? AND product_id = ?",
+                    "UPDATE warehouse_inventory SET stock_quantity = stock_quantity + ? WHERE warehouse_id = ? AND product_id = ?",
                     (item['quantity'], store_id, item['product_id'])
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO warehouse_inventory (store_id, product_id, stock_quantity) VALUES (?, ?, ?)",
+                    "INSERT INTO warehouse_inventory (warehouse_id, product_id, stock_quantity) VALUES (?, ?, ?)",
                     (store_id, item['product_id'], item['quantity'])
                 )
         

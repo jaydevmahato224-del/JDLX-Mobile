@@ -108,7 +108,10 @@ from services.auto_healer import trigger_system_scan
 # APP INITIALIZATION & CONFIGURATION
 # ==============================================================================
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # --- CORS Configuration ---
 # Enable CORS for Store/Admin/Warehouse frontends.
@@ -134,7 +137,8 @@ CORS(
     resources={r"/api/*": {
         "origins": cors_origins,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"],
+        "expose_headers": ["Content-Type", "Authorization"]
     }},
     supports_credentials=True,
 )

@@ -12,12 +12,16 @@ import TopLoader from './components/TopLoader'
 import PageLoader from './components/PageLoader'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
+import { API_BASE_URL } from './config'
+
+console.log("%c JDLX DEBUG: API_BASE_URL is", "color: #f59e0b; font-weight: bold;", API_BASE_URL);
 
 // ─── Global Fetch Interceptor ─────────────────────────────────────────────────
 const _originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
   const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+  console.log(`%c JDLX FETCH: ${requestUrl}`, "color: #3b82f6;");
   
   // Only show loader for significant API calls
   const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs');
@@ -25,6 +29,7 @@ window.fetch = async (...args) => {
 
   try {
     const response = await _originalFetch(...args);
+    console.log(`%c JDLX STATUS: ${response.status} for ${requestUrl}`, "color: #10b981;");
     
     if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {
       useStore.getState().logout();

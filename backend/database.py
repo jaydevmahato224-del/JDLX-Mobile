@@ -128,11 +128,11 @@ def init_db():
     ensure_columns('dark_stores', [('latitude', 'REAL'), ('longitude', 'REAL'), ('address', 'TEXT'), ('pincode', 'TEXT'), ('active', 'BOOLEAN DEFAULT 1'), ('manager_name', 'TEXT'), ('phone', 'TEXT')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY AUTOINCREMENT, warehouse_name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    ensure_columns('warehouses', [('partner_id', 'TEXT'), ('application_id', 'INTEGER'), ('owner_name', 'TEXT'), ('phone', 'TEXT'), ('address', 'TEXT'), ('pincode', 'TEXT'), ('warehouse_capacity', 'INTEGER'), ('warehouse_type', "TEXT DEFAULT 'micro_fulfillment'"), ('warehouse_role', "TEXT DEFAULT 'owner'"), ('operations_status', "TEXT DEFAULT 'open'"), ('weather_status', "TEXT DEFAULT 'clear'"), ('account_status', "TEXT DEFAULT 'active'"), ('profile_kyc_status', "TEXT DEFAULT 'verified'"), ('kyc_notice_sent', 'INTEGER DEFAULT 0'), ('kyc_notice_sent_at', 'TIMESTAMP'), ('service_radius_km', 'REAL DEFAULT 4')])
+    ensure_columns('warehouses', [('partner_id', 'TEXT'), ('application_id', 'INTEGER'), ('owner_name', 'TEXT'), ('phone', 'TEXT'), ('address', 'TEXT'), ('pincode', 'TEXT'), ('warehouse_capacity', 'INTEGER'), ('warehouse_type', "TEXT DEFAULT 'micro_fulfillment'"), ('warehouse_role', "TEXT DEFAULT 'owner'"), ('operations_status', "TEXT DEFAULT 'open'"), ('weather_status', "TEXT DEFAULT 'clear'"), ('account_status', "TEXT DEFAULT 'active'"), ('profile_kyc_status', "TEXT DEFAULT 'verified'"), ('kyc_notice_sent', 'INTEGER DEFAULT 0'), ('kyc_notice_sent_at', 'TIMESTAMP'), ('service_radius_km', 'REAL DEFAULT 4'), ('quick_mode_enabled', 'INTEGER DEFAULT 0')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        warehouse_id INTEGER NOT NULL,
+        warehouse_partner_id INTEGER NOT NULL,
         product_id INTEGER NOT NULL,
         product_name TEXT,
         sku TEXT,
@@ -151,11 +151,26 @@ def init_db():
         status TEXT DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+        FOREIGN KEY(warehouse_partner_id) REFERENCES warehouses(id),
         FOREIGN KEY(product_id) REFERENCES products(id)
     )''')
+    ensure_columns('warehouse_inventory', [
+        ('warehouse_id', 'INTEGER'),
+        ('available_stock', 'INTEGER DEFAULT 0')
+    ])
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_wh ON warehouse_inventory(warehouse_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_prod ON warehouse_inventory(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_order_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        warehouse_id INTEGER NOT NULL,
+        assignment_status TEXT DEFAULT 'assigned',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(order_id) REFERENCES orders(id),
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+    )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_addresses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

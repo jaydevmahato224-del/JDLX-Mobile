@@ -605,6 +605,11 @@ def sync_root_order_status_from_warehouse(cursor, order_id, warehouse_status):
 
     timestamp_column = STATUS_TIMESTAMP_COLUMN.get(target_status)
     if timestamp_column:
+        # Whitelist validation for dynamic column name
+        allowed_columns = {"confirmed_at", "packed_at", "out_for_delivery_at", "cancelled_at", "delivered_at"}
+        if timestamp_column not in allowed_columns:
+            raise ValueError(f"Invalid timestamp column: {timestamp_column}")
+
         cursor.execute(
             f'''
             UPDATE orders
@@ -727,6 +732,15 @@ def update_warehouse_order_status(cursor, warehouse_order_id, warehouse_partner_
     }.get(new_status)
 
     if timestamp_field:
+        # Whitelist validation for dynamic column name
+        allowed_fields = {
+            "accepted_at", "packing_started_at", "packed_at", 
+            "ready_for_pickup_at", "courier_pickup_requested_at", 
+            "dispatched_at", "cancelled_at"
+        }
+        if timestamp_field not in allowed_fields:
+            raise ValueError(f"Invalid timestamp field: {timestamp_field}")
+
         cursor.execute(
             f'''
             UPDATE warehouse_orders

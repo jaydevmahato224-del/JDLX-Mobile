@@ -120,8 +120,8 @@ cors_origins = [
     r"^http://localhost:517[3-5]$",
     r"^http://127\.0\.0\.1:517[3-5]$",
     r"^http://10\.0\.2\.2:517[3-5]$",
-    r"^https?://(.*)jdlxmobile\.in$",
-    r"^https?://(.*)vercel\.app$",
+    r"^https?://([a-z0-9-]+\.)*jdlxmobile\.in$",
+    r"^https?://jdlx-[a-z0-9-]+\.vercel\.app$",
 ]
 if cors_origins_env:
     extra_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
@@ -304,7 +304,10 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+SECRET_KEY = os.environ.get("JWT_SECRET")
+if not SECRET_KEY:
+    SECRET_KEY = "jdlx_secret_keys_123"
+    logger.warning("JWT_SECRET not found in environment. Using insecure default fallback secret.")
 app.secret_key = SECRET_KEY
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -407,14 +410,14 @@ def token_required(f):
     def decorated(*args, **kwargs):
         token = request.headers.get('Authorization')
         if not token:
-            return success_response(None, 'Token is missing!', 401)
+            return error_response('Token is missing!', 401)
         try:
             token = token.split(" ")[1] # Bearer <token>
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             data['role'] = normalize_role(data.get('role'))
             request.user = data
         except Exception as e:
-            return success_response(None, 'Token is invalid!', 401)
+            return error_response('Token is invalid!', 401)
         return f(*args, **kwargs)
     return decorated
 
@@ -1858,7 +1861,6 @@ def get_products():
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
                        p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only,
                        wi.stock_quantity as physical_stock,
-                wi.reserved_stock as hard_reserved,
                 (wi.stock_quantity - wi.reserved_stock) as available_stock,
                 (SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE product_id = p.id) as cart_reserved,
                 (wi.reserved_stock + COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0)) as reserved_stock,
@@ -1953,9 +1955,10 @@ def get_products():
             }
         }
         
-        response = jsonify(products if not request.args.get('include_meta') else response_data)
+        response_payload = products if not request.args.get('include_meta') else response_data
+        response, status_code = success_response(response_payload, "Products retrieved successfully")
         response.headers['Cache-Control'] = 'public, max-age=300'
-        return response, 200
+        return response, status_code
         
     except Exception as e:
         logger.error(f"Error fetching products: {str(e)}")
@@ -2021,7 +2024,7 @@ def get_product(product_id):
         product_dict['final_return_policy'] = product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy
         
         conn.close()
-        return jsonify(product_dict), 200
+        return success_response(product_dict, "Product details retrieved successfully")
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -2068,7 +2071,7 @@ def get_product_stock(product_id):
         if not stock_data:
             return error_response("Product not found", 404)
             
-        return jsonify(stock_data), 200
+        return success_response(stock_data, "Stock data retrieved successfully")
     except Exception as e:
         return error_response(str(e), 500)
 

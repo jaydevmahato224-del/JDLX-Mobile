@@ -202,7 +202,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
 
         if (!mountedRef.current) return
 
-        const nextBatch = Array.isArray(data) ? data : []
+        const nextBatch = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
 
         setProducts((prev) => {
           if (replace) return nextBatch

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Package, Save, ArrowLeft, Trash2, Plus, Search, Filter, ShieldCheck, Undo2 } from 'lucide-react'
+import { Package, Save, ArrowLeft, Trash2, Plus, Search, Filter, ShieldCheck, Undo2, CreditCard } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
@@ -22,7 +22,8 @@ function AdminProducts() {
         images: '[]',
         barcode: '',
         global_sku_code: '',
-        return_policy: ''
+        return_policy: '',
+        prepaid_only: 0
     });
 
     const fetchProducts = async () => {
@@ -104,7 +105,8 @@ function AdminProducts() {
             images: product.images || '[]',
             barcode: product.barcode || '',
             global_sku_code: product.global_sku_code || '',
-            return_policy: product.return_policy || ''
+            return_policy: product.return_policy || '',
+            prepaid_only: product.prepaid_only || 0
         });
         setShowAddModal(true);
     };
@@ -129,7 +131,7 @@ function AdminProducts() {
                 <button 
                     onClick={() => {
                         setEditingProduct(null);
-                        setFormData({ name: '', price: '', category_id: '', delivery_time: '15-30 mins', images: '[]', barcode: '', global_sku_code: '', return_policy: '' });
+                        setFormData({ name: '', price: '', category_id: '', delivery_time: '15-30 mins', images: '[]', barcode: '', global_sku_code: '', return_policy: '', prepaid_only: 0 });
                         setShowAddModal(true);
                     }}
                     className="bg-primary text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
@@ -179,6 +181,12 @@ function AdminProducts() {
                                 <ShieldCheck size={14} className="text-blue-500" />
                                 <span>{p.sku || 'No SKU'}</span>
                             </div>
+                            {p.prepaid_only === 1 && (
+                                <div className="flex items-center gap-2 text-xs font-black text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                                    <CreditCard size={14} />
+                                    <span>PREPAID ONLY</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex gap-2">
@@ -284,6 +292,20 @@ function AdminProducts() {
                                         value={formData.global_sku_code}
                                         onChange={e => setFormData({...formData, global_sku_code: e.target.value})}
                                     />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer hover:bg-white hover:shadow-md transition-all">
+                                        <input 
+                                            type="checkbox"
+                                            className="w-5 h-5 rounded-lg border-gray-300 text-primary focus:ring-primary"
+                                            checked={formData.prepaid_only === 1}
+                                            onChange={e => setFormData({...formData, prepaid_only: e.target.checked ? 1 : 0})}
+                                        />
+                                        <div>
+                                            <p className="text-sm font-black text-slate-800">Restrict to Prepaid Only</p>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Disable COD for this product</p>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
 

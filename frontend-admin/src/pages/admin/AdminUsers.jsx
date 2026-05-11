@@ -455,6 +455,34 @@ const AdminUsers = () => {
                                                             {updatingStatus ? 'PROCESSING...' : 'BAN ACCOUNT'}
                                                         </button>
                                                     )}
+                                                    
+                                                    <button 
+                                                        onClick={async () => {
+                                                            try {
+                                                                setUpdatingStatus(true);
+                                                                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                                                                const res = await fetch(`${API_BASE_URL}/admin/users/${selectedUser.id}/cod-restriction`, {
+                                                                    method: 'PATCH',
+                                                                    headers: {
+                                                                        'Authorization': `Bearer ${token}`,
+                                                                        'Content-Type': 'application/json'
+                                                                    },
+                                                                    body: JSON.stringify({ restricted: !selectedUser.cod_restricted })
+                                                                });
+                                                                if (res.ok) {
+                                                                    setSelectedUser(prev => ({ ...prev, cod_restricted: !prev.cod_restricted }));
+                                                                }
+                                                            } catch (e) {
+                                                                alert('Failed to update COD restriction');
+                                                            } finally {
+                                                                setUpdatingStatus(false);
+                                                            }
+                                                        }} 
+                                                        disabled={updatingStatus}
+                                                        className={`mt-2 py-2 font-bold rounded text-xs border ${selectedUser.cod_restricted ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}
+                                                    >
+                                                        {selectedUser.cod_restricted ? 'REMOVE COD RESTRICTION' : 'RESTRICT COD (FAKE PROTECTION)'}
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>

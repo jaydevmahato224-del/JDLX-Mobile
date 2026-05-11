@@ -156,29 +156,29 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   }
 
   return (
-    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[2rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 hover:border-primary/20">
+    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 hover:border-primary/20">
       <div onClick={() => navigate(`/product/${product.id}`)} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
         {/* Dynamic Badges Overlay */}
-        <div className="absolute top-4 left-4 z-20 flex flex-col gap-2">
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-1 md:gap-2">
           {outOfStock ? (
-            <span className="bg-slate-900/90 backdrop-blur text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-xl">
+            <span className="bg-slate-900/90 backdrop-blur text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-xl">
               Sold Out
             </span>
           ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="bg-red-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-red-500/20 animate-pulse">
-              Limited Stock
+            <span className="bg-red-500 text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-red-500/20 animate-pulse">
+              Low Stock
             </span>
           ) : (Number(product.is_featured) === 1 || product.is_featured === true) ? (
-            <span className="bg-primary text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-primary/30 animate-soft-glow">
-              Premium Pick
+            <span className="bg-primary text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-primary/30 animate-soft-glow">
+              Premium
             </span>
           ) : product.average_rating >= 4.5 ? (
-            <span className="bg-emerald-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-emerald-500/20">
+            <span className="bg-emerald-500 text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-emerald-500/20">
               Best Seller
             </span>
           ) : (
-            <span className="bg-blue-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-blue-500/20">
-              New Arrival
+            <span className="bg-blue-500 text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-blue-500/20">
+              New
             </span>
           )}
         </div>
@@ -186,12 +186,12 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         {/* Wishlist Button */}
         <button 
           onClick={handleWishlistToggle}
-          className={`absolute top-4 right-4 z-20 h-10 w-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${isInWishlist ? 'bg-red-500 text-white shadow-lg' : 'bg-white/80 text-slate-400 hover:text-red-500 hover:bg-white'}`}
+          className={`absolute top-2 right-2 md:top-4 md:right-4 z-20 h-8 w-8 md:h-10 md:w-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${isInWishlist ? 'bg-red-500 text-white shadow-lg' : 'bg-white/80 text-slate-400 hover:text-red-500 hover:bg-white'}`}
         >
-          <Heart size={18} fill={isInWishlist ? "currentColor" : "none"} strokeWidth={2.5} />
+          <Heart size={14} className="md:w-[18px] md:h-[18px]" fill={isInWishlist ? "currentColor" : "none"} strokeWidth={2.5} />
         </button>
 
-        <div className="h-full w-full p-8 transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1) group-hover:scale-110">
+        <div className="h-full w-full p-4 md:p-8 transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1) group-hover:scale-110">
           <BlurImage
             src={getProductImage(product)}
             alt={product.name}
@@ -200,69 +200,69 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         </div>
       </div>
 
-      <div className="p-6 md:p-8 flex-1 flex flex-col gap-4">
+      <div className="p-4 md:p-8 flex-1 flex flex-col gap-2 md:gap-4">
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">
-              {product.category || 'Elite Collection'}
+            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-primary/60">
+              {product.category || 'Elite'}
             </span>
             {product.average_rating > 0 ? (
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
-                <Star size={10} fill="currentColor" className="text-emerald-500" />
-                <span className="text-[10px] font-black text-emerald-700">{Number(product.average_rating).toFixed(1)}</span>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
+                <Star size={8} fill="currentColor" className="text-emerald-500" />
+                <span className="text-[9px] md:text-[10px] font-black text-emerald-700">{Number(product.average_rating).toFixed(1)}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100">
-                <ShieldCheck size={10} className="text-blue-500" />
-                <span className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">Verified Quality</span>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100">
+                <ShieldCheck size={8} className="text-blue-500" />
+                <span className="text-[8px] font-black text-blue-700 uppercase tracking-tighter">Verified</span>
               </div>
             )}
           </div>
-          <h3 className="line-clamp-2 text-base font-black text-[var(--color-on-surface)] leading-tight group-hover:text-primary transition-colors min-h-[2.5em]">
+          <h3 className="line-clamp-2 text-sm md:text-base font-black text-[var(--color-on-surface)] leading-tight group-hover:text-primary transition-colors min-h-[2.5em]">
             {product.name}
           </h3>
         </div>
 
-        <div className="mt-auto flex items-end justify-between gap-4">
-          <div className="space-y-1">
-             <div className="flex items-baseline gap-2">
-               <span className="text-2xl font-black text-[var(--color-on-surface)] tracking-tighter">₹{product.price}</span>
+        <div className="mt-auto flex items-center justify-between gap-2 md:gap-4">
+          <div className="space-y-0.5 md:space-y-1">
+             <div className="flex items-baseline gap-1 md:gap-2">
+               <span className="text-lg md:text-2xl font-black text-[var(--color-on-surface)] tracking-tighter">₹{product.price}</span>
                {product.mrp > product.price && (
-                 <span className="text-xs text-slate-400 line-through font-bold">₹{product.mrp}</span>
+                 <span className="text-[10px] md:text-xs text-slate-400 line-through font-bold">₹{product.mrp}</span>
                )}
              </div>
              {product.mrp > product.price && (
-               <span className="block text-[10px] font-black text-emerald-600 uppercase">Save {Math.round(((product.mrp - product.price) / product.mrp) * 100)}% Today</span>
+               <span className="block text-[8px] md:text-[10px] font-black text-emerald-600 uppercase">Save {Math.round(((product.mrp - product.price) / product.mrp) * 100)}%</span>
              )}
           </div>
 
           {quantity > 0 ? (
-            <div className="flex items-center bg-slate-900 rounded-2xl p-1 shadow-xl">
+            <div className="flex items-center bg-slate-900 rounded-xl md:rounded-2xl p-0.5 md:p-1 shadow-xl">
               <button
                 onClick={handleDecrease}
-                className="h-8 w-8 flex items-center justify-center text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                className="h-7 w-7 md:h-8 md:w-8 flex items-center justify-center text-white hover:bg-white/10 rounded-lg md:rounded-xl transition-all active:scale-90"
               >
-                <Minus size={16} />
+                <Minus size={14} />
               </button>
-              <span className="min-w-[28px] text-center text-sm font-black text-white">
-                {isSyncing ? '...' : quantity}
+              <span className="min-w-[20px] md:min-w-[28px] text-center text-xs md:text-sm font-black text-white">
+                {isSyncing ? '..' : quantity}
               </span>
               <button
                 disabled={quantity >= availableStock || isSyncing}
                 onClick={handleIncrease}
-                className="h-8 w-8 flex items-center justify-center text-white hover:bg-white/10 rounded-xl transition-all active:scale-90 disabled:opacity-30"
+                className="h-7 w-7 md:h-8 md:w-8 flex items-center justify-center text-white hover:bg-white/10 rounded-lg md:rounded-xl transition-all active:scale-90 disabled:opacity-30"
               >
-                <Plus size={16} />
+                <Plus size={14} />
               </button>
             </div>
           ) : (
             <button
               disabled={disabled || outOfStock || isSyncing}
               onClick={handleAddToCartWithCheck}
-              className="h-11 px-6 btn-primary rounded-2xl shadow-lg shadow-primary/20"
+              className="h-9 md:h-11 px-3 md:px-6 btn-primary rounded-xl md:rounded-2xl shadow-lg shadow-primary/20 text-xs md:text-sm"
             >
-              {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <ShoppingBag size={18} />}
-              <span>{isSyncing ? '...' : 'Add'}</span>
+              {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={16} />}
+              <span className="hidden xs:inline">{isSyncing ? '...' : 'Add'}</span>
             </button>
           )}
         </div>
@@ -531,11 +531,11 @@ export default function Home() {
           </div>
           
           <div className="space-y-2">
-            <h1 className="text-4xl md:text-7xl font-black tracking-tight text-[var(--color-on-surface)] leading-[0.95]">
+            <h1 className="text-2xl md:text-7xl font-black tracking-tight text-[var(--color-on-surface)] leading-tight md:leading-[0.95]">
               {getGreeting().text}, <span className="text-primary">{getFirstName(user)}</span> {getGreeting().icon}
             </h1>
             
-            <p className="max-w-2xl text-[var(--color-on-surface-variant)] text-lg md:text-xl font-medium leading-relaxed opacity-80">
+            <p className="max-w-2xl text-[var(--color-on-surface-variant)] text-sm md:text-xl font-medium leading-relaxed opacity-80">
               {cart.length > 0 
                 ? `You have ${cart.length} premium ${cart.length === 1 ? 'item' : 'items'} waiting in your cart.` 
                 : wishlist.length > 0 
@@ -578,9 +578,9 @@ export default function Home() {
               <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Picked from your history</p>
             </div>
           </div>
-          <div className="flex gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
+          <div className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
             {recentlyViewed.map((p) => (
-              <div key={`recent-${p.id}`} className="min-w-[280px] md:min-w-[320px]">
+              <div key={`recent-${p.id}`} className="min-w-[180px] xs:min-w-[200px] md:min-w-[320px]">
                 <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
               </div>
             ))}
@@ -640,9 +640,9 @@ export default function Home() {
             <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Freshly added to collection</p>
           </div>
         </div>
-        <div className="flex gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
+        <div className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
           {regularProducts.slice(0, 6).map((p) => (
-            <div key={`new-${p.id}`} className="min-w-[280px] md:min-w-[320px]" onClick={() => addToRecentlyViewed(p)}>
+            <div key={`new-${p.id}`} className="min-w-[180px] xs:min-w-[200px] md:min-w-[320px]" onClick={() => addToRecentlyViewed(p)}>
               <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
             </div>
           ))}

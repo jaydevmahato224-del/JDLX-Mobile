@@ -1,8 +1,8 @@
 {
-  "short_name": "JDLX Mobile",
-  "name": "JDLX MOBILE: Premium Online Store",
-  "description": "Premium delivery for daily essentials and high-end accessories.",
-  "categories": ["shopping", "food", "lifestyle"],
+  "short_name": "JDLX",
+  "name": "JDLX MOBILE | Digital Concierge",
+  "description": "Premium hyperlocal delivery for high-end tech accessories and daily essentials.",
+  "categories": ["shopping", "technology", "lifestyle"],
   "icons": [
     {
       "src": "favicon.ico",
@@ -24,17 +24,19 @@
   ],
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#0F172A",
-  "background_color": "#ffffff",
+  "theme_color": "#0a0a0c",
+  "background_color": "#0a0a0c",
   "orientation": "portrait",
   "shortcuts": [
     {
-      "name": "My Orders",
-      "url": "/orders",
+      "name": "View Cart",
+      "short_name": "Cart",
+      "url": "/cart",
       "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Search",
+      "name": "Search Products",
+      "short_name": "Search",
       "url": "/search",
       "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
     }

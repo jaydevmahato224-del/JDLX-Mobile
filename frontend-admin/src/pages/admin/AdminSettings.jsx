@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, AlertCircle } from 'lucide-react'
+import { Settings, Save, AlertCircle, Trash2 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
@@ -21,8 +21,20 @@ export default function AdminSettings() {
     scheduled_delivery_note: 'Reliable fulfillment from our central warehouse.',
     quick_delivery_note: 'Hyperlocal dispatch from the active dark store.',
     platform_fee: '7',
-    free_delivery_threshold: '199',
+    free_delivery_threshold: '499',
     delivery_fee: '49',
+    
+    // New Delivery & Payment Settings
+    cod_enabled: 'true',
+    prepaid_delivery_charge: '49',
+    cod_delivery_charge: '99',
+    cod_advance_amount: '49',
+    free_delivery_enabled: 'true',
+    cod_alert_text: 'Save more with prepaid orders! FREE delivery on orders above ₹499.',
+    prepaid_recommendation_enabled: 'true',
+    priority_dispatch_enabled: 'true',
+    min_order_cod: '0',
+
     shiprocket_email: '',
     shiprocket_password: '',
     shiprocket_pickup_location: 'Primary',
@@ -43,8 +55,35 @@ export default function AdminSettings() {
     ticker_text: 'Free delivery on orders above ₹499 • Better experience with fast delivery'
   })
 
+  // Helper Toggle Component
+  const Toggle = ({ enabled, onChange, label, description }) => (
+    <div className="flex items-center justify-between p-6 rounded-3xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-md transition-all">
+      <div>
+        <h3 className="font-bold text-slate-800">{label}</h3>
+        {description && <p className="text-xs text-slate-500 mt-1">{description}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(enabled === 'true' ? 'false' : 'true')}
+        className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none ${
+          enabled === 'true' ? 'bg-primary' : 'bg-slate-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+            enabled === 'true' ? 'translate-x-8' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  )
+
+  const [pincodeRules, setPincodeRules] = useState([])
+  const [newPincode, setNewPincode] = useState({ pincode: '', cod_allowed: 'false' })
+
   useEffect(() => {
     fetchSettings()
+    fetchPincodeRules()
   }, [])
 
   const fetchSettings = async () => {
@@ -62,6 +101,53 @@ export default function AdminSettings() {
       alert('Failed to load settings')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchPincodeRules = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/pincode-rules`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const json = await res.json()
+      if (res.ok) setPincodeRules(json)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleAddPincodeRule = async () => {
+    if (!newPincode.pincode) return
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/pincode-rules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          pincode: newPincode.pincode, 
+          cod_allowed: newPincode.cod_allowed === 'true' ? 1 : 0 
+        })
+      })
+      if (res.ok) {
+        setNewPincode({ pincode: '', cod_allowed: 'false' })
+        fetchPincodeRules()
+      }
+    } catch (err) {
+      alert('Error adding pincode rule')
+    }
+  }
+
+  const handleDeletePincodeRule = async (pincode) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/pincode-rules/${pincode}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) fetchPincodeRules()
+    } catch (err) {
+      alert('Error deleting pincode rule')
     }
   }
 
@@ -149,111 +235,227 @@ export default function AdminSettings() {
       <div className="grid gap-10">
 
 
-        {/* Logistics & Delivery Section */}
+        {/* Pincode Restrictions Section */}
         <section className="ui-card-standard p-6 md:p-10">
           <div className="mb-10">
-            <h2 className="text-2xl font-black text-slate-900">Logistics & Delivery</h2>
-            <p className="text-slate-500 font-medium mt-1">Configure delivery timeframes and eligibility rules.</p>
+            <h2 className="text-2xl font-black text-slate-900">Pincode Restrictions</h2>
+            <p className="text-slate-500 font-medium mt-1">Restrict COD for specific high-risk delivery locations.</p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Scheduled Delivery Time</label>
-                <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Standard Fallback</span>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-6 bg-red-500 rounded-full"></div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Add New Restriction</h3>
               </div>
-              <input
-                type="text"
-                value={settings.scheduled_delivery_time || ''}
-                onChange={(e) => handleChange('scheduled_delivery_time', e.target.value)}
-                placeholder="e.g., Tomorrow by 11:00 AM"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
-              />
-              <div className="mt-4 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Scheduled Note</label>
-                <input
-                  type="text"
-                  value={settings.scheduled_delivery_note || ''}
-                  onChange={(e) => handleChange('scheduled_delivery_note', e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 outline-none focus:bg-white focus:border-primary transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Delivery Radius (KM)</label>
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Active Range</span>
-              </div>
-              <input
-                type="number"
-                value={settings.quick_delivery_max_distance || ''}
-                onChange={(e) => handleChange('quick_delivery_max_distance', e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
-              />
-              <div className="mt-4 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Quick Note</label>
-                <input
-                  type="text"
-                  value={settings.quick_delivery_note || ''}
-                  onChange={(e) => handleChange('quick_delivery_note', e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 outline-none focus:bg-white focus:border-primary transition-all"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-6 pt-10 mt-10 border-t border-slate-100">
-             <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Platform & Checkout Fees</h3>
-             </div>
-             
-             <div className="grid gap-8 md:grid-cols-2">
+              <div className="grid gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Fixed Platform Fee (₹)</label>
-                  </div>
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Pincode</label>
+                  <input
+                    type="text"
+                    value={newPincode.pincode}
+                    onChange={(e) => setNewPincode({ ...newPincode, pincode: e.target.value })}
+                    placeholder="e.g., 110001"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-red-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">COD Status</label>
+                  <select
+                    value={newPincode.cod_allowed}
+                    onChange={(e) => setNewPincode({ ...newPincode, cod_allowed: e.target.value })}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-red-500 transition-all"
+                  >
+                    <option value="false">Blocked (Prepaid Only)</option>
+                    <option value="true">Allowed</option>
+                  </select>
+                </div>
+                <button
+                  onClick={handleAddPincodeRule}
+                  className="w-full py-3 bg-red-600 text-white rounded-2xl font-bold shadow-lg shadow-red-200 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Add Restriction
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-6 bg-slate-900 rounded-full"></div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Active Restrictions</h3>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2">
+                {pincodeRules.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">No restrictions defined yet.</p>
+                ) : (
+                  pincodeRules.map((rule) => (
+                    <div key={rule.pincode} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
+                      <div>
+                        <p className="font-black text-slate-800">{rule.pincode}</p>
+                        <p className={`text-[10px] font-bold uppercase ${rule.cod_allowed ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {rule.cod_allowed ? 'COD Allowed' : 'Prepaid Only'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeletePincodeRule(rule.pincode)}
+                        className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Delivery & Payment Controls */}
+        <section className="ui-card-standard p-6 md:p-10">
+          <div className="mb-10">
+            <h2 className="text-2xl font-black text-slate-900">Delivery & Payment Controls</h2>
+            <p className="text-slate-500 font-medium mt-1">Configure global delivery fees, COD rules, and checkout incentives.</p>
+          </div>
+
+          <div className="grid gap-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Toggle 
+                label="Enable Cash on Delivery (COD)" 
+                description="Allow customers to pay during delivery."
+                enabled={settings.cod_enabled}
+                onChange={(val) => handleChange('cod_enabled', val)}
+              />
+              <Toggle 
+                label="Enable Free Delivery" 
+                description="Automatically apply ₹0 delivery fee above threshold."
+                enabled={settings.free_delivery_enabled}
+                onChange={(val) => handleChange('free_delivery_enabled', val)}
+              />
+            </div>
+
+            <div className="grid gap-8 md:grid-cols-2 pt-6 border-t border-slate-100">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="w-1.5 h-6 bg-emerald-500 rounded-full"></div>
+                   <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Prepaid Configuration</h3>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Prepaid Delivery Charge (₹)</label>
                   <input
                     type="number"
-                    value={settings.platform_fee || ''}
-                    onChange={(e) => handleChange('platform_fee', e.target.value)}
+                    value={settings.prepaid_delivery_charge || ''}
+                    onChange={(e) => handleChange('prepaid_delivery_charge', e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium">Applied to every order regardless of value.</p>
                 </div>
-             </div>
-          </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Free Delivery Threshold (₹)</label>
+                  <input
+                    type="number"
+                    value={settings.free_delivery_threshold || ''}
+                    onChange={(e) => handleChange('free_delivery_threshold', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
 
-            <div className="space-y-6 pt-8 mt-8 border-t border-slate-100">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="w-1.5 h-6 bg-amber-500 rounded-full"></div>
+                   <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">COD Configuration</h3>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">COD Delivery Charge (₹)</label>
+                  <input
+                    type="number"
+                    value={settings.cod_delivery_charge || ''}
+                    onChange={(e) => handleChange('cod_delivery_charge', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-amber-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">COD Advance Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={settings.cod_advance_amount || ''}
+                    onChange={(e) => handleChange('cod_advance_amount', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-amber-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Min. Order for COD (₹)</label>
+                  <input
+                    type="number"
+                    value={settings.min_order_cod || ''}
+                    onChange={(e) => handleChange('min_order_cod', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-amber-500 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 pt-10 border-t border-slate-100">
                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Delivery Charge Logic</h3>
+                  <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Incentives & Badges</h3>
                </div>
                
                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Free Delivery Threshold (₹)</label>
-                    <input
-                      type="number"
-                      value={settings.free_delivery_threshold || ''}
-                      onChange={(e) => handleChange('free_delivery_threshold', e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
-                    />
-                    <p className="text-[10px] text-slate-400 font-medium">Orders equal or above this amount will have ₹0 delivery fee.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Standard Delivery Fee (₹)</label>
-                    <input
-                      type="number"
-                      value={settings.delivery_fee || ''}
-                      onChange={(e) => handleChange('delivery_fee', e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
-                    />
-                    <p className="text-[10px] text-slate-400 font-medium">Fee applied to orders below the threshold.</p>
-                  </div>
+                 <Toggle 
+                    label="Prepaid Recommendation" 
+                    description="Show 'Recommended' tag on prepaid option."
+                    enabled={settings.prepaid_recommendation_enabled}
+                    onChange={(val) => handleChange('prepaid_recommendation_enabled', val)}
+                  />
+                  <Toggle 
+                    label="Priority Dispatch Badge" 
+                    description="Show lightning badge for prepaid orders."
+                    enabled={settings.priority_dispatch_enabled}
+                    onChange={(val) => handleChange('priority_dispatch_enabled', val)}
+                  />
+               </div>
+
+               <div className="space-y-2 pt-4">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">COD Alert Banner Text</label>
+                  <textarea
+                    value={settings.cod_alert_text || ''}
+                    onChange={(e) => handleChange('cod_alert_text', e.target.value)}
+                    rows={2}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-700 outline-none focus:bg-white focus:border-primary transition-all resize-none"
+                    placeholder="Message shown when COD is selected..."
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">This text is shown in the yellow alert box on the checkout page when COD is selected.</p>
                </div>
             </div>
+
+            <div className="space-y-6 pt-10 border-t border-slate-100">
+               <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1.5 h-6 bg-purple-600 rounded-full"></div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Delivery Logistics (Shiprocket)</h3>
+               </div>
+               <div className="grid gap-8 md:grid-cols-2">
+                 <div className="space-y-2">
+                   <label className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Delivery Radius (KM)</label>
+                   <input
+                     type="number"
+                     value={settings.quick_delivery_max_distance || ''}
+                     onChange={(e) => handleChange('quick_delivery_max_distance', e.target.value)}
+                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                   />
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-xs font-black uppercase tracking-widest text-slate-400">Fixed Platform Fee (₹)</label>
+                   <input
+                     type="number"
+                     value={settings.platform_fee || ''}
+                     onChange={(e) => handleChange('platform_fee', e.target.value)}
+                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                   />
+                 </div>
+               </div>
+            </div>
+          </div>
+        </section>
 
             <div className="space-y-6 pt-8 mt-8 border-t border-slate-100">
                <div className="flex items-center gap-2 mb-2">

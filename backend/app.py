@@ -130,6 +130,8 @@ else:
         r"^https://jdlx-mobile\.vercel\.app$",
         r"^https://jdlx-admin\.vercel\.app$",
         r"^https://jdlx-official-admin\.vercel\.app$",
+        r"^https://jdlxmobile\.in$",
+        r"^https://www\.jdlxmobile\.in$",
     ]
 
 CORS(
@@ -1857,7 +1859,7 @@ def get_products():
         if store_id:
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.return_policy, p.is_featured,
+                       p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only,
                        wi.stock_quantity as physical_stock,
                 wi.reserved_stock as hard_reserved,
                 (wi.stock_quantity - wi.reserved_stock) as available_stock,
@@ -1881,7 +1883,7 @@ def get_products():
         else:
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.stock, p.return_policy, p.is_featured,
+                       p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only,
                        COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as cart_reserved,
                        p.low_stock_threshold, p.status,
                        c.name as category_name,
@@ -2186,21 +2188,86 @@ def checkout():
                     f"Insufficient physical stock for {inventory['name']}. Available: {max(0, physical_available)}", 
                     400
                 )
+            
+            # Check if any product is prepaid-only
+            cursor.execute("SELECT prepaid_only FROM products WHERE id = ?", (item['id'],))
+            product_data = cursor.fetchone()
+            if product_data and product_data['prepaid_only']:
+                is_prepaid_only_order = True
 
         # Get dynamic fees from settings
-        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee')")
+        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled')")
         settings_rows = cursor.fetchall()
         settings = {row['key']: row['value'] for row in settings_rows}
         
         platform_fee = float(settings.get('platform_fee', 7))
-        free_thresh = float(settings.get('free_delivery_threshold', 199))
-        std_delivery_fee = float(settings.get('delivery_fee', 49))
+        free_thresh = float(settings.get('free_delivery_threshold', 499))
+        prepaid_fee = float(settings.get('prepaid_delivery_charge', 49))
+        cod_fee = float(settings.get('cod_delivery_charge', 99))
+        cod_advance = float(settings.get('cod_advance_amount', 49))
+        cod_enabled = settings.get('cod_enabled', 'true').lower() == 'true'
+
+        payment_type = data.get('payment_type', 'PREPAID').upper()
+        if payment_type == 'COD':
+            if not cod_enabled:
+                return error_response("Cash on Delivery is currently disabled", 400)
+            
+            # 1. Check for prepaid-only products
+            if locals().get('is_prepaid_only_order', False):
+                return error_response("Your cart contains items that require prepaid payment.", 400)
+
+            # 2. Check for Pincode Restrictions
+            delivery_pincode = data.get('pincode')
+            if delivery_pincode:
+                cursor.execute("SELECT cod_allowed FROM pincode_rules WHERE pincode = ?", (delivery_pincode,))
+                pincode_rule = cursor.fetchone()
+                if pincode_rule and not pincode_rule['cod_allowed']:
+                    return error_response(f"Cash on Delivery is not available for pincode {delivery_pincode}.", 400)
+
+            # 3. Check for User Restrictions
+            cursor.execute("SELECT cod_restricted FROM users WHERE id = ?", (user_id,))
+            user_info = cursor.fetchone()
+            if user_info and user_info['cod_restricted']:
+                return error_response("Cash on Delivery is restricted for your account due to policy violations.", 400)
+
+            # 4. Fake COD Protection (Block repeated rejected orders)
+            # Check orders from last 30 days
+            cursor.execute('''
+                SELECT COUNT(*) as rejected_count FROM orders 
+                WHERE user_id = ? AND payment_type = 'COD' 
+                AND order_status IN ('CANCELLED', 'REJECTED')
+                AND created_at > datetime('now', '-30 days')
+            ''', (user_id,))
+            rejected_row = cursor.fetchone()
+            if rejected_row and rejected_row['rejected_count'] >= 2:
+                return error_response("COD is temporarily disabled for you due to multiple recent order cancellations.", 400)
+
+        # Calculate Delivery Charge
+        actual_delivery_fee = 0
+        free_delivery_applied = 0
         
-        actual_delivery_fee = 0 if total_amount >= free_thresh else std_delivery_fee
-        
-        # New Fitting Charge logic
+        if payment_type == 'PREPAID':
+            if total_amount >= free_thresh:
+                actual_delivery_fee = 0
+                free_delivery_applied = 1
+            else:
+                actual_delivery_fee = prepaid_fee
+        else: # COD
+            actual_delivery_fee = cod_fee
+            free_delivery_applied = 0
+
         fitting_charge = float(data.get('fitting_charge', 0))
         final_total = total_amount + platform_fee + actual_delivery_fee + fitting_charge
+        
+        # Calculate Pay Now and COD amounts
+        pay_now_amount = final_total
+        cod_remaining_amount = 0
+        cod_advance_paid = 0
+        
+        if payment_type == 'COD':
+            cod_advance_paid = cod_advance
+            pay_now_amount = cod_advance_paid
+            cod_remaining_amount = final_total - cod_advance_paid
 
         # 3. Insert Order with correct column names and delivery_type
         order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
@@ -2209,13 +2276,15 @@ def checkout():
                 order_number, user_id, customer_name, customer_phone, delivery_address, 
                 order_status, total_amount, dark_store_id, estimated_delivery, 
                 delivery_latitude, delivery_longitude, payment_status, delivery_type,
-                platform_fee, delivery_fee, fitting_charge
+                platform_fee, delivery_fee, fitting_charge, payment_type,
+                cod_advance_paid, cod_remaining_amount, free_delivery_applied
             )
-            VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
             phone, address, final_total, store_id, f"{est_time} mins", 
-            user_lat, user_lng, delivery_type, platform_fee, actual_delivery_fee, fitting_charge
+            user_lat, user_lng, delivery_type, platform_fee, actual_delivery_fee, fitting_charge,
+            payment_type, cod_advance_paid, cod_remaining_amount, free_delivery_applied
         ))
 
         
@@ -2308,7 +2377,15 @@ def checkout():
             "message": "Order placed successfully", 
             "order_id": order_id,
             "estimated_delivery_time": f"{est_time} mins",
-            "assigned_store": best_store['name']
+            "assigned_store": best_store['name'],
+            "summary": {
+                "subtotal": total_amount,
+                "delivery_charge": actual_delivery_fee,
+                "free_delivery_status": "Applied" if free_delivery_applied else "Not Applicable",
+                "pay_now_amount": pay_now_amount,
+                "remaining_cod_amount": cod_remaining_amount,
+                "payment_type": payment_type
+            }
         }), 201
     except Exception as e:
         return error_response(str(e), 500)
@@ -2430,6 +2507,22 @@ def admin_update_order_status(order_id):
             "admin_cancelled_order" if new_status == "CANCELLED" else "admin_modified_order",
         )
         return success_response(None, f"Order status updated to {new_status}")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+@app.route('/api/admin/users/<int:user_id>/cod-restriction', methods=['PATCH'])
+@token_required
+@require_admin()
+def admin_toggle_user_cod_restriction(user_id):
+    data = request.json
+    restricted = 1 if data.get('restricted') else 0
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET cod_restricted = ? WHERE id = ?", (restricted, user_id))
+        conn.commit()
+        conn.close()
+        return success_response(None, f"User COD restriction {'enabled' if restricted else 'disabled'}")
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -3924,8 +4017,8 @@ def admin_add_product():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'))
+            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0))
         )
         product_id = cursor.lastrowid
         conn.commit()
@@ -3956,7 +4049,7 @@ def admin_update_product(product_id):
         cursor = conn.cursor()
         updates = []
         params = []
-        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured']:
+        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only']:
             if key in data:
                 updates.append(f"{key}=?")
                 params.append(data[key])
@@ -3994,6 +4087,61 @@ def admin_update_product(product_id):
     except Exception as e:
         return error_response(str(e), 500)
 
+
+@app.route('/api/admin/pincode-rules', methods=['GET'])
+@token_required
+@require_admin()
+def get_pincode_rules():
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM pincode_rules ORDER BY created_at DESC")
+        rules = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(rules)
+    except Exception as e:
+        return error_response(str(e), 500)
+
+@app.route('/api/admin/pincode-rules', methods=['POST'])
+@token_required
+@require_admin()
+@require_permission("manage_settings")
+def add_pincode_rule():
+    data = request.json
+    pincode = data.get('pincode')
+    cod_allowed = data.get('cod_allowed', 1)
+    prepaid_only = data.get('prepaid_only', 0)
+    
+    if not pincode:
+        return error_response("Pincode is required", 400)
+    
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO pincode_rules (pincode, cod_allowed, prepaid_only)
+            VALUES (?, ?, ?)
+        ''', (pincode, cod_allowed, prepaid_only))
+        conn.commit()
+        conn.close()
+        return success_response(None, "Pincode rule saved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+@app.route('/api/admin/pincode-rules/<string:pincode>', methods=['DELETE'])
+@token_required
+@require_admin()
+@require_permission("manage_settings")
+def delete_pincode_rule(pincode):
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM pincode_rules WHERE pincode = ?", (pincode,))
+        conn.commit()
+        conn.close()
+        return success_response(None, "Pincode rule deleted")
+    except Exception as e:
+        return error_response(str(e), 500)
 
 @app.route('/api/admin/inventory', methods=['GET'])
 @token_required
@@ -4378,19 +4526,24 @@ def create_payment():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT total_amount FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT total_amount, payment_type, cod_advance_paid FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
         
         if not order:
             conn.close()
             return error_response("Order not found", 404)
             
-        razorpay_order = payment_service.create_payment_order(order['total_amount'], order_id)
+        # Determine amount to pay now
+        amount_to_pay = order['total_amount']
+        if order['payment_type'] == 'COD':
+            amount_to_pay = order['cod_advance_paid']
+
+        razorpay_order = payment_service.create_payment_order(amount_to_pay, order_id)
         
         cursor.execute('''
             INSERT INTO payments (order_id, payment_method, amount, transaction_id, payment_status)
             VALUES (?, ?, ?, ?, 'PENDING')
-        ''', (order_id, data.get('payment_method', 'RAZORPAY'), order['total_amount'], razorpay_order['id']))
+        ''', (order_id, data.get('payment_method', 'RAZORPAY'), amount_to_pay, razorpay_order['id']))
         
         conn.commit()
         conn.close()
@@ -4410,11 +4563,19 @@ def verify_payment():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT user_id, payment_type, cod_advance_paid FROM orders WHERE id = ?", (order_id,))
         user_row = cursor.fetchone()
         user_id = user_row['user_id'] if user_row else None
+        payment_type = user_row['payment_type'] if user_row else 'PREPAID'
 
-        if data.get('payment_method') == 'COD':
+        # If it's a COD order, we expect a Razorpay payment for the advance amount
+        # unless COD advance is 0 (which is not our case here)
+        if data.get('payment_method') == 'COD' and payment_type != 'COD':
+             # Trying to use COD on a PREPAID order - not allowed
+             return error_response("Payment method mismatch", 400)
+        
+        if data.get('payment_method') == 'COD' and payment_type == 'COD' and user_row['cod_advance_paid'] <= 0:
+            # Pure COD with no advance (if we ever support it)
             cursor.execute("UPDATE orders SET status = 'PLACED', payment_status = 'PENDING' WHERE id = ?", (order_id,))
             cursor.execute("UPDATE payments SET payment_status = 'SUCCESS' WHERE order_id = ?", (order_id,))
             if user_id:
@@ -4427,13 +4588,14 @@ def verify_payment():
         is_valid = True 
         
         if is_valid:
-            cursor.execute("UPDATE orders SET status = 'PLACED', payment_status = 'PAID' WHERE id = ?", (order_id,))
+            new_payment_status = 'PAID' if payment_type == 'PREPAID' else 'ADVANCE_PAID'
+            cursor.execute("UPDATE orders SET status = 'PLACED', payment_status = ? WHERE id = ?", (new_payment_status, order_id))
             cursor.execute('UPDATE payments SET payment_status = "SUCCESS", transaction_id = ? WHERE order_id = ?', (razorpay_payment_id, order_id))
             if user_id:
                 notification_service.send_order_notification(user_id, order_id, 'PLACED')
             conn.commit()
             conn.close()
-            return success_response(None, "Payment verified", 200)
+            return success_response(None, "Payment verified and order placed", 200)
         else:
             conn.close()
             return error_response("Invalid payment signature", 400)
@@ -5122,6 +5284,23 @@ def warehouse_availability():
                 "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.')
             }, "Availability checked")
 
+        # Check user-specific COD restriction if logged in
+        user_cod_restricted = False
+        token = request.headers.get('Authorization')
+        if token and token.startswith('Bearer '):
+            try:
+                from flask import current_app
+                import jwt
+                payload = jwt.decode(token.split(' ')[1], current_app.config['SECRET_KEY'], algorithms=['HS256'])
+                user_id = payload.get('user_id')
+                if user_id:
+                    cursor.execute("SELECT cod_restricted FROM users WHERE id = ?", (user_id,))
+                    u_row = cursor.fetchone()
+                    if u_row and u_row['cod_restricted']:
+                        user_cod_restricted = True
+            except:
+                pass
+
         return success_response({
             "ordering_enabled": True,
             "can_order": True,
@@ -5131,8 +5310,16 @@ def warehouse_availability():
             "store_id": store["id"],
             "quick_mode_enabled": bool(store.get("quick_mode_enabled", 0)),
             "platform_fee": float(settings.get('platform_fee', 7)),
-            "free_delivery_threshold": float(settings.get('free_delivery_threshold', 199)),
+            "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
             "delivery_fee": float(settings.get('delivery_fee', 49)),
+            "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),
+            "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
+            "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
+            "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
+            "user_cod_restricted": user_cod_restricted,
+            "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
+            "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
+            "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true',
             "scheduled_delivery_time": settings.get('scheduled_delivery_time', 'Tomorrow'),
             "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.'),
             "quick_delivery_max_distance": float(settings.get('quick_delivery_max_distance', 5)),

@@ -210,12 +210,12 @@ body::before {
 /* Button & Controls */
 .btn-primary {
   @apply inline-flex items-center justify-center rounded-full font-black transition-all px-6 uppercase tracking-widest text-[10px] shadow-lg active:scale-95;
-  background-color: var(--color-primary) !important;
-  color: var(--color-on-primary) !important;
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
 }
 .btn-primary:hover {
-  background-color: var(--color-primary-dark) !important;
-  color: var(--color-on-primary) !important;
+  background-color: var(--color-primary-dark);
+  color: var(--color-on-primary);
   transform: translateY(-2px);
 }
 

@@ -1,0 +1,13 @@
+# Robots.txt for jdlxmobile.in
+User-agent: *
+Allow: /
+
+# Disallow sensitive paths
+Disallow: /admin/
+Disallow: /warehouse/
+Disallow: /profile/
+Disallow: /checkout/
+Disallow: /oauth/
+
+# Sitemap location
+Sitemap: https://jdlxmobile.in/sitemap.xml

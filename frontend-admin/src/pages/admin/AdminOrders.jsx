@@ -470,8 +470,33 @@ function AdminOrders() {
                                     </div>
                                     <div className="flex justify-between items-center pt-3 border-t-2 border-dashed border-slate-200 mt-2">
                                         <p className="font-black text-slate-900 uppercase tracking-tight">Final Total</p>
-                                        <p className="font-black text-2xl text-primary tracking-tighter">₹{selectedOrder.total_amount.toLocaleString()}</p>
+                                        <div className="text-right">
+                                            <p className="font-black text-2xl text-primary tracking-tighter">₹{selectedOrder.total_amount.toLocaleString()}</p>
+                                            <div className="flex gap-2 justify-end mt-1">
+                                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${selectedOrder.payment_type === 'COD' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                                                    {selectedOrder.payment_type || 'PREPAID'}
+                                                </span>
+                                                {selectedOrder.free_delivery_applied === 1 && (
+                                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 uppercase tracking-widest">
+                                                        Free Delivery Applied
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    {selectedOrder.payment_type === 'COD' && (
+                                        <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+                                            <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Advance Paid</p>
+                                                <p className="text-lg font-black text-amber-900">₹{selectedOrder.cod_advance_paid || 0}</p>
+                                            </div>
+                                            <div className="p-3 rounded-xl bg-slate-100 border border-slate-200">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Remaining COD</p>
+                                                <p className="text-lg font-black text-slate-900">₹{selectedOrder.cod_remaining_amount || 0}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

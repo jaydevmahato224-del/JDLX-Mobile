@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { resolveMediaUrl, API_BASE_URL } from '../../config'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
@@ -72,7 +72,7 @@ function Cart() {
         return sum;
     }, 0);
 
-    const freeDeliveryThreshold = Number(availability?.free_delivery_threshold || 199);
+    const freeDeliveryThreshold = Number(availability?.free_delivery_threshold || 499);
     const deliveryFee = subtotal >= freeDeliveryThreshold ? 0 : Number(availability?.delivery_fee || 49);
     const platformFee = Number(availability?.platform_fee || 7);
     const finalToPay = subtotal + fittingTotal + deliveryFee + platformFee;
@@ -153,7 +153,8 @@ function Cart() {
                 </div>
             </header>
 
-            <div className="grid lg:grid-cols-[1fr,380px] gap-8 items-start">
+            <div className="flex flex-col gap-8">
+                {/* Cart Items List */}
                 <div className="space-y-4">
                     {cart.map(item => {
                         const isRemoved = item.removedFromInventory;
@@ -184,7 +185,6 @@ function Cart() {
                                             <div className="flex items-center gap-3">
                                                 <p className={`font-black text-xl text-primary ${isUnavailable ? 'opacity-50' : ''}`}>₹{item.price}</p>
                                                 
-                                                {/* Smart Stock Badge - Merged and improved logic */}
                                                 {!isUnavailable && stockCount > 0 && stockCount <= 3 && (
                                                     <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-colors ${atMaxStock ? 'bg-red-50 border-red-100 text-red-600' : 'bg-amber-50 border-amber-100 text-amber-600'}`}>
                                                         <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${atMaxStock ? 'bg-red-500' : 'bg-amber-500'}`} />
@@ -264,70 +264,15 @@ function Cart() {
                     })}
                 </div>
 
-                {/* Sidebar Summary */}
-                <aside className="sticky top-24 space-y-6">
-                    <div className="glass-card p-8 shadow-2xl relative overflow-hidden">
-                        {/* Decorative background element */}
-                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl" />
-                        
-                        <h3 className="text-xl font-black text-[var(--color-on-surface)] mb-6 flex items-center gap-2" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                            Order Summary
-                        </h3>
-
-                        <div className="space-y-4">
-                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80">
-                                <span>Items Subtotal</span>
-                                <span className="text-[var(--color-on-surface)]">₹{subtotal.toLocaleString()}</span>
-                            </div>
-
-                            {fittingTotal > 0 && (
-                                <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80">
-                                    <span>Fitting Service</span>
-                                    <span className="text-primary">₹{fittingTotal.toLocaleString()}</span>
-                                </div>
-                            )}
-                            
-                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80">
-                                <span>Delivery Fee</span>
-                                {deliveryFee === 0 ? (
-                                    <span className="text-[#00E676] flex items-center gap-1.5 font-black uppercase tracking-widest text-[10px]"><CheckCircle2 size={14} /> FREE</span>
-                                ) : (
-                                    <span className="text-[var(--color-on-surface)]">₹{deliveryFee}</span>
-                                )}
-                            </div>
-                            
-                            {subtotal < freeDeliveryThreshold && subtotal > 0 && (
-                                <div className="space-y-3">
-                                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-amber-600">
-                                        <span>Delivery Goal</span>
-                                        <span>₹{freeDeliveryThreshold - subtotal} to go</span>
-                                    </div>
-                                    <div className="h-1.5 w-full bg-amber-100 rounded-full overflow-hidden">
-                                        <div 
-                                            className="h-full bg-amber-500 transition-all duration-1000" 
-                                            style={{ width: `${(subtotal / freeDeliveryThreshold) * 100}%` }}
-                                        />
-                                    </div>
-                                    <p className="text-[9px] font-bold text-amber-600/60 uppercase tracking-tighter">
-                                        Add ₹{freeDeliveryThreshold - subtotal} more for free express delivery
-                                    </p>
-                                </div>
-                            )}
-
-                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface)]/80 pb-6 border-b border-[var(--color-surface-high)]">
-                                <span>Platform Fee</span>
-                                <span className="text-[var(--color-on-surface)]">₹{platformFee}</span>
-                            </div>
-
-                            <div className="flex justify-between items-center pt-2">
-                                <span className="text-lg font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>To Pay</span>
-                                <div className="text-right">
-                                    <span className="text-3xl font-black text-primary tracking-tighter block" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                        ₹{finalToPay.toLocaleString()}
-                                    </span>
-                                    <p className="text-[9px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Inclusive of all taxes</p>
-                                </div>
-                            </div>
+                {/* Streamlined Checkout Footer */}
+                <div className="mt-8 mb-12 flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                    <div className="w-full max-w-lg glass-card p-8 shadow-2xl border-primary/10 flex flex-col items-center gap-6">
+                        <div className="text-center space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Estimated Subtotal</p>
+                            <h3 className="text-4xl font-black text-primary tracking-tighter" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                ₹{subtotal.toLocaleString()}
+                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Delivery & Taxes calculated at checkout</p>
                         </div>
 
                         <button
@@ -349,43 +294,27 @@ function Cart() {
                                     navigate('/checkout');
                                 }
                             }}
-                            className={`w-full mt-8 flex justify-between items-center group h-16 rounded-2xl px-6 transition-all active:scale-[0.98] ${subtotal <= 0 || isSyncing || hasStickerMissingDevice
+                            className={`w-full group h-16 rounded-2xl px-8 flex items-center justify-between transition-all active:scale-[0.98] ${subtotal <= 0 || isSyncing || hasStickerMissingDevice
                                 ? 'bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200' 
-                                : 'bg-primary text-slate-950 shadow-2xl shadow-primary/20 hover:bg-primary/90'
+                                : 'bg-primary text-slate-950 shadow-2xl shadow-primary/30 hover:bg-primary/90'
                             }`}
                         >
-                            <span className="font-black uppercase tracking-[0.2em] text-[11px]">{isSyncing ? 'Verifying...' : 'Checkout'}</span>
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl font-black">₹{finalToPay.toLocaleString()}</span>
-                                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                            </div>
+                            <span className="font-black uppercase tracking-[0.2em] text-[12px]">{isSyncing ? 'Verifying...' : 'Proceed to Checkout'}</span>
+                            <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform" />
                         </button>
-                        
+
                         {hasStickerMissingDevice && !isSyncing && (
-                            <p className="mt-4 text-center text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center justify-center gap-2">
+                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
                                 <AlertCircle size={12} /> Select Device Model(s) to proceed
-                            </p>
-                        )}
-                        
-                        {subtotal <= 0 && !isSyncing && cart.length > 0 && (
-                            <p className="mt-4 text-center text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center justify-center gap-2">
-                                <AlertCircle size={12} /> Add available items to proceed
                             </p>
                         )}
                     </div>
 
-                    <div className="glass-card p-6 bg-primary/[0.02] border-primary/5">
-                        <div className="flex gap-4 items-start">
-                            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center flex-shrink-0 text-primary">
-                                <CheckCircle2 />
-                            </div>
-                            <div>
-                                <h4 className="font-black text-sm text-slate-900 mb-1">Safe & Secure</h4>
-                                <p className="text-xs font-medium text-slate-500 leading-relaxed">Your order is protected by our {deliveryMode === 'quick' ? 'super-fast hyperlocal' : 'secure express'} delivery network and 100% genuine product guarantee.</p>
-                            </div>
-                        </div>
+                    <div className="flex items-center gap-6 opacity-30 grayscale pointer-events-none">
+                        <ShieldCheck size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Secure 256-Bit SSL Checkout</span>
                     </div>
-                </aside>
+                </div>
             </div>
 
             {/* Login Required Modal */}

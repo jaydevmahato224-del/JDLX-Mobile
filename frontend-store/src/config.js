@@ -16,13 +16,9 @@ function getDefaultApiBaseUrl() {
 
   const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
   
-  // If we are on the main domain, we should not default to port 5000 
-  // unless we are explicitly in a development environment.
+  // In production, we should prioritize the Render URL or the environment variable.
   if (hostname === 'jdlxmobile.in' || hostname === 'www.jdlxmobile.in' || hostname.includes('vercel.app')) {
-    // Return a placeholder or the most likely backend URL if known
-    // For now, we'll return the origin without 5000 to avoid obvious errors,
-    // but the user SHOULD set VITE_API_URL.
-    return `${protocol}//${hostname}/api`; 
+    return PROD_BACKEND_URL; 
   }
 
   return `${protocol}//${resolvedHost}:5000/api`;

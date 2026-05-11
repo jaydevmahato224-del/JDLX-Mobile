@@ -120,6 +120,8 @@ cors_origins = [
     r"^http://localhost:517[3-5]$",
     r"^http://127\.0\.0\.1:517[3-5]$",
     r"^http://10\.0\.2\.2:517[3-5]$",
+    r"^https?://jdlxmobile\.in$",
+    r"^https?://www\.jdlxmobile\.in$",
     r"^https?://([a-z0-9-]+\.)*jdlxmobile\.in$",
     r"^https?://jdlx-[a-z0-9-]+\.vercel\.app$",
 ]

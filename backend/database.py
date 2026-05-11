@@ -17,7 +17,8 @@ class LibsqlRow:
         try: return self._tuple[self._keys.index(key)]
         except ValueError: raise KeyError(key)
     def __len__(self): return len(self._tuple)
-    def __iter__(self): return iter(self._tuple)
+    def __iter__(self):
+        return iter(zip(self._keys, self._tuple))
 
 class LibsqlCursorWrapper:
     def __init__(self, cursor, row_factory=None):

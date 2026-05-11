@@ -1749,7 +1749,12 @@ def match_products_from_text(text, conn):
 @require_warehouse_auth
 def warehouse_get_inventory():
     """List all inventory items for current warehouse."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = request.warehouse_payload.get("warehouse_id")
+    current_app.logger.info(f"Fetching inventory for warehouse_id: {wh_id}")
+    
+    if not wh_id:
+        return error_response("Warehouse ID missing from token", 400)
+
     conn = get_db()
     try:
         rows = conn.execute(
@@ -1779,7 +1784,13 @@ def warehouse_get_inventory():
                ORDER BY wi.id DESC""",
             (wh_id,),
         ).fetchall()
-        return jsonify([dict(r) for r in rows]), 200
+        
+        result = [dict(r) for r in rows]
+        current_app.logger.info(f"Inventory found: {len(result)} items for warehouse {wh_id}")
+        return jsonify(result), 200
+    except Exception as e:
+        current_app.logger.error(f"Inventory fetch error: {str(e)}")
+        return error_response(f"Failed to fetch inventory: {str(e)}", 500)
     finally:
         conn.close()
 

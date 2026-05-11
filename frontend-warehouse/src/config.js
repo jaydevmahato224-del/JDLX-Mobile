@@ -14,6 +14,11 @@ function getDefaultApiBaseUrl() {
       : hostname;
 
   const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+  
+  if (hostname.includes('vercel.app') || hostname.includes('jdlxmobile.in')) {
+    return `${protocol}//${hostname}/api`;
+  }
+
   return `${protocol}//${resolvedHost}:5000/api`;
 }
 

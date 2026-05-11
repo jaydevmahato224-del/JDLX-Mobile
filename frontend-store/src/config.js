@@ -1,4 +1,6 @@
 // API Configuration
+const PROD_BACKEND_URL = "https://jdlx-mobile.onrender.com/api";
+
 function getDefaultApiBaseUrl() {
   if (typeof window === 'undefined') {
     return 'http://localhost:5000/api';
@@ -16,7 +18,7 @@ function getDefaultApiBaseUrl() {
 
   const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
   
-  // In production, we should prioritize the Render URL or the environment variable.
+  // In production, we should prioritize the Render URL.
   if (hostname === 'jdlxmobile.in' || hostname === 'www.jdlxmobile.in' || hostname.includes('vercel.app')) {
     return PROD_BACKEND_URL; 
   }
@@ -24,14 +26,17 @@ function getDefaultApiBaseUrl() {
   return `${protocol}//${resolvedHost}:5000/api`;
 }
 
-const PROD_BACKEND_URL = "https://jdlx-mobile.onrender.com/api";
+// Determine if we are on a production domain
+const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+const isProductionDomain = currentHostname === 'jdlxmobile.in' || 
+                           currentHostname === 'www.jdlxmobile.in' || 
+                           currentHostname.includes('vercel.app');
 
-  // In production domains, we force the Render URL to prevent misconfigured VITE_API_URL env vars
-  const isProductionDomain = hostname === 'jdlxmobile.in' || hostname === 'www.jdlxmobile.in' || hostname.includes('vercel.app');
+// Export API_BASE_URL with forced production URL for production domains
+export const API_BASE_URL = isProductionDomain 
+  ? PROD_BACKEND_URL 
+  : (import.meta.env.VITE_API_URL || getDefaultApiBaseUrl());
 
-  export const API_BASE_URL = isProductionDomain 
-    ? PROD_BACKEND_URL 
-    : (import.meta.env.VITE_API_URL || getDefaultApiBaseUrl());
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export function resolveMediaUrl(value) {

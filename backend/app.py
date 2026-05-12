@@ -1599,21 +1599,23 @@ def update_server_cart():
         conn = get_db()
         cursor = conn.cursor()
         
+        # 1. AUTO-RELEASE: Clear cart items older than 30 mins
+        cursor.execute("DELETE FROM cart WHERE updated_at < datetime('now', '-30 minutes')")
+        
         # Build where clause based on what we have
         where_clause = "user_id = ?" if user_id else "session_id = ?"
         id_val = user_id if user_id else session_id
 
-        # Stock Validation
+        # Stock Validation (Requirement 1: SOFT RESERVATION)
+        # We check against products.stock (which is SQ - HR). 
+        # We DO NOT subtract other people's carts (in_others) from displayed stock.
         cursor.execute("SELECT name, stock FROM products WHERE id = ?", (product_id,))
         product = cursor.fetchone()
         if not product:
             return error_response("Product not found", 404)
         
-        # Calculate how many are in other people's carts
-        cursor.execute(f"SELECT SUM(quantity) as in_others FROM cart WHERE product_id = ? AND NOT ({where_clause})", (product_id, id_val))
-        in_others = cursor.fetchone()['in_others'] or 0
-        
-        available = max(0, product['stock'] - in_others)
+        # Requirement 1 & 4: available_stock (product['stock']) remains unchanged by other carts
+        available = max(0, product['stock'])
 
         if action == 'remove':
             cursor.execute(f"DELETE FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
@@ -1626,16 +1628,16 @@ def update_server_cart():
                 return error_response(f"Only {available} items available in total", 400)
                 
             if existing:
-                cursor.execute("UPDATE cart SET quantity = ? WHERE id = ?", (new_qty, existing['id']))
+                cursor.execute("UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_qty, existing['id']))
             else:
                 if user_id:
-                    cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)", (user_id, product_id, new_qty))
+                    cursor.execute("INSERT INTO cart (user_id, product_id, quantity, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", (user_id, product_id, new_qty))
                 else:
-                    cursor.execute("INSERT INTO cart (session_id, product_id, quantity) VALUES (?, ?, ?)", (session_id, product_id, new_qty))
+                    cursor.execute("INSERT INTO cart (session_id, product_id, quantity, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", (session_id, product_id, new_qty))
         elif action == 'update':
             if quantity > available:
                 return error_response(f"Only {available} items available in total", 400)
-            cursor.execute(f"UPDATE cart SET quantity = ? WHERE {where_clause} AND product_id = ?", (quantity, id_val, product_id))
+            cursor.execute(f"UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE {where_clause} AND product_id = ?", (quantity, id_val, product_id))
             
         conn.commit()
         conn.close()
@@ -1866,10 +1868,10 @@ def get_products():
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
                        p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only,
                        wi.stock_quantity as physical_stock,
+                       wi.stock_quantity as stock,
+                       wi.reserved_stock as reserved_stock,
                 (wi.stock_quantity - wi.reserved_stock) as available_stock,
                 (SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE product_id = p.id) as cart_reserved,
-                (wi.reserved_stock + COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0)) as reserved_stock,
-                       wi.available_stock as stock, 
                        wi.low_stock_threshold, p.status,
                        c.name as category_name,
                        c.important_note as category_note,
@@ -1888,6 +1890,7 @@ def get_products():
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
                        p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only,
+                       0 as reserved_stock,
                        COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as cart_reserved,
                        p.low_stock_threshold, p.status,
                        c.name as category_name,
@@ -2043,8 +2046,7 @@ def get_product_stock(product_id):
         
         if store_id:
             cursor.execute("""
-                SELECT wi.stock_quantity, wi.reserved_stock,
-                (wi.stock_quantity - wi.reserved_stock) as available_stock
+                SELECT wi.stock_quantity, wi.reserved_stock
                 FROM warehouse_inventory wi
                 WHERE wi.product_id = ? AND wi.warehouse_id = ?
             """, (product_id, store_id))
@@ -2053,7 +2055,7 @@ def get_product_stock(product_id):
                 stock_data = {
                     "stock": row['stock_quantity'],
                     "reserved_stock": row['reserved_stock'],
-                    "available": max(0, row['available_stock'])
+                    "available": max(0, row['stock_quantity'] - row['reserved_stock'])
                 }
             else:
                 stock_data = None
@@ -2061,13 +2063,12 @@ def get_product_stock(product_id):
             cursor.execute("SELECT stock, low_stock_threshold FROM products WHERE id = ?", (product_id,))
             row = cursor.fetchone()
             if row:
-                # For global products, we might need to check total cart reservations if applicable
-                cursor.execute("SELECT SUM(quantity) as cart_reserved FROM cart WHERE product_id = ?", (product_id,))
-                cart_res = cursor.fetchone()['cart_reserved'] or 0
+                # Requirement 4: Show stock based on available_stock (which is SQ - HR) only.
+                # Do NOT subtract cart_reserved.
                 stock_data = {
                     "stock": row['stock'],
-                    "reserved_stock": cart_res,
-                    "available": max(0, row['stock'] - cart_res)
+                    "reserved_stock": 0,
+                    "available": max(0, row['stock'])
                 }
             else:
                 stock_data = None
@@ -2295,29 +2296,21 @@ def checkout():
         
         order_id = cursor.lastrowid
 
-        # 4. Insert Order Items and Update both store and global stock
+        # 4. Insert Order Items and Update both store and global stock (Requirement 2: HARD RESERVATION)
         for item in items:
             cursor.execute(
                 "INSERT INTO order_items (order_id, product_id, quantity, price, device_model, fitting_charge) VALUES (?, ?, ?, ?, ?, ?)",
                 (order_id, item['id'], item['qty'], item['price'], item.get('device_model'), item.get('fitting_charge', 0))
             )
             
-            # Update warehouse-specific inventory (Source of truth)
+            # Requirement 2: Increment reserved_stock instead of reducing stock_quantity immediately.
+            # This counts as a "hard reservation". Triggers sync available_stock and products.stock.
             cursor.execute("""
                 UPDATE warehouse_inventory 
-                SET stock_quantity = stock_quantity - ?,
-                    available_stock = available_stock - ?,
+                SET reserved_stock = reserved_stock + ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE warehouse_id = ? AND product_id = ?
-            """, (item['qty'], item['qty'], store_id, item['id']))
-            
-            # Update global stock (single source of truth)
-            cursor.execute("""
-                UPDATE products 
-                SET stock = (SELECT SUM(stock_quantity - reserved_stock) FROM warehouse_inventory WHERE product_id = ?),
-                    last_updated = CURRENT_TIMESTAMP 
-                WHERE id = ?
-            """, (item['id'], item['id']))
+            """, (item['qty'], store_id, item['id']))
 
             # Trigger Low Stock Notifications if stock drops to <= 5 (matching UI default)
             cursor.execute("SELECT name, stock, low_stock_threshold FROM products WHERE id = ?", (item['id'],))
@@ -2463,6 +2456,42 @@ def get_order_tracking(order_id):
     except Exception as e:
         return error_response(str(e), 500)
 
+def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
+    """Adjusts inventory based on order status transitions."""
+    if old_status == new_status:
+        return
+
+    # Transitions to DELIVERED: Confirm hard reservation (SQ -= qty, HR -= qty)
+    if new_status == 'DELIVERED' and old_status != 'DELIVERED':
+        cursor.execute("SELECT product_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
+        items = cursor.fetchall()
+        cursor.execute("SELECT dark_store_id as store_id FROM orders WHERE id = ?", (order_id,))
+        order = cursor.fetchone()
+        if order and order['store_id']:
+            for item in items:
+                cursor.execute("""
+                    UPDATE warehouse_inventory 
+                    SET stock_quantity = stock_quantity - ?,
+                        reserved_stock = reserved_stock - ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE warehouse_id = ? AND product_id = ?
+                """, (item['quantity'], item['quantity'], order['store_id'], item['product_id']))
+
+    # Transitions to CANCELLED/REFUNDED: Release hard reservation (HR -= qty)
+    elif new_status in ['CANCELLED', 'REFUNDED', 'REJECTED'] and old_status not in ['CANCELLED', 'REFUNDED', 'REJECTED', 'DELIVERED']:
+        cursor.execute("SELECT product_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
+        items = cursor.fetchall()
+        cursor.execute("SELECT dark_store_id as store_id FROM orders WHERE id = ?", (order_id,))
+        order = cursor.fetchone()
+        if order and order['store_id']:
+            for item in items:
+                cursor.execute("""
+                    UPDATE warehouse_inventory 
+                    SET reserved_stock = MAX(0, reserved_stock - ?),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE warehouse_id = ? AND product_id = ?
+                """, (item['quantity'], order['store_id'], item['product_id']))
+
 @app.route('/api/admin/order/<int:order_id>/status', methods=['PATCH'])
 @token_required
 @require_admin()
@@ -2476,6 +2505,13 @@ def admin_update_order_status(order_id):
         conn = get_db()
         cursor = conn.cursor()
         
+        # Get current status
+        cursor.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
+        current_status_row = cursor.fetchone()
+        old_status = current_status_row['status'] if current_status_row else None
+
+        handle_stock_on_status_change(cursor, order_id, old_status, new_status)
+
         timestamp_col = None
         if new_status == 'PACKING': timestamp_col = "status_packing_at"
         elif new_status == 'READY_FOR_PICKUP': timestamp_col = "status_ready_at"
@@ -3558,6 +3594,14 @@ def update_order_status(order_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
+
+        # Get current status
+        cursor.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
+        current_status_row = cursor.fetchone()
+        old_status = current_status_row['status'] if current_status_row else None
+
+        handle_stock_on_status_change(cursor, order_id, old_status, new_status)
+
         cursor.execute("UPDATE orders SET order_status=? WHERE id=?", (new_status, order_id))
         conn.commit()
         conn.close()

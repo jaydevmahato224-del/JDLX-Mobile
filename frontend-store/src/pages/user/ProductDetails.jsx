@@ -120,7 +120,7 @@ export default function ProductDetails() {
   };
 
   return (
-    <div className="reveal-staggered pb-24 md:pb-0">
+    <div className="reveal-staggered pb-48 md:pb-0">
       <button onClick={() => navigate(-1)} className="fixed top-4 left-4 z-[110] md:hidden h-10 w-10 flex items-center justify-center rounded-full bg-slate-900/40 backdrop-blur-md text-white border border-white/10 active:scale-90 transition-all shadow-xl"><ArrowLeft size={20} /></button>
 
       <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr] animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -258,7 +258,7 @@ export default function ProductDetails() {
       )}
 
       {/* Mobile Sticky Bar */}
-      <div className="fixed bottom-[74px] inset-x-0 z-[100] px-4 md:hidden">
+      <div className="fixed bottom-[100px] inset-x-0 z-[100] px-4 md:hidden">
          <div className="bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-3 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-full duration-700">
             {quantity > 0 ? (
                 <div className="flex w-full items-center gap-3">

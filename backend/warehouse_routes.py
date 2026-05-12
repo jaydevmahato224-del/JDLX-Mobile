@@ -2268,6 +2268,21 @@ def warehouse_update_order_status(assignment_id):
             (new_status, assignment_id, wh_id),
         )
 
+        if new_status == "rejected":
+            # Requirement 2: Release hard reservation if warehouse rejects the assignment
+            conn.execute(
+                """UPDATE warehouse_inventory 
+                   SET reserved_stock = MAX(0, reserved_stock - (
+                       SELECT quantity FROM order_items 
+                       WHERE order_id = ? AND product_id = warehouse_inventory.product_id
+                   )),
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE warehouse_id = ? AND product_id IN (
+                       SELECT product_id FROM order_items WHERE order_id = ?
+                   )""",
+                (assignment["order_id"], wh_id, assignment["order_id"]),
+            )
+
         mapped_order_status = order_status_map.get(new_status)
         if mapped_order_status == "PACKING":
             conn.execute(

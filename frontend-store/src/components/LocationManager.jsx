@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { MapPin, Navigation, Zap, Clock, CheckCircle2, X, RefreshCw, AlertCircle, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import toast from 'react-hot-toast';
@@ -8,8 +8,32 @@ const LocationManager = () => {
   const { setDeliveryMode, setUserLocation, userLocation, deliveryMode, setNearestStoreId, setIsCheckingLocation } = useStore();
   const [showPrompt, setShowPrompt] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
+  const [isDismissing, setIsDismissing] = useState(false);
   const [status, setStatus] = useState('idle'); // 'idle', 'checking', 'error'
   const [errorMessage, setErrorMessage] = useState('');
+  const touchStartY = useRef(null);
+
+  const handleTouchStart = (e) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartY.current === null) return;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaY = touchStartY.current - touchEndY;
+    if (deltaY > 50) {
+      handleDismiss();
+    }
+    touchStartY.current = null;
+  };
+
+  const handleDismiss = () => {
+    setIsDismissing(true);
+    setTimeout(() => {
+      setShowBanner(false);
+      setIsDismissing(false);
+    }, 600);
+  };
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
@@ -177,7 +201,16 @@ const LocationManager = () => {
   return (
     <>
       {showBanner && !showPrompt && (
-        <div className="fixed top-[var(--app-header-height)] inset-x-0 z-[60] flex justify-center p-4 animate-in slide-in-from-top duration-500">
+        <div 
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className={`fixed top-[var(--app-header-height)] inset-x-0 z-[60] flex justify-center p-4 transition-all duration-700 ${
+            isDismissing ? 'opacity-0 translate-y-[-120%] scale-95 pointer-events-none' : 'translate-y-0 opacity-100'
+          } ${!isDismissing ? 'animate-in slide-in-from-top duration-500' : ''}`}
+          style={{
+            transitionTimingFunction: isDismissing ? 'cubic-bezier(0.68, -0.6, 0.32, 1.6)' : 'cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
             <div className="w-full max-w-xl bg-slate-900/90 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
@@ -188,14 +221,14 @@ const LocationManager = () => {
                 <div className="flex items-center gap-2">
                     <button 
                         onClick={() => {
-                            setShowBanner(false);
+                            handleDismiss();
                             handleGetLocation();
                         }}
                         className="text-[10px] font-black uppercase tracking-widest bg-primary text-[var(--color-on-primary)] px-3 py-1.5 rounded-lg hover:opacity-90 transition-all"
                     >
                         Enable
                     </button>
-                    <button onClick={() => setShowBanner(false)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
+                    <button onClick={handleDismiss} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
                         <X size={16} />
                     </button>
                 </div>

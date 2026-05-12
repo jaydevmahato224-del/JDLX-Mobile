@@ -26,16 +26,13 @@ function getDefaultApiBaseUrl() {
   return `${protocol}//${resolvedHost}:5000/api`;
 }
 
-// Determine if we are on a production domain
+// Determine if we are on a production domain or any remote host
 const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
-const isProductionDomain = currentHostname === 'jdlxmobile.in' || 
-                           currentHostname === 'www.jdlxmobile.in' || 
-                           currentHostname.includes('vercel.app');
+const isLocalhost = currentHostname === 'localhost' || currentHostname === '127.0.0.1';
 
-// Export API_BASE_URL with forced production URL for production domains
-export const API_BASE_URL = isProductionDomain 
-  ? PROD_BACKEND_URL 
-  : (import.meta.env.VITE_API_URL || getDefaultApiBaseUrl());
+// Export API_BASE_URL: Use environment variable if set, otherwise use local fallback for localhost or production URL for everything else.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (isLocalhost ? getDefaultApiBaseUrl() : PROD_BACKEND_URL);
 
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 

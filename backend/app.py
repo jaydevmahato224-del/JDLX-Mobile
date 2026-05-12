@@ -127,6 +127,7 @@ cors_origins = [
     r"^https?://www\.jdlxmobile\.in$",
     r"^https?://([a-z0-9-]+\.)*jdlxmobile\.in$",
     r"^https?://jdlx-[a-z0-9-]+\.vercel\.app$",
+    r"^https?://[a-z0-9-]+\.onrender\.com$",
 ]
 if cors_origins_env:
     extra_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]

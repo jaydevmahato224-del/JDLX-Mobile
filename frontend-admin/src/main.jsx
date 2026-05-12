@@ -5,7 +5,7 @@ import App from './App.jsx'
 import './index.css'
 
 // Using a placeholder client ID for now. User must configure this later.
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE"
+const GOOGLE_CLIENT_ID = "473832938691-oa46nvu19l6clb7fucu2u562clitbuah.apps.googleusercontent.com"
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

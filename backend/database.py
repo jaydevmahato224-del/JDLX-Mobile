@@ -354,6 +354,26 @@ def init_db():
         FOREIGN KEY(order_id) REFERENCES orders(id)
     )''')
 
+    cursor.execute('''CREATE TABLE IF NOT EXISTS bug_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        page_location TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        description TEXT NOT NULL,
+        steps_to_reproduce TEXT,
+        screenshot_path TEXT,
+        browser TEXT,
+        os TEXT,
+        screen_resolution TEXT,
+        page_url TEXT,
+        user_agent TEXT,
+        status TEXT DEFAULT 'New',
+        developer_notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
     # --- Security ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, ip_address TEXT, status TEXT NOT NULL, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS security_alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, alert_type TEXT NOT NULL, message TEXT NOT NULL, severity TEXT DEFAULT 'medium', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')

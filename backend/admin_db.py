@@ -486,3 +486,100 @@ def execute_query():
         return error_response(str(e))
     finally:
         conn.close()
+
+@admin_db_bp.route('/api/admin/bug-reports', methods=['GET'])
+@require_admin()
+def admin_get_bug_reports():
+    """Retrieves all bug reports with reporter info and filters."""
+    status_filter = request.args.get('status')
+    severity_filter = request.args.get('severity')
+    
+    conn = get_db()
+    try:
+        query = """
+            SELECT b.*, u.name as reporter_name, u.email as reporter_email
+            FROM bug_reports b
+            JOIN users u ON b.user_id = u.id
+        """
+        filters = []
+        params = []
+        
+        if status_filter:
+            filters.append("b.status = ?")
+            params.append(status_filter)
+            
+        if severity_filter:
+            filters.append("b.severity = ?")
+            params.append(severity_filter)
+            
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+            
+        query += """
+            ORDER BY 
+                CASE b.severity
+                    WHEN 'Critical' THEN 1
+                    WHEN 'High' THEN 2
+                    WHEN 'Medium' THEN 3
+                    WHEN 'Low' THEN 4
+                    ELSE 5
+                END,
+                b.created_at DESC
+        """
+        
+        rows = conn.execute(query, params).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/bug-reports/<int:report_id>', methods=['PATCH'])
+@require_admin()
+def admin_update_bug_report(report_id):
+    """Updates status and developer notes for a bug report."""
+    data = request.json or {}
+    status = data.get('status')
+    developer_notes = data.get('developer_notes')
+    
+    valid_statuses = {'New', 'Investigating', 'Fixed', 'Closed', 'Duplicate'}
+    
+    if status and status not in valid_statuses:
+        return error_response(f"Invalid status. Allowed: {', '.join(valid_statuses)}", 400)
+        
+    conn = get_db()
+    try:
+        # Check if report exists
+        report = conn.execute("SELECT id FROM bug_reports WHERE id = ?", (report_id,)).fetchone()
+        if not report:
+            return error_response("Bug report not found", 404)
+            
+        update_fields = []
+        params = []
+        
+        if status:
+            update_fields.append("status = ?")
+            params.append(status)
+            
+        if developer_notes is not None:
+            update_fields.append("developer_notes = ?")
+            params.append(developer_notes)
+            
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        
+        if not update_fields:
+            return error_response("No fields to update", 400)
+            
+        query = f"UPDATE bug_reports SET {', '.join(update_fields)} WHERE id = ?"
+        params.append(report_id)
+        
+        conn.execute(query, params)
+        conn.commit()
+        
+        # Fetch updated record
+        updated = conn.execute("SELECT * FROM bug_reports WHERE id = ?", (report_id,)).fetchone()
+        return success_response(dict(updated), "Bug report updated successfully")
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()

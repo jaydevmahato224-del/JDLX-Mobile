@@ -454,8 +454,6 @@ export default function AdminSettings() {
                  </div>
                </div>
             </div>
-          </div>
-        </section>
 
             <div className="space-y-6 pt-8 mt-8 border-t border-slate-100">
                <div className="flex items-center gap-2 mb-2">
@@ -502,6 +500,7 @@ export default function AdminSettings() {
                  </p>
               </div>
             </div>
+          </div>
         </section>
 
         {/* Store Policies Section */}

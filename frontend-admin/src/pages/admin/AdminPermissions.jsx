@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
 function AdminPermissions() {
-  const token = useStore((state) => state.token)
+  const token = useStore((state) => state.adminToken || state.token)
   const [admins, setAdmins] = useState([])
   const [selectedAdminId, setSelectedAdminId] = useState('')
   const [permissions, setPermissions] = useState([])

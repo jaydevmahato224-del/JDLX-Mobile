@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
 function AdminAuditLogs() {
-  const token = useStore((state) => state.token)
+  const token = useStore((state) => state.adminToken || state.token)
   const user = useStore((state) => state.user)
   const [logs, setLogs] = useState([])
   const [admins, setAdmins] = useState([])

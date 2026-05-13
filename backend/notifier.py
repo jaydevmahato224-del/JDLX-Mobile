@@ -366,32 +366,42 @@ def send_user_status_update_email(to_email, user_name, new_status, reason=None):
         return False
 
 def send_individual_email(to_email, user_name, subject, message):
+    if not GMAIL_USER or not GMAIL_PASS:
+        print("[MAIL ERROR] SMTP credentials missing in environment (.env)")
+        return False
+        
+    print(f"[MAIL LOG] Preparing individual email for {to_email} (User: {user_name})")
+    
     msg = MIMEMultipart()
-    msg['From'] = GMAIL_USER
+    msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
     msg['To'] = to_email
     msg['Subject'] = f"JDLX Mobile: {subject}"
     
-    message_html = message.replace('\n', '<br/>')
+    message_html = (message or '').replace('\n', '<br/>')
     body = f"""
-    <h2>Hello {user_name},</h2>
-    <div style="padding: 15px; border-left: 4px solid #001f3f; background: #f9f9f9; font-style: italic;">
-        {message_html}
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
+        <h2 style="color: #001f3f;">Hello {user_name},</h2>
+        <div style="padding: 15px; border-left: 4px solid #001f3f; background: #f9f9f9; font-style: italic; border-radius: 4px; margin: 20px 0;">
+            {message_html}
+        </div>
+        <p style="font-size: 14px; color: #666;">If you have any questions, feel free to reply to this email or visit our support center.</p>
+        <br/>
+        <p>Best Regards,<br/><b>JDLX Mobile Team</b></p>
     </div>
-    <br/>
-    <p>Best Regards,<br/>JDLX Mobile Team</p>
     """
     msg.attach(MIMEText(body, 'html'))
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.set_debuglevel(0) # Set to 1 for more verbose debugging
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[MAIL LOG] Individual email sent to {to_email}.")
+        print(f"[MAIL SUCCESS] Individual email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"[MAIL ERROR] Failed to send individual email to {to_email}: {e}")
+        print(f"[MAIL ERROR] Failed to send individual email to {to_email}: {str(e)}")
         return False
 
 def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, reason=None):

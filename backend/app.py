@@ -347,13 +347,6 @@ PARTNER_GOOGLE_REDIRECT_URI = os.environ.get("PARTNER_GOOGLE_REDIRECT_URI", "htt
 
 DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "jdlx.db")
 INITIAL_SUPER_ADMIN_EMAIL = os.environ.get("INITIAL_SUPER_ADMIN_EMAIL", "").strip().lower()
-DEFAULT_ADMIN_PERMISSIONS = [
-    "manage_products",
-    "manage_orders",
-    "manage_inventory",
-    "manage_delivery",
-    "view_analytics",
-]
 AVAILABLE_ADMIN_PERMISSIONS = [
     "manage_products",
     "manage_orders",
@@ -361,6 +354,15 @@ AVAILABLE_ADMIN_PERMISSIONS = [
     "manage_delivery",
     "view_analytics",
     "manage_admins",
+    "manage_users",
+]
+
+DEFAULT_ADMIN_PERMISSIONS = [
+    "manage_products",
+    "manage_orders",
+    "manage_inventory",
+    "manage_delivery",
+    "manage_users",
 ]
 
 # --- OAuth Clients ---
@@ -3028,7 +3030,7 @@ def get_admin_user_details(user_id):
 @app.route('/api/admin/users/<int:user_id>/status', methods=['PATCH'])
 @token_required
 @require_admin()
-@require_permission("manage_admins")
+@require_permission("manage_users")
 def update_user_account_status(user_id):
     """Updates a user's account status (e.g., active, suspended)."""
     status = request.json.get('status')
@@ -3040,14 +3042,14 @@ def update_user_account_status(user_id):
         cursor = conn.cursor()
         cursor.execute("SELECT name, email FROM users WHERE id = ?", (user_id,))
         user_row = cursor.fetchone()
-        
+
         cursor.execute("UPDATE users SET account_status = ? WHERE id = ?", (status, user_id))
         conn.commit()
-        
+
         if user_row:
             from threading import Thread
             Thread(target=send_user_status_update_email, args=(user_row['email'], user_row['name'], status, reason)).start()
-            
+
         conn.close()
         return success_response(None, f"User status updated to {status}")
     except Exception as e:
@@ -3057,9 +3059,8 @@ def update_user_account_status(user_id):
 @app.route('/api/admin/users/<int:user_id>/send-email', methods=['POST'])
 @token_required
 @require_admin()
-@require_permission("manage_admins")
-def send_manual_user_email(user_id):
-    """Sends a manual email to a specific user and records it in history."""
+@require_permission("manage_users")
+def send_manual_user_email(user_id):    """Sends a manual email to a specific user and records it in history."""
     subject = request.json.get('subject')
     message = request.json.get('message')
     
@@ -3088,13 +3089,15 @@ def send_manual_user_email(user_id):
         except Exception as db_err:
             logger.error(f"Failed to record mail history: {str(db_err)}")
 
-        from threading import Thread
-        Thread(target=send_individual_email, args=(user_row['email'], user_row['name'], subject, message)).start()
-        
-        return success_response(None, f"Email sent to {user_row['email']}")
+        # Send email synchronously to catch errors
+        success = send_individual_email(user_row['email'], user_row['name'], subject, message)
+
+        if success:
+            return success_response(None, f"Email successfully sent to {user_row['email']}")
+        else:
+            return error_response(f"Failed to send email to {user_row['email']}. Check SMTP settings.", 500)
     except Exception as e:
         return error_response(str(e), 500)
-
 
 @app.route('/api/admin/notifications/bulk', methods=['POST'])
 @token_required

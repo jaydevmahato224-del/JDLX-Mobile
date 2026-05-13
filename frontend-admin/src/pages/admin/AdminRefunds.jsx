@@ -7,7 +7,7 @@ import { useStore } from '../../store/useStore'
 function AdminRefunds() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
-    const token = useStore(state => state.token);
+    const token = useStore(state => state.adminToken || state.token);
 
     const fetchRequests = async () => {
         setLoading(true);

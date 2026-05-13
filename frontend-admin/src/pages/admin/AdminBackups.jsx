@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
 function AdminBackups() {
-  const token = useStore((state) => state.token)
+  const token = useStore((state) => state.adminToken || state.token)
   const user = useStore((state) => state.user)
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState([])

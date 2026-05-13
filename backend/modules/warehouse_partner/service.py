@@ -441,7 +441,7 @@ def _warehouse_stock_available(cursor, warehouse_partner_id, items):
     for item in items:
         cursor.execute(
             '''
-            SELECT stock_quantity, reserved_stock
+            SELECT stock_quantity
             FROM warehouse_inventory
             WHERE warehouse_partner_id = ? AND product_id = ?
             ''',
@@ -450,7 +450,7 @@ def _warehouse_stock_available(cursor, warehouse_partner_id, items):
         inventory_row = cursor.fetchone()
         if not inventory_row:
             return False
-        available = (inventory_row["stock_quantity"] or 0) - (inventory_row["reserved_stock"] or 0)
+        available = inventory_row["stock_quantity"] or 0
         if available < item["quantity"]:
             return False
     return True
@@ -531,16 +531,6 @@ def assign_order_to_warehouse_partner(order_id, conn=None):
 
     ranked.sort(key=lambda item: item[1])
     selected, score = ranked[0]
-
-    for item in items:
-        cursor.execute(
-            '''
-            UPDATE warehouse_inventory
-            SET reserved_stock = reserved_stock + ?, updated_at = CURRENT_TIMESTAMP
-            WHERE warehouse_partner_id = ? AND product_id = ?
-            ''',
-            (item["quantity"], selected["id"], item["product_id"]),
-        )
 
     cursor.execute(
         '''

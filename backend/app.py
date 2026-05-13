@@ -50,6 +50,10 @@ from auth.permission_guard import require_permission
 from warehouse_routes import warehouse_bp, issue_warehouse_token
 from delivery_routes import delivery_bp
 from admin_db import admin_db_bp
+from complaint_routes import complaint_bp
+from support_routes import support_bp
+from report_routes import report_bp
+from refund_routes import refund_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location
@@ -146,6 +150,10 @@ CORS(
 app.register_blueprint(warehouse_bp)
 app.register_blueprint(delivery_bp)
 app.register_blueprint(admin_db_bp)
+app.register_blueprint(complaint_bp)
+app.register_blueprint(support_bp)
+app.register_blueprint(report_bp)
+app.register_blueprint(refund_bp)
 
 
 # ==============================================================================
@@ -1551,19 +1559,44 @@ def get_device_models():
 
 
 @app.route('/api/cart', methods=['GET'])
-@token_required
 def get_cart():
-    """Retrieves the user's server-side cart."""
+    """Retrieves the user's server-side cart, supporting both token and session_id."""
     try:
-        user_id = request.user.get('user_id')
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            try:
+                from app import SECRET_KEY
+                import jwt
+                decoded = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+                user_id = decoded.get('user_id')
+            except:
+                pass
+        
+        session_id = request.args.get('session_id')
+        
+        if not user_id and not session_id:
+            return success_response([], "Empty cart (no user or session)")
+
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT c.*, p.name, p.price, p.images, p.category 
-            FROM cart c 
-            JOIN products p ON c.product_id = p.id 
-            WHERE c.user_id = ?
-        """, (user_id,))
+        
+        if user_id:
+            cursor.execute("""
+                SELECT c.*, p.name, p.price, p.images, p.category 
+                FROM cart c 
+                JOIN products p ON c.product_id = p.id 
+                WHERE c.user_id = ?
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT c.*, p.name, p.price, p.images, p.category 
+                FROM cart c 
+                JOIN products p ON c.product_id = p.id 
+                WHERE c.session_id = ?
+            """, (session_id,))
+            
         items = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return success_response(items, "Cart retrieved")
@@ -1618,7 +1651,14 @@ def update_server_cart():
         available = max(0, product['stock'])
 
         if action == 'remove':
+            # Release SOFT RESERVATION by simply deleting from cart. 
+            # Note: Stock visibility (available_stock) is calculated dynamically as (SQ - HR).
+            # If there's a specific 'soft_reserved' field in warehouse_inventory, it should be decremented.
+            # However, looking at get_products, 'cart_reserved' is calculated via SUM(cart.quantity).
+            # So deleting from cart table IS the release mechanism for soft reservation.
             cursor.execute(f"DELETE FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
+        elif action == 'clear_cart':
+            cursor.execute(f"DELETE FROM cart WHERE {where_clause}")
         elif action == 'add':
             cursor.execute(f"SELECT id, quantity FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
             existing = cursor.fetchone()
@@ -1870,7 +1910,7 @@ def get_products():
                        wi.stock_quantity as physical_stock,
                        wi.stock_quantity as stock,
                        wi.reserved_stock as reserved_stock,
-                (wi.stock_quantity - wi.reserved_stock) as available_stock,
+                wi.stock_quantity as available_stock,
                 (SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE product_id = p.id) as cart_reserved,
                        wi.low_stock_threshold, p.status,
                        c.name as category_name,
@@ -2055,7 +2095,7 @@ def get_product_stock(product_id):
                 stock_data = {
                     "stock": row['stock_quantity'],
                     "reserved_stock": row['reserved_stock'],
-                    "available": max(0, row['stock_quantity'] - row['reserved_stock'])
+                    "available": max(0, row['stock_quantity'])
                 }
             else:
                 stock_data = None
@@ -2187,7 +2227,7 @@ def checkout():
             if not inventory:
                 return error_response(f"Product {item['id']} not available in selected warehouse", 404)
             
-            physical_available = inventory['stock_quantity'] - inventory['hard_reserved']
+            physical_available = inventory['stock_quantity']
             
             if physical_available < item['qty']:
                 return error_response(
@@ -2303,11 +2343,11 @@ def checkout():
                 (order_id, item['id'], item['qty'], item['price'], item.get('device_model'), item.get('fitting_charge', 0))
             )
             
-            # Requirement 2: Increment reserved_stock instead of reducing stock_quantity immediately.
-            # This counts as a "hard reservation". Triggers sync available_stock and products.stock.
+            # Requirement 2: Reduce stock_quantity immediately on order confirmation.
+            # This counts as "ORDER CONFIRMED". Triggers sync available_stock and products.stock.
             cursor.execute("""
                 UPDATE warehouse_inventory 
-                SET reserved_stock = reserved_stock + ?,
+                SET stock_quantity = MAX(0, stock_quantity - ?),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE warehouse_id = ? AND product_id = ?
             """, (item['qty'], store_id, item['id']))
@@ -2461,23 +2501,12 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
     if old_status == new_status:
         return
 
-    # Transitions to DELIVERED: Confirm hard reservation (SQ -= qty, HR -= qty)
+    # Transitions to DELIVERED: Stock is already reduced at checkout. 
+    # No action needed for stock_quantity.
     if new_status == 'DELIVERED' and old_status != 'DELIVERED':
-        cursor.execute("SELECT product_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
-        items = cursor.fetchall()
-        cursor.execute("SELECT dark_store_id as store_id FROM orders WHERE id = ?", (order_id,))
-        order = cursor.fetchone()
-        if order and order['store_id']:
-            for item in items:
-                cursor.execute("""
-                    UPDATE warehouse_inventory 
-                    SET stock_quantity = stock_quantity - ?,
-                        reserved_stock = reserved_stock - ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE warehouse_id = ? AND product_id = ?
-                """, (item['quantity'], item['quantity'], order['store_id'], item['product_id']))
+        pass
 
-    # Transitions to CANCELLED/REFUNDED: Release hard reservation (HR -= qty)
+    # Transitions to CANCELLED/REFUNDED/REJECTED: Add stock_quantity back.
     elif new_status in ['CANCELLED', 'REFUNDED', 'REJECTED'] and old_status not in ['CANCELLED', 'REFUNDED', 'REJECTED', 'DELIVERED']:
         cursor.execute("SELECT product_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
         items = cursor.fetchall()
@@ -2487,7 +2516,7 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
             for item in items:
                 cursor.execute("""
                     UPDATE warehouse_inventory 
-                    SET reserved_stock = MAX(0, reserved_stock - ?),
+                    SET stock_quantity = stock_quantity + ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE warehouse_id = ? AND product_id = ?
                 """, (item['quantity'], order['store_id'], item['product_id']))

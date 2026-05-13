@@ -10,6 +10,9 @@ def test_logic():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
+    p_id = None
+    wh_id = None
+    
     try:
         # 1. Setup test product
         print("--- Setting up test data ---")

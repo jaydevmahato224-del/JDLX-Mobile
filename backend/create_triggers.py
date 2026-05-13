@@ -9,30 +9,33 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # 1. Trigger to sync available_stock in warehouse_inventory
+cursor.execute('DROP TRIGGER IF EXISTS sync_available_stock_update')
 cursor.execute('''
-CREATE TRIGGER IF NOT EXISTS sync_available_stock_update
+CREATE TRIGGER sync_available_stock_update
 AFTER UPDATE OF stock_quantity, reserved_stock ON warehouse_inventory
 BEGIN
     UPDATE warehouse_inventory 
-    SET available_stock = MAX(0, stock_quantity - reserved_stock)
+    SET available_stock = MAX(0, stock_quantity)
     WHERE id = NEW.id;
 END;
 ''')
 
 # 2. Trigger to sync available_stock on insert
+cursor.execute('DROP TRIGGER IF EXISTS sync_available_stock_insert')
 cursor.execute('''
-CREATE TRIGGER IF NOT EXISTS sync_available_stock_insert
+CREATE TRIGGER sync_available_stock_insert
 AFTER INSERT ON warehouse_inventory
 BEGIN
     UPDATE warehouse_inventory 
-    SET available_stock = MAX(0, stock_quantity - reserved_stock)
+    SET available_stock = MAX(0, stock_quantity)
     WHERE id = NEW.id;
 END;
 ''')
 
 # 3. Trigger to sync global products.stock on warehouse_inventory change
+cursor.execute('DROP TRIGGER IF EXISTS sync_global_stock_update')
 cursor.execute('''
-CREATE TRIGGER IF NOT EXISTS sync_global_stock_update
+CREATE TRIGGER sync_global_stock_update
 AFTER UPDATE OF available_stock ON warehouse_inventory
 BEGIN
     UPDATE products
@@ -42,8 +45,9 @@ END;
 ''')
 
 # 4. Trigger to sync global products.stock on warehouse_inventory insert
+cursor.execute('DROP TRIGGER IF EXISTS sync_global_stock_insert')
 cursor.execute('''
-CREATE TRIGGER IF NOT EXISTS sync_global_stock_insert
+CREATE TRIGGER sync_global_stock_insert
 AFTER INSERT ON warehouse_inventory
 BEGIN
     UPDATE products

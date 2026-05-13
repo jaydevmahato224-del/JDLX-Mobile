@@ -291,6 +291,68 @@ def init_db():
     
     cursor.execute('''CREATE TABLE IF NOT EXISTS admin_audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, action_type TEXT NOT NULL, target_entity TEXT NOT NULL, target_id INTEGER, description TEXT, ip_address TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(admin_id) REFERENCES users(id))''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS support_tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL, status TEXT DEFAULT 'OPEN', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id))''')
+    ensure_columns('support_tickets', [
+        ('admin_reply', 'TEXT'),
+        ('ticket_number', 'TEXT'),
+        ('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+    ])
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS ticket_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        sender TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(ticket_id) REFERENCES support_tickets(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS complaints (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        issue_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        photo_path TEXT,
+        status TEXT DEFAULT 'Pending',
+        admin_reply TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(order_id) REFERENCES orders(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS order_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        report_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        photo_path TEXT,
+        status TEXT DEFAULT 'Submitted',
+        resolution TEXT,
+        admin_notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(order_id) REFERENCES orders(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS refund_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        request_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        photo_path TEXT,
+        status TEXT DEFAULT 'Pending',
+        refund_amount REAL,
+        admin_notes TEXT,
+        resolution TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(order_id) REFERENCES orders(id)
+    )''')
 
     # --- Security ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, ip_address TEXT, status TEXT NOT NULL, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')

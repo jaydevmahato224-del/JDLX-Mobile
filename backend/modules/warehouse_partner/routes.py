@@ -365,7 +365,7 @@ def register_warehouse_partner_module(
             '''
             SELECT
                 COUNT(*) AS total_inventory_lines,
-                SUM(CASE WHEN (stock_quantity - reserved_stock) <= low_stock_threshold THEN 1 ELSE 0 END) AS low_stock_alerts,
+                SUM(CASE WHEN stock_quantity <= low_stock_threshold THEN 1 ELSE 0 END) AS low_stock_alerts,
                 SUM(stock_quantity) AS total_inventory_units
             FROM warehouse_inventory
             WHERE warehouse_partner_id = ?
@@ -1154,7 +1154,7 @@ def register_warehouse_partner_module(
             SELECT COUNT(*) AS low_stock_skus
             FROM warehouse_inventory
             WHERE warehouse_partner_id = ?
-              AND (stock_quantity - reserved_stock) <= low_stock_threshold
+              AND stock_quantity <= low_stock_threshold
             ''',
             (partner["id"],),
         )

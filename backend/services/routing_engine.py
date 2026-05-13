@@ -44,15 +44,15 @@ def _find_best_store(cursor, delivery_lat, delivery_lon, order_id):
     for dist, store_id in store_distances:
         has_inventory = True
         for item in order_items:
-            # Phase 8 validation check: (stock - reserved >= requested)
+            # Phase 8 validation check: (stock_quantity >= requested)
             cursor.execute('''
-                SELECT stock_quantity, reserved_stock 
+                SELECT stock_quantity 
                 FROM store_inventory 
                 WHERE store_id = ? AND product_id = ?
             ''', (store_id, item['product_id']))
             inv = cursor.fetchone()
             
-            if not inv or (inv['stock_quantity'] - inv['reserved_stock']) < item['quantity']:
+            if not inv or inv['stock_quantity'] < item['quantity']:
                 has_inventory = False
                 break
                 
@@ -120,16 +120,6 @@ def execute_routing(order_id):
             conn.commit()
             print(f"[Haversine Engine] Order {order_id} failed: Native Inventory Exhaustion.")
             return
-        
-        # 2. Reserve the inventory at this specific store
-        cursor.execute("SELECT product_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
-        items = cursor.fetchall()
-        for item in items:
-            cursor.execute('''
-                UPDATE store_inventory 
-                SET reserved_stock = reserved_stock + ? 
-                WHERE store_id = ? AND product_id = ?
-            ''', (item['quantity'], best_store_id, item['product_id']))
             
         # 3. Rider Assignment
         partner_id, eta = _assign_delivery_partner(cursor, best_store_id)

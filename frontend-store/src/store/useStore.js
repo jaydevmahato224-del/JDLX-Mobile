@@ -12,7 +12,7 @@ const syncCartWithServer = async (productId, quantity, action = 'add') => {
     }
 
     try {
-        await fetch(`${API_BASE_URL}/cart`, {
+        const response = await fetch(`${API_BASE_URL}/cart`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -20,8 +20,10 @@ const syncCartWithServer = async (productId, quantity, action = 'add') => {
             },
             body: JSON.stringify({ product_id: productId, quantity, action, session_id: sessionId })
         });
+        return response.ok;
     } catch (e) {
         console.error('Failed to sync cart:', e);
+        return false;
     }
 }
 
@@ -52,23 +54,42 @@ export const useStore = create((set) => ({
     warehouseToken: localStorage.getItem('warehouseToken') || null,
     warehouseRequestUser: safeParse('warehouseRequestUser'),
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
-    cart: safeParse('cart') || [],
+    cart: [],
+    isCartLoaded: false,
     theme: localStorage.getItem('theme') || 'light',
     fetchCart: async () => {
         const state = useStore.getState();
-        if (!state.token) return;
+        let sessionId = localStorage.getItem('sessionId');
+        if (!sessionId) {
+            sessionId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('sessionId', sessionId);
+        }
+
         try {
-            const res = await fetch(`${API_BASE_URL}/cart`, {
-                headers: { 'Authorization': `Bearer ${state.token}` }
+            const res = await fetch(`${API_BASE_URL}/cart?session_id=${sessionId}`, {
+                headers: { 
+                    ...(state.token ? { 'Authorization': `Bearer ${state.token}` } : {})
+                }
             });
             const json = await res.json();
             if (res.ok && json.success) {
-                const normalizedCart = Array.isArray(json.data) ? json.data : [];
-                set({ cart: normalizedCart });
+                const serverCart = Array.isArray(json.data) ? json.data : [];
+                // Standardize server cart items to match local structure
+                const normalizedCart = serverCart.map(item => ({
+                    ...item,
+                    id: item.product_id, // Map product_id back to id for UI
+                }));
+                set({ cart: normalizedCart, isCartLoaded: true });
                 localStorage.setItem('cart', JSON.stringify(normalizedCart));
+                
+                // PROBLEM 2 FIX: Sync with inventory AFTER cart sync is complete
+                await useStore.getState().syncCartWithInventory();
+            } else {
+                set({ isCartLoaded: true });
             }
         } catch (e) {
             console.error('Failed to fetch cart:', e);
+            set({ isCartLoaded: true });
         }
     },
     setUser: (user, token) => {
@@ -136,59 +157,80 @@ export const useStore = create((set) => ({
         localStorage.removeItem('warehouseRequestToken');
         set({ warehouseRequestUser: null, warehouseRequestToken: null });
     },
-    addToCart: (product) => set((state) => {
+    addToCart: async (product) => {
+        const state = useStore.getState();
         const deviceModel = getDeviceModelValue(product?.device_model);
         const existing = state.cart.find(item => String(item.id) === String(product.id));
         const availableStock = getAvailableStock(product)
         
         if (availableStock <= 0) {
-            return state
+            return;
         }
 
-        let newCart;
-        if (existing) {
-            if (existing.qty >= availableStock) {
-                return state
+        if (existing && existing.qty >= availableStock) {
+            return;
+        }
+
+        const newQty = existing ? existing.qty + 1 : 1;
+        
+        // Sync with server FIRST
+        const success = await syncCartWithServer(product.id, 1, 'add');
+
+        set((state) => {
+            let newCart;
+            if (existing) {
+                newCart = state.cart.map(item =>
+                    String(item.id) === String(product.id) ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
+                );
+            } else {
+                newCart = [
+                    ...state.cart,
+                    {
+                        ...product,
+                        device_model: deviceModel || null,
+                        fitting: product.fitting ?? false,
+                        stock: availableStock,
+                        reserved_stock: Number(product?.reserved_stock ?? 0),
+                        qty: 1,
+                    },
+                ];
             }
-            newCart = state.cart.map(item =>
-                String(item.id) === String(product.id) ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: item.qty + 1 } : item
-            );
-        } else {
-            newCart = [
-                ...state.cart,
-                {
-                    ...product,
-                    device_model: deviceModel || null,
-                    fitting: product.fitting ?? false,
-                    stock: availableStock,
-                    reserved_stock: Number(product?.reserved_stock ?? 0),
-                    qty: 1,
-                },
-            ];
-        }
 
-        localStorage.setItem('cart', JSON.stringify(newCart));
-        syncCartWithServer(product.id, 1, 'add');
-        return { cart: newCart };
-    }),
-    removeFromCart: (productId) => set((state) => {
-        const newCart = state.cart.filter(item => String(item.id) !== String(productId));
-        localStorage.setItem('cart', JSON.stringify(newCart));
-        syncCartWithServer(productId, 0, 'remove');
-        return { cart: newCart };
-    }),
-    updateQuantity: (productId, qty) => set((state) => {
-        let finalQty = qty;
-        const newCart = state.cart.map(item => {
-            if (String(item.id) !== String(productId)) return item;
-            const maxQty = getAvailableStock(item);
-            finalQty = Math.max(1, Math.min(qty, maxQty));
-            return { ...item, qty: finalQty };
+            localStorage.setItem('cart', JSON.stringify(newCart));
+            return { cart: newCart };
         });
-        localStorage.setItem('cart', JSON.stringify(newCart));
-        syncCartWithServer(productId, finalQty, 'update');
-        return { cart: newCart };
-    }),
+    },
+    removeFromCart: async (productId) => {
+        // PROBLEM 3 FIX: Sync with server FIRST
+        const success = await syncCartWithServer(productId, 0, 'remove');
+        
+        set((state) => {
+            const newCart = state.cart.filter(item => String(item.id) !== String(productId));
+            localStorage.setItem('cart', JSON.stringify(newCart));
+            return { cart: newCart };
+        });
+    },
+    updateQuantity: async (productId, qty) => {
+        let finalQty = qty;
+        const state = useStore.getState();
+        const item = state.cart.find(i => String(i.id) === String(productId));
+        if (!item) return;
+
+        const maxQty = getAvailableStock(item);
+        finalQty = Math.max(1, Math.min(qty, maxQty));
+
+        // PROBLEM 3 CONSISTENCY: Sync with server FIRST
+        const success = await syncCartWithServer(productId, finalQty, 'update');
+
+        set((state) => {
+            const newCart = state.cart.map(item => {
+                if (String(item.id) !== String(productId)) return item;
+                return { ...item, qty: finalQty };
+            });
+            localStorage.setItem('cart', JSON.stringify(newCart));
+            return { cart: newCart };
+        });
+    },
     updateDeviceModel: (productId, deviceModel) => set((state) => {
         const normalizedDeviceModel = getDeviceModelValue(deviceModel);
         const newCart = state.cart.map(item =>
@@ -206,6 +248,7 @@ export const useStore = create((set) => ({
     }),
     clearCart: () => {
         localStorage.removeItem('cart');
+        syncCartWithServer(null, 0, 'clear_cart');
         set({ cart: [] });
     },
     registerForNotification: async (productId, email) => {

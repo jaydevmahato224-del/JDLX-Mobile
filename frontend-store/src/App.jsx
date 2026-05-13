@@ -52,7 +52,14 @@ const Payments = lazy(() => import('./pages/user/Payments'))
 const Wallet = lazy(() => import('./pages/user/Wallet'))
 const Notifications = lazy(() => import('./pages/user/Notifications'))
 const Security = lazy(() => import('./pages/user/Security'))
-const Support = lazy(() => import('./pages/user/Support'))
+const SupportPage = lazy(() => import('./pages/user/SupportPage'))
+const TicketDetailPage = lazy(() => import('./pages/user/TicketDetailPage'))
+const ComplaintPage = lazy(() => import('./pages/user/ComplaintPage'))
+const MyRequestsPage = lazy(() => import('./pages/user/MyRequestsPage'))
+const OrderReportPage = lazy(() => import('./pages/user/OrderReportPage'))
+const MyReportsPage = lazy(() => import('./pages/user/MyReportsPage'))
+const RefundRequestPage = lazy(() => import('./pages/user/RefundRequestPage'))
+const MyRefundsPage = lazy(() => import('./pages/user/MyRefundsPage'))
 const Coupons = lazy(() => import('./pages/user/Coupons'))
 const AboutSite = lazy(() => import('./pages/user/AboutSite'))
 const TermsAndConditions = lazy(() => import('./pages/user/TermsAndConditions'))
@@ -139,8 +146,10 @@ function App() {
   const { token, fetchCart, fetchWishlist } = useStore()
 
   useEffect(() => {
+    // Always fetch cart as source of truth
+    fetchCart()
+    
     if (token) {
-      fetchCart()
       fetchWishlist()
     }
   }, [token, fetchCart, fetchWishlist])
@@ -179,7 +188,14 @@ function App() {
                     <Route path="/profile/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
                     <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                     <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
-                    <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+                    <Route path="/profile/support" element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
+                    <Route path="/support/ticket/:ticket_id" element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
+                    <Route path="/profile/complaint" element={<ProtectedRoute><ComplaintPage /></ProtectedRoute>} />
+                    <Route path="/profile/order-report" element={<ProtectedRoute><OrderReportPage /></ProtectedRoute>} />
+                    <Route path="/profile/my-reports" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
+                    <Route path="/profile/refund-request" element={<ProtectedRoute><RefundRequestPage /></ProtectedRoute>} />
+                    <Route path="/profile/my-refunds" element={<ProtectedRoute><MyRefundsPage /></ProtectedRoute>} />
+                    <Route path="/my-requests" element={<ProtectedRoute><MyRequestsPage /></ProtectedRoute>} />
                     <Route path="/profile/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
                     <Route path="/profile/about-site" element={<AboutSite />} />
                     <Route path="/profile/terms" element={<TermsAndConditions />} />

@@ -38,6 +38,7 @@ function Cart() {
     const toggleFittingService = useStore(state => state.toggleFittingService);
     const deliveryMode = useStore(state => state.deliveryMode);
     const token = useStore(state => state.token);
+    const isCartLoaded = useStore(state => state.isCartLoaded);
     const [isSyncing, setIsSyncing] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [availability, setAvailability] = useState(null);
@@ -49,14 +50,9 @@ function Cart() {
             .catch(e => console.error('Failed to load availability:', e));
     }, []);
 
-    useEffect(() => {
-        const sync = async () => {
-            setIsSyncing(true);
-            await syncCartWithInventory();
-            setIsSyncing(false);
-        };
-        sync();
-    }, [syncCartWithInventory]);
+    if (!isCartLoaded) {
+        return <PageLoader />;
+    }
 
     // Robust ID matching and numeric conversions
     const availableItems = cart.filter(item => !item.removedFromInventory && Number(item.stock || 0) > 0);

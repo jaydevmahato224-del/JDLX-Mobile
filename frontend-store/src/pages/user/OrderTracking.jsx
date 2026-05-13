@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 
 function OrderTracking() {
@@ -363,6 +363,51 @@ function OrderTracking() {
                         >
                             <Undo2 size={18} /> Request Refund
                         </button>
+                    )}
+
+                    <Link
+                        to={`/profile/complaint?order_id=${orderId}`}
+                        className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors border border-indigo-200"
+                    >
+                        <MessageSquare size={18} /> Is order mein problem hai?
+                    </Link>
+
+                    {['DELIVERED', 'COMPLETED'].includes(order?.status?.toUpperCase()) && (
+                        <Link
+                            to={`/profile/order-report?order_id=${orderId}`}
+                            className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-100 transition-colors border border-red-200"
+                        >
+                            <Flag size={18} /> Is order ki report karein
+                        </Link>
+                    )}
+
+                    {['DELIVERED', 'COMPLETED'].includes(order?.status?.toUpperCase()) && (
+                        (() => {
+                            const deliveryDate = new Date(order?.status_delivered_at || order?.updated_at || order?.created_at);
+                            const now = new Date();
+                            const diffDays = Math.ceil((now - deliveryDate) / (1000 * 60 * 60 * 24));
+                            const isWithinWindow = diffDays <= 7;
+
+                            if (isWithinWindow) {
+                                return (
+                                    <Link
+                                        to={`/profile/refund-request?order_id=${orderId}`}
+                                        className="w-full py-3 bg-emerald-50 text-emerald-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors border border-emerald-200"
+                                    >
+                                        <RotateCcw size={18} /> Refund / Return request
+                                    </Link>
+                                );
+                            } else {
+                                return (
+                                    <button
+                                        disabled
+                                        className="w-full py-3 bg-gray-50 text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-gray-100 cursor-not-allowed"
+                                    >
+                                        <RotateCcw size={18} /> Return window expired
+                                    </button>
+                                );
+                            }
+                        })()
                     )}
 
                     {showRefundForm && (

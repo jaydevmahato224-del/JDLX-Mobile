@@ -1,10 +1,342 @@
 from flask import Blueprint, request, jsonify
 from database import get_db
-from auth.role_guard import require_super_admin
+from auth.role_guard import require_super_admin, require_admin
 from utils.response_utils import success_response, error_response
 import sqlite3
 
 admin_db_bp = Blueprint('admin_db', __name__)
+
+@admin_db_bp.route('/api/admin/complaints', methods=['GET'])
+@require_admin()
+def get_all_complaints():
+    conn = get_db()
+    try:
+        query = """
+            SELECT c.*, u.name as user_name, u.email as user_email, o.total_amount, o.status as order_status
+            FROM complaints c
+            JOIN users u ON c.user_id = u.id
+            JOIN orders o ON c.order_id = o.id
+            ORDER BY c.created_at DESC
+        """
+        rows = conn.execute(query).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/complaints/<int:complaint_id>', methods=['PATCH'])
+@require_admin()
+def update_complaint(complaint_id):
+    data = request.get_json(silent=True) or {}
+    status = data.get('status')
+    admin_reply = data.get('admin_reply')
+
+    allowed_statuses = ["Pending", "In Progress", "Resolved", "Closed"]
+    
+    conn = get_db()
+    try:
+        # Check if complaint exists
+        complaint = conn.execute("SELECT id FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+        if not complaint:
+            return error_response("Complaint not found", 404)
+
+        updates = []
+        params = []
+
+        if status:
+            if status not in allowed_statuses:
+                return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
+            updates.append("status = ?")
+            params.append(status)
+        
+        if admin_reply is not None:
+            updates.append("admin_reply = ?")
+            params.append(admin_reply)
+
+        if not updates:
+            return error_response("No fields to update", 400)
+
+        params.append(complaint_id)
+        query = f"UPDATE complaints SET {', '.join(updates)} WHERE id = ?"
+        
+        conn.execute(query, params)
+        conn.commit()
+
+        # Fetch updated record
+        updated_row = conn.execute("SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+        return success_response(dict(updated_row), "Complaint updated successfully")
+
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/support/tickets', methods=['GET'])
+@require_admin()
+def admin_get_all_tickets():
+    conn = get_db()
+    try:
+        query = """
+            SELECT t.*, u.name as customer_name, u.email as customer_email
+            FROM support_tickets t
+            JOIN users u ON t.user_id = u.id
+            ORDER BY t.updated_at DESC
+        """
+        rows = conn.execute(query).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/support/tickets/<int:ticket_id>', methods=['GET'])
+@require_admin()
+def admin_get_ticket_details(ticket_id):
+    conn = get_db()
+    try:
+        ticket = conn.execute("SELECT * FROM support_tickets WHERE id = ?", (ticket_id,)).fetchone()
+        if not ticket:
+            return error_response("Ticket not found", 404)
+        
+        messages = conn.execute(
+            "SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at ASC",
+            (ticket_id,)
+        ).fetchall()
+        
+        return success_response({
+            "ticket": dict(ticket),
+            "messages": [dict(m) for m in messages]
+        })
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/support/tickets/<int:ticket_id>/reply', methods=['POST'])
+@require_admin()
+def admin_reply_to_ticket(ticket_id):
+    data = request.get_json(silent=True) or {}
+    message = data.get('message')
+    status = data.get('status')
+
+    if not message:
+        return error_response("Message is required", 400)
+
+    conn = get_db()
+    try:
+        # Check if ticket exists
+        ticket = conn.execute("SELECT id FROM support_tickets WHERE id = ?", (ticket_id,)).fetchone()
+        if not ticket:
+            return error_response("Ticket not found", 404)
+
+        cursor = conn.cursor()
+        # Insert admin reply
+        cursor.execute(
+            "INSERT INTO ticket_messages (ticket_id, sender, message) VALUES (?, 'admin', ?)",
+            (ticket_id, message)
+        )
+
+        # Build update query
+        updates = ["updated_at = CURRENT_TIMESTAMP"]
+        params = []
+
+        if status:
+            allowed_statuses = ["Open", "In Progress", "Resolved", "Closed"]
+            if status not in allowed_statuses:
+                return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
+            updates.append("status = ?")
+            params.append(status)
+
+        params.append(ticket_id)
+        cursor.execute(f"UPDATE support_tickets SET {', '.join(updates)} WHERE id = ?", params)
+        
+        conn.commit()
+        
+        updated_ticket = conn.execute("SELECT * FROM support_tickets WHERE id = ?", (ticket_id,)).fetchone()
+        return success_response(dict(updated_ticket), "Reply added and ticket updated", 201)
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/order-reports', methods=['GET'])
+@require_admin()
+def admin_get_all_reports():
+    status_filter = request.args.get('status')
+    conn = get_db()
+    try:
+        query = """
+            SELECT r.*, u.name as customer_name, u.email as customer_email,
+                   o.total_amount, o.created_at as order_date, o.order_number
+            FROM order_reports r
+            JOIN users u ON r.user_id = u.id
+            JOIN orders o ON r.order_id = o.id
+        """
+        params = []
+        if status_filter:
+            query += " WHERE r.status = ?"
+            params.append(status_filter)
+        
+        query += " ORDER BY r.created_at DESC"
+        
+        rows = conn.execute(query, params).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/order-reports/<int:report_id>', methods=['PATCH'])
+@require_admin()
+def admin_update_report(report_id):
+    data = request.get_json(silent=True) or {}
+    status = data.get('status')
+    resolution = data.get('resolution')
+    admin_notes = data.get('admin_notes')
+
+    allowed_statuses = ['Submitted', 'Under Review', 'Resolved', 'Rejected']
+    
+    conn = get_db()
+    try:
+        # Check if report exists
+        report = conn.execute("SELECT id FROM order_reports WHERE id = ?", (report_id,)).fetchone()
+        if not report:
+            return error_response("Report not found", 404)
+
+        updates = ["updated_at = CURRENT_TIMESTAMP"]
+        params = []
+
+        if status:
+            if status not in allowed_statuses:
+                return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
+            updates.append("status = ?")
+            params.append(status)
+        
+        if resolution is not None:
+            updates.append("resolution = ?")
+            params.append(resolution)
+            
+        if admin_notes is not None:
+            updates.append("admin_notes = ?")
+            params.append(admin_notes)
+
+        params.append(report_id)
+        query = f"UPDATE order_reports SET {', '.join(updates)} WHERE id = ?"
+        
+        conn.execute(query, params)
+        conn.commit()
+
+        # Fetch updated record
+        updated_row = conn.execute("SELECT * FROM order_reports WHERE id = ?", (report_id,)).fetchone()
+        return success_response(dict(updated_row), "Report updated successfully")
+
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/refund-requests', methods=['GET'])
+@require_admin()
+def admin_get_all_refunds():
+    status_filter = request.args.get('status')
+    conn = get_db()
+    try:
+        query = """
+            SELECT r.*, u.name as customer_name, u.email as customer_email,
+                   o.total_amount as order_amount, o.order_number
+            FROM refund_requests r
+            JOIN users u ON r.user_id = u.id
+            JOIN orders o ON r.order_id = o.id
+        """
+        params = []
+        if status_filter:
+            query += " WHERE r.status = ?"
+            params.append(status_filter)
+        
+        query += " ORDER BY r.created_at DESC"
+        
+        rows = conn.execute(query, params).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/refund-requests/<int:request_id>', methods=['PATCH'])
+@require_admin()
+def admin_update_refund(request_id):
+    data = request.get_json(silent=True) or {}
+    status = data.get('status')
+    refund_amount = data.get('refund_amount')
+    admin_notes = data.get('admin_notes')
+    resolution = data.get('resolution')
+
+    allowed_statuses = ['Pending', 'Approved', 'Rejected', 'Processing', 'Completed']
+    
+    conn = get_db()
+    try:
+        # Check if request exists
+        refund = conn.execute("SELECT id FROM refund_requests WHERE id = ?", (request_id,)).fetchone()
+        if not refund:
+            return error_response("Refund request not found", 404)
+
+        updates = ["updated_at = CURRENT_TIMESTAMP"]
+        params = []
+
+        if status:
+            if status not in allowed_statuses:
+                return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
+            updates.append("status = ?")
+            params.append(status)
+        
+        if refund_amount is not None:
+            try:
+                amt = float(refund_amount)
+                if amt < 0: raise ValueError()
+                updates.append("refund_amount = ?")
+                params.append(amt)
+            except ValueError:
+                return error_response("Invalid refund amount", 400)
+            
+        if admin_notes is not None:
+            updates.append("admin_notes = ?")
+            params.append(admin_notes)
+            
+        if resolution is not None:
+            updates.append("resolution = ?")
+            params.append(resolution)
+
+        params.append(request_id)
+        query = f"UPDATE refund_requests SET {', '.join(updates)} WHERE id = ?"
+        
+        conn.execute(query, params)
+        conn.commit()
+
+        updated_row = conn.execute("SELECT * FROM refund_requests WHERE id = ?", (request_id,)).fetchone()
+        return success_response(dict(updated_row), "Refund request updated successfully")
+
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/refund-requests/summary', methods=['GET'])
+@require_admin()
+def admin_get_refund_summary():
+    conn = get_db()
+    try:
+        stats = {
+            "total_pending": conn.execute("SELECT COUNT(*) FROM refund_requests WHERE status = 'Pending'").fetchone()[0],
+            "total_approved": conn.execute("SELECT COUNT(*) FROM refund_requests WHERE status = 'Approved'").fetchone()[0],
+            "total_amount_approved": conn.execute("SELECT SUM(refund_amount) FROM refund_requests WHERE status = 'Approved'").fetchone()[0] or 0,
+            "total_completed": conn.execute("SELECT COUNT(*) FROM refund_requests WHERE status = 'Completed'").fetchone()[0]
+        }
+        return success_response(stats)
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
 
 @admin_db_bp.route('/api/admin/db/tables', methods=['GET'])
 @require_super_admin()

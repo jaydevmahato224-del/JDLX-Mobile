@@ -1161,7 +1161,7 @@ def warehouse_dashboard():
         low_stock = conn.execute(
             """SELECT COUNT(*) as n FROM warehouse_inventory 
                WHERE warehouse_id = ? 
-               AND (stock_quantity - reserved_stock) <= low_stock_threshold""",
+               AND stock_quantity <= low_stock_threshold""",
             (wh_id,),
         ).fetchone()["n"]
         
@@ -1848,7 +1848,7 @@ def warehouse_add_inventory():
         # Sync global products.stock
         conn.execute(
             """UPDATE products SET stock = (
-                SELECT COALESCE(SUM(MAX(0, stock_quantity - reserved_stock)), 0)
+                SELECT COALESCE(SUM(stock_quantity), 0)
                 FROM warehouse_inventory WHERE product_id = ?
             ) WHERE id = ?""",
             (product_id, product_id)
@@ -1951,7 +1951,7 @@ def warehouse_create_product():
         # Sync global products.stock
         conn.execute(
             """UPDATE products SET stock = (
-                SELECT COALESCE(SUM(MAX(0, stock_quantity - reserved_stock)), 0)
+                SELECT COALESCE(SUM(stock_quantity), 0)
                 FROM warehouse_inventory WHERE product_id = ?
             ) WHERE id = ?""",
             (product_id, product_id)
@@ -2038,7 +2038,7 @@ def warehouse_patch_inventory(item_id):
                 # Sync global products.stock (sum of all warehouses)
                 conn.execute(
                     """UPDATE products SET stock = (
-                        SELECT COALESCE(SUM(MAX(0, stock_quantity - reserved_stock)), 0)
+                        SELECT COALESCE(SUM(stock_quantity), 0)
                         FROM warehouse_inventory WHERE product_id = ?
                     ) WHERE id = ?""",
                     (inv["product_id"], inv["product_id"])
@@ -2127,7 +2127,7 @@ def warehouse_adjust_stock(item_id):
         if item["product_id"]:
             conn.execute(
                 """UPDATE products SET stock = (
-                    SELECT COALESCE(SUM(MAX(0, stock_quantity - reserved_stock)), 0)
+                    SELECT COALESCE(SUM(stock_quantity), 0)
                     FROM warehouse_inventory WHERE product_id = ?
                 ) WHERE id = ?""",
                 (item["product_id"], item["product_id"])

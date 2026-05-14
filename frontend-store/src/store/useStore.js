@@ -45,7 +45,7 @@ const safeParse = (key) => {
     }
 }
 
-export const useStore = create((set) => ({
+export const useStore = create((set, get) => ({
     user: safeParse('user'),
     token: localStorage.getItem('token') || null,
     adminUser: safeParse('adminUser'),
@@ -58,7 +58,7 @@ export const useStore = create((set) => ({
     isCartLoaded: false,
     theme: localStorage.getItem('theme') || 'light',
     fetchCart: async () => {
-        const state = useStore.getState();
+        const state = get();
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
             sessionId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -83,7 +83,7 @@ export const useStore = create((set) => ({
                 localStorage.setItem('cart', JSON.stringify(normalizedCart));
                 
                 // PROBLEM 2 FIX: Sync with inventory AFTER cart sync is complete
-                await useStore.getState().syncCartWithInventory();
+                await get().syncCartWithInventory();
             } else {
                 set({ isCartLoaded: true });
             }
@@ -98,8 +98,8 @@ export const useStore = create((set) => ({
             localStorage.setItem('token', token);
             // Auto-fetch cart and wishlist after login
             set({ user, token });
-            useStore.getState().fetchCart();
-            useStore.getState().fetchWishlist();
+            get().fetchCart();
+            get().fetchWishlist();
         } else {
             localStorage.removeItem('user');
             localStorage.removeItem('token');
@@ -158,7 +158,7 @@ export const useStore = create((set) => ({
         set({ warehouseRequestUser: null, warehouseRequestToken: null });
     },
     addToCart: async (product) => {
-        const state = useStore.getState();
+        const state = get();
         const deviceModel = getDeviceModelValue(product?.device_model);
         const existing = state.cart.find(item => String(item.id) === String(product.id));
         const availableStock = getAvailableStock(product)
@@ -212,7 +212,7 @@ export const useStore = create((set) => ({
     },
     updateQuantity: async (productId, qty) => {
         let finalQty = qty;
-        const state = useStore.getState();
+        const state = get();
         const item = state.cart.find(i => String(i.id) === String(productId));
         if (!item) return;
 
@@ -252,7 +252,7 @@ export const useStore = create((set) => ({
         set({ cart: [] });
     },
     registerForNotification: async (productId, email) => {
-        const { user } = useStore.getState();
+        const { user } = get();
         try {
             const response = await fetch(`${API_BASE_URL}/products/${productId}/notify`, {
                 method: 'POST',
@@ -313,7 +313,7 @@ export const useStore = create((set) => ({
         }
     },
     syncCartWithInventory: async () => {
-        const state = useStore.getState();
+        const state = get();
         if (state.cart.length === 0) return;
 
         try {
@@ -364,7 +364,7 @@ export const useStore = create((set) => ({
     // Wishlist Logic
     wishlist: safeParse('wishlist') || [],
     fetchWishlist: async () => {
-        const state = useStore.getState();
+        const state = get();
         if (!state.token) return;
         try {
             const res = await fetch(`${API_BASE_URL}/wishlist`, {
@@ -381,7 +381,7 @@ export const useStore = create((set) => ({
         }
     },
     toggleWishlist: async (product) => {
-        const state = useStore.getState();
+        const state = get();
         if (!state.token) {
             toast.error('Please login to use wishlist');
             return;

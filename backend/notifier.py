@@ -327,6 +327,64 @@ def send_delivery_welcome_email(to_email, partner_name):
         print(f"Failed to send delivery welcome email: {e}")
         return False
 
+def send_welcome_email(to_email, user_name):
+    """Sends a premium welcome email to newly registered users."""
+    if not GMAIL_USER or not GMAIL_PASS:
+        print("[MAIL ERROR] SMTP credentials missing for Welcome Email")
+        return False
+
+    msg = MIMEMultipart()
+    msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
+    msg['To'] = to_email
+    msg['Subject'] = f"Welcome to JDLX Mobile, {user_name}! 🚀"
+    
+    body = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #eee; border-radius: 20px; text-align: center;">
+        <div style="background: #001f3f; padding: 20px; border-radius: 15px; margin-bottom: 25px;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; tracking-tight: -0.02em;">JDLX MOBILE</h1>
+        </div>
+        
+        <h2 style="color: #333; font-size: 22px;">Hello {user_name}, welcome to the family!</h2>
+        
+        <p style="color: #666; font-size: 16px; line-height: 1.6;">
+            We're thrilled to have you join our premium hyperlocal network. Your journey towards the fastest and most reliable mobile shopping experience starts here.
+        </p>
+        
+        <div style="margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 15px;">
+            <p style="margin: 0; font-weight: bold; color: #001f3f;">What's next?</p>
+            <ul style="text-align: left; display: inline-block; color: #475569; font-size: 14px; margin-top: 10px;">
+                <li>🔥 Explore the latest premium gadgets</li>
+                <li>⚡ Experience lightning-fast deliveries</li>
+                <li>🛠️ Track your orders in real-time</li>
+                <li>🎁 Unlock exclusive member-only offers</li>
+            </ul>
+        </div>
+        
+        <p style="color: #666; font-size: 14px;">
+            If you need any help, our support team is just a tap away.
+        </p>
+        
+        <div style="margin-top: 30px; border-top: 1px solid #eee; pt: 20px;">
+            <p style="color: #999; font-size: 12px;">
+                © {datetime.datetime.now().year} JDLX Mobile Elite. All rights reserved.
+            </p>
+        </div>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(GMAIL_USER, GMAIL_PASS)
+        server.sendmail(GMAIL_USER, to_email, msg.as_string())
+        server.quit()
+        print(f"[MAIL SUCCESS] Welcome email sent to {to_email}.")
+        return True
+    except Exception as e:
+        print(f"[MAIL ERROR] Failed to send welcome email: {str(e)}")
+        return False
+
 def send_user_status_update_email(to_email, user_name, new_status, reason=None):
     msg = MIMEMultipart()
     msg['From'] = GMAIL_USER

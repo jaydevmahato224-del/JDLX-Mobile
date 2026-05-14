@@ -63,6 +63,8 @@ const MyRefundsPage = lazy(() => import('./pages/user/MyRefundsPage'))
 const Coupons = lazy(() => import('./pages/user/Coupons'))
 const AboutSite = lazy(() => import('./pages/user/AboutSite'))
 const TermsAndConditions = lazy(() => import('./pages/user/TermsAndConditions'))
+const BugReportPage = lazy(() => import('./pages/user/BugReportPage'))
+const MyBugReportsPage = lazy(() => import('./pages/user/MyBugReportsPage'))
 
 // ─── Protected Route Wrapper ──────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
@@ -199,6 +201,8 @@ function App() {
                     <Route path="/profile/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
                     <Route path="/profile/about-site" element={<AboutSite />} />
                     <Route path="/profile/terms" element={<TermsAndConditions />} />
+                    <Route path="/profile/bug-report" element={<ProtectedRoute><BugReportPage /></ProtectedRoute>} />
+                    <Route path="/profile/my-bug-reports" element={<ProtectedRoute><MyBugReportsPage /></ProtectedRoute>} />
                     
                     {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" replace />} />

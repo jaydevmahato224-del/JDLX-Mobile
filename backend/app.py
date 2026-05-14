@@ -42,7 +42,8 @@ from notifier import (
     send_low_stock_catchy_email,
     send_review_thank_you_email,
     send_availability_subscription_confirmation,
-    send_product_restock_alert
+    send_product_restock_alert,
+    send_welcome_email
 )
 from services.inventory_service import trigger_low_stock_notifications as trigger_low_stock_notifications_svc
 from auth.role_guard import normalize_role, require_admin, require_super_admin
@@ -538,6 +539,11 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         conn.commit()
         cursor.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
         user = cursor.fetchone()
+        
+        # New User: Trigger Welcome Email in background
+        if user and email:
+            from threading import Thread
+            Thread(target=send_welcome_email, args=(email, name or 'User')).start()
 
     maybe_bootstrap_super_admin(cursor, user['id'], user['email'])
     conn.commit()
@@ -3062,7 +3068,8 @@ def update_user_account_status(user_id):
 @token_required
 @require_admin()
 @require_permission("manage_users")
-def send_manual_user_email(user_id):    """Sends a manual email to a specific user and records it in history."""
+def send_manual_user_email(user_id):
+    """Sends a manual email to a specific user and records it in history."""
     subject = request.json.get('subject')
     message = request.json.get('message')
     

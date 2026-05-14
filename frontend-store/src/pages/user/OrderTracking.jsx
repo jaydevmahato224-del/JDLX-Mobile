@@ -369,7 +369,7 @@ function OrderTracking() {
                         to={`/profile/complaint?order_id=${orderId}`}
                         className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors border border-indigo-200"
                     >
-                        <MessageSquare size={18} /> Is order mein problem hai?
+                        <MessageSquare size={18} /> Report an issue with this order
                     </Link>
 
                     {['DELIVERED', 'COMPLETED'].includes(order?.status?.toUpperCase()) && (
@@ -377,7 +377,7 @@ function OrderTracking() {
                             to={`/profile/order-report?order_id=${orderId}`}
                             className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-100 transition-colors border border-red-200"
                         >
-                            <Flag size={18} /> Is order ki report karein
+                            <Flag size={18} /> Report this order
                         </Link>
                     )}
 

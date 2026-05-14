@@ -77,7 +77,7 @@ def submit_refund_request():
             delivery_time = datetime.datetime.now() # Should not happen with current DB setup
         
         if (datetime.datetime.now() - delivery_time).days > 7:
-            return error_response("7 din ka return window expire ho gaya hai", 400)
+            return error_response("The 7-day return window has expired", 400)
 
         # 4. Check for existing non-rejected request
         existing = conn.execute(
@@ -86,7 +86,7 @@ def submit_refund_request():
         ).fetchone()
 
         if existing and existing['status'] != 'Rejected':
-            return error_response("Is order ka refund request pehle se submit hai", 409)
+            return error_response("A refund request for this order has already been submitted", 409)
 
         # 5. Handle photo upload
         photo_path = None
@@ -176,7 +176,7 @@ def check_refund_eligibility(order_id):
 
         status = (order['status'] or '').lower()
         if status not in ['delivered', 'completed']:
-            return success_response({"eligible": False, "reason": "Order deliver nahi hua hai yet"})
+            return success_response({"eligible": False, "reason": "Order has not been delivered yet"})
 
         delivery_time_str = order['status_delivered_at'] or order['created_at']
         try:
@@ -186,7 +186,7 @@ def check_refund_eligibility(order_id):
         
         delta = datetime.datetime.now() - delivery_time
         if delta.days > 7:
-            return success_response({"eligible": False, "reason": "7 din ka return window expire ho gaya"})
+            return success_response({"eligible": False, "reason": "The 7-day return window has expired"})
 
         existing = conn.execute(
             "SELECT status FROM refund_requests WHERE order_id = ? AND user_id = ?",
@@ -194,7 +194,7 @@ def check_refund_eligibility(order_id):
         ).fetchone()
 
         if existing and existing['status'] != 'Rejected':
-            return success_response({"eligible": False, "reason": "Refund request pehle se submit hai"})
+            return success_response({"eligible": False, "reason": "A refund request for this order has already been submitted"})
 
         return success_response({
             "eligible": True,

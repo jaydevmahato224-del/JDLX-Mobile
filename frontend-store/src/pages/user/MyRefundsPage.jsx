@@ -86,10 +86,10 @@ function MyRefundsPage() {
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
                         <RotateCcw size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800">Koi refund request nahi hai</h3>
-                    <p className="text-gray-400 text-sm mt-2 max-w-xs">Jab aap koi refund ya exchange request bhejenge, woh yahan dikhayi degi.</p>
+                    <h3 className="text-xl font-bold text-gray-800">No refund requests yet</h3>
+                    <p className="text-gray-400 text-sm mt-2 max-w-xs">When you submit a refund or exchange request, it will appear here.</p>
                     <Link to="/profile/refund-request" className="btn-primary mt-6 px-8 h-12">
-                        Refund request karein
+                        Submit refund request
                     </Link>
                 </div>
             ) : (

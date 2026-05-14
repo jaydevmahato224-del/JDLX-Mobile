@@ -73,8 +73,8 @@ function MyRequestsPage() {
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
                         <MessageSquare size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800">Koi request nahi hai abhi</h3>
-                    <p className="text-gray-400 text-sm mt-2 max-w-xs">Jab aap koi issue report karenge, woh yahan dikhayi degi.</p>
+                    <h3 className="text-xl font-bold text-gray-800">No requests found yet</h3>
+                    <p className="text-gray-400 text-sm mt-2 max-w-xs">When you report an issue, it will appear here.</p>
                     <Link to="/profile/complaint" className="text-primary font-black uppercase tracking-widest text-[10px] mt-6 hover:underline">
                         Report an issue now
                     </Link>
@@ -115,7 +115,7 @@ function MyRequestsPage() {
                                 <div className="mt-2 p-4 bg-primary/5 rounded-2xl border border-primary/10">
                                     <div className="flex items-center gap-2 mb-1 text-primary">
                                         <CheckCircle2 size={14} />
-                                        <span className="text-[10px] font-black uppercase tracking-widest">JDLX Team ka jawab:</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest">JDLX Team Response:</span>
                                     </div>
                                     <p className="text-sm text-gray-700 font-medium italic">
                                         "{req.admin_reply}"

@@ -83,7 +83,7 @@ function TicketDetailPage() {
                 setReply('');
                 // Optimistic update/refresh
                 fetchTicketDetails();
-                toast.success("Reply bhejein!");
+                toast.success("Reply sent!");
             } else {
                 toast.error(json.message || "Failed to send reply");
             }
@@ -193,7 +193,7 @@ function TicketDetailPage() {
                         <div className="flex items-center gap-3 text-gray-500">
                             <Lock size={18} />
                             <p className="text-xs font-bold uppercase tracking-wider">
-                                Yeh ticket closed hai. Naya issue hai toh nayi ticket banayein.
+                                This ticket is closed. Please create a new ticket for any new issues.
                             </p>
                         </div>
                         <Link to="/profile/support" className="text-primary text-[10px] font-black uppercase tracking-widest hover:underline">
@@ -203,7 +203,7 @@ function TicketDetailPage() {
                 ) : (
                     <form onSubmit={handleReply} className="relative group">
                         <textarea
-                            placeholder="Aapka reply likhein..."
+                            placeholder="Type your reply here..."
                             value={reply}
                             onChange={(e) => setReply(e.target.value)}
                             className="w-full h-24 rounded-3xl bg-white border border-gray-100 p-5 pr-16 text-sm font-bold text-gray-800 shadow-xl focus:ring-4 focus:ring-primary/10 focus:border-primary/20 outline-none transition-all resize-none"

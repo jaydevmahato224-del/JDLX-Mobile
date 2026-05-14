@@ -125,8 +125,8 @@ function SupportPage() {
                         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 mx-auto mb-4">
                             <CheckCircle2 size={32} />
                         </div>
-                        <h3 className="text-xl font-black mb-2 text-green-800">Aapka ticket number: {createdTicket.ticket_number}</h3>
-                        <p className="text-green-700/70 text-sm mb-6">24-48 ghante mein reply milega. Humne aapka issue record kar liya hai.</p>
+                        <h3 className="text-xl font-black mb-2 text-green-800">Your ticket number: {createdTicket.ticket_number}</h3>
+                        <p className="text-green-700/70 text-sm mb-6">You will receive a reply within 24-48 hours. Your issue has been recorded.</p>
                         <button 
                             onClick={() => setCreatedTicket(null)}
                             className="btn-primary h-12 px-8"
@@ -201,8 +201,8 @@ function SupportPage() {
                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
                             <Ticket size={32} />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-800">Abhi koi ticket nahi hai</h3>
-                        <p className="text-gray-400 text-sm mt-2 max-w-xs">Jab aap support request bhejenge, toh yahan dikhayi degi.</p>
+                        <h3 className="text-xl font-bold text-gray-800">No tickets yet</h3>
+                        <p className="text-gray-400 text-sm mt-2 max-w-xs">When you submit a support request, it will appear here.</p>
                     </div>
                 ) : (
                     <div className="space-y-4">

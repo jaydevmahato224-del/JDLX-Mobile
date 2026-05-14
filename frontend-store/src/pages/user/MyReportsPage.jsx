@@ -75,7 +75,7 @@ function MyReportsPage() {
                     <p className="text-gray-500 mt-1">Status of your reported order issues.</p>
                 </div>
                 <Link to="/profile/order-report" className="btn-primary h-12 px-6">
-                    Nayi Report
+                    New Report
                 </Link>
             </div>
 
@@ -84,10 +84,10 @@ function MyReportsPage() {
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
                         <ClipboardList size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800">Koi report nahi hai abhi</h3>
-                    <p className="text-gray-400 text-sm mt-2 max-w-xs">Jab aap koi order issue report karenge, woh yahan dikhayi degi.</p>
+                    <h3 className="text-xl font-bold text-gray-800">No reports yet</h3>
+                    <p className="text-gray-400 text-sm mt-2 max-w-xs">When you report an order issue, it will appear here.</p>
                     <Link to="/profile/order-report" className="btn-primary mt-6 px-8 h-12">
-                        Nayi report karein
+                        Report an issue
                     </Link>
                 </div>
             ) : (

@@ -94,7 +94,7 @@ def submit_bug_report():
         ))
         conn.commit()
         bug_id = cursor.lastrowid
-        return success_response({"bug_id": bug_id}, "Bug report submit ho gaya", 201)
+        return success_response({"bug_id": bug_id}, "Bug report submitted successfully", 201)
     except Exception as e:
         return error_response(str(e), 500)
     finally:

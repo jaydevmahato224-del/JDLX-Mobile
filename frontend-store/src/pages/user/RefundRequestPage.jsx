@@ -156,16 +156,16 @@ function RefundRequestPage() {
                 setSuccess(true);
             } else {
                 if (res.status === 403) {
-                    setErrorMsg("Yeh order aapka nahi hai.");
-                } else if (res.status === 400 && data.message?.includes("7 din")) {
-                    setErrorMsg("7 din ka return window expire ho gaya hai.");
+                    setErrorMsg("This order does not belong to you.");
+                } else if (res.status === 400 && data.message?.includes("7 day")) {
+                    setErrorMsg("The 7-day return window has expired.");
                 } else if (res.status === 400 && data.message?.includes("deliver")) {
-                    setErrorMsg("Sirf delivered orders ka refund ho sakta hai.");
+                    setErrorMsg("Only delivered orders can be refunded.");
                 } else if (res.status === 409) {
                     setErrorMsg(
                         <div className="flex flex-col gap-2">
-                            <span>Is order ka refund request pehle se submit hai.</span>
-                            <Link to="/profile/my-refunds" className="text-white underline font-bold">Requests dekhein →</Link>
+                            <span>A refund request for this order has already been submitted.</span>
+                            <Link to="/profile/my-refunds" className="text-white underline font-bold">View Requests →</Link>
                         </div>
                     );
                 } else {
@@ -188,9 +188,9 @@ function RefundRequestPage() {
                 <h2 className="text-3xl font-black mb-2 tracking-tight">Refund Request Submitted!</h2>
                 <div className="glass-card p-6 bg-green-50 border-green-100 text-green-800 mb-8 max-w-md">
                     <p className="font-bold text-lg mb-1 text-green-900">Expected refund: ₹{eligibility?.order_amount || '...'}</p>
-                    <p className="text-sm opacity-80 italic">Final amount admin review ke baad confirm hoga.</p>
+                    <p className="text-sm opacity-80 italic">Final amount will be confirmed after admin review.</p>
                 </div>
-                <p className="text-gray-500 mb-8 max-w-md">Hamari team 3-5 business days mein aapki request process karegi aur status update degi.</p>
+                <p className="text-gray-500 mb-8 max-w-md">Our team will process your request within 3-5 business days and provide a status update.</p>
                 <Link to="/profile/my-refunds" className="btn-primary h-14 px-10">
                     My Refunds History <ChevronRight size={18} className="ml-2" />
                 </Link>
@@ -206,7 +206,7 @@ function RefundRequestPage() {
                         <RotateCcw className="text-primary w-8 h-8" />
                         <h1 className="text-3xl font-black tracking-tight">Returns & Refunds</h1>
                     </div>
-                    <p className="text-gray-500">Order wapis karna hai? Humne details bhej dein.</p>
+                    <p className="text-gray-500">Need to return an order? Please provide the details.</p>
                 </div>
                 <Link to="/profile/orders" className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline flex items-center gap-1">
                     <ArrowLeft size={12} /> Orders
@@ -313,7 +313,7 @@ function RefundRequestPage() {
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Description</label>
                         <textarea
-                            placeholder="Problem ka detail mein batao — isse hamari team aapki request jaldi process kar sakti hai..."
+                            placeholder="Describe the problem in detail — this helps our team process your request faster..."
                             value={form.description}
                             onChange={e => setForm({ ...form, description: e.target.value })}
                             className="w-full min-h-[140px] rounded-2xl bg-[var(--color-surface-low)] p-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
@@ -368,7 +368,7 @@ function RefundRequestPage() {
                             )}
                         </button>
                         <p className="text-[10px] text-center text-gray-400 mt-4 font-bold uppercase tracking-tighter">
-                            Final amount admin review ke baad confirm hoga
+                            Final amount will be confirmed after admin review
                         </p>
                     </div>
                 </form>

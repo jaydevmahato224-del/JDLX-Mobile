@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
-import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw } from 'lucide-react'
+import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug } from 'lucide-react'
 
 import { usePWAInstall } from '../../hooks/usePWAInstall'
 import toast from 'react-hot-toast'
@@ -62,10 +62,12 @@ function Profile() {
         { icon: Info, label: 'About Us', path: '/profile/about-site', color: 'text-primary-500', bg: 'bg-primary-500/10' },
         { icon: FileText, label: 'Terms', path: '/profile/terms', color: 'text-slate-700', bg: 'bg-slate-700/10' },
         { icon: HelpCircle, label: 'Support', path: '/profile/support', color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-        { icon: MessageSquare, label: 'Meri complaints', path: '/my-requests', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+        { icon: MessageSquare, label: 'My complaints', path: '/my-requests', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
         { icon: MessageCircle, label: 'Support tickets', path: '/profile/support', color: 'text-amber-600', bg: 'bg-amber-600/10' },
         { icon: ClipboardList, label: 'Order reports', path: '/profile/my-reports', color: 'text-violet-500', bg: 'bg-violet-500/10' },
         { icon: RotateCcw, label: 'My refunds', path: '/profile/my-refunds', color: 'text-emerald-600', bg: 'bg-emerald-600/10' },
+        { icon: Bug, label: 'Report Bug', path: '/profile/bug-report', color: 'text-red-500', bg: 'bg-red-500/10' },
+        { icon: AlertCircle, label: 'Bug reports', path: '/profile/my-bug-reports', color: 'text-rose-500', bg: 'bg-rose-500/10' },
         { 
             icon: Download, 
             label: 'Download App', 

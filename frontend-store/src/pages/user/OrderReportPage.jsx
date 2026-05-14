@@ -73,12 +73,12 @@ function OrderReportPage() {
         setErrorMsg(null);
         
         if (!form.order_id || !form.report_type || !form.description) {
-            toast.error("Sahi details bharein please");
+            toast.error("Please fill in all details");
             return;
         }
 
         if (form.description.length < 20) {
-            toast.error("Description kam se kam 20 characters ki honi chahiye");
+            toast.error("Description must be at least 20 characters");
             return;
         }
 
@@ -100,18 +100,18 @@ function OrderReportPage() {
             const data = await res.json();
             
             if (res.ok) {
-                toast.success("Report submit ho gayi!");
+                toast.success("Report submitted successfully!");
                 setSuccess(true);
             } else {
                 if (res.status === 403) {
-                    setErrorMsg("Yeh order aapka nahi hai. Kripya apna sahi order select karein.");
+                    setErrorMsg("This order does not belong to you. Please select a valid order.");
                 } else if (res.status === 400 && data.message?.includes("deliver hue")) {
-                    setErrorMsg("Sirf deliver ho chuke orders ki report kar sakte hain. Processing orders ke liye thoda intezar karein.");
+                    setErrorMsg("Reports can only be submitted for delivered orders. Please wait for processing orders to be delivered.");
                 } else if (res.status === 409) {
                     setErrorMsg(
                         <div className="flex flex-col gap-2">
-                            <span>Is order ki report pehle se submit ki ja chuki hai.</span>
-                            <Link to="/profile/my-reports" className="text-white underline font-bold">Purani report dekhein →</Link>
+                            <span>A report for this order has already been submitted.</span>
+                            <Link to="/profile/my-reports" className="text-white underline font-bold">View previous report →</Link>
                         </div>
                     );
                 } else {
@@ -119,7 +119,7 @@ function OrderReportPage() {
                 }
             }
         } catch (err) {
-            toast.error("Network issue. Dobara koshish karein.");
+            toast.error("Network issue. Please try again.");
         } finally {
             setSubmitting(false);
         }
@@ -132,7 +132,7 @@ function OrderReportPage() {
                     <CheckCircle2 size={40} />
                 </div>
                 <h2 className="text-3xl font-black mb-2">Report Submitted!</h2>
-                <p className="text-gray-500 mb-8 max-w-md">Report submit ho gayi! Hamari team 48 ghante mein review karegi aur aapko update degi.</p>
+                <p className="text-gray-500 mb-8 max-w-md">Your report has been submitted! Our team will review it within 48 hours and provide an update.</p>
                 <Link to="/profile/my-reports" className="btn-primary h-14 px-10">
                     My Reports History <ChevronRight size={18} className="ml-2" />
                 </Link>
@@ -147,7 +147,7 @@ function OrderReportPage() {
                     <PackageSearch className="text-primary w-8 h-8" />
                     <h1 className="text-3xl font-black tracking-tight">Report Order Issue</h1>
                 </div>
-                <p className="text-gray-500">Order delivered hone ke baad koi problem aayi? Humne yahan report karein.</p>
+                <p className="text-gray-500">Experienced a problem after your order was delivered? Report it here.</p>
             </div>
 
             {errorMsg && (
@@ -199,7 +199,7 @@ function OrderReportPage() {
                 <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Description</label>
                     <textarea
-                        placeholder="Kya problem aayi? Jitna detail de saken utna better..."
+                        placeholder="What problem did you experience? Provide as much detail as possible..."
                         value={form.description}
                         onChange={e => setForm({ ...form, description: e.target.value })}
                         className="w-full min-h-[120px] rounded-2xl bg-[var(--color-surface-low)] p-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"

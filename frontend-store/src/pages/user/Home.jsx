@@ -156,7 +156,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   }
 
   return (
-    <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 hover:border-primary/20">
+    <article className="gpu-accelerated group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 hover:border-primary/20">
       <div onClick={() => navigate(`/product/${product.id}`)} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-1 md:gap-2">
@@ -570,7 +570,7 @@ export default function Home() {
 
       {/* 2. Recently Viewed (Personalized Discovery) */}
       {recentlyViewed.length > 0 && (
-        <section className="space-y-8">
+        <section className="content-visibility-auto space-y-8">
           <div className="flex items-center gap-4">
             <div className="h-10 w-1.5 bg-primary rounded-full shadow-[0_0_15px_rgba(245,158,11,0.4)]" />
             <div className="space-y-1">
@@ -589,7 +589,7 @@ export default function Home() {
       )}
 
       {/* 3. Dynamic Banner Carousel */}
-      <section className="relative overflow-hidden rounded-[40px] shadow-2xl shadow-primary/5">
+      <section className="content-visibility-auto gpu-accelerated relative overflow-hidden rounded-[40px] shadow-2xl shadow-primary/5">
         {allBanners.length > 0 ? (
           <div className="relative">
             <div className="flex transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1)" style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}>
@@ -612,7 +612,7 @@ export default function Home() {
       </section>
 
       {/* 4. Trending Now (Curated Picks) */}
-      <section className="space-y-10">
+      <section className="content-visibility-auto space-y-10">
         <div className="flex items-end justify-between">
           <div className="space-y-1">
             <h2 className="text-3xl font-black tracking-tight">Trending Now</h2>
@@ -632,7 +632,7 @@ export default function Home() {
       </section>
 
       {/* 5. New Arrivals (Latest Additions) */}
-      <section className="space-y-8">
+      <section className="content-visibility-auto space-y-8">
         <div className="flex items-center gap-4">
           <div className="h-10 w-1.5 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)]" />
           <div className="space-y-1">
@@ -650,7 +650,7 @@ export default function Home() {
       </section>
 
       {/* 6. Main Catalog (Elite Collection) */}
-      <section className="space-y-10">
+      <section className="content-visibility-auto space-y-10">
         <div className="flex items-center gap-4">
           <div className="h-10 w-1.5 bg-primary rounded-full shadow-[0_0_15px_rgba(245,158,11,0.4)]" />
           <h2 className="text-3xl font-black tracking-tight">Elite Catalog</h2>
@@ -671,7 +671,9 @@ export default function Home() {
         {hasMore && <div ref={observerRef} className="py-10 flex justify-center"><PaginationLoader /></div>}
       </section>
 
-      <RecommendationsSection />
+      <div className="content-visibility-auto">
+        <RecommendationsSection />
+      </div>
     </div>
   )
 }

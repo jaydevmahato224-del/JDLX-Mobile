@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Heart, Zap, Star, Truck, ShieldCheck } from 'lucide-react'
+import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Heart as HeartIcon, Zap, Star, Truck, ShieldCheck } from 'lucide-react'
 
 import BlurImage from '../../components/BlurImage'
 import PaginationLoader from '../../components/PaginationLoader'
@@ -192,7 +192,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
           onClick={handleWishlistToggle}
           className={`absolute top-2 right-2 md:top-4 md:right-4 z-20 h-8 w-8 md:h-10 md:w-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-300 ${isInWishlist ? 'bg-red-500 text-white shadow-lg' : 'bg-white/80 text-slate-400 hover:text-red-500 hover:bg-white'}`}
         >
-          <Heart size={14} className="md:w-[18px] md:h-[18px]" fill={isInWishlist ? "currentColor" : "none"} strokeWidth={2.5} />
+          <HeartIcon size={14} className="md:w-[18px] md:h-[18px]" fill={isInWishlist ? "currentColor" : "none"} strokeWidth={2.5} />
         </button>
 
         <div className="h-full w-full p-4 md:p-8 transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1) group-hover:scale-110">
@@ -630,7 +630,7 @@ export default function Home() {
            
            {wishlist.length > 0 && (
              <Link to="/profile/wishlist" className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100 transition-all group">
-                <Heart size={14} className="text-red-500 group-hover:scale-110 transition-transform" fill="currentColor" />
+                <HeartIcon size={14} className="text-red-500 group-hover:scale-110 transition-transform" fill="currentColor" />
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">{wishlist.length} Saved</span>
              </Link>
            )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Search, ShoppingCart, User, ChevronLeft, RefreshCw, Heart, Zap, Clock } from 'lucide-react'
+import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, RefreshCw, Heart as HeartIcon, Zap, Clock } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { API_BASE_URL } from '../config'
 import NotificationBell from './NotificationBell'
@@ -111,7 +111,7 @@ function Layout({ children }) {
                 className="relative h-10 w-10 flex items-center justify-center rounded-full hover:bg-[var(--color-surface-low)] transition-all active:scale-90"
                 aria-label="Wishlist"
               >
-                <Heart size={20} className={wishlist.length > 0 ? "text-red-500" : "text-[var(--color-on-surface-variant)]"} fill={wishlist.length > 0 ? "currentColor" : "none"} />
+                <HeartIcon size={20} className={wishlist.length > 0 ? "text-red-500" : "text-[var(--color-on-surface-variant)]"} fill={wishlist.length > 0 ? "currentColor" : "none"} />
                 {wishlist.length > 0 && (
                   <span className="absolute top-1.5 right-1.5 h-4 min-w-[16px] px-1 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                     {wishlist.length}

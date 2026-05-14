@@ -148,8 +148,6 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   overflow-x: hidden;
   transition: background-color var(--transition-speed) var(--transition-cubic);
-  /* Hardware acceleration trigger */
-  transform: translateZ(0);
 }
 
 /* Performance Layer Promotion */

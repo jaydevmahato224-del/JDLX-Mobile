@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { Suspense, lazy, useEffect, useLayoutEffect } from 'react'
-import Home from './pages/user/Home'
+import HomePage from './pages/user/Home'
 import Login from './pages/user/Login'
 import Cart from './pages/user/Cart'
 import ProductDetails from './pages/user/ProductDetails'
@@ -170,7 +170,7 @@ function App() {
                 <Layout>
                   <Routes>
                     {/* Public Routes */}
-                    <Route path="/" element={<Home />} />
+                    <Route path="/" element={<HomePage />} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/cart" element={<Cart />} />

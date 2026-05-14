@@ -405,6 +405,75 @@ export default function Home() {
 
   const [banners, setBanners] = useState([])
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
+  const [bannerInterval, setBannerInterval] = useState(null)
+
+  // Swipe Logic Refs
+  const bannerTouchStart = useRef(0)
+  const bannerTouchEnd = useRef(0)
+  const SWIPE_THRESHOLD = 50
+
+  const handleBannerNext = useCallback(() => {
+    setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
+  }, [banners.length, products.length]) // dependency placeholder
+
+  const handleBannerPrev = useCallback(() => {
+    setCurrentBannerIndex(prev => (prev - 1 + allBanners.length) % allBanners.length)
+  }, [banners.length, products.length]) // dependency placeholder
+
+  const resetBannerTimer = useCallback(() => {
+    if (bannerInterval) clearInterval(bannerInterval)
+    if (allBanners.length <= 1) return
+
+    const newInterval = setInterval(() => {
+      setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
+    }, 5000)
+    setBannerInterval(newInterval)
+  }, [allBanners.length, bannerInterval])
+
+  // Swipe Handlers
+  const onBannerTouchStart = (e) => {
+    bannerTouchStart.current = e.targetTouches[0].clientX
+  }
+
+  const onBannerTouchMove = (e) => {
+    bannerTouchEnd.current = e.targetTouches[0].clientX
+  }
+
+  const onBannerTouchEnd = () => {
+    if (!bannerTouchStart.current || !bannerTouchEnd.current) return
+    const distance = bannerTouchStart.current - bannerTouchEnd.current
+    if (Math.abs(distance) > SWIPE_THRESHOLD) {
+      if (distance > 0) handleBannerNext()
+      else handleBannerPrev()
+      resetBannerTimer()
+    }
+    bannerTouchStart.current = 0
+    bannerTouchEnd.current = 0
+  }
+
+  const onBannerMouseDown = (e) => {
+    bannerTouchStart.current = e.clientX
+    if (e.target.tagName === 'IMG') e.preventDefault()
+  }
+
+  const onBannerMouseMove = (e) => {
+    if (bannerTouchStart.current) {
+      bannerTouchEnd.current = e.clientX
+    }
+  }
+
+  const onBannerMouseUp = () => {
+    if (bannerTouchStart.current && bannerTouchEnd.current) {
+      const distance = bannerTouchStart.current - bannerTouchEnd.current
+      if (Math.abs(distance) > SWIPE_THRESHOLD) {
+        if (distance > 0) handleBannerNext()
+        else handleBannerPrev()
+        resetBannerTimer()
+      }
+    }
+    bannerTouchStart.current = 0
+    bannerTouchEnd.current = 0
+  }
   
   const globalSearchQuery = useStore((state) => state.globalSearchQuery)
   const setGlobalSearchQuery = useStore((state) => state.setGlobalSearchQuery)
@@ -495,8 +564,9 @@ export default function Home() {
     const interval = setInterval(() => {
       setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
     }, 5000)
+    setBannerInterval(interval)
     return () => clearInterval(interval)
-  }, [allBanners])
+  }, [allBanners.length])
 
   useEffect(() => {
     const effectiveStoreId = deliveryMode === 'quick' ? nearestStoreId : null
@@ -589,12 +659,21 @@ export default function Home() {
       )}
 
       {/* 3. Dynamic Banner Carousel */}
-      <section className="content-visibility-auto gpu-accelerated relative overflow-hidden rounded-[40px] shadow-2xl shadow-primary/5">
+      <section 
+        className="content-visibility-auto gpu-accelerated relative overflow-hidden rounded-[40px] shadow-2xl shadow-primary/5 cursor-grab active:cursor-grabbing"
+        onTouchStart={onBannerTouchStart}
+        onTouchMove={onBannerTouchMove}
+        onTouchEnd={onBannerTouchEnd}
+        onMouseDown={onBannerMouseDown}
+        onMouseMove={onBannerMouseMove}
+        onMouseUp={onBannerMouseUp}
+        onMouseLeave={onBannerMouseUp}
+      >
         {allBanners.length > 0 ? (
           <div className="relative">
             <div className="flex transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1)" style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}>
               {allBanners.map((b) => (
-                <div key={b.id} className="w-full flex-shrink-0">
+                <div key={b.id} className="w-full flex-shrink-0 select-none">
                   <PromoBanner {...b} cta={b.cta_text} onClick={() => handleBannerClick(b.link_url)} />
                 </div>
               ))}
@@ -602,7 +681,7 @@ export default function Home() {
             {allBanners.length > 1 && (
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2.5 z-20">
                 {allBanners.map((_, idx) => (
-                  <button key={idx} onClick={() => setCurrentBannerIndex(idx)} 
+                  <button key={idx} onClick={() => { setCurrentBannerIndex(idx); resetBannerTimer(); }} 
                     className={`h-1.5 rounded-full transition-all duration-500 ${currentBannerIndex === idx ? 'w-10 bg-white' : 'w-1.5 bg-white/30'}`} />
                 ))}
               </div>

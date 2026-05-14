@@ -191,7 +191,7 @@ function App() {
                     <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                     <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
                     <Route path="/profile/support" element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
-                    <Route path="/support/ticket/:ticket_id" element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
+                    <Route path="/profile/support/ticket/:ticket_id" element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
                     <Route path="/profile/complaint" element={<ProtectedRoute><ComplaintPage /></ProtectedRoute>} />
                     <Route path="/profile/order-report" element={<ProtectedRoute><OrderReportPage /></ProtectedRoute>} />
                     <Route path="/profile/my-reports" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />

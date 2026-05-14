@@ -323,7 +323,8 @@ export const useStore = create((set) => ({
                     if (!res.ok) {
                         return { ...item, removedFromInventory: true, stock: 0 };
                     }
-                    const freshProduct = await res.json();
+                    const json = await res.json();
+                    const freshProduct = json.data || {};
                     
                     // Standardize stock field matching the refactor
                     const physical = Number(freshProduct.stock ?? freshProduct.physical_stock ?? freshProduct.stock_quantity ?? 0);

@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { resolveMediaUrl, API_BASE_URL } from '../../config'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
+import PageLoader from '../../components/PageLoader'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
 
 function getProductImage(item) {

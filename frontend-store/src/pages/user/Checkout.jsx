@@ -39,8 +39,12 @@ function Checkout() {
     const [checkingPincode, setCheckingPincode] = useState(false);
     const deliveryMode = useStore(state => state.deliveryMode);
     const nearestStoreId = useStore(state => state.nearestStoreId);
+    const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
     useEffect(() => {
+        // Refresh inventory data on mount
+        syncCartWithInventory();
+
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {

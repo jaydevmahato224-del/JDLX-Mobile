@@ -105,8 +105,10 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     try {
       const storeId = deliveryMode === 'quick' ? nearestStoreId : null;
       const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock${storeId ? `?store_id=${storeId}` : ''}`);
-      const data = await res.json();
-      if (res.ok && data.available <= quantity) {
+      const json = await res.json();
+      const stockData = json.data || {};
+      
+      if (res.ok && stockData.available <= quantity) {
         toast.error(`No more units available`, {
           icon: '🚫',
           style: { borderRadius: '15px', background: '#333', color: '#fff', fontSize: '12px', fontWeight: 'bold' }
@@ -140,8 +142,10 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     try {
       const storeId = deliveryMode === 'quick' ? nearestStoreId : null;
       const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock${storeId ? `?store_id=${storeId}` : ''}`);
-      const data = await res.json();
-      if (res.ok && data.available <= 0) {
+      const json = await res.json();
+      const stockData = json.data || {};
+
+      if (res.ok && stockData.available <= 0) {
         toast.error(`Out of stock`, { icon: '🚫' });
       } else {
         onAddToCart(product);

@@ -170,10 +170,12 @@ export const useStore = create((set, get) => ({
         const availableStock = getAvailableStock(product)
         
         if (availableStock <= 0) {
+            toast.error("Item out of stock");
             return;
         }
 
         if (existing && existing.qty >= availableStock) {
+            toast.error("Maximum available stock reached");
             return;
         }
 
@@ -181,9 +183,7 @@ export const useStore = create((set, get) => ({
         const safeQty = isNaN(currentQty) ? 0 : currentQty;
         const newQty = existing ? safeQty + 1 : 1;
         
-        // Sync with server FIRST
-        const success = await syncCartWithServer(product.id, 1, 'add');
-
+        // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
         set((state) => {
             let newCart;
             if (existing) {
@@ -203,20 +203,29 @@ export const useStore = create((set, get) => ({
                     },
                 ];
             }
-
             localStorage.setItem('cart', JSON.stringify(newCart));
             return { cart: newCart };
         });
+
+        // Sync with server in background
+        const success = await syncCartWithServer(product.id, 1, 'add');
+        if (!success) {
+            console.error('Failed to sync add-to-cart with server');
+        }
     },
     removeFromCart: async (productId) => {
-        // PROBLEM 3 FIX: Sync with server FIRST
-        const success = await syncCartWithServer(productId, 0, 'remove');
-        
+        // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
         set((state) => {
             const newCart = state.cart.filter(item => String(item.id) !== String(productId));
             localStorage.setItem('cart', JSON.stringify(newCart));
             return { cart: newCart };
         });
+
+        // Sync with server in background
+        const success = await syncCartWithServer(productId, 0, 'remove');
+        if (!success) {
+            console.error('Failed to sync remove-from-cart with server');
+        }
     },
     updateQuantity: async (productId, qty) => {
         let requestedQty = Number(qty);

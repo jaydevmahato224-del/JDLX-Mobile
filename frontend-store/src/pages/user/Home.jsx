@@ -411,6 +411,25 @@ export default function Home() {
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
   const [bannerInterval, setBannerInterval] = useState(null)
 
+  const featuredProducts = useMemo(() => products.filter(p => Number(p.is_featured) === 1 || p.is_featured === true), [products])
+  const regularProducts = useMemo(() => products.filter(p => !p.is_featured), [products])
+
+  const allBanners = useMemo(() => {
+    const apiBanners = banners.map(b => ({ ...b, image: resolveMediaUrl(b.image_url), type: 'promo' }));
+    const productBanners = featuredProducts.slice(0, 3).map(p => ({
+      id: `prod-${p.id}`,
+      title: p.name,
+      subtitle: p.description || "Premium JDLX Mobile Collection",
+      cta_text: "Shop Now",
+      image: getProductImage(p),
+      badge_text: "Featured",
+      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      link_url: `/product/${p.id}`,
+      type: 'product'
+    }));
+    return [...apiBanners, ...productBanners];
+  }, [banners, featuredProducts]);
+
   // Swipe Logic Refs
   const bannerTouchStart = useRef(0)
   const bannerTouchEnd = useRef(0)
@@ -418,11 +437,11 @@ export default function Home() {
 
   const handleBannerNext = useCallback(() => {
     setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
-  }, [banners.length, products.length]) // dependency placeholder
+  }, [allBanners.length])
 
   const handleBannerPrev = useCallback(() => {
     setCurrentBannerIndex(prev => (prev - 1 + allBanners.length) % allBanners.length)
-  }, [banners.length, products.length]) // dependency placeholder
+  }, [allBanners.length])
 
   const resetBannerTimer = useCallback(() => {
     if (bannerInterval) clearInterval(bannerInterval)
@@ -523,8 +542,7 @@ export default function Home() {
     }
   }, [user])
 
-  const featuredProducts = useMemo(() => products.filter(p => Number(p.is_featured) === 1 || p.is_featured === true), [products])
-  const regularProducts = useMemo(() => products.filter(p => !p.is_featured), [products])
+
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 800)
@@ -547,21 +565,7 @@ export default function Home() {
       .catch((e) => console.error('Banners failed:', e))
   }, [])
 
-  const allBanners = useMemo(() => {
-    const apiBanners = banners.map(b => ({ ...b, image: resolveMediaUrl(b.image_url), type: 'promo' }));
-    const productBanners = featuredProducts.slice(0, 3).map(p => ({
-      id: `prod-${p.id}`,
-      title: p.name,
-      subtitle: p.description || "Premium JDLX Mobile Collection",
-      cta_text: "Shop Now",
-      image: getProductImage(p),
-      badge_text: "Featured",
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-      link_url: `/product/${p.id}`,
-      type: 'product'
-    }));
-    return [...apiBanners, ...productBanners];
-  }, [banners, featuredProducts]);
+
 
   useEffect(() => {
     if (allBanners.length <= 1) return

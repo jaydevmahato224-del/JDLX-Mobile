@@ -67,6 +67,68 @@ from utils.activity_logger import log_admin_action
 from security.admin_audit_logger import log_admin_event
 from services.shiprocket_service import ShiprocketService
 
+from security.rate_limiter import check_and_record_request, get_blocked_ips
+from security.login_guard import record_login_attempt, is_account_locked
+from security.anomaly_detector import (
+    create_security_alert,
+    detect_failed_login_anomaly,
+    detect_admin_activity_anomaly,
+    get_security_overview,
+)
+from backup.backup_service import (
+    create_full_backup,
+    backup_database,
+    list_backups,
+)
+from recovery.recovery_service import (
+    restore_database,
+    restore_files,
+    verify_backup_integrity,
+)
+from utils.response_utils import success_response, error_response
+from utils.product_optimizer import optimizer
+from services.health_monitor import get_system_health_metrics
+from services.auto_healer import trigger_system_scan
+
+# ==============================================================================
+# APP INITIALIZATION & CONFIGURATION
+# ==============================================================================
+
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# --- CORS Configuration ---
+# Enable CORS for Store/Admin/Warehouse frontends.
+# Notes:
+# - Android emulator can't reach host via `localhost` (uses `10.0.2.2`).
+# - Vite dev servers are often accessed via LAN IP (e.g. `192.168.x.x`).
+cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
+cors_origins = [
+    r"^http://localhost:517[3-5]$",
+    r"^http://127\.0\.0\.1:517[3-5]$",
+    r"^http://10\.0\.2\.2:517[3-5]$",
+    r"^https?://(www\.)?jdlxmobile\.in$",
+    r"^https?://.*\.jdlxmobile\.in$",
+    r"^https?://.*\.vercel\.app$",
+    r"^https?://.*\.onrender\.com$",
+]
+if cors_origins_env:
+    extra_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    cors_origins.extend(extra_origins)
+
+CORS(
+    app,
+    resources={r"/api/.*": {
+        "origins": cors_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"],
+        "expose_headers": ["Content-Type", "Authorization"]
+    }},
+    supports_credentials=True,
+)
+
 # ==============================================================================
 # HELPERS & UTILITIES
 # ==============================================================================
@@ -160,67 +222,6 @@ def shiprocket_webhook():
             return error_response(str(e), 500)
     
     return success_response({"status": "ignored", "reason": f"Event {event} not handled"})
-
-from security.rate_limiter import check_and_record_request, get_blocked_ips
-from security.login_guard import record_login_attempt, is_account_locked
-from security.anomaly_detector import (
-    create_security_alert,
-    detect_failed_login_anomaly,
-    detect_admin_activity_anomaly,
-    get_security_overview,
-)
-from backup.backup_service import (
-    create_full_backup,
-    backup_database,
-    list_backups,
-)
-from recovery.recovery_service import (
-    restore_database,
-    restore_files,
-    verify_backup_integrity,
-)
-from utils.response_utils import success_response, error_response
-from utils.product_optimizer import optimizer
-from services.health_monitor import get_system_health_metrics
-from services.auto_healer import trigger_system_scan
-
-# ==============================================================================
-# APP INITIALIZATION & CONFIGURATION
-# ==============================================================================
-
-from werkzeug.middleware.proxy_fix import ProxyFix
-
-app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-
-# --- CORS Configuration ---
-# Enable CORS for Store/Admin/Warehouse frontends.
-# Notes:
-# - Android emulator can't reach host via `localhost` (uses `10.0.2.2`).
-# - Vite dev servers are often accessed via LAN IP (e.g. `192.168.x.x`).
-cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
-cors_origins = [
-    r"^http://localhost:517[3-5]$",
-    r"^http://127\.0\.0\.1:517[3-5]$",
-    r"^http://10\.0\.2\.2:517[3-5]$",
-    r"^https?://(www\.)?jdlxmobile\.in$",
-    r"^https?://.*\.vercel\.app$",
-    r"^https?://.*\.onrender\.com$",
-]
-if cors_origins_env:
-    extra_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
-    cors_origins.extend(extra_origins)
-
-CORS(
-    app,
-    resources={r"/api/*": {
-        "origins": cors_origins,
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"],
-        "expose_headers": ["Content-Type", "Authorization"]
-    }},
-    supports_credentials=True,
-)
 
 # --- Blueprint Registration ---
 app.register_blueprint(warehouse_bp)

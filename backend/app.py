@@ -87,6 +87,80 @@ def sync_to_shiprocket(order_data, cursor):
     
     return sr.create_order(order_data)
 
+@app.route('/api/webhook/shiprocket', methods=['POST'])
+def shiprocket_webhook():
+    """Handles status updates from Shiprocket."""
+    # 1. Verify token (Authenticity Check)
+    token = request.headers.get('x-api-key') # Shiprocket often uses x-api-key for webhooks
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM system_settings WHERE key = 'shiprocket_token'")
+    row = cursor.fetchone()
+    expected_token = row['value'] if row else None
+    
+    # Optional: If token verification is strictly required by the user, but not configured
+    # we log it but proceed if it's a test or until configured.
+    # However, for production we should be strict.
+    if expected_token and token != expected_token:
+         return error_response("Unauthorized", 401)
+
+    data = request.json
+    if not data:
+        return error_response("Invalid payload", 400)
+
+    # Log the incoming webhook for debugging
+    logger.info(f"Shiprocket Webhook received: {json.dumps(data)}")
+
+    event = data.get('current_status')
+    awb_number = data.get('awb')
+    sr_order_id = data.get('order_id')
+
+    if not sr_order_id:
+        return error_response("Missing Shiprocket Order ID", 400)
+
+    # Map Shiprocket statuses to JDLX statuses
+    # Shiprocket statuses: 'shipment_tracked', 'delivered', 'shipped', etc.
+    new_jdlx_status = None
+    timestamp_col = None
+
+    if event in ['shipped', 'shipment_tracked']:
+        new_jdlx_status = 'SHIPPED'
+        timestamp_col = 'shipped_at'
+    elif event == 'delivered':
+        new_jdlx_status = 'DELIVERED'
+        timestamp_col = 'delivered_at'
+
+    if new_jdlx_status:
+        try:
+            # Update order based on shiprocket_order_id
+            cursor.execute("SELECT id, user_id FROM orders WHERE shiprocket_order_id = ?", (sr_order_id,))
+            order = cursor.fetchone()
+            
+            if order:
+                order_id = order['id']
+                user_id = order['user_id']
+                
+                # Update status and timestamp
+                cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_jdlx_status, order_id))
+                
+                # Notify user
+                notification_service.send_order_notification(user_id, order_id, new_jdlx_status)
+                
+                if new_jdlx_status == 'DELIVERED':
+                    # Log activity
+                    log_admin_action(0, "order_delivered_via_shiprocket", "order", order_id)
+
+                conn.commit()
+                return success_response({"status": "updated", "order_id": order_id})
+            else:
+                return error_response("Order not found in JDLX system", 404)
+        except Exception as e:
+            logger.error(f"Shiprocket Webhook processing error: {str(e)}")
+            return error_response(str(e), 500)
+    
+    return success_response({"status": "ignored", "reason": f"Event {event} not handled"})
+
 from security.rate_limiter import check_and_record_request, get_blocked_ips
 from security.login_guard import record_login_attempt, is_account_locked
 from security.anomaly_detector import (
@@ -2215,11 +2289,20 @@ def checkout():
             
         best_store, error_msg = select_best_warehouse(user_lat, user_lng, stores, items, cursor)
         
-        if error_msg:
+        delivery_message = None
+        if error_msg and delivery_type == 'quick':
+            # FIX 1: Fallout Logic
+            delivery_type = 'scheduled'
+            delivery_message = "Quick delivery unavailable in your area. Your order will be delivered via Scheduled Delivery."
+            # In scheduled mode, we pick the first available store or central hub for Shiprocket sync
+            best_store = stores[0] # Pick first as fallback for metadata
+            est_time = "3-5 days"
+        elif error_msg:
             return error_response(error_msg, 400)
+        else:
+            est_time = f"{best_store['estimated_time']} mins"
             
         store_id = best_store['id']
-        est_time = best_store['estimated_time']
 
         # 2. Check store-specific inventory (REAL-TIME PHYSICAL STOCK CHECK)
         for item in items:
@@ -2252,12 +2335,13 @@ def checkout():
                 is_prepaid_only_order = True
 
         # Get dynamic fees from settings
-        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled')")
+        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled', 'free_delivery_enabled')")
         settings_rows = cursor.fetchall()
         settings = {row['key']: row['value'] for row in settings_rows}
         
         platform_fee = float(settings.get('platform_fee', 7))
         free_thresh = float(settings.get('free_delivery_threshold', 499))
+        free_delivery_enabled = settings.get('free_delivery_enabled', 'true').lower() == 'true'
         prepaid_fee = float(settings.get('prepaid_delivery_charge', 49))
         cod_fee = float(settings.get('cod_delivery_charge', 99))
         cod_advance = float(settings.get('cod_advance_amount', 49))
@@ -2302,15 +2386,13 @@ def checkout():
         actual_delivery_fee = 0
         free_delivery_applied = 0
         
-        if payment_type == 'PREPAID':
-            if total_amount >= free_thresh:
-                actual_delivery_fee = 0
-                free_delivery_applied = 1
-            else:
-                actual_delivery_fee = prepaid_fee
+        if free_delivery_enabled and total_amount >= free_thresh:
+            actual_delivery_fee = 0
+            free_delivery_applied = 1
+        elif payment_type == 'PREPAID':
+            actual_delivery_fee = prepaid_fee
         else: # COD
             actual_delivery_fee = cod_fee
-            free_delivery_applied = 0
 
         fitting_charge = float(data.get('fitting_charge', 0))
         final_total = total_amount + platform_fee + actual_delivery_fee + fitting_charge
@@ -2335,7 +2417,7 @@ def checkout():
                 platform_fee, delivery_fee, fitting_charge, payment_type,
                 cod_advance_paid, cod_remaining_amount, free_delivery_applied
             )
-            VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
             phone, address, final_total, store_id, f"{est_time} mins", 
@@ -2422,10 +2504,11 @@ def checkout():
         send_order_email(user_info['email'], order_details)
         
         return jsonify({
-            "message": "Order placed successfully", 
+            "message": delivery_message or "Order placed successfully", 
             "order_id": order_id,
-            "estimated_delivery_time": f"{est_time} mins",
+            "estimated_delivery_time": est_time,
             "assigned_store": best_store['name'],
+            "delivery_type": delivery_type,
             "summary": {
                 "subtotal": total_amount,
                 "delivery_charge": actual_delivery_fee,
@@ -2446,7 +2529,7 @@ def get_order_status(order_id):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT o.*, 
+            SELECT o.*, o.order_status as status,
                    dp.name as partner_name, dp.phone as partner_phone,
                    ds.store_code, ds.name as store_name
             FROM orders o 
@@ -2537,30 +2620,29 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
 @require_permission("manage_orders")
 def admin_update_order_status(order_id):
     data = request.json
-    new_status = data.get('status')
+    new_status = data.get('status', '').upper()
     
-    # Valid stages: PLACED, PACKING, OUT_FOR_DELIVERY, DELIVERED
+    # Valid stages: PLACED, PACKED, SHIPPED, DELIVERED, CANCELLED
     try:
         conn = get_db()
         cursor = conn.cursor()
         
         # Get current status
-        cursor.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT order_status FROM orders WHERE id = ?", (order_id,))
         current_status_row = cursor.fetchone()
-        old_status = current_status_row['status'] if current_status_row else None
+        old_status = current_status_row['order_status'] if current_status_row else None
 
         handle_stock_on_status_change(cursor, order_id, old_status, new_status)
 
         timestamp_col = None
-        if new_status == 'PACKING': timestamp_col = "status_packing_at"
-        elif new_status == 'READY_FOR_PICKUP': timestamp_col = "status_ready_at"
-        elif new_status == 'OUT_FOR_DELIVERY': timestamp_col = "status_out_at"
-        elif new_status == 'DELIVERED': timestamp_col = "status_delivered_at"
+        if new_status == 'PACKED': timestamp_col = "packed_at"
+        elif new_status == 'SHIPPED': timestamp_col = "shipped_at"
+        elif new_status == 'DELIVERED': timestamp_col = "delivered_at"
         
         if timestamp_col:
-            cursor.execute(f"UPDATE orders SET status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_status, order_id))
+            cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_status, order_id))
         else:
-            cursor.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
+            cursor.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_status, order_id))
 
         # Notify user about status update
         cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,))
@@ -3631,19 +3713,28 @@ def assign_delivery_partner(order_id):
 def update_order_status(order_id):
     """Updates the status of an order."""
     data = request.json
-    new_status = data.get('status')
+    new_status = data.get('status', '').upper()
     try:
         conn = get_db()
         cursor = conn.cursor()
 
         # Get current status
-        cursor.execute("SELECT status FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT order_status FROM orders WHERE id = ?", (order_id,))
         current_status_row = cursor.fetchone()
-        old_status = current_status_row['status'] if current_status_row else None
+        old_status = current_status_row['order_status'] if current_status_row else None
 
         handle_stock_on_status_change(cursor, order_id, old_status, new_status)
 
-        cursor.execute("UPDATE orders SET order_status=? WHERE id=?", (new_status, order_id))
+        timestamp_col = None
+        if new_status == 'PACKED': timestamp_col = "packed_at"
+        elif new_status == 'SHIPPED': timestamp_col = "shipped_at"
+        elif new_status == 'DELIVERED': timestamp_col = "delivered_at"
+        
+        if timestamp_col:
+            cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_status, order_id))
+        else:
+            cursor.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_status, order_id))
+            
         conn.commit()
         conn.close()
         log_admin_action(request.user.get('user_id'), "order_modified", "order", order_id)
@@ -4490,7 +4581,7 @@ def get_warehouse_analytics():
                 COUNT(o.id) as total_orders, 
                 COALESCE(SUM(o.total_amount), 0) as total_revenue,
                 COALESCE(SUM(CASE WHEN o.created_at >= datetime('now', '-1 day') THEN o.total_amount ELSE 0 END), 0) as daily_sales,
-                COUNT(CASE WHEN o.order_status NOT IN ('delivered', 'cancelled', 'returned', 'refunded') THEN o.id END) as active_orders,
+                COUNT(CASE WHEN UPPER(o.order_status) NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED') THEN o.id END) as active_orders,
                 (SELECT COUNT(*) FROM delivery_partners dp WHERE dp.status = 'AVAILABLE' AND dp.location = ds.name) as assigned_riders
             FROM dark_stores ds
             LEFT JOIN orders o ON ds.id = o.store_id
@@ -4996,22 +5087,22 @@ def cancel_order(order_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT status, user_id FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT order_status as status, user_id FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
-        
+
         if not order:
             conn.close()
             return error_response("Order not found", 404)
-            
+
         if order['user_id'] != user_id:
             conn.close()
             return error_response("Unauthorized", 403)
-            
-        if order['status'] not in ['PLACED', 'PACKING', 'PENDING_PAYMENT']:
+
+        if order['status'].upper() not in ['PLACED', 'PACKING', 'PACKED', 'PENDING_PAYMENT', 'PENDING']:
             conn.close()
             return error_response(f"Cannot cancel order in {order['status']} status", 400)
-            
-        cursor.execute("UPDATE orders SET status = 'CANCELLED' WHERE id = ?", (order_id,))
+
+        cursor.execute("UPDATE orders SET order_status = 'CANCELLED' WHERE id = ?", (order_id,))
         notification_service.send_order_notification(user_id, order_id, 'CANCELLED')
         conn.commit()
         conn.close()
@@ -5027,36 +5118,37 @@ def request_refund(order_id):
     user_id = request.user['user_id']
     data = request.json
     reason = data.get('reason')
-    
+
     if not reason:
         return error_response("Reason is required", 400)
-        
+
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT status, user_id FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT order_status as status, user_id FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
-        
+
         if not order:
             conn.close()
             return error_response("Order not found", 404)
-            
+
         if order['user_id'] != user_id:
             conn.close()
             return error_response("Unauthorized", 403)
-            
-        if order['status'] != 'DELIVERED':
+
+        if order['status'].upper() != 'DELIVERED':
             conn.close()
             return error_response("Only delivered orders can be refunded", 400)
-            
+
         cursor.execute('''
             INSERT INTO refund_requests (order_id, user_id, reason)
             VALUES (?, ?, ?)
         ''', (order_id, user_id, reason))
-        cursor.execute("UPDATE orders SET status = 'REFUND_REQUESTED' WHERE id = ?", (order_id,))
-        
+        cursor.execute("UPDATE orders SET order_status = 'REFUND_REQUESTED' WHERE id = ?", (order_id,))
+
         conn.commit()
         conn.close()
+
         return success_response(None, "Refund request submitted", 201)
     except Exception as e:
         return error_response(str(e), 500)
@@ -5400,6 +5492,7 @@ def warehouse_availability():
             "store_id": store["id"],
             "quick_mode_enabled": bool(store.get("quick_mode_enabled", 0)),
             "platform_fee": float(settings.get('platform_fee', 7)),
+            "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
             "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
             "delivery_fee": float(settings.get('delivery_fee', 49)),
             "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),

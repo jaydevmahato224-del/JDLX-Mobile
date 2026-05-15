@@ -2233,10 +2233,10 @@ def warehouse_update_order_status(assignment_id):
         "rejected": set(),
     }
     order_status_map = {
-        "accepted": "PACKING",
+        "accepted": "CONFIRMED",
         "packing": "PACKING",
-        "packed": "PACKING",
-        "dispatched": "OUT_FOR_DELIVERY",
+        "packed": "PACKED",
+        "dispatched": "SHIPPED",
     }
 
     if new_status not in allowed_transitions:
@@ -2284,27 +2284,32 @@ def warehouse_update_order_status(assignment_id):
             )
 
         mapped_order_status = order_status_map.get(new_status)
-        if mapped_order_status == "PACKING":
+        if mapped_order_status == "CONFIRMED":
             conn.execute(
                 """UPDATE orders
                    SET order_status = ?, confirmed_at = COALESCE(confirmed_at, CURRENT_TIMESTAMP)
                    WHERE id = ?""",
-
                 (mapped_order_status, assignment["order_id"]),
             )
-        elif new_status == "packed":
+        elif mapped_order_status == "PACKED":
             conn.execute(
                 """UPDATE orders
                    SET order_status = ?, packed_at = COALESCE(packed_at, CURRENT_TIMESTAMP)
                    WHERE id = ?""",
                 (mapped_order_status, assignment["order_id"]),
             )
-        elif mapped_order_status == "OUT_FOR_DELIVERY":
+        elif mapped_order_status == "SHIPPED":
             conn.execute(
                 """UPDATE orders
-                   SET order_status = ?, out_for_delivery_at = COALESCE(out_for_delivery_at, CURRENT_TIMESTAMP)
+                   SET order_status = ?, shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)
                    WHERE id = ?""",
-
+                (mapped_order_status, assignment["order_id"]),
+            )
+        elif mapped_order_status:
+             conn.execute(
+                """UPDATE orders
+                   SET order_status = ?
+                   WHERE id = ?""",
                 (mapped_order_status, assignment["order_id"]),
             )
 

@@ -115,8 +115,25 @@ def init_db():
         cursor.execute("UPDATE products SET stock = CASE WHEN (stock IS NULL OR stock = 0) AND stock_quantity > 0 THEN stock_quantity ELSE stock END")
 
     # --- Commerce & Fulfillment ---
-    cursor.execute('''CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, total_amount REAL NOT NULL, status TEXT DEFAULT 'PLACED', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id))''')
-    ensure_columns('orders', [('delivery_address', 'TEXT'), ('phone', 'TEXT'), ('platform_fee', 'REAL DEFAULT 0'), ('delivery_fee', 'REAL DEFAULT 0'), ('shiprocket_order_id', 'TEXT'), ('payment_type', "TEXT DEFAULT 'PREPAID'"), ('cod_advance_paid', 'REAL DEFAULT 0'), ('cod_remaining_amount', 'REAL DEFAULT 0'), ('free_delivery_applied', 'INTEGER DEFAULT 0'), ('fitting_charge', 'REAL DEFAULT 0'), ('status_packing_at', 'TIMESTAMP'), ('status_out_at', 'TIMESTAMP'), ('status_delivered_at', 'TIMESTAMP'), ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"), ('delivery_partner_id', 'INTEGER'), ('store_id', 'INTEGER')])
+    cursor.execute('''CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, total_amount REAL NOT NULL, order_status TEXT DEFAULT 'PLACED', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id))''')
+    ensure_columns('orders', [
+        ('delivery_address', 'TEXT'), 
+        ('phone', 'TEXT'), 
+        ('platform_fee', 'REAL DEFAULT 0'), 
+        ('delivery_fee', 'REAL DEFAULT 0'), 
+        ('shiprocket_order_id', 'TEXT'), 
+        ('payment_type', "TEXT DEFAULT 'PREPAID'"), 
+        ('cod_advance_paid', 'REAL DEFAULT 0'), 
+        ('cod_remaining_amount', 'REAL DEFAULT 0'), 
+        ('free_delivery_applied', 'INTEGER DEFAULT 0'), 
+        ('fitting_charge', 'REAL DEFAULT 0'), 
+        ('packed_at', 'TIMESTAMP'), 
+        ('shipped_at', 'TIMESTAMP'), 
+        ('delivered_at', 'TIMESTAMP'), 
+        ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"), 
+        ('delivery_partner_id', 'INTEGER'), 
+        ('store_id', 'INTEGER')
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(order_id) REFERENCES orders(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
     ensure_columns('order_items', [('device_model', 'TEXT')])

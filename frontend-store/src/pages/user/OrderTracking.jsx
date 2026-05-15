@@ -168,10 +168,9 @@ function OrderTracking() {
 
     const stages = [
         { id: 'PLACED', label: 'Order Placed', icon: Clock, time: order?.created_at },
-        { id: 'PACKING', label: 'Packing', icon: Package, time: order?.status_packing_at },
-        { id: 'READY_FOR_PICKUP', label: 'Ready for Pickup', icon: CheckCircle, time: order?.status_ready_at },
-        { id: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', icon: Truck, time: order?.status_out_at },
-        { id: 'DELIVERED', label: 'Delivered', icon: CheckCircle, time: order?.status_delivered_at }
+        { id: 'PACKED', label: 'Packed', icon: Package, time: order?.packed_at },
+        { id: 'SHIPPED', label: 'Shipped', icon: Truck, time: order?.shipped_at },
+        { id: 'DELIVERED', label: 'Delivered', icon: CheckCircle, time: order?.delivered_at }
     ];
 
     const getCurrentStageIndex = () => {

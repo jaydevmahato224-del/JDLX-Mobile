@@ -131,9 +131,9 @@ function Checkout() {
     const codAlertText = availability?.cod_alert_text || 'Save more with prepaid orders! FREE delivery on orders above ₹499.';
 
     // Delivery Charge Calculation
-    const deliveryCharge = paymentMethod === 'PREPAID' 
-        ? (isFreeDeliveryEnabled && subtotal >= freeThreshold ? 0 : prepaidFee)
-        : codFee;
+    const deliveryCharge = (isFreeDeliveryEnabled && subtotal >= freeThreshold)
+        ? 0
+        : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
 
     const finalTotal = subtotal + platformFee + deliveryCharge + fittingTotal;
     const payNowAmount = paymentMethod === 'COD' ? codAdvance : finalTotal;

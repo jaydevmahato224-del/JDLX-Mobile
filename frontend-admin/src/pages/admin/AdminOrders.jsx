@@ -133,6 +133,7 @@ function AdminOrders() {
 
     const getStatusStyle = (status) => {
         const styles = {
+            'placed': 'bg-yellow-100 text-yellow-800',
             'pending': 'bg-yellow-100 text-yellow-800',
             'routing': 'bg-blue-100 text-blue-800 border-blue-200 animate-pulse',
             'waiting_for_partner': 'bg-orange-100 text-orange-800 border-orange-200',
@@ -140,11 +141,12 @@ function AdminOrders() {
             'inventory_unavailable': 'bg-red-50 text-red-900 border border-red-200',
             'confirmed': 'bg-blue-100 text-blue-800',
             'packed': 'bg-purple-100 text-purple-800',
+            'shipped': 'bg-teal-100 text-teal-800',
             'out_for_delivery': 'bg-teal-100 text-teal-800',
             'delivered': 'bg-green-100 text-green-800',
             'cancelled': 'bg-red-100 text-red-800'
         };
-        return styles[status] || 'bg-gray-100 text-gray-800';
+        return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-800';
     };
 
     const printInvoice = () => {
@@ -218,13 +220,15 @@ function AdminOrders() {
                         className="flex-1 md:flex-none py-2 px-4 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                         <option value="all">All Statuses</option>
+                        <option value="PLACED">Placed</option>
                         <option value="pending">Pending</option>
                         <option value="routing">Routing / AI Queue</option>
                         <option value="waiting_for_partner">Waiting For Partner</option>
                         <option value="store_assigned">Assigned to Store</option>
                         <option value="inventory_unavailable">Inventory Error</option>
                         <option value="confirmed">Confirmed</option>
-                        <option value="packed">Packed</option>
+                        <option value="PACKED">Packed</option>
+                        <option value="SHIPPED">Shipped</option>
                         <option value="out_for_delivery">Out for Delivery</option>
                         <option value="delivered">Delivered</option>
                         <option value="cancelled">Cancelled</option>
@@ -330,13 +334,13 @@ function AdminOrders() {
 
                             {/* Action Controls */}
                             <div className="flex flex-wrap gap-2 no-print">
-                                {['pending', 'inventory_unavailable'].includes(selectedOrder.order_status) && (
+                                {['pending', 'inventory_unavailable', 'PLACED'].includes(selectedOrder.order_status) && (
                                     <button onClick={() => updateStatus(selectedOrder.id, 'routing')} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 flex flex-row items-center gap-2"><Map className="w-4 h-4" /> Trigger Auto-Route Engine</button>
                                 )}
-                                {['store_assigned', 'confirmed'].includes(selectedOrder.order_status) && (
-                                    <button onClick={() => updateStatus(selectedOrder.id, 'packed')} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700">Mark Packed</button>
+                                {['store_assigned', 'confirmed', 'PLACED'].includes(selectedOrder.order_status?.toUpperCase()) && (
+                                    <button onClick={() => updateStatus(selectedOrder.id, 'PACKED')} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700">Mark Packed</button>
                                 )}
-                                {selectedOrder.order_status === 'packed' && !selectedOrder.delivery_partner_id && (
+                                {selectedOrder.order_status?.toUpperCase() === 'PACKED' && !selectedOrder.delivery_partner_id && (
                                     <div className="flex bg-gray-100 p-1 rounded-xl">
                                         <select
                                             value={selectedPartner}
@@ -351,14 +355,14 @@ function AdminOrders() {
                                         <button onClick={() => assignPartner(selectedOrder.id)} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center gap-2 shadow-sm"><UserPlus className="w-4 h-4" /> Assign</button>
                                     </div>
                                 )}
-                                {selectedOrder.order_status === 'packed' && selectedOrder.delivery_partner_id && (
-                                    <button onClick={() => updateStatus(selectedOrder.id, 'out_for_delivery')} className="px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-semibold hover:bg-orange-700 flex items-center gap-2"><Truck className="w-4 h-4" /> Dispatch</button>
+                                {(selectedOrder.order_status?.toUpperCase() === 'PACKED' || selectedOrder.order_status === 'packed') && selectedOrder.delivery_partner_id && (
+                                    <button onClick={() => updateStatus(selectedOrder.id, 'SHIPPED')} className="px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-semibold hover:bg-orange-700 flex items-center gap-2"><Truck className="w-4 h-4" /> Dispatch / Ship</button>
                                 )}
-                                {selectedOrder.order_status === 'out_for_delivery' && (
-                                    <button onClick={() => updateStatus(selectedOrder.id, 'delivered')} className="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Mark Delivered</button>
+                                {(['SHIPPED', 'OUT_FOR_DELIVERY'].includes(selectedOrder.order_status?.toUpperCase()) || selectedOrder.order_status === 'out_for_delivery') && (
+                                    <button onClick={() => updateStatus(selectedOrder.id, 'DELIVERED')} className="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Mark Delivered</button>
                                 )}
-                                {['pending', 'confirmed'].includes(selectedOrder.order_status) && (
-                                    <button onClick={() => { if (window.confirm('Are you sure you want to cancel this order?')) updateStatus(selectedOrder.id, 'cancelled') }} className="px-4 py-2 text-red-600 bg-red-50 rounded-xl text-sm font-semibold hover:bg-red-100 ml-auto flex items-center gap-2">Cancel</button>
+                                {['pending', 'confirmed', 'PLACED'].includes(selectedOrder.order_status?.toUpperCase()) && (
+                                    <button onClick={() => { if (window.confirm('Are you sure you want to cancel this order?')) updateStatus(selectedOrder.id, 'CANCELLED') }} className="px-4 py-2 text-red-600 bg-red-50 rounded-xl text-sm font-semibold hover:bg-red-100 ml-auto flex items-center gap-2">Cancel</button>
                                 )}
                             </div>
 
@@ -521,6 +525,13 @@ function AdminOrders() {
                                             <div className="absolute -left-7 top-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-white shadow"></div>
                                             <p className="font-bold text-sm text-gray-800">Packed</p>
                                             <p className="text-xs text-gray-500">{new Date(selectedOrder.packed_at).toLocaleString()}</p>
+                                        </div>
+                                    )}
+                                    {selectedOrder.shipped_at && (
+                                        <div className="relative">
+                                            <div className="absolute -left-7 top-1 w-3 h-3 bg-teal-500 rounded-full border-2 border-white shadow"></div>
+                                            <p className="font-bold text-sm text-gray-800">Shipped</p>
+                                            <p className="text-xs text-gray-500">{new Date(selectedOrder.shipped_at).toLocaleString()}</p>
                                         </div>
                                     )}
                                     {selectedOrder.out_for_delivery_at && (

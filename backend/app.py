@@ -1669,14 +1669,14 @@ def get_cart():
         
         if user_id:
             cursor.execute("""
-                SELECT c.*, p.name, p.price, p.images, p.category 
+                SELECT c.*, p.name, p.price, p.images, p.category, p.stock
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
                 WHERE c.user_id = ?
             """, (user_id,))
         else:
             cursor.execute("""
-                SELECT c.*, p.name, p.price, p.images, p.category 
+                SELECT c.*, p.name, p.price, p.images, p.category, p.stock
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
                 WHERE c.session_id = ?

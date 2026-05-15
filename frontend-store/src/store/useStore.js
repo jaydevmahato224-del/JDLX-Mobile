@@ -80,11 +80,14 @@ export const useStore = create((set, get) => ({
                     id: item.product_id, // Map product_id back to id for UI
                     qty: Number(item.qty || item.quantity || 1)
                 }));
-                set({ cart: normalizedCart, isCartLoaded: true });
+                
+                // PROBLEM 2 FIX: Sync with inventory BEFORE setting isCartLoaded to true
+                // This prevents the "Sold out" flash because the UI won't render until stock is confirmed
+                set({ cart: normalizedCart });
                 localStorage.setItem('cart', JSON.stringify(normalizedCart));
                 
-                // PROBLEM 2 FIX: Sync with inventory AFTER cart sync is complete
                 await get().syncCartWithInventory();
+                set({ isCartLoaded: true });
             } else {
                 set({ isCartLoaded: true });
             }
@@ -225,9 +228,7 @@ export const useStore = create((set, get) => ({
         const maxQty = getAvailableStock(item);
         finalQty = Math.max(1, Math.min(requestedQty, maxQty));
 
-        // PROBLEM 3 CONSISTENCY: Sync with server FIRST
-        const success = await syncCartWithServer(productId, finalQty, 'update');
-
+        // Update local state IMMEDIATELY for responsiveness
         set((state) => {
             const newCart = state.cart.map(item => {
                 if (String(item.id) !== String(productId)) return item;
@@ -236,6 +237,12 @@ export const useStore = create((set, get) => ({
             localStorage.setItem('cart', JSON.stringify(newCart));
             return { cart: newCart };
         });
+
+        // PERSISTENCE FIX: Sync with server
+        const success = await syncCartWithServer(productId, finalQty, 'update');
+        if (!success) {
+            console.error('Failed to persist quantity to server');
+        }
     },
     updateDeviceModel: (productId, deviceModel) => set((state) => {
         const normalizedDeviceModel = getDeviceModelValue(deviceModel);

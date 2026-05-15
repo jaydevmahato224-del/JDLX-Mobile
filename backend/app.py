@@ -1652,11 +1652,11 @@ def get_cart():
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header.split(' ')[1]
             try:
-                from app import SECRET_KEY
                 import jwt
                 decoded = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
                 user_id = decoded.get('user_id')
-            except:
+            except Exception as e:
+                print(f"DEBUG: JWT decode failed: {e}")
                 pass
         
         session_id = request.args.get('session_id')
@@ -1666,6 +1666,11 @@ def get_cart():
 
         conn = get_db()
         cursor = conn.cursor()
+        
+        # MIGRATION: If we have both, move session items to user
+        if user_id and session_id:
+            cursor.execute("UPDATE cart SET user_id = ?, session_id = NULL WHERE session_id = ? AND user_id IS NULL", (user_id, session_id))
+            conn.commit()
         
         if user_id:
             cursor.execute("""
@@ -1698,16 +1703,24 @@ def update_server_cart():
     if auth_header and auth_header.startswith('Bearer '):
         token = auth_header.split(' ')[1]
         try:
-            from app import SECRET_KEY
             import jwt
             decoded = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
             user_id = decoded.get('user_id')
-        except:
+        except Exception as e:
+            print(f"DEBUG: update_server_cart JWT decode failed: {e}")
             pass
 
     session_id = data.get('session_id')
-    product_id = data.get('product_id')
-    quantity = data.get('quantity', 1)
+    try:
+        product_id = int(data.get('product_id'))
+    except (TypeError, ValueError):
+        return error_response("Invalid Product ID", 400)
+        
+    try:
+        quantity = int(data.get('quantity', 1))
+    except (TypeError, ValueError):
+        quantity = 1
+        
     action = data.get('action', 'add')
 
     if not user_id and not session_id:
@@ -1717,6 +1730,11 @@ def update_server_cart():
         conn = get_db()
         cursor = conn.cursor()
         
+        # MIGRATION: Before any update, ensure session items are moved to user
+        if user_id and session_id:
+            cursor.execute("UPDATE cart SET user_id = ?, session_id = NULL WHERE session_id = ? AND user_id IS NULL", (user_id, session_id))
+            conn.commit()
+            
         # 1. AUTO-RELEASE: Clear cart items older than 30 mins
         cursor.execute("DELETE FROM cart WHERE updated_at < datetime('now', '-30 minutes')")
         
@@ -1725,22 +1743,14 @@ def update_server_cart():
         id_val = user_id if user_id else session_id
 
         # Stock Validation (Requirement 1: SOFT RESERVATION)
-        # We check against products.stock (which is SQ - HR). 
-        # We DO NOT subtract other people's carts (in_others) from displayed stock.
         cursor.execute("SELECT name, stock FROM products WHERE id = ?", (product_id,))
         product = cursor.fetchone()
         if not product:
             return error_response("Product not found", 404)
         
-        # Requirement 1 & 4: available_stock (product['stock']) remains unchanged by other carts
         available = max(0, product['stock'])
 
         if action == 'remove':
-            # Release SOFT RESERVATION by simply deleting from cart. 
-            # Note: Stock visibility (available_stock) is calculated dynamically as (SQ - HR).
-            # If there's a specific 'soft_reserved' field in warehouse_inventory, it should be decremented.
-            # However, looking at get_products, 'cart_reserved' is calculated via SUM(cart.quantity).
-            # So deleting from cart table IS the release mechanism for soft reservation.
             cursor.execute(f"DELETE FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
         elif action == 'clear_cart':
             cursor.execute(f"DELETE FROM cart WHERE {where_clause}")
@@ -1762,6 +1772,7 @@ def update_server_cart():
         elif action == 'update':
             if quantity > available:
                 return error_response(f"Only {available} items available in total", 400)
+            
             cursor.execute(f"UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE {where_clause} AND product_id = ?", (quantity, id_val, product_id))
             
         conn.commit()

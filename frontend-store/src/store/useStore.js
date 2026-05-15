@@ -54,10 +54,11 @@ export const useStore = create((set, get) => ({
     warehouseToken: localStorage.getItem('warehouseToken') || null,
     warehouseRequestUser: safeParse('warehouseRequestUser'),
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
-    cart: [],
+    cart: JSON.parse(localStorage.getItem('cart') || '[]'),
     isCartLoaded: false,
     theme: localStorage.getItem('theme') || 'light',
     fetchCart: async () => {
+        set({ isCartLoaded: false });
         const state = get();
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
@@ -72,6 +73,7 @@ export const useStore = create((set, get) => ({
                 }
             });
             const json = await res.json();
+
             if (res.ok && json.success) {
                 const serverCart = Array.isArray(json.data) ? json.data : [];
                 // Standardize server cart items to match local structure

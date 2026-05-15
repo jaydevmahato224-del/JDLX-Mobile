@@ -67,7 +67,7 @@ export const useStore = create((set, get) => ({
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/cart?session_id=${sessionId}`, {
+            const res = await fetch(`${API_BASE_URL}/cart?session_id=${sessionId}&_t=${Date.now()}`, {
                 headers: { 
                     ...(state.token ? { 'Authorization': `Bearer ${state.token}` } : {})
                 }
@@ -394,7 +394,7 @@ export const useStore = create((set, get) => ({
         const state = get();
         if (!state.token) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/wishlist`, {
+            const res = await fetch(`${API_BASE_URL}/wishlist?_t=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${state.token}` }
             });
             const data = await res.json();

@@ -78,7 +78,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const [isSyncing, setIsSyncing] = useState(false)
 
   const cartItem = cart.find((item) => String(item.id) === String(product.id))
-  const quantity = cartItem ? cartItem.qty : 0
+  const quantity = cartItem ? Number(cartItem.qty || 0) : 0
   const isInWishlist = wishlist.some(item => String(item.id) === String(product.id))
 
   const stock = Number(product?.stock ?? 0)

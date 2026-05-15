@@ -106,11 +106,16 @@ function Checkout() {
         }, 800);
     };
 
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const subtotal = cart.reduce((sum, item) => {
+        const price = Number(item.price || 0);
+        const qty = Number(item.qty || 1);
+        return sum + (price * qty);
+    }, 0);
     const fittingTotal = cart.reduce((sum, item) => {
         if (item.fitting) {
             const charge = item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40;
-            return sum + (charge * item.qty);
+            const qty = Number(item.qty || 1);
+            return sum + (charge * qty);
         }
         return sum;
     }, 0);
@@ -118,13 +123,13 @@ function Checkout() {
     const hasOutOfStockItems = cart.some(item => (item.stock ?? 0) <= 0);
     
     // Dynamic Settings
-    const freeThreshold = availability?.free_delivery_threshold || 499;
+    const freeThreshold = Number(availability?.free_delivery_threshold || 499);
     const isFreeDeliveryEnabled = availability?.free_delivery_enabled !== false; // Default true
-    const platformFee = availability?.platform_fee || 7;
-    const prepaidFee = availability?.prepaid_delivery_charge || 49;
-    const codFee = availability?.cod_delivery_charge || 99;
-    const codAdvance = availability?.cod_advance_amount || 49;
-    const minOrderCod = availability?.min_order_cod || 0;
+    const platformFee = Number(availability?.platform_fee || 7);
+    const prepaidFee = Number(availability?.prepaid_delivery_charge || 49);
+    const codFee = Number(availability?.cod_delivery_charge || 99);
+    const codAdvance = Number(availability?.cod_advance_amount || 49);
+    const minOrderCod = Number(availability?.min_order_cod || 0);
     const codEnabled = availability?.cod_enabled !== false;
     const showPrepaidRecommendation = availability?.prepaid_recommendation_enabled !== false;
     const showPriorityBadge = availability?.priority_dispatch_enabled !== false;
@@ -518,10 +523,10 @@ function Checkout() {
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-[13px] font-black text-slate-900 truncate max-w-[120px] sm:max-w-[200px]">{item.name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{item.qty} x ₹{item.price}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{Number(item.qty || 1)} x ₹{Number(item.price || 0)}</p>
                                         </div>
                                     </div>
-                                    <div className="text-[13px] font-black text-slate-900">₹{(item.price * item.qty).toLocaleString()}</div>
+                                    <div className="text-[13px] font-black text-slate-900">₹{(Number(item.price || 0) * Number(item.qty || 1)).toLocaleString()}</div>
                                 </div>
                             ))}
                         </div>

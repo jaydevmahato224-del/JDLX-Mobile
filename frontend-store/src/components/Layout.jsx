@@ -21,7 +21,7 @@ function Layout({ children }) {
 
   const isCheckingLocation = useStore((state) => state.isCheckingLocation)
 
-  const cartItemCount = useMemo(() => cart.reduce((acc, item) => acc + item.qty, 0), [cart])
+  const cartItemCount = useMemo(() => cart.reduce((acc, item) => acc + Number(item.qty || 0), 0), [cart])
 
   const [tickerText, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
   const [loadingSettings, setLoadingSettings] = useState(true)

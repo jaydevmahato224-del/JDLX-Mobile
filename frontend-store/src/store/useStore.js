@@ -78,6 +78,7 @@ export const useStore = create((set, get) => ({
                 const normalizedCart = serverCart.map(item => ({
                     ...item,
                     id: item.product_id, // Map product_id back to id for UI
+                    qty: Number(item.qty || item.quantity || 1)
                 }));
                 set({ cart: normalizedCart, isCartLoaded: true });
                 localStorage.setItem('cart', JSON.stringify(normalizedCart));
@@ -171,7 +172,9 @@ export const useStore = create((set, get) => ({
             return;
         }
 
-        const newQty = existing ? existing.qty + 1 : 1;
+        const currentQty = Number(existing?.qty || 0);
+        const safeQty = isNaN(currentQty) ? 0 : currentQty;
+        const newQty = existing ? safeQty + 1 : 1;
         
         // Sync with server FIRST
         const success = await syncCartWithServer(product.id, 1, 'add');
@@ -211,13 +214,16 @@ export const useStore = create((set, get) => ({
         });
     },
     updateQuantity: async (productId, qty) => {
-        let finalQty = qty;
+        let requestedQty = Number(qty);
+        if (isNaN(requestedQty)) requestedQty = 1;
+        
+        let finalQty = requestedQty;
         const state = get();
         const item = state.cart.find(i => String(i.id) === String(productId));
         if (!item) return;
 
         const maxQty = getAvailableStock(item);
-        finalQty = Math.max(1, Math.min(qty, maxQty));
+        finalQty = Math.max(1, Math.min(requestedQty, maxQty));
 
         // PROBLEM 3 CONSISTENCY: Sync with server FIRST
         const success = await syncCartWithServer(productId, finalQty, 'update');
@@ -331,11 +337,14 @@ export const useStore = create((set, get) => ({
                     const hardReserved = Number(freshProduct.hard_reserved ?? 0);
                     const available = Math.max(0, physical - hardReserved);
                     
+                    const currentQty = Number(item.qty || item.quantity || 1);
+                    const safeQty = isNaN(currentQty) ? 1 : currentQty;
+                    
                     return { 
                         ...item, 
                         ...freshProduct, 
                         stock: available,
-                        qty: Math.min(item.qty, Math.max(1, available)),
+                        qty: Math.min(safeQty, Math.max(1, available)),
                         removedFromInventory: false 
                     };
                 } catch (err) {

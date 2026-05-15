@@ -60,11 +60,16 @@ function Cart() {
     const hasUnavailableItems = cart.some(item => item.removedFromInventory || Number(item.stock || 0) <= 0);
     const hasStickerMissingDevice = cart.some(item => isStickerProduct(item) && !getDeviceModelValue(item.device_model));
     
-    const subtotal = availableItems.reduce((sum, item) => sum + (Number(item.price || 0) * item.qty), 0);
+    const subtotal = availableItems.reduce((sum, item) => {
+        const price = Number(item.price || 0);
+        const qty = Number(item.qty || 1);
+        return sum + (price * qty);
+    }, 0);
     const fittingTotal = availableItems.reduce((sum, item) => {
         if (item.fitting) {
             const charge = item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40;
-            return sum + (charge * item.qty);
+            const qty = Number(item.qty || 1);
+            return sum + (charge * qty);
         }
         return sum;
     }, 0);
@@ -245,7 +250,7 @@ function Cart() {
                                             >
                                                 {item.qty === 1 ? <Trash2 className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
                                             </button>
-                                            <span className="w-6 text-center text-[16px] font-black text-[var(--color-on-surface)]">{item.qty}</span>
+                                            <span className="w-6 text-center text-[16px] font-black text-[var(--color-on-surface)]">{Number(item.qty || 1)}</span>
                                             <button
                                                 onClick={() => updateQuantity(item.id, item.qty + 1)}
                                                 className="w-10 h-10 flex items-center justify-center text-primary hover:bg-[var(--color-surface-low)] rounded-xl transition-all disabled:opacity-20 disabled:cursor-not-allowed"

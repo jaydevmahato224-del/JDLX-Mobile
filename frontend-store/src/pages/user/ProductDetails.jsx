@@ -47,7 +47,7 @@ export default function ProductDetails() {
   const products = useMemo(() => (storeProducts?.length ? storeProducts : remoteProducts), [storeProducts, remoteProducts]);
   const product = useMemo(() => products.find((p) => String(p.id) === String(id)), [id, products]);
   const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(id)), [cart, id]);
-  const quantity = cartItem?.qty || 0;
+  const quantity = Number(cartItem?.qty || 0);
   const isInWishlist = useMemo(() => wishlist.some(item => String(item.id) === String(id)), [wishlist, id]);
 
   useEffect(() => {

@@ -1711,17 +1711,20 @@ def update_server_cart():
             pass
 
     session_id = data.get('session_id')
-    try:
-        product_id = int(data.get('product_id'))
-    except (TypeError, ValueError):
-        return error_response("Invalid Product ID", 400)
+    action = data.get('action', 'add')
+
+    # Allow clear_cart without a product_id
+    product_id = None
+    if action != 'clear_cart':
+        try:
+            product_id = int(data.get('product_id'))
+        except (TypeError, ValueError):
+            return error_response("Invalid Product ID", 400)
         
     try:
         quantity = int(data.get('quantity', 1))
     except (TypeError, ValueError):
         quantity = 1
-        
-    action = data.get('action', 'add')
 
     if not user_id and not session_id:
         return error_response("User ID or Session ID required", 400)
@@ -1742,19 +1745,29 @@ def update_server_cart():
         where_clause = "user_id = ?" if user_id else "session_id = ?"
         id_val = user_id if user_id else session_id
 
-        # Stock Validation (Requirement 1: SOFT RESERVATION)
-        cursor.execute("SELECT name, stock FROM products WHERE id = ?", (product_id,))
+        if action == 'clear_cart':
+            cursor.execute(f"DELETE FROM cart WHERE {where_clause}", (id_val,))
+            conn.commit()
+            conn.close()
+            return success_response(None, "Cart cleared")
+
+        # Stock Validation (Requirement 1: SOFT RESERVATION) - Check warehouse_inventory first, then fallback to products
+        cursor.execute('''
+            SELECT p.name, 
+                   COALESCE(SUM(wi.stock_quantity), p.stock, 0) as total_stock
+            FROM products p
+            LEFT JOIN warehouse_inventory wi ON p.id = wi.product_id
+            WHERE p.id = ?
+            GROUP BY p.id
+        ''', (product_id,))
         product = cursor.fetchone()
         if not product:
             return error_response("Product not found", 404)
         
-        stock_val = product['stock'] if product['stock'] is not None else 0
-        available = max(0, stock_val)
+        available = max(0, int(product['total_stock'] or 0))
 
         if action == 'remove':
             cursor.execute(f"DELETE FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
-        elif action == 'clear_cart':
-            cursor.execute(f"DELETE FROM cart WHERE {where_clause}")
         elif action == 'add':
             cursor.execute(f"SELECT id, quantity FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
             existing = cursor.fetchone()

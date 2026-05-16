@@ -17,10 +17,11 @@ function NotificationBell() {
             const res = await fetch(`${API_BASE_URL}/notifications`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const data = await res.json();
+            const json = await res.json();
             if (res.ok) {
-                setNotifications(data);
-                setUnreadCount(data.filter(n => !n.read_status).length);
+                const notificationsData = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+                setNotifications(notificationsData);
+                setUnreadCount(notificationsData.filter(n => !n.is_read).length);
             }
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
@@ -53,7 +54,7 @@ function NotificationBell() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                setNotifications(prev => prev.map(n => n.id === id ? { ...n, read_status: 1 } : n));
+                setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
                 setUnreadCount(prev => Math.max(0, prev - 1));
             }
         } catch (error) {
@@ -68,7 +69,7 @@ function NotificationBell() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                setNotifications(prev => prev.map(n => ({ ...n, read_status: 1 })));
+                setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
                 setUnreadCount(0);
             }
         } catch (error) {
@@ -122,16 +123,16 @@ function NotificationBell() {
                             notifications.map(notification => (
                                 <div
                                     key={notification.id}
-                                    className={`p-4 border-b border-gray-50 flex gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${!notification.read_status ? 'bg-primary/5' : ''}`}
-                                    onClick={() => !notification.read_status && markAsRead(notification.id)}
+                                    className={`p-4 border-b border-gray-50 flex gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${!notification.is_read ? 'bg-primary/5' : ''}`}
+                                    onClick={() => !notification.is_read && markAsRead(notification.id)}
                                 >
                                     <div className="mt-1">{getIcon(notification.type)}</div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-start">
-                                            <h4 className={`text-sm font-bold ${!notification.read_status ? 'text-gray-900' : 'text-gray-600'}`}>
+                                            <h4 className={`text-sm font-bold ${!notification.is_read ? 'text-gray-900' : 'text-gray-600'}`}>
                                                 {notification.title}
                                             </h4>
-                                            {!notification.read_status && (
+                                            {!notification.is_read && (
                                                 <div className="w-2 h-2 bg-primary rounded-full"></div>
                                             )}
                                         </div>

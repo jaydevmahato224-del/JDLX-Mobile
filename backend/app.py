@@ -1852,11 +1852,11 @@ def get_wishlist():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT w.added_at, p.id, p.name, p.price, p.images, p.category, p.stock
+            SELECT w.created_at, p.id, p.name, p.price, p.images, p.category, p.stock
             FROM wishlist w 
             JOIN products p ON w.product_id = p.id 
             WHERE w.user_id = ?
-            ORDER BY w.added_at DESC
+            ORDER BY w.created_at DESC
         """, (user_id,))
         items = [normalize_product_row(row) for row in cursor.fetchall()]
         conn.close()

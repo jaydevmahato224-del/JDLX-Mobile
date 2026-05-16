@@ -1739,7 +1739,11 @@ def update_server_cart():
             conn.commit()
             
         # 1. AUTO-RELEASE: Clear cart items older than 30 mins
-        cursor.execute("DELETE FROM cart WHERE updated_at < datetime('now', '-30 minutes')")
+        try:
+            cursor.execute("DELETE FROM cart WHERE updated_at < datetime('now', '-30 minutes')")
+        except Exception as e:
+            if 'no such column: updated_at' not in str(e).lower():
+                print(f"DEBUG: Cart auto-release failed: {e}")
         
         # Build where clause based on what we have
         where_clause = "user_id = ?" if user_id else "session_id = ?"
@@ -1777,17 +1781,17 @@ def update_server_cart():
                 return error_response(f"Only {available} items available in total", 400)
                 
             if existing:
-                cursor.execute("UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_qty, existing['id']))
+                cursor.execute("UPDATE cart SET quantity = ? WHERE id = ?", (new_qty, existing['id']))
             else:
                 if user_id:
-                    cursor.execute("INSERT INTO cart (user_id, product_id, quantity, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", (user_id, product_id, new_qty))
+                    cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)", (user_id, product_id, new_qty))
                 else:
-                    cursor.execute("INSERT INTO cart (session_id, product_id, quantity, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", (session_id, product_id, new_qty))
+                    cursor.execute("INSERT INTO cart (session_id, product_id, quantity) VALUES (?, ?, ?)", (session_id, product_id, new_qty))
         elif action == 'update':
             if quantity > available:
                 return error_response(f"Only {available} items available in total", 400)
             
-            cursor.execute(f"UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE {where_clause} AND product_id = ?", (quantity, id_val, product_id))
+            cursor.execute(f"UPDATE cart SET quantity = ? WHERE {where_clause} AND product_id = ?", (quantity, id_val, product_id))
             
         conn.commit()
         conn.close()

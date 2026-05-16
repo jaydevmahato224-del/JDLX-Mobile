@@ -1748,7 +1748,8 @@ def update_server_cart():
         if not product:
             return error_response("Product not found", 404)
         
-        available = max(0, product['stock'])
+        stock_val = product['stock'] if product['stock'] is not None else 0
+        available = max(0, stock_val)
 
         if action == 'remove':
             cursor.execute(f"DELETE FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))

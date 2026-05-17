@@ -106,8 +106,117 @@ def init_db():
     ensure_columns('categories', [('important_note', 'TEXT'), ('return_policy', "TEXT DEFAULT '7 Days Return Policy'"), ('device_customization_enabled', 'INTEGER DEFAULT 0')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL DEFAULT 0, category_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(category_id) REFERENCES categories(id))''')
-    ensure_columns('products', [('barcode', 'TEXT'), ('global_sku_code', 'TEXT'), ('description', 'TEXT'), ('sub_category', 'TEXT'), ('brand', 'TEXT'), ('units_per_pack', 'TEXT'), ('material_type', 'TEXT'), ('weight', 'TEXT'), ('dimensions', 'TEXT'), ('is_fragile', 'BOOLEAN DEFAULT 0'), ('is_temp_sensitive', 'BOOLEAN DEFAULT 0'), ('is_perishable', 'BOOLEAN DEFAULT 0'), ('is_featured', 'BOOLEAN DEFAULT 0'), ('expiry_date', 'TEXT'), ('return_policy', 'TEXT'), ('prepaid_only', 'INTEGER DEFAULT 0'), ('low_stock_threshold', 'INTEGER DEFAULT 5'), ('delivery_time', "TEXT DEFAULT '12-25 mins'"), ('status', "TEXT DEFAULT 'available'"), ('images', 'TEXT')])
+    ensure_columns('products', [('barcode', 'TEXT'), ('global_sku_code', 'TEXT'), ('description', 'TEXT'), ('sub_category', 'TEXT'), ('brand', 'TEXT'), ('units_per_pack', 'TEXT'), ('material_type', 'TEXT'), ('weight', 'TEXT'), ('dimensions', 'TEXT'), ('is_fragile', 'BOOLEAN DEFAULT 0'), ('is_temp_sensitive', 'BOOLEAN DEFAULT 0'), ('is_perishable', 'BOOLEAN DEFAULT 0'), ('is_featured', 'BOOLEAN DEFAULT 0'), ('expiry_date', 'TEXT'), ('return_policy', 'TEXT'), ('prepaid_only', 'INTEGER DEFAULT 0'), ('low_stock_threshold', 'INTEGER DEFAULT 5'), ('delivery_time', "TEXT DEFAULT '12-25 mins'"), ('status', "TEXT DEFAULT 'available'"), ('images', 'TEXT'), ('has_variants', 'BOOLEAN DEFAULT 0'), ('is_parent', 'BOOLEAN DEFAULT 0'), ('recommendation_priority', 'INTEGER DEFAULT 0'), ('recommendation_weight', 'REAL DEFAULT 1.0'), ('lifecycle_state', "TEXT DEFAULT 'live'")])
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_recommendations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        recommended_product_id INTEGER NOT NULL,
+        recommendation_type TEXT NOT NULL, -- 'related', 'upsell', 'cross_sell', 'frequent'
+        priority INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(product_id, recommended_product_id, recommendation_type),
+        FOREIGN KEY(product_id) REFERENCES products(id),
+        FOREIGN KEY(recommended_product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_recommendations_product ON product_recommendations(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_content (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL UNIQUE,
+        overview TEXT,
+        highlights TEXT, -- JSON array of strings
+        specifications TEXT, -- JSON object
+        compatibility TEXT,
+        box_contents TEXT,
+        warranty_info TEXT,
+        usage_instructions TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_content_product ON product_content(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_badges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        badge_type TEXT NOT NULL, -- 'best_seller', 'trending', 'new_arrival', 'premium', 'limited_deal', 'staff_choice', 'verified'
+        priority INTEGER DEFAULT 0,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        is_active BOOLEAN DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_badges_product ON product_badges(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_fulfillment (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL UNIQUE,
+        package_weight REAL DEFAULT 0,
+        length REAL DEFAULT 0,
+        width REAL DEFAULT 0,
+        height REAL DEFAULT 0,
+        shipping_tier TEXT DEFAULT 'standard', -- 'standard', 'express', 'heavy', 'fragile'
+        dispatch_sla INTEGER DEFAULT 24, -- in hours
+        is_cod_eligible BOOLEAN DEFAULT 1,
+        is_fragile BOOLEAN DEFAULT 0,
+        is_express_eligible BOOLEAN DEFAULT 1,
+        return_window INTEGER DEFAULT 7, -- in days
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fulfillment_product ON product_fulfillment(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_discovery (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL UNIQUE,
+        meta_title TEXT,
+        meta_description TEXT,
+        search_keywords TEXT, -- JSON array
+        product_tags TEXT, -- JSON array
+        search_synonyms TEXT, -- JSON array
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_discovery_product ON product_discovery(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_analytics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL UNIQUE,
+        view_count INTEGER DEFAULT 0,
+        cart_add_count INTEGER DEFAULT 0,
+        purchase_count INTEGER DEFAULT 0,
+        wishlist_count INTEGER DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_product ON product_analytics(product_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_variants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        sku TEXT UNIQUE,
+        price REAL,
+        stock INTEGER DEFAULT 0,
+        barcode TEXT UNIQUE,
+        model_name TEXT,
+        color TEXT,
+        pack_size TEXT,
+        material_type TEXT,
+        images TEXT,
+        weight TEXT,
+        dimensions TEXT,
+        status TEXT DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)")
 
     # Legacy Stock Sync
     cursor.execute("PRAGMA table_info(products)")
@@ -136,10 +245,10 @@ def init_db():
     ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(order_id) REFERENCES orders(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
-    ensure_columns('order_items', [('device_model', 'TEXT')])
+    ensure_columns('order_items', [('device_model', 'TEXT'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS cart (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
-    ensure_columns('cart', [('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')])
+    ensure_columns('cart', [('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
 
     # --- Logistics & Stores ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS dark_stores (id INTEGER PRIMARY KEY AUTOINCREMENT, store_code TEXT UNIQUE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
@@ -174,10 +283,13 @@ def init_db():
     )''')
     ensure_columns('warehouse_inventory', [
         ('warehouse_id', 'INTEGER'),
-        ('available_stock', 'INTEGER DEFAULT 0')
+        ('available_stock', 'INTEGER DEFAULT 0'),
+        ('variant_id', 'INTEGER REFERENCES product_variants(id)')
     ])
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_wh ON warehouse_inventory(warehouse_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_prod ON warehouse_inventory(product_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_variant ON warehouse_inventory(variant_id)")
+
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_order_assignments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

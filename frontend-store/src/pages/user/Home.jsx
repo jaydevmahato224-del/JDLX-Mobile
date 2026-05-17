@@ -502,7 +502,7 @@ export default function Home() {
   const setGlobalSearchQuery = useStore((state) => state.setGlobalSearchQuery)
   const query = globalSearchQuery || ''
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [recommendations, setRecommendations] = useState([])
+
 
   const logInteraction = useCallback(async (type, targetId, category) => {
     try {
@@ -523,24 +523,7 @@ export default function Home() {
     }
   }, [user])
 
-  const fetchRecommendations = useCallback(async () => {
-    try {
-      let sessionId = localStorage.getItem('jdlx_session_id')
-      if (!sessionId) {
-        sessionId = Math.random().toString(36).substring(7)
-        localStorage.setItem('jdlx_session_id', sessionId)
-      }
-      const params = new URLSearchParams()
-      if (user?.user_id) params.append('user_id', user.user_id)
-      if (sessionId) params.append('session_id', sessionId)
-      
-      const res = await fetch(`${API_BASE_URL}/user/recommendations?${params.toString()}`)
-      const json = await res.json()
-      if (json.success) setRecommendations(json.data)
-    } catch (e) {
-      console.error('Recommendations failed:', e)
-    }
-  }, [user])
+
 
 
 
@@ -549,9 +532,7 @@ export default function Home() {
     return () => clearTimeout(timer)
   }, [query])
 
-  useEffect(() => {
-    fetchRecommendations()
-  }, [fetchRecommendations])
+
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/categories`)

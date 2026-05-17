@@ -261,6 +261,9 @@ def normalize_product_row(row):
         product['stock'] = 0
     if 'stock_quantity' in product:
         product.pop('stock_quantity')
+    
+    product['has_variants'] = bool(product.get('has_variants', 0))
+    product['lifecycle_state'] = product.get('lifecycle_state', 'live')
     return product
 
 
@@ -1674,20 +1677,44 @@ def get_cart():
         
         if user_id:
             cursor.execute("""
-                SELECT c.*, p.name, p.price, p.images, p.category, p.stock
+                SELECT c.*, p.name, p.price as base_price, p.images as base_images, p.category, p.stock as base_stock,
+                       pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
+                LEFT JOIN product_variants pv ON c.variant_id = pv.id
                 WHERE c.user_id = ?
             """, (user_id,))
         else:
             cursor.execute("""
-                SELECT c.*, p.name, p.price, p.images, p.category, p.stock
+                SELECT c.*, p.name, p.price as base_price, p.images as base_images, p.category, p.stock as base_stock,
+                       pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
+                LEFT JOIN product_variants pv ON c.variant_id = pv.id
                 WHERE c.session_id = ?
             """, (session_id,))
             
-        items = [dict(row) for row in cursor.fetchall()]
+        items = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            if item.get('variant_id'):
+                item['name'] = item['variant_name'] or item['name']
+                item['price'] = item['variant_price'] if item['variant_price'] is not None else item['base_price']
+                img_val = item['variant_images'] or item['base_images']
+                item['stock'] = item['variant_stock'] if item['variant_stock'] is not None else item['base_stock']
+            else:
+                item['price'] = item['base_price']
+                img_val = item['base_images']
+                item['stock'] = item['base_stock']
+            
+            if img_val and isinstance(img_val, str):
+                try: item['images'] = json.loads(img_val)
+                except: item['images'] = [img_val]
+            else:
+                item['images'] = img_val or []
+                
+            items.append(item)
+
         conn.close()
         return success_response(items, "Cart retrieved")
     except Exception as e:
@@ -1712,6 +1739,7 @@ def update_server_cart():
 
     session_id = data.get('session_id')
     action = data.get('action', 'add')
+    variant_id = data.get('variant_id')
 
     # Allow clear_cart without a product_id
     product_id = None
@@ -1755,25 +1783,37 @@ def update_server_cart():
             conn.close()
             return success_response(None, "Cart cleared")
 
-        # Stock Validation (Requirement 1: SOFT RESERVATION) - Check warehouse_inventory first, then fallback to products
-        cursor.execute('''
-            SELECT p.name, 
-                   COALESCE(SUM(wi.stock_quantity), p.stock, 0) as total_stock
-            FROM products p
-            LEFT JOIN warehouse_inventory wi ON p.id = wi.product_id
-            WHERE p.id = ?
-            GROUP BY p.id
-        ''', (product_id,))
-        product = cursor.fetchone()
-        if not product:
-            return error_response("Product not found", 404)
-        
-        available = max(0, int(product['total_stock'] or 0))
+        # Stock Validation
+        if variant_id:
+            cursor.execute("SELECT stock FROM product_variants WHERE id = ?", (variant_id,))
+            variant = cursor.fetchone()
+            available = variant['stock'] if variant else 0
+        else:
+            cursor.execute('''
+                SELECT p.name, 
+                       COALESCE(SUM(wi.stock_quantity), p.stock, 0) as total_stock
+                FROM products p
+                LEFT JOIN warehouse_inventory wi ON p.id = wi.product_id
+                WHERE p.id = ?
+                GROUP BY p.id
+            ''', (product_id,))
+            product = cursor.fetchone()
+            if not product:
+                return error_response("Product not found", 404)
+            available = max(0, int(product['total_stock'] or 0))
+
+        cart_where = f"{where_clause} AND product_id = ?"
+        cart_params = [id_val, product_id]
+        if variant_id:
+            cart_where += " AND variant_id = ?"
+            cart_params.append(variant_id)
+        else:
+            cart_where += " AND variant_id IS NULL"
 
         if action == 'remove':
-            cursor.execute(f"DELETE FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
+            cursor.execute(f"DELETE FROM cart WHERE {cart_where}", cart_params)
         elif action == 'add':
-            cursor.execute(f"SELECT id, quantity FROM cart WHERE {where_clause} AND product_id = ?", (id_val, product_id))
+            cursor.execute(f"SELECT id, quantity FROM cart WHERE {cart_where}", cart_params)
             existing = cursor.fetchone()
             new_qty = (existing['quantity'] if existing else 0) + quantity
             
@@ -1781,17 +1821,17 @@ def update_server_cart():
                 return error_response(f"Only {available} items available in total", 400)
                 
             if existing:
-                cursor.execute("UPDATE cart SET quantity = ? WHERE id = ?", (new_qty, existing['id']))
+                cursor.execute("UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_qty, existing['id']))
             else:
                 if user_id:
-                    cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)", (user_id, product_id, new_qty))
+                    cursor.execute("INSERT INTO cart (user_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?)", (user_id, product_id, variant_id, new_qty))
                 else:
-                    cursor.execute("INSERT INTO cart (session_id, product_id, quantity) VALUES (?, ?, ?)", (session_id, product_id, new_qty))
+                    cursor.execute("INSERT INTO cart (session_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?)", (session_id, product_id, variant_id, new_qty))
         elif action == 'update':
             if quantity > available:
                 return error_response(f"Only {available} items available in total", 400)
             
-            cursor.execute(f"UPDATE cart SET quantity = ? WHERE {where_clause} AND product_id = ?", (quantity, id_val, product_id))
+            cursor.execute(f"UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE {cart_where}", [quantity] + cart_params)
             
         conn.commit()
         conn.close()
@@ -1943,7 +1983,7 @@ def get_category_products(category_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM products WHERE status='available' AND category_id=?", (category_id,))
+        cursor.execute("SELECT * FROM products WHERE status='available' AND category_id=? AND lifecycle_state IN ('live', 'coming_soon')", (category_id,))
         products = [normalize_product_row(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(products)
@@ -1969,7 +2009,7 @@ def search_products():
                    COALESCE(c.device_customization_enabled, 0) as device_customization_enabled
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.status = 'available'
+            WHERE p.status = 'available' AND p.lifecycle_state IN ('live', 'coming_soon')
         """
         params = []
         
@@ -2037,7 +2077,7 @@ def get_products():
                 LEFT JOIN categories c ON p.category_id = c.id
                 INNER JOIN warehouse_inventory wi ON p.id = wi.product_id
                 LEFT JOIN product_reviews r ON p.id = r.product_id
-                WHERE p.status = 'available' AND wi.warehouse_id = ?
+                WHERE p.status = 'available' AND wi.warehouse_id = ? AND p.lifecycle_state IN ('live', 'coming_soon')
             '''
             params = [store_id]
         else:
@@ -2056,7 +2096,7 @@ def get_products():
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 LEFT JOIN product_reviews r ON p.id = r.product_id
-                WHERE p.status = 'available'
+                WHERE p.status = 'available' AND p.lifecycle_state IN ('live', 'coming_soon')
             '''
             params = []
         
@@ -2087,10 +2127,10 @@ def get_products():
         total_count = None
         if request.args.get('include_count'):
             if store_id:
-                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p INNER JOIN warehouse_inventory wi ON p.id = wi.product_id WHERE p.status = "available" AND wi.warehouse_id = ?'
+                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p INNER JOIN warehouse_inventory wi ON p.id = wi.product_id WHERE p.status = "available" AND wi.warehouse_id = ? AND p.lifecycle_state IN ("live", "coming_soon")'
                 count_params = [store_id]
             else:
-                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p WHERE p.status = "available"'
+                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p WHERE p.status = "available" AND p.lifecycle_state IN ("live", "coming_soon")'
                 count_params = []
                 
             if category_id:
@@ -2184,8 +2224,107 @@ def get_product(product_id):
 
         # Determine the effective return policy: Product > Category > Global
         product_dict['final_return_policy'] = product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy
+
+        # Fetch variants for this product
+        cursor.execute("SELECT * FROM product_variants WHERE product_id = ?", (product_id,))
+        variants = [dict(r) for r in cursor.fetchall()]
+        for v in variants:
+            if v.get('images'):
+                try:
+                    v['images'] = json.loads(v['images'])
+                except:
+                    pass
+        product_dict['variants'] = variants
+
+        # Fetch recommendations
+        cursor.execute("""
+            SELECT pr.recommendation_type, p.id, p.name, p.price, p.images, p.brand
+            FROM product_recommendations pr
+            JOIN products p ON pr.recommended_product_id = p.id
+            WHERE pr.product_id = ?
+            ORDER BY pr.priority DESC
+        """, (product_id,))
+        recs = cursor.fetchall()
         
+        product_dict['recommendation_controls'] = {
+            'related': [dict(r) for r in recs if r['recommendation_type'] == 'related'],
+            'upsell': [dict(r) for r in recs if r['recommendation_type'] == 'upsell'],
+            'cross_sell': [dict(r) for r in recs if r['recommendation_type'] == 'cross_sell'],
+            'frequent': [dict(r) for r in recs if r['recommendation_type'] == 'frequent'],
+            'manual_priority': product_dict.get('recommendation_priority', 0),
+            'smart_weight': product_dict.get('recommendation_weight', 1.0)
+        }
+
+        # Fetch product content
+        cursor.execute("SELECT * FROM product_content WHERE product_id = ?", (product_id,))
+        content = cursor.fetchone()
+        if content:
+            content_dict = dict(content)
+            # Parse JSON fields
+            for json_field in ['highlights', 'specifications']:
+                if content_dict.get(json_field):
+                    try:
+                        content_dict[json_field] = json.loads(content_dict[json_field])
+                    except:
+                        pass
+            product_dict['content'] = content_dict
+        else:
+            product_dict['content'] = None
+
+        # Fetch badges
+        cursor.execute("""
+            SELECT badge_type, priority, start_date, end_date
+            FROM product_badges
+            WHERE product_id = ? AND is_active = 1
+            AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP)
+            AND (end_date IS NULL OR end_date >= CURRENT_TIMESTAMP)
+            ORDER BY priority DESC
+        """, (product_id,))
+        product_dict['badges'] = [dict(r) for r in cursor.fetchall()]
+
+        # Fetch fulfillment
+        cursor.execute("SELECT * FROM product_fulfillment WHERE product_id = ?", (product_id,))
+        fulfillment = cursor.fetchone()
+        product_dict['fulfillment'] = dict(fulfillment) if fulfillment else None
+
+        # Fetch discovery
+        cursor.execute("SELECT * FROM product_discovery WHERE product_id = ?", (product_id,))
+        discovery = cursor.fetchone()
+        if discovery:
+            discovery_dict = dict(discovery)
+            for json_field in ['search_keywords', 'product_tags', 'search_synonyms']:
+                if discovery_dict.get(json_field):
+                    try:
+                        discovery_dict[json_field] = json.loads(discovery_dict[json_field])
+                    except:
+                        discovery_dict[json_field] = []
+                else:
+                    discovery_dict[json_field] = []
+            product_dict['discovery'] = discovery_dict
+        else:
+            product_dict['discovery'] = None
+
+        # Fetch analytics
+        cursor.execute("SELECT * FROM product_analytics WHERE product_id = ?", (product_id,))
+        analytics = cursor.fetchone()
+        if analytics:
+            ana_dict = dict(analytics)
+            # Calculate Conversion Rate (Purchases / Views)
+            views = ana_dict.get('view_count', 0)
+            purchases = ana_dict.get('purchase_count', 0)
+            ana_dict['conversion_rate'] = round((purchases / views * 100), 2) if views > 0 else 0
+            product_dict['analytics'] = ana_dict
+        else:
+            product_dict['analytics'] = {
+                'view_count': 0,
+                'cart_add_count': 0,
+                'purchase_count': 0,
+                'wishlist_count': 0,
+                'conversion_rate': 0
+            }
+
         conn.close()
+
         return success_response(product_dict, "Product details retrieved successfully")
     except Exception as e:
         return error_response(str(e), 500)
@@ -2460,21 +2599,47 @@ def checkout():
 
         # 4. Insert Order Items and Update both store and global stock (Requirement 2: HARD RESERVATION)
         for item in items:
+            v_id = item.get('variant_id')
             cursor.execute(
-                "INSERT INTO order_items (order_id, product_id, quantity, price, device_model, fitting_charge) VALUES (?, ?, ?, ?, ?, ?)",
-                (order_id, item['id'], item['qty'], item['price'], item.get('device_model'), item.get('fitting_charge', 0))
+                "INSERT INTO order_items (order_id, product_id, variant_id, quantity, price, device_model, fitting_charge) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (order_id, item['id'], v_id, item['qty'], item['price'], item.get('device_model'), item.get('fitting_charge', 0))
             )
-            
+
             # Requirement 2: Reduce stock_quantity immediately on order confirmation.
             # This counts as "ORDER CONFIRMED". Triggers sync available_stock and products.stock.
+            if v_id:
+                cursor.execute("""
+                    UPDATE warehouse_inventory
+                    SET stock_quantity = MAX(0, stock_quantity - ?),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
+                """, (item['qty'], store_id, item['id'], v_id))
+
+                # Sync variant stock
+                cursor.execute("""
+                    UPDATE product_variants SET stock = (
+                        SELECT COALESCE(SUM(stock_quantity), 0)
+                        FROM warehouse_inventory WHERE variant_id = ?
+                    ) WHERE id = ?
+                """, (v_id, v_id))
+            else:
+                cursor.execute("""
+                    UPDATE warehouse_inventory
+                    SET stock_quantity = MAX(0, stock_quantity - ?),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE warehouse_id = ? AND product_id = ? AND variant_id IS NULL
+                """, (item['qty'], store_id, item['id']))
+
+            # Sync global products.stock
             cursor.execute("""
-                UPDATE warehouse_inventory 
-                SET stock_quantity = MAX(0, stock_quantity - ?),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE warehouse_id = ? AND product_id = ?
-            """, (item['qty'], store_id, item['id']))
+                UPDATE products SET stock = (
+                    SELECT COALESCE(SUM(stock_quantity), 0)
+                    FROM warehouse_inventory WHERE product_id = ?
+                ) WHERE id = ?
+            """, (item['id'], item['id']))
 
             # Trigger Low Stock Notifications if stock drops to <= 5 (matching UI default)
+
             cursor.execute("SELECT name, stock, low_stock_threshold FROM products WHERE id = ?", (item['id'],))
             prod_data = cursor.fetchone()
             if prod_data and 0 < prod_data['stock'] <= (prod_data['low_stock_threshold'] or 5):
@@ -2631,19 +2796,43 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
 
     # Transitions to CANCELLED/REFUNDED/REJECTED: Add stock_quantity back.
     elif new_status in ['CANCELLED', 'REFUNDED', 'REJECTED'] and old_status not in ['CANCELLED', 'REFUNDED', 'REJECTED', 'DELIVERED']:
-        cursor.execute("SELECT product_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
+        cursor.execute("SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
         items = cursor.fetchall()
         cursor.execute("SELECT dark_store_id as store_id FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
         if order and order['store_id']:
             for item in items:
-                cursor.execute("""
-                    UPDATE warehouse_inventory 
-                    SET stock_quantity = stock_quantity + ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE warehouse_id = ? AND product_id = ?
-                """, (item['quantity'], order['store_id'], item['product_id']))
+                v_id = item['variant_id']
+                if v_id:
+                    cursor.execute("""
+                        UPDATE warehouse_inventory
+                        SET stock_quantity = stock_quantity + ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
+                    """, (item['quantity'], order['store_id'], item['product_id'], v_id))
 
+                    # Sync variant stock
+                    cursor.execute("""
+                        UPDATE product_variants SET stock = (
+                            SELECT COALESCE(SUM(stock_quantity), 0)
+                            FROM warehouse_inventory WHERE variant_id = ?
+                        ) WHERE id = ?
+                    """, (v_id, v_id))
+                else:
+                    cursor.execute("""
+                        UPDATE warehouse_inventory
+                        SET stock_quantity = stock_quantity + ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE warehouse_id = ? AND product_id = ? AND variant_id IS NULL
+                    """, (item['quantity'], order['store_id'], item['product_id']))
+
+                # Sync global products.stock
+                cursor.execute("""
+                    UPDATE products SET stock = (
+                        SELECT COALESCE(SUM(stock_quantity), 0)
+                        FROM warehouse_inventory WHERE product_id = ?
+                    ) WHERE id = ?
+                """, (item['product_id'], item['product_id']))
 @app.route('/api/admin/order/<int:order_id>/status', methods=['PATCH'])
 @token_required
 @require_admin()
@@ -4260,7 +4449,7 @@ def admin_update_product(product_id):
         cursor = conn.cursor()
         updates = []
         params = []
-        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only']:
+        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
             if key in data:
                 updates.append(f"{key}=?")
                 params.append(data[key])

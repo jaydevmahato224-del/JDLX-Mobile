@@ -1254,6 +1254,48 @@ def warehouse_dashboard():
     finally:
         conn.close()
 
+
+@warehouse_bp.route("/api/warehouse/analytics", methods=["GET"])
+@require_warehouse_auth
+def warehouse_analytics():
+    """Warehouse analytics for the partner dashboard charts."""
+    wh_id = request.warehouse_payload["warehouse_id"]
+    conn = get_db()
+    try:
+        status_rows = conn.execute(
+            """
+            SELECT assignment_status, COUNT(*) AS count
+            FROM warehouse_order_assignments
+            WHERE warehouse_id = ?
+            GROUP BY assignment_status
+            """,
+            (wh_id,),
+        ).fetchall()
+
+        low_stock = conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM warehouse_inventory
+            WHERE warehouse_id = ?
+              AND stock_quantity <= low_stock_threshold
+            """,
+            (wh_id,),
+        ).fetchone()["n"]
+
+        return jsonify({
+            "status_breakdown": {
+                row["assignment_status"]: row["count"]
+                for row in status_rows
+            },
+            "low_stock_skus": low_stock,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"ERROR in warehouse_analytics: {str(e)}", exc_info=True)
+        return error_response(str(e), 500)
+    finally:
+        conn.close()
+
+
 @warehouse_bp.route("/api/warehouse/restock", methods=["GET"])
 @require_warehouse_auth
 def get_warehouse_restock_requests():
@@ -1775,6 +1817,8 @@ def warehouse_get_inventory():
                       p.weight, p.dimensions, p.is_fragile, p.is_temp_sensitive,
                       p.is_perishable, p.expiry_date, p.is_featured,
                       p.return_policy,
+                      p.recommendation_priority, p.recommendation_weight,
+                      p.lifecycle_state,
                       c.return_policy as category_return_policy,
                       ROUND(COALESCE((SELECT AVG(rating) FROM product_reviews WHERE product_id = p.id), 0), 1) as average_rating
                FROM warehouse_inventory wi
@@ -1883,8 +1927,18 @@ def warehouse_create_product():
     global_sku_code = data.get('global_sku_code', '').strip() or None
     
     description = data.get('description', '')
+    has_variants = data.get('has_variants', False)
+    variants_data = data.get('variants', [])
+    
+    # Recommendation Controls
+    rec_priority = data.get('recommendation_priority', 0)
+    rec_weight = data.get('recommendation_weight', 1.0)
+    recommendations = data.get('recommendations', {}) # { 'related': [id1, id2], ... }
 
-    if not name or price is None:
+    # Lifecycle State
+    lifecycle_state = data.get('lifecycle_state', 'live')
+
+    if not name or (price is None and not has_variants):
         return error_response("Missing name or price", 400)
     
     # Validate barcode if provided (e.g., 13-digit format)
@@ -1902,63 +1956,210 @@ def warehouse_create_product():
             if existing:
                 return error_response(f"Product with barcode {barcode} already exists in global catalog.", 409)
 
-            # 1. Insert into products
+        # 1. Insert into products
         cursor.execute(
             """
             INSERT INTO products (
                 name, description, sub_category, price, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
-                weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, is_featured
+                weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
+                is_featured, has_variants, is_parent, recommendation_priority, recommendation_weight,
+                lifecycle_state
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                name, description, data.get('sub_category'), price, category, category_id, images, 
+                name, description, data.get('sub_category'), price or 0, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, data.get('brand'), data.get('units_per_pack'), 
                 data.get('material_type'), data.get('weight'), data.get('dimensions'),
                 data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
                 data.get('is_perishable', 0), data.get('expiry_date'),
-                data.get('is_featured', 0)
+                data.get('is_featured', 0), 1 if has_variants else 0, 1 if has_variants else 0,
+                rec_priority, rec_weight, lifecycle_state
             )
         )
         product_id = cursor.lastrowid
-        
-        # 2. Logic for Unique Identifier (SKU)
-        final_sku = sku or global_sku_code or barcode
-        
-        if not final_sku:
-            final_sku = str(random.randint(100000, 999999))
-            # Verify uniqueness in warehouse inventory
-            while cursor.execute("SELECT id FROM warehouse_inventory WHERE sku = ?", (final_sku,)).fetchone():
-                final_sku = str(random.randint(100000, 999999))
-        
-        # 3. Add to warehouse_inventory
-        cursor.execute(
-            """INSERT INTO warehouse_inventory 
-               (warehouse_id, product_id, product_name, sku, stock_quantity, available_stock,
-                low_stock_threshold, cost_price, selling_price, mrp, 
-                discount_pct, discount_amt, gst_pct, brand, unit)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                wh_id, product_id, name, final_sku, initial_stock, initial_stock, 2, 
-                data.get('cost_price', 0), data.get('selling_price', 0),
-                data.get('mrp', 0.0), data.get('discount_pct', 0.0),
-                data.get('discount_amt', 0.0),
-                data.get('gst_pct'), data.get('brand'), data.get('unit', 'pcs')
-            )
-        )
 
-        # Sync global products.stock
-        conn.execute(
-            """UPDATE products SET stock = (
-                SELECT COALESCE(SUM(stock_quantity), 0)
-                FROM warehouse_inventory WHERE product_id = ?
-            ) WHERE id = ?""",
-            (product_id, product_id)
-        )
+        # Save Recommendations
+        for rec_type, prod_ids in recommendations.items():
+            if not isinstance(prod_ids, list): continue
+            for r_id in prod_ids:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO product_recommendations (product_id, recommended_product_id, recommendation_type) VALUES (?, ?, ?)",
+                    (product_id, r_id, rec_type)
+                )
+
+        # Save Product Content
+        content = data.get('content', {})
+        if content:
+            cursor.execute(
+                """INSERT INTO product_content (
+                    product_id, overview, highlights, specifications, compatibility,
+                    box_contents, warranty_info, usage_instructions
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    product_id, 
+                    content.get('overview'),
+                    json.dumps(content.get('highlights', [])),
+                    json.dumps(content.get('specifications', {})),
+                    content.get('compatibility'),
+                    content.get('box_contents'),
+                    content.get('warranty_info'),
+                    content.get('usage_instructions')
+                )
+            )
+
+        # Save Badges
+        badges = data.get('badges', [])
+        if badges:
+            for b in badges:
+                cursor.execute(
+                    """INSERT INTO product_badges (product_id, badge_type, priority, is_active)
+                       VALUES (?, ?, ?, ?)""",
+                    (product_id, b.get('type'), b.get('priority', 0), 1 if b.get('is_active', True) else 0)
+                )
+
+        # Save Fulfillment
+        ful = data.get('fulfillment', {})
+        if ful:
+            cursor.execute(
+                """INSERT INTO product_fulfillment (
+                    product_id, package_weight, length, width, height, 
+                    shipping_tier, dispatch_sla, is_cod_eligible, is_fragile, 
+                    is_express_eligible, return_window
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    product_id, 
+                    ful.get('package_weight', 0),
+                    ful.get('length', 0),
+                    ful.get('width', 0),
+                    ful.get('height', 0),
+                    ful.get('shipping_tier', 'standard'),
+                    ful.get('dispatch_sla', 24),
+                    1 if ful.get('is_cod_eligible', True) else 0,
+                    1 if ful.get('is_fragile', False) else 0,
+                    1 if ful.get('is_express_eligible', True) else 0,
+                    ful.get('return_window', 7)
+                )
+            )
+
+        # Save Discovery
+        disco = data.get('discovery', {})
+        if disco:
+            cursor.execute(
+                """INSERT INTO product_discovery (
+                    product_id, meta_title, meta_description, 
+                    search_keywords, product_tags, search_synonyms
+                ) VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    product_id, 
+                    disco.get('meta_title'),
+                    disco.get('meta_description'),
+                    json.dumps(disco.get('search_keywords', [])),
+                    json.dumps(disco.get('product_tags', [])),
+                    json.dumps(disco.get('search_synonyms', []))
+                )
+            )
         
-        conn.commit()
-        return success_response({"product_id": product_id, "sku": final_sku}, "Product created, added to inventory, and synced with catalog", 201)
+        if has_variants and variants_data:
+            created_variants = []
+            for v in variants_data:
+                v_name = f"{name} - {v.get('name', 'Variant')}"
+                v_sku = v.get('sku') or str(random.randint(100000, 999999))
+                v_barcode = v.get('barcode', '').strip() or None
+                v_price = v.get('price', price)
+                v_stock = v.get('stock_quantity', 0)
+                v_images = v.get('images', images)
+                if isinstance(v_images, list):
+                    v_images = json.dumps(v_images)
+
+                cursor.execute(
+                    """INSERT INTO product_variants 
+                       (product_id, name, sku, price, barcode, model_name, color, 
+                        pack_size, material_type, images, weight, dimensions)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        product_id, v_name, v_sku, v_price, v_barcode, v.get('model_name'),
+                        v.get('color'), v.get('pack_size'), v.get('material_type'),
+                        v_images, v.get('weight'), v.get('dimensions')
+                    )
+                )
+                variant_id = cursor.lastrowid
+                
+                # Add to warehouse_inventory
+                cursor.execute(
+                    """INSERT INTO warehouse_inventory 
+                       (warehouse_id, product_id, variant_id, product_name, sku, stock_quantity, available_stock,
+                        low_stock_threshold, cost_price, selling_price, mrp, 
+                        discount_pct, discount_amt, gst_pct, brand, unit)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        wh_id, product_id, variant_id, v_name, v_sku, v_stock, v_stock, 2, 
+                        v.get('cost_price', 0), v_price,
+                        v.get('mrp', 0.0), v.get('discount_pct', 0.0),
+                        v.get('discount_amt', 0.0),
+                        v.get('gst_pct'), data.get('brand'), data.get('unit', 'pcs')
+                    )
+                )
+                
+                # Sync variant stock
+                cursor.execute(
+                    "UPDATE product_variants SET stock = ? WHERE id = ?",
+                    (v_stock, variant_id)
+                )
+                created_variants.append({"variant_id": variant_id, "sku": v_sku})
+
+            # Sync parent stock
+            conn.execute(
+                """UPDATE products SET stock = (
+                    SELECT COALESCE(SUM(stock_quantity), 0)
+                    FROM warehouse_inventory WHERE product_id = ?
+                ) WHERE id = ?""",
+                (product_id, product_id)
+            )
+            
+            conn.commit()
+            return success_response({"product_id": product_id, "variants": created_variants}, "Product and variants created", 201)
+        
+        else:
+            # Original Single Product Logic
+            # 2. Logic for Unique Identifier (SKU)
+            final_sku = sku or global_sku_code or barcode
+            
+            if not final_sku:
+                final_sku = str(random.randint(100000, 999999))
+                # Verify uniqueness in warehouse inventory
+                while cursor.execute("SELECT id FROM warehouse_inventory WHERE sku = ?", (final_sku,)).fetchone():
+                    final_sku = str(random.randint(100000, 999999))
+            
+            # 3. Add to warehouse_inventory
+            cursor.execute(
+                """INSERT INTO warehouse_inventory 
+                   (warehouse_id, product_id, product_name, sku, stock_quantity, available_stock,
+                    low_stock_threshold, cost_price, selling_price, mrp, 
+                    discount_pct, discount_amt, gst_pct, brand, unit)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    wh_id, product_id, name, final_sku, initial_stock, initial_stock, 2, 
+                    data.get('cost_price', 0), data.get('selling_price', 0),
+                    data.get('mrp', 0.0), data.get('discount_pct', 0.0),
+                    data.get('discount_amt', 0.0),
+                    data.get('gst_pct'), data.get('brand'), data.get('unit', 'pcs')
+                )
+            )
+
+            # Sync global products.stock
+            conn.execute(
+                """UPDATE products SET stock = (
+                    SELECT COALESCE(SUM(stock_quantity), 0)
+                    FROM warehouse_inventory WHERE product_id = ?
+                ) WHERE id = ?""",
+                (product_id, product_id)
+            )
+            
+            conn.commit()
+            return success_response({"product_id": product_id, "sku": final_sku}, "Product created, added to inventory, and synced with catalog", 201)
+
     except Exception as e:
         return error_response(str(e), 500)
     finally:
@@ -1992,7 +2193,8 @@ def warehouse_patch_inventory(item_id):
         product_meta_fields = [
             "name", "images", "description", "brand", "units_per_pack", "material_type", 
             "category_id", "sub_category", "weight", "dimensions", "is_fragile", 
-            "is_temp_sensitive", "is_perishable", "expiry_date", "is_featured"
+            "is_temp_sensitive", "is_perishable", "expiry_date", "is_featured",
+            "recommendation_priority", "recommendation_weight", "lifecycle_state"
         ]
         meta_updates = []
         meta_values = []
@@ -2007,6 +2209,103 @@ def warehouse_patch_inventory(item_id):
         if meta_updates:
             meta_values.append(inv["product_id"])
             conn.execute(f"UPDATE products SET {', '.join(meta_updates)} WHERE id = ?", meta_values)
+
+        # Handle Recommendations if provided
+        if "recommendations" in data:
+            product_id = inv["product_id"]
+            recommendations = data["recommendations"] # { 'related': [id1, id2], ... }
+            
+            # Simple approach: clear all and re-insert for provided types
+            for rec_type, prod_ids in recommendations.items():
+                if not isinstance(prod_ids, list): continue
+                conn.execute("DELETE FROM product_recommendations WHERE product_id = ? AND recommendation_type = ?", (product_id, rec_type))
+                for r_id in prod_ids:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO product_recommendations (product_id, recommended_product_id, recommendation_type) VALUES (?, ?, ?)",
+                        (product_id, r_id, rec_type)
+                    )
+
+        # Handle Product Content if provided
+        if "content" in data:
+            product_id = inv["product_id"]
+            content = data["content"]
+            
+            # Upsert logic for SQLite
+            conn.execute("DELETE FROM product_content WHERE product_id = ?", (product_id,))
+            conn.execute(
+                """INSERT INTO product_content (
+                    product_id, overview, highlights, specifications, compatibility,
+                    box_contents, warranty_info, usage_instructions
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    product_id, 
+                    content.get('overview'),
+                    json.dumps(content.get('highlights', [])),
+                    json.dumps(content.get('specifications', {})),
+                    content.get('compatibility'),
+                    content.get('box_contents'),
+                    content.get('warranty_info'),
+                    content.get('usage_instructions')
+                )
+            )
+
+        # Handle Badges if provided
+        if "badges" in data:
+            product_id = inv["product_id"]
+            badges = data["badges"]
+            conn.execute("DELETE FROM product_badges WHERE product_id = ?", (product_id,))
+            for b in badges:
+                conn.execute(
+                    """INSERT INTO product_badges (product_id, badge_type, priority, is_active)
+                       VALUES (?, ?, ?, ?)""",
+                    (product_id, b.get('type'), b.get('priority', 0), 1 if b.get('is_active', True) else 0)
+                )
+
+        # Handle Fulfillment if provided
+        if "fulfillment" in data:
+            product_id = inv["product_id"]
+            ful = data["fulfillment"]
+            conn.execute("DELETE FROM product_fulfillment WHERE product_id = ?", (product_id,))
+            conn.execute(
+                """INSERT INTO product_fulfillment (
+                    product_id, package_weight, length, width, height, 
+                    shipping_tier, dispatch_sla, is_cod_eligible, is_fragile, 
+                    is_express_eligible, return_window
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    product_id, 
+                    ful.get('package_weight', 0),
+                    ful.get('length', 0),
+                    ful.get('width', 0),
+                    ful.get('height', 0),
+                    ful.get('shipping_tier', 'standard'),
+                    ful.get('dispatch_sla', 24),
+                    1 if ful.get('is_cod_eligible', True) else 0,
+                    1 if ful.get('is_fragile', False) else 0,
+                    1 if ful.get('is_express_eligible', True) else 0,
+                    ful.get('return_window', 7)
+                )
+            )
+
+        # Handle Discovery if provided
+        if "discovery" in data:
+            product_id = inv["product_id"]
+            disco = data["discovery"]
+            conn.execute("DELETE FROM product_discovery WHERE product_id = ?", (product_id,))
+            conn.execute(
+                """INSERT INTO product_discovery (
+                    product_id, meta_title, meta_description, 
+                    search_keywords, product_tags, search_synonyms
+                ) VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    product_id, 
+                    disco.get('meta_title'),
+                    disco.get('meta_description'),
+                    json.dumps(disco.get('search_keywords', [])),
+                    json.dumps(disco.get('product_tags', [])),
+                    json.dumps(disco.get('search_synonyms', []))
+                )
+            )
 
         # Update inventory fields if any
         # Remove fields that belong to global product metadata from inventory updates
@@ -2043,6 +2342,20 @@ def warehouse_patch_inventory(item_id):
                     ) WHERE id = ?""",
                     (inv["product_id"], inv["product_id"])
                 )
+
+                # Sync variant stock if applicable
+                inv_variant = conn.execute(
+                    "SELECT variant_id FROM warehouse_inventory WHERE id = ?",
+                    (item_id,)
+                ).fetchone()
+                if inv_variant and inv_variant["variant_id"]:
+                    conn.execute(
+                        """UPDATE product_variants SET stock = (
+                            SELECT COALESCE(SUM(stock_quantity), 0)
+                            FROM warehouse_inventory WHERE variant_id = ?
+                        ) WHERE id = ?""",
+                        (inv_variant["variant_id"], inv_variant["variant_id"])
+                    )
 
         conn.commit()
         # Clear cache to reflect updates immediately

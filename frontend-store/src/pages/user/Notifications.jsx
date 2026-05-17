@@ -34,7 +34,7 @@ function Notifications() {
             <button onClick={markAll} className="btn-secondary mb-4">Mark All Read</button>
             <ul className="space-y-2">
                 {notes.map(n=> (
-                    <li key={n.id} className={`p-3 ${n.is_read?'bg-gray-100':''} glass-card`}> 
+                    <li key={n.id} className={`p-3 ${n.read_status?'bg-gray-100':''} glass-card`}> 
                         <div className="font-bold">{n.title}</div>
                         <div className="text-sm">{n.message}</div>
                         <div className="text-xs text-gray-500">{n.created_at}</div>

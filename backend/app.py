@@ -1790,12 +1790,9 @@ def update_server_cart():
             available = variant['stock'] if variant else 0
         else:
             cursor.execute('''
-                SELECT p.name, 
-                       COALESCE(SUM(wi.stock_quantity), p.stock, 0) as total_stock
-                FROM products p
-                LEFT JOIN warehouse_inventory wi ON p.id = wi.product_id
-                WHERE p.id = ?
-                GROUP BY p.id
+                SELECT name, stock as total_stock
+                FROM products
+                WHERE id = ?
             ''', (product_id,))
             product = cursor.fetchone()
             if not product:

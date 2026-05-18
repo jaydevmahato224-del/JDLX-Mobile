@@ -56,6 +56,7 @@ from support_routes import support_bp
 from report_routes import report_bp
 from refund_routes import refund_bp
 from bug_routes import bug_bp
+from offer_routes import offer_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location

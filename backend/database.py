@@ -547,6 +547,42 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS delivery_applications (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     ensure_columns('delivery_applications', [('partner_id', 'TEXT'), ('warehouse_id', 'INTEGER'), ('phone', 'TEXT'), ('verification_status', 'TEXT'), ('pan_card_image', 'TEXT'), ('aadhaar_front_image', 'TEXT'), ('aadhaar_back_image', 'TEXT'), ('face_verification_image', 'TEXT'), ('face_verification_status', 'TEXT'), ('aadhaar_extracted_address', 'TEXT'), ('aadhaar_qr_payload', 'TEXT')])
 
+    # --- Offers & Discounts ---
+    cursor.execute('''CREATE TABLE IF NOT EXISTS offers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        offer_type TEXT NOT NULL, -- 'coupon', 'automatic', 'seasonal', 'daily'
+        discount_type TEXT NOT NULL, -- 'percentage', 'flat'
+        discount_value REAL NOT NULL,
+        min_order_amount REAL DEFAULT 0,
+        max_discount_amount REAL,
+        target_type TEXT DEFAULT 'all', -- 'all', 'new_user', 'specific_user'
+        applicable_on TEXT DEFAULT 'all', -- 'all', 'category', 'product'
+        applicable_ids TEXT, -- JSON array
+        coupon_code TEXT UNIQUE,
+        usage_limit INTEGER,
+        usage_count INTEGER DEFAULT 0,
+        per_user_limit INTEGER DEFAULT 1,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        is_active BOOLEAN DEFAULT 1,
+        banner_image TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS offer_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        offer_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        discount_applied REAL NOT NULL,
+        used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(offer_id) REFERENCES offers(id),
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(order_id) REFERENCES orders(id)
+    )''')
+
     # --- Seeding & Defaults ---
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('platform_fee', '7')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('free_delivery_threshold', '499')")

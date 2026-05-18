@@ -467,5 +467,76 @@ export const useStore = create((set, get) => ({
     // PWA Install Prompt State
     pwaInstallPrompt: null,
     setPwaInstallPrompt: (prompt) => set({ pwaInstallPrompt: prompt }),
-    clearPwaInstallPrompt: () => set({ pwaInstallPrompt: null })
+    clearPwaInstallPrompt: () => set({ pwaInstallPrompt: null }),
+
+    // Offers & Discounts
+    activeOffers: [],
+    appliedOffer: null, // { offer_id, discount_amount, title, code }
+    fetchActiveOffers: async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/offers/active`);
+            const json = await res.json();
+            if (res.ok && json.data) {
+                set({ activeOffers: json.data });
+                return json.data;
+            }
+        } catch (e) {
+            console.error('Failed to fetch offers:', e);
+        }
+        return [];
+    },
+    applyAutomaticOffers: async (cartTotal, productIds) => {
+        const state = get();
+        if (!state.token || cartTotal <= 0) return null;
+        try {
+            const res = await fetch(`${API_BASE_URL}/offers/apply-automatic`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${state.token}`
+                },
+                body: JSON.stringify({ cart_total: cartTotal, product_ids: productIds })
+            });
+            const json = await res.json();
+            if (res.ok && json.data && json.data.applied_offer) {
+                // Only auto-apply if it's better than current applied offer
+                const currentDiscount = state.appliedOffer ? state.appliedOffer.discount_amount : 0;
+                const autoOffer = json.data.applied_offer;
+                if (autoOffer.discount_amount > currentDiscount || (!state.appliedOffer?.code && autoOffer.discount_amount > 0)) {
+                    set({ appliedOffer: autoOffer });
+                    return autoOffer;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to apply automatic offers:', e);
+        }
+        return null;
+    },
+    applyCoupon: async (code, cartTotal, productIds) => {
+        const state = get();
+        if (!state.token) {
+            return { valid: false, message: 'Please login to apply coupons' };
+        }
+        try {
+            const res = await fetch(`${API_BASE_URL}/offers/validate-coupon`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${state.token}`
+                },
+                body: JSON.stringify({ coupon_code: code, cart_total: cartTotal, product_ids: productIds })
+            });
+            const json = await res.json();
+            if (res.ok && json.data && json.data.valid) {
+                set({ appliedOffer: { ...json.data, code } });
+                return json.data;
+            } else {
+                return { valid: false, message: json.error || 'Invalid coupon' };
+            }
+        } catch (e) {
+            console.error('Failed to validate coupon:', e);
+            return { valid: false, message: 'Failed to validate coupon' };
+        }
+    },
+    removeOffer: () => set({ appliedOffer: null })
 }))

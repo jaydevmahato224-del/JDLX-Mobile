@@ -238,6 +238,11 @@ function App() {
                 <AdminProducts />
               </AdminRoute>
             } />
+            <Route path="offers" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+                <AdminOffers />
+              </AdminRoute>
+            } />
             <Route path="orders" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'delivery_admin']}>
                 <AdminOrders />

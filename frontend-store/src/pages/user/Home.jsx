@@ -534,6 +534,8 @@ export default function Home() {
 
 
 
+  const [offerBanners, setOfferBanners] = useState([])
+
   useEffect(() => {
     fetch(`${API_BASE_URL}/categories`)
       .then((res) => res.json())
@@ -551,6 +553,12 @@ export default function Home() {
         .then((json) => json.success && setBanners(json.data))
         .catch((e) => console.error('Banners failed:', e))
     }
+
+    // Fetch Offer Banners
+    fetch(`${API_BASE_URL}/offers/banners`)
+      .then(res => res.json())
+      .then(json => setOfferBanners(json.data || []))
+      .catch(e => console.error('Offer banners failed:', e))
   }, [])
 
 
@@ -685,6 +693,34 @@ export default function Home() {
           </div>
         ) : <PromoBanner />}
       </section>
+
+      {/* Offer Banners */}
+      {offerBanners.length > 0 && (
+        <section className="content-visibility-auto -mx-6 px-6 overflow-x-auto no-scrollbar snap-x snap-mandatory flex gap-4 pb-4">
+          {offerBanners.map(offer => (
+            <div 
+              key={offer.id} 
+              className="snap-center shrink-0 w-[280px] h-[120px] rounded-2xl overflow-hidden shadow-lg cursor-pointer bg-slate-100 relative group"
+              onClick={() => {
+                 // Determine route based on applicable_on
+                 if (offer.applicable_on === 'category' && offer.applicable_ids?.length) {
+                    navigate('/?category_id=' + offer.applicable_ids[0]);
+                 } else if (offer.applicable_on === 'product' && offer.applicable_ids?.length) {
+                    navigate('/product/' + offer.applicable_ids[0]);
+                 } else {
+                    navigate('/search?q=offers');
+                 }
+              }}
+            >
+              <img src={offer.banner_image} alt={offer.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
+                 <h3 className="text-white font-black text-sm tracking-tight">{offer.title}</h3>
+                 <p className="text-white/80 text-[10px] font-bold uppercase tracking-widest">{offer.description || 'Exclusive Offer'}</p>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* 4. Trending Now (Curated Picks) */}
       <section className="content-visibility-auto space-y-10">

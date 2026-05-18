@@ -41,6 +41,14 @@ function Checkout() {
     const nearestStoreId = useStore(state => state.nearestStoreId);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
+    // Offers & Discounts
+    const appliedOffer = useStore(state => state.appliedOffer);
+    const applyAutomaticOffers = useStore(state => state.applyAutomaticOffers);
+    const applyCoupon = useStore(state => state.applyCoupon);
+    const removeOffer = useStore(state => state.removeOffer);
+    const [couponCode, setCouponCode] = useState('');
+    const [couponLoading, setCouponLoading] = useState(false);
+
     useEffect(() => {
         // Refresh inventory data on mount
         syncCartWithInventory();
@@ -111,6 +119,30 @@ function Checkout() {
         const qty = Number(item.qty || 1);
         return sum + (price * qty);
     }, 0);
+
+    const productIds = cart.map(item => item.id);
+
+    useEffect(() => {
+        if (subtotal > 0 && user) {
+            applyAutomaticOffers(subtotal, productIds);
+        } else {
+            removeOffer();
+        }
+    }, [subtotal, user]);
+
+    const handleApplyCoupon = async () => {
+        if (!couponCode.trim()) return;
+        setCouponLoading(true);
+        const res = await applyCoupon(couponCode, subtotal, productIds);
+        if (res.valid) {
+            toast.success(`Coupon applied: ₹${res.discount_amount} off`);
+        } else {
+            toast.error(res.message);
+        }
+        setCouponLoading(false);
+        setCouponCode('');
+    };
+
     const fittingTotal = cart.reduce((sum, item) => {
         if (item.fitting) {
             const charge = item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40;
@@ -140,7 +172,8 @@ function Checkout() {
         ? 0
         : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
 
-    const finalTotal = subtotal + platformFee + deliveryCharge + fittingTotal;
+    const discountAmount = appliedOffer ? appliedOffer.discount_amount : 0;
+    const finalTotal = Math.max(0, subtotal - discountAmount) + platformFee + deliveryCharge + fittingTotal;
     const payNowAmount = paymentMethod === 'COD' ? codAdvance : finalTotal;
     const remainingCodAmount = paymentMethod === 'COD' ? (finalTotal - codAdvance) : 0;
     const isCodDisabledByAmount = subtotal < minOrderCod;
@@ -195,7 +228,9 @@ function Checkout() {
                 email: formData.email,
                 delivery_type: useStore.getState().deliveryMode,
                 customer_name: formData.name,
-                payment_type: paymentMethod // Pass payment_type
+                payment_type: paymentMethod, // Pass payment_type
+                offer_id: appliedOffer ? appliedOffer.offer_id : null,
+                discount_applied: discountAmount
             };
 
             const orderRes = await fetch(`${API_BASE_URL}/checkout`, {
@@ -240,6 +275,26 @@ function Checkout() {
                 })
             });
             if (!verifyRes.ok) throw new Error("Payment verification failed");
+
+            // Record offer usage if applied
+            if (appliedOffer) {
+                try {
+                    await fetch(`${API_BASE_URL}/offers/record-usage`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            offer_id: appliedOffer.offer_id,
+                            order_id: orderId,
+                            discount_applied: discountAmount
+                        })
+                    });
+                } catch (e) {
+                    console.error('Failed to record offer usage', e);
+                }
+            }
 
             setOrderPlaced(true);
             setTimeout(() => {
@@ -531,6 +586,54 @@ function Checkout() {
                             ))}
                         </div>
 
+                        {/* Coupon Input */}
+                        <div className="pt-4 border-t border-slate-100">
+                            {appliedOffer && appliedOffer.code ? (
+                                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <BadgePercent className="text-emerald-500 w-5 h-5" />
+                                        <div>
+                                            <p className="text-sm font-black text-emerald-800 tracking-tight">{appliedOffer.code}</p>
+                                            <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">{appliedOffer.title || 'Coupon Applied'}</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={removeOffer}
+                                        className="text-xs font-bold text-red-500 hover:text-red-700"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            ) : appliedOffer ? (
+                                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center gap-3">
+                                    <BadgePercent className="text-emerald-500 w-5 h-5" />
+                                    <div>
+                                        <p className="text-sm font-black text-emerald-800 tracking-tight">{appliedOffer.title}</p>
+                                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Offer Auto-Applied</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={couponCode}
+                                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                        placeholder="Enter Coupon Code" 
+                                        className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-primary uppercase transition-colors"
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={handleApplyCoupon}
+                                        disabled={couponLoading || !couponCode.trim()}
+                                        className="px-6 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {couponLoading ? '...' : 'Apply'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Detailed Bill */}
                         <div className="space-y-4 pt-4 border-t border-slate-100">
                             <div className="flex justify-between text-sm font-bold text-slate-500">
@@ -538,6 +641,13 @@ function Checkout() {
                                 <span>₹{subtotal.toLocaleString()}</span>
                             </div>
                             
+                            {discountAmount > 0 && (
+                                <div className="flex justify-between text-sm font-bold text-emerald-500">
+                                    <span>Discount ({appliedOffer?.code || 'Offer'})</span>
+                                    <span>-₹{discountAmount.toLocaleString()}</span>
+                                </div>
+                            )}
+
                             {fittingTotal > 0 && (
                                 <div className="flex justify-between text-sm font-bold text-primary">
                                     <span>Fitting Service Total</span>

@@ -14,6 +14,7 @@ function AdminLayout({ children }) {
 
     const navLinks = [
         { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', allowedRoles: ['super_admin', 'admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'] },
+        { path: '/admin/offers', icon: BadgePercent, label: 'Offers & Promotions', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-rose-500 font-bold' },
         { path: '/admin/banners', icon: LayoutDashboard, label: 'Banner Manager', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/system-health', icon: Activity, label: 'System Health', allowedRoles: ['super_admin'] },
         { path: '/admin/server-control', icon: Server, label: 'Server Control', allowedRoles: ['super_admin'], extraStyle: 'text-blue-500 font-bold' },

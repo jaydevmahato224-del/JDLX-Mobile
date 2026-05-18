@@ -1645,6 +1645,15 @@ def get_device_models():
         return error_response(str(e), 500)
 
 
+def table_has_column(cursor, table_name, column_name):
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        return any(row[1] == column_name for row in cursor.fetchall())
+    except Exception as e:
+        print(f"DEBUG: Failed to inspect {table_name}.{column_name}: {e}")
+        return False
+
+
 
 @app.route('/api/cart', methods=['GET'])
 def get_cart():
@@ -1760,6 +1769,7 @@ def update_server_cart():
     try:
         conn = get_db()
         cursor = conn.cursor()
+        cart_has_updated_at = table_has_column(cursor, 'cart', 'updated_at')
         
         # MIGRATION: Before any update, ensure session items are moved to user
         if user_id and session_id:
@@ -1767,11 +1777,8 @@ def update_server_cart():
             conn.commit()
             
         # 1. AUTO-RELEASE: Clear cart items older than 30 mins
-        try:
+        if cart_has_updated_at:
             cursor.execute("DELETE FROM cart WHERE updated_at < datetime('now', '-30 minutes')")
-        except Exception as e:
-            if 'no such column: updated_at' not in str(e).lower():
-                print(f"DEBUG: Cart auto-release failed: {e}")
         
         # Build where clause based on what we have
         where_clause = "user_id = ?" if user_id else "session_id = ?"
@@ -1818,7 +1825,10 @@ def update_server_cart():
                 return error_response(f"Only {available} items available in total", 400)
                 
             if existing:
-                cursor.execute("UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_qty, existing['id']))
+                if cart_has_updated_at:
+                    cursor.execute("UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_qty, existing['id']))
+                else:
+                    cursor.execute("UPDATE cart SET quantity = ? WHERE id = ?", (new_qty, existing['id']))
             else:
                 if user_id:
                     cursor.execute("INSERT INTO cart (user_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?)", (user_id, product_id, variant_id, new_qty))
@@ -1828,7 +1838,10 @@ def update_server_cart():
             if quantity > available:
                 return error_response(f"Only {available} items available in total", 400)
             
-            cursor.execute(f"UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE {cart_where}", [quantity] + cart_params)
+            if cart_has_updated_at:
+                cursor.execute(f"UPDATE cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE {cart_where}", [quantity] + cart_params)
+            else:
+                cursor.execute(f"UPDATE cart SET quantity = ? WHERE {cart_where}", [quantity] + cart_params)
             
         conn.commit()
         conn.close()

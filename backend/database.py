@@ -248,7 +248,7 @@ def init_db():
     ensure_columns('order_items', [('device_model', 'TEXT'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS cart (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
-    ensure_columns('cart', [('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
+    ensure_columns('cart', [('updated_at', 'TIMESTAMP'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
 
     # --- Logistics & Stores ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS dark_stores (id INTEGER PRIMARY KEY AUTOINCREMENT, store_code TEXT UNIQUE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')

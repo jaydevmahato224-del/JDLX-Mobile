@@ -64,9 +64,11 @@ function Layout({ children }) {
               ) : (
                 <div className="flex items-center gap-3">
                   <Link to="/" className="flex items-center gap-2 group transition-all">
-                    <div className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--color-primary)] text-[var(--color-on-primary)] font-black transition-all group-hover:scale-110">
-                      JX
-                    </div>
+                    <img 
+                      src="/logo192.png" 
+                      alt="JDLX Logo" 
+                      className="h-8 w-8 object-contain transition-all group-hover:scale-110" 
+                    />
                   </Link>
                   
                   {/* Delivery Mode Badge */}
@@ -94,12 +96,19 @@ function Layout({ children }) {
 
             {/* Center: Main Branding */}
             <div className="flex justify-center">
-              <Link to="/" className="flex flex-col items-center leading-none group text-center">
-                <div className="text-lg md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap text-[var(--color-on-surface)]">
-                  JDLX MOBILE
-                </div>
-                <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">
-                  {deliveryMode === 'quick' ? 'Hyperlocal Quick Commerce' : 'Premium Mobile Store'}
+              <Link to="/" className="flex items-center gap-2 md:gap-3 group transition-all">
+                <img 
+                  src="/logo192.png" 
+                  alt="Logo" 
+                  className="h-8 w-8 md:h-10 md:w-10 object-contain transition-transform duration-500 group-hover:scale-110" 
+                />
+                <div className="flex flex-col items-start leading-none">
+                  <div className="text-lg md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap text-[var(--color-on-surface)]">
+                    JDLX MOBILE
+                  </div>
+                  <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">
+                    {deliveryMode === 'quick' ? 'Hyperlocal Quick Commerce' : 'Premium Mobile Store'}
+                  </div>
                 </div>
               </Link>
             </div>

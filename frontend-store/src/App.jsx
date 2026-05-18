@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import { Suspense, lazy, useEffect, useLayoutEffect } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react'
 import HomePage from './pages/user/Home'
 import Login from './pages/user/Login'
 import Cart from './pages/user/Cart'
@@ -10,6 +10,7 @@ import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
 import PageLoader from './components/PageLoader'
+import SplashScreen from './components/SplashScreen'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
@@ -146,6 +147,10 @@ function OperationalRedirect() {
 
 function App() {
   const { token, fetchCart, fetchWishlist } = useStore()
+  const [showSplash, setShowSplash] = useState(() => {
+    // Show splash only if not already shown in this session
+    return !sessionStorage.getItem('jdlx_splash_shown')
+  })
 
   useEffect(() => {
     // Always fetch cart as source of truth
@@ -155,6 +160,15 @@ function App() {
       fetchWishlist()
     }
   }, [token, fetchCart, fetchWishlist])
+
+  const handleSplashFinish = () => {
+    sessionStorage.setItem('jdlx_splash_shown', 'true')
+    setShowSplash(false)
+  }
+
+  if (showSplash) {
+    return <SplashScreen onFinish={handleSplashFinish} />
+  }
 
   return (
     <ErrorBoundary>

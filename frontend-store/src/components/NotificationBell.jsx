@@ -3,6 +3,8 @@ import { Bell, Check, Trash2, Package, Tag, Info } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
 
+const isUnreadNotification = (notification) => !Number(notification.read_status ?? notification.is_read ?? 0);
+
 function NotificationBell() {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
@@ -17,25 +19,27 @@ function NotificationBell() {
             const res = await fetch(`${API_BASE_URL}/notifications`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (res.status === 401) return;
             const json = await res.json();
             if (res.ok) {
                 const notificationsData = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
                 setNotifications(notificationsData);
-                setUnreadCount(notificationsData.filter(n => !n.read_status).length);
+                setUnreadCount(notificationsData.filter(isUnreadNotification).length);
             }
         } catch (error) {
-            console.error('Failed to fetch notifications:', error);
+            if (error.name !== 'AbortError') {
+                console.warn('Notifications temporarily unavailable.');
+            }
         }
     }, [token]);
 
     useEffect(() => {
-        const initialFetchTimer = setTimeout(fetchNotifications, 0);
-        const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
-        return () => {
-            clearTimeout(initialFetchTimer);
-            clearInterval(interval);
-        };
+        fetchNotifications();
     }, [fetchNotifications]);
+
+    useEffect(() => {
+        if (isOpen) fetchNotifications();
+    }, [isOpen, fetchNotifications]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -54,7 +58,7 @@ function NotificationBell() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                setNotifications(prev => prev.map(n => n.id === id ? { ...n, read_status: 1 } : n));
+                setNotifications(prev => prev.map(n => n.id === id ? { ...n, read_status: 1, is_read: 1 } : n));
                 setUnreadCount(prev => Math.max(0, prev - 1));
             }
         } catch (error) {
@@ -69,7 +73,7 @@ function NotificationBell() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                setNotifications(prev => prev.map(n => ({ ...n, read_status: 1 })));
+                setNotifications(prev => prev.map(n => ({ ...n, read_status: 1, is_read: 1 })));
                 setUnreadCount(0);
             }
         } catch (error) {
@@ -123,16 +127,16 @@ function NotificationBell() {
                             notifications.map(notification => (
                                 <div
                                     key={notification.id}
-                                    className={`p-4 border-b border-gray-50 flex gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${!notification.read_status ? 'bg-primary/5' : ''}`}
-                                    onClick={() => !notification.read_status && markAsRead(notification.id)}
+                                    className={`p-4 border-b border-gray-50 flex gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${isUnreadNotification(notification) ? 'bg-primary/5' : ''}`}
+                                    onClick={() => isUnreadNotification(notification) && markAsRead(notification.id)}
                                 >
                                     <div className="mt-1">{getIcon(notification.type)}</div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-start">
-                                            <h4 className={`text-sm font-bold ${!notification.read_status ? 'text-gray-900' : 'text-gray-600'}`}>
+                                            <h4 className={`text-sm font-bold ${isUnreadNotification(notification) ? 'text-gray-900' : 'text-gray-600'}`}>
                                                 {notification.title}
                                             </h4>
-                                            {!notification.read_status && (
+                                            {isUnreadNotification(notification) && (
                                                 <div className="w-2 h-2 bg-primary rounded-full"></div>
                                             )}
                                         </div>

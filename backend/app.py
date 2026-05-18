@@ -5044,7 +5044,9 @@ def get_notifications():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+        has_read_status = table_has_column(cursor, 'notifications', 'read_status')
+        read_status_expr = "read_status" if has_read_status else "is_read"
+        cursor.execute(f"SELECT *, {read_status_expr} AS read_status FROM notifications WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
         notifs = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return success_response(notifs, "Notifications retrieved")
@@ -5060,7 +5062,8 @@ def mark_read(notif_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE notifications SET read_status = 1 WHERE id = ? AND user_id = ?", (notif_id, user_id))
+        read_column = 'read_status' if table_has_column(cursor, 'notifications', 'read_status') else 'is_read'
+        cursor.execute(f"UPDATE notifications SET {read_column} = 1 WHERE id = ? AND user_id = ?", (notif_id, user_id))
         conn.commit()
         conn.close()
         return success_response(None, "Marked as read", 200)
@@ -5076,7 +5079,8 @@ def read_all_notifications():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE notifications SET read_status = 1 WHERE user_id = ?", (user_id,))
+        read_column = 'read_status' if table_has_column(cursor, 'notifications', 'read_status') else 'is_read'
+        cursor.execute(f"UPDATE notifications SET {read_column} = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
         conn.close()
         return success_response(None, "All marked as read", 200)

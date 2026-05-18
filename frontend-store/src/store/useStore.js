@@ -323,6 +323,23 @@ export const useStore = create((set, get) => ({
     setNearestStoreId: (id) => set({ nearestStoreId: id }),
     isCheckingLocation: false,
     setIsCheckingLocation: (val) => set({ isCheckingLocation: val }),
+    banners: [],
+    fetchBanners: async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/settings?_t=${Date.now()}`);
+            const json = await res.json();
+            if (res.ok && json.data) {
+                // Ensure banners is always an array
+                const bannersData = json.data.banners || [];
+                set({ banners: bannersData });
+                return bannersData;
+            }
+            return [];
+        } catch (e) {
+            console.error('Failed to fetch banners:', e);
+            return [];
+        }
+    },
     products: [],
     fetchProducts: async () => {
         try {

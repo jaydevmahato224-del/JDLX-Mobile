@@ -146,28 +146,68 @@ function OperationalRedirect() {
 }
 
 function App() {
-  const { token, fetchCart, fetchWishlist } = useStore()
+  const { token, fetchCart, fetchWishlist, fetchProducts, fetchBanners } = useStore()
   const [showSplash, setShowSplash] = useState(() => {
-    // Show splash only if not already shown in this session
-    return !sessionStorage.getItem('jdlx_splash_shown')
+    // Show splash only if:
+    // 1. App is running in standalone (PWA) mode
+    // 2. Device is mobile (Phone/Tablet)
+    // 3. Not already shown in this session
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    return isStandalone && isMobile && !sessionStorage.getItem('jdlx_splash_shown')
   })
 
+  const [dataReady, setDataReady] = useState(false)
+  const [splashFinished, setSplashFinished] = useState(false)
+
   useEffect(() => {
-    // Always fetch cart as source of truth
-    fetchCart()
-    
-    if (token) {
-      fetchWishlist()
+    // BUG 1 FIX: Only preload in App.jsx if we are showing the splash screen.
+    // Otherwise, let individual pages (like Home.jsx) handle their own loading.
+    if (!showSplash) {
+      setDataReady(true)
+      return
     }
-  }, [token, fetchCart, fetchWishlist])
+
+    // Preload everything simultaneously
+    const preloadData = async () => {
+      try {
+        const promises = [
+          fetchProducts(),
+          fetchBanners(),
+          fetchCart()
+        ]
+        
+        if (token) {
+          promises.push(fetchWishlist())
+        }
+        
+        await Promise.all(promises)
+        console.log("%c JDLX: Preload Complete", "color: #10b981; font-weight: bold;")
+      } catch (err) {
+        console.error("Preload failed:", err)
+      } finally {
+        setDataReady(true)
+      }
+    }
+
+    preloadData()
+  }, [showSplash, token, fetchCart, fetchWishlist, fetchProducts, fetchBanners])
 
   const handleSplashFinish = () => {
-    sessionStorage.setItem('jdlx_splash_shown', 'true')
-    setShowSplash(false)
+    setSplashFinished(true)
   }
 
+  // Effect to hide splash only when BOTH animation is done AND data is ready
+  useEffect(() => {
+    if (splashFinished && dataReady) {
+      sessionStorage.setItem('jdlx_splash_shown', 'true')
+      setShowSplash(false)
+    }
+  }, [splashFinished, dataReady])
+
   if (showSplash) {
-    return <SplashScreen onFinish={handleSplashFinish} />
+    return <SplashScreen onFinish={handleSplashFinish} dataReady={dataReady} />
   }
 
   return (

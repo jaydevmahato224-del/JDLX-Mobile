@@ -540,10 +540,17 @@ export default function Home() {
       .then((json) => setCategories(json.data || []))
       .catch((err) => console.error('Categories failed:', err))
 
-    fetch(`${API_BASE_URL}/banners`)
-      .then((r) => r.json())
-      .then((json) => json.success && setBanners(json.data))
-      .catch((e) => console.error('Banners failed:', e))
+    // Banners are preloaded in App.jsx via useStore.fetchBanners()
+    // but we still sync them to local state for compatibility with existing useMemo
+    const preloadedBanners = useStore.getState().banners;
+    if (preloadedBanners && preloadedBanners.length > 0) {
+      setBanners(preloadedBanners);
+    } else {
+      fetch(`${API_BASE_URL}/banners`)
+        .then((r) => r.json())
+        .then((json) => json.success && setBanners(json.data))
+        .catch((e) => console.error('Banners failed:', e))
+    }
   }, [])
 
 

@@ -18,50 +18,92 @@ class ErrorBoundary extends React.Component {
 
     render() {
         if (this.state.hasError) {
-            const errorMessage = this.state.error ? this.state.error.toString() : "An unexpected error occurred.";
+            const isOffline = !navigator.onLine || (this.state.error && this.state.error.message.includes('fetch'));
 
             return (
-                <div className="min-h-screen bg-[var(--color-surface)] px-6 py-10 text-center">
-                    <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-3xl items-center justify-center">
-                        <div className="ui-card-premium w-full overflow-hidden p-8 sm:p-10">
-                            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-50 text-red-500 shadow-[0_20px_50px_-20px_rgba(185,28,28,0.45)]">
-                                <AlertTriangle size={38} />
-                            </div>
-                            <div className="mb-3 flex items-center justify-center gap-2">
-                                <div className="h-px w-8 bg-primary/20"></div>
-                                <span className="ui-label text-primary/70">Storefront Recovery</span>
-                                <div className="h-px w-8 bg-primary/20"></div>
-                            </div>
-                            <h1 className="ui-h2 mb-3 text-slate-900 sm:text-4xl">Something went wrong</h1>
-                            <p className="mx-auto mb-8 max-w-xl font-medium text-slate-500">
-                                {errorMessage}
-                            </p>
-                            {this.state.error && this.state.error.stack && (
-                                <details className="mb-8 rounded-[24px] border border-red-100 bg-red-50/40 p-4 text-left">
-                                    <summary className="cursor-pointer list-none text-sm font-black uppercase tracking-[0.2em] text-red-700">
-                                        Technical details
-                                    </summary>
-                                    <pre className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-white/80 p-4 text-xs text-red-600">
-                                        {this.state.error.stack}
-                                    </pre>
-                                </details>
-                            )}
-
-                            <div className="mx-auto flex w-full max-w-sm flex-col gap-4 sm:flex-row">
-                                <button
-                                    onClick={() => window.location.reload()}
-                                    className="flex-1 rounded-2xl bg-primary py-4 text-white font-black shadow-xl shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                                >
-                                    <RefreshCcw size={20} /> Reload App
-                                </button>
-                                <a
-                                    href="/"
-                                    className="flex-1 rounded-2xl border border-slate-200 bg-white/80 py-4 text-slate-800 font-black shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
-                                >
-                                    <Home size={20} /> Go Home
-                                </a>
-                            </div>
+                <div className="min-h-screen bg-white px-6 flex items-center justify-center font-sans">
+                    <div className="w-full max-w-lg text-center space-y-8 animate-in fade-in duration-700">
+                        {/* Animated Robot Character */}
+                        <div className="relative h-64 flex justify-center items-center">
+                            <svg width="240" height="240" viewBox="0 0 240 240" className="drop-shadow-2xl">
+                                <style>
+                                    {`
+                                        @keyframes wobble {
+                                            0%, 100% { transform: rotate(-3deg) translateY(0); }
+                                            50% { transform: rotate(3deg) translateY(-10px); }
+                                        }
+                                        @keyframes blink {
+                                            0%, 90%, 100% { transform: scaleY(1); }
+                                            95% { transform: scaleY(0.1); }
+                                        }
+                                        @keyframes antenna-shake {
+                                            0%, 100% { transform: rotate(0); }
+                                            25% { transform: rotate(-15deg); }
+                                            75% { transform: rotate(15deg); }
+                                        }
+                                        .robot-body { animation: wobble 4s ease-in-out infinite; transform-origin: center; }
+                                        .robot-eye { animation: blink 5s infinite; transform-origin: center; }
+                                        .robot-antenna { animation: antenna-shake 2s ease-in-out infinite; transform-origin: bottom center; }
+                                    `}
+                                </style>
+                                {/* Antenna */}
+                                <g className="robot-antenna" style={{ transformBox: 'fill-box' }}>
+                                    <line x1="120" y1="60" x2="120" y2="40" stroke="#1a2332" strokeWidth="6" strokeLinecap="round" />
+                                    <circle cx="120" cy="35" r="8" fill="#F5C518" />
+                                </g>
+                                {/* Robot Head/Body */}
+                                <g className="robot-body">
+                                    <rect x="60" y="60" width="120" height="120" rx="30" fill="#1a2332" />
+                                    <rect x="75" y="75" width="90" height="70" rx="15" fill="#2a3a52" />
+                                    {/* Eyes */}
+                                    <circle className="robot-eye" cx="100" cy="110" r="10" fill="#F5C518" />
+                                    <circle className="robot-eye" cx="140" cy="110" r="10" fill="#F5C518" />
+                                    {/* Mouth/Panel */}
+                                    <rect x="95" y="145" width="50" height="8" rx="4" fill="#F5C518" opacity="0.8" />
+                                </g>
+                                {/* Floating Gears/Signals */}
+                                <path d="M40 100 Q 30 80, 20 100" stroke="#F5C518" strokeWidth="4" fill="none" className="animate-pulse" />
+                                <path d="M200 80 Q 210 60, 220 80" stroke="#F5C518" strokeWidth="4" fill="none" className="animate-pulse" style={{ animationDelay: '0.5s' }} />
+                            </svg>
                         </div>
+
+                        <div className="space-y-4">
+                            <h1 className="text-3xl md:text-4xl font-black text-[#1a2332] tracking-tight">
+                                {isOffline ? "No signal found! 📡" : "Oops! Lost connection..."}
+                            </h1>
+                            <p className="text-slate-500 font-medium text-lg">
+                                Check your internet and try again
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="px-10 py-4 bg-[#F5C518] text-[#1a2332] font-black rounded-2xl shadow-[0_10px_30px_-5px_rgba(245,197,24,0.4)] hover:shadow-[0_15px_40px_-5px_rgba(245,197,24,0.6)] active:scale-95 transition-all duration-300"
+                            >
+                                Try Again
+                            </button>
+                            <a
+                                href="/"
+                                className="px-10 py-4 bg-white text-[#1a2332] font-bold rounded-2xl border-2 border-slate-100 hover:bg-slate-50 active:scale-95 transition-all duration-300"
+                            >
+                                Go Home
+                            </a>
+                        </div>
+
+                        {/* Technical Details Hidden but available */}
+                        {this.state.error && (
+                            <details className="mt-12 text-left opacity-30 hover:opacity-100 transition-opacity">
+                                <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-slate-400 text-center">
+                                    Technical Log
+                                </summary>
+                                <pre className="mt-4 p-4 bg-slate-50 rounded-xl text-[10px] text-slate-500 overflow-auto max-h-40">
+                                    {this.state.error.toString()}
+                                    {"\n"}
+                                    {this.state.error.stack}
+                                </pre>
+                            </details>
+                        )}
                     </div>
                 </div>
             );

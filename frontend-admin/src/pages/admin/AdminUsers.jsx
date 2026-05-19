@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Search, Filter, ShieldAlert, CheckCircle, Ban, X, Mail, Send, AlertTriangle, Info, Bell } from 'lucide-react';
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL, resolveMediaUrl } from '../../config';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -352,7 +352,7 @@ const AdminUsers = () => {
                                             <td className="px-6 py-4 text-gray-900 font-medium">
                                                 <div className="flex items-center gap-3">
                                                     {user.profile_image ? (
-                                                        <img src={user.profile_image} className="w-10 h-10 rounded-full" />
+                                                        <img src={resolveMediaUrl(user.profile_image)} className="w-10 h-10 rounded-full" />
                                                     ) : (
                                                         <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">{user.name.charAt(0)}</div>
                                                     )}

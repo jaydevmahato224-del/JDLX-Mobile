@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BadgePercent, Plus, Search, Filter, AlertCircle, Edit, Trash2, Image as ImageIcon, Calendar, Target, Box, Check, X } from 'lucide-react'
-import { API_BASE_URL } from '../../config'
+import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { toast } from 'react-hot-toast'
 import { useStore } from '../../store/useStore'
 
@@ -220,7 +220,7 @@ export default function AdminOffers() {
                                             {bannerFile ? (
                                                 <img src={URL.createObjectURL(bannerFile)} className="w-full h-full object-cover" />
                                             ) : formData.banner_image ? (
-                                                <img src={formData.banner_image} className="w-full h-full object-cover" />
+                                                <img src={resolveMediaUrl(formData.banner_image)} className="w-full h-full object-cover" />
                                             ) : (
                                                 <>
                                                     <ImageIcon className="text-slate-300 w-8 h-8 mb-2" />
@@ -376,7 +376,7 @@ export default function AdminOffers() {
                                     <td className="p-6">
                                         <div className="flex items-center gap-4">
                                             {offer.banner_image ? (
-                                                <img src={offer.banner_image} className="w-12 h-12 rounded-xl object-cover border border-slate-100" />
+                                                <img src={resolveMediaUrl(offer.banner_image)} className="w-12 h-12 rounded-xl object-cover border border-slate-100" />
                                             ) : (
                                                 <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
                                                     <BadgePercent size={20} />

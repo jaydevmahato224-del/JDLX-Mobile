@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FolderTree, Save, ArrowLeft, Trash2, Plus, Image as ImageIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { API_BASE_URL } from '../../config'
+import { API_BASE_URL, resolveMediaUrl } from '../../config'
 
 function AdminCategories() {
     const [categories, setCategories] = useState([]);
@@ -257,7 +257,7 @@ function AdminCategories() {
                             </div>
                         ) : (
                             <>
-                                <img src={category.icon} alt={category.name} className="w-20 h-20 object-cover rounded-2xl shadow-sm bg-white" />
+                                <img src={resolveMediaUrl(category.icon)} alt={category.name} className="w-20 h-20 object-cover rounded-2xl shadow-sm bg-white" />
                                 <h3 className="font-bold text-gray-800 text-lg">{category.name}</h3>
                                 <p className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded uppercase tracking-tighter truncate max-w-full">
                                     {(category.return_policy || 'Default').split('\n')[0]}

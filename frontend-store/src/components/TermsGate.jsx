@@ -26,7 +26,8 @@ function TermsGate() {
   const needsAccept = Boolean(user) && acceptedVersion < requiredVersion
 
   useEffect(() => {
-    if (!user || !token) {
+    const activeToken = token || localStorage.getItem('token');
+    if (!user || !activeToken || activeToken === 'null' || activeToken === 'undefined') {
       setOpen(false)
       setChecking(false)
       return
@@ -37,7 +38,7 @@ function TermsGate() {
       try {
         const [settingsRes, profileRes] = await Promise.all([
           fetch(`${API_BASE_URL}/settings`),
-          fetch(`${API_BASE_URL}/user/profile`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_BASE_URL}/user/profile`, { headers: { Authorization: `Bearer ${activeToken}` } }),
         ])
 
         const settingsJson = await settingsRes.json().catch(() => null)

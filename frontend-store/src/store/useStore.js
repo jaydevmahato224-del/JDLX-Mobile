@@ -415,10 +415,11 @@ export const useStore = create((set, get) => ({
     wishlist: safeParse('wishlist') || [],
     fetchWishlist: async () => {
         const state = get();
-        if (!state.token) return;
+        const token = state.token || localStorage.getItem('token');
+        if (!token || token === 'null' || token === 'undefined') return;
         try {
             const res = await fetch(`${API_BASE_URL}/wishlist?_t=${Date.now()}`, {
-                headers: { 'Authorization': `Bearer ${state.token}` }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
             if (res.ok) {

@@ -16,7 +16,9 @@ function Notifications() {
     },[user,navigate]);
 
     const fetchNotes = async () => {
-        const res = await window.fetch(`${API_BASE_URL}/user/notifications`, { headers: { Authorization: `Bearer ${token}` } });
+        const activeToken = token || localStorage.getItem('token');
+        if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
+        const res = await window.fetch(`${API_BASE_URL}/user/notifications`, { headers: { Authorization: `Bearer ${activeToken}` } });
         if (res.ok) setNotes(await res.json());
     };
     useEffect(() => { fetchNotes(); }, []);

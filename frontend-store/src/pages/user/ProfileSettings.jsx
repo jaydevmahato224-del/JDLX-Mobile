@@ -22,9 +22,14 @@ function ProfileSettings() {
 
     useEffect(() => {
         const fetchProfile = async () => {
+            const activeToken = token || localStorage.getItem('token');
+            if (!activeToken || activeToken === 'null' || activeToken === 'undefined') {
+                setLoading(false);
+                return;
+            }
             try {
                 const res = await fetch(`${API_BASE_URL}/user/profile`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${activeToken}` }
                 });
                 if (res.ok) {
                     const data = await res.json();

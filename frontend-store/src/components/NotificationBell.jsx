@@ -14,10 +14,11 @@ function NotificationBell() {
     const user = useStore(state => state.user);
 
     const fetchNotifications = useCallback(async () => {
-        if (!token) return;
+        const activeToken = token || localStorage.getItem('token');
+        if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
         try {
             const res = await fetch(`${API_BASE_URL}/notifications`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${activeToken}` }
             });
             if (res.status === 401) return;
             const json = await res.json();

@@ -1,7 +1,9 @@
 import { memo } from 'react';
 import { ChevronRight, Zap } from 'lucide-react';
 
-const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, badge, gradient, overlay_opacity = 0.5, onClick }) {
+const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, badge, badge_text, gradient, overlay_opacity = 0.5, onClick }) {
+  const displayBadge = badge || badge_text;
+
   return (
     <div 
       className={`relative w-full h-[240px] md:h-[400px] rounded-[32px] md:rounded-[40px] overflow-hidden group cursor-pointer shadow-2xl transition-all duration-700 hover:scale-[1.01] ${gradient || 'bg-slate-900'}`}
@@ -21,10 +23,10 @@ const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, bad
 
       {/* Content */}
       <div className="relative z-10 h-full flex flex-col justify-center px-6 md:px-16 max-w-2xl animate-in fade-in slide-in-from-left-12 duration-1000">
-        {badge && (
+        {displayBadge && (
           <div className="inline-flex items-center gap-1.5 px-3 md:px-4 py-1.5 md:py-2 bg-white/20 backdrop-blur-md rounded-full border border-white/30 mb-3 md:mb-6 w-fit animate-pulse-soft">
             <Zap size={12} className="text-yellow-400 fill-yellow-400" />
-            <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] !text-white">{badge}</span>
+            <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] !text-white">{displayBadge}</span>
           </div>
         )}
 

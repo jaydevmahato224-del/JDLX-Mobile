@@ -552,7 +552,11 @@ export default function Home() {
     } else {
       fetch(`${API_BASE_URL}/banners`)
         .then((r) => r.json())
-        .then((json) => json.success && setBanners(json.data))
+        .then((json) => {
+          if (json.success && json.data) {
+            setBanners(json.data);
+          }
+        })
         .catch((e) => console.error('Banners failed:', e))
     }
 

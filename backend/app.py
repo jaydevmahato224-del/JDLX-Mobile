@@ -20,7 +20,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
 # --- Third-Party Imports ---
 import jwt
-from flask import Flask, jsonify, request, send_file, redirect, session, url_for
+from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -5832,6 +5832,15 @@ def health_check():
 # ==============================================================================
 # MAIN EXECUTION
 # ==============================================================================
+
+@app.route('/static/uploads/<path:filename>')
+def serve_uploads(filename):
+    """Serves uploaded files from the static/uploads directory."""
+    # Security: Only allow specific extensions
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    if ext not in ALLOWED_EXTENSIONS and ext != 'webp':
+        return error_response("File type not allowed", 403)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # Ensure database is initialized before any requests
 init_db()

@@ -535,6 +535,7 @@ export default function Home() {
 
 
   const [offerBanners, setOfferBanners] = useState([])
+  const [activeOffers, setActiveOffers] = useState([])
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/categories`)
@@ -557,8 +558,24 @@ export default function Home() {
     // Fetch Offer Banners
     fetch(`${API_BASE_URL}/offers/banners`)
       .then(res => res.json())
-      .then(json => setOfferBanners(json.data || []))
+      .then(json => {
+        if (json.success && Array.isArray(json.data)) {
+          setOfferBanners(json.data)
+        } else {
+          setOfferBanners([])
+        }
+      })
       .catch(e => console.error('Offer banners failed:', e))
+
+    // Fetch Active Offers (for text-based offer cards)
+    fetch(`${API_BASE_URL}/offers/active`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.success && Array.isArray(json.data)) {
+          setActiveOffers(json.data)
+        }
+      })
+      .catch(e => console.error('Active offers failed:', e))
   }, [])
 
 
@@ -695,7 +712,7 @@ export default function Home() {
       </section>
 
       {/* Offer Banners */}
-      {offerBanners.length > 0 && (
+      {Array.isArray(offerBanners) && offerBanners.length > 0 && (
         <section className="content-visibility-auto -mx-6 px-6 overflow-x-auto no-scrollbar snap-x snap-mandatory flex gap-4 pb-4">
           {offerBanners.map(offer => (
             <div 
@@ -721,44 +738,145 @@ export default function Home() {
           ))}
         </section>
       )}
-
-      {/* 4. Trending Now (Curated Picks) */}
-      <section className="content-visibility-auto space-y-10">
-        <div className="flex items-end justify-between">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-black tracking-tight">Trending Now</h2>
-            <p className="text-slate-400 font-bold italic">Curated essentials for your device</p>
-          </div>
-          <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-            <Zap size={24} fill="currentColor" className="animate-pulse" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {featuredProducts.slice(0, 4).map(p => (
-            <div key={`trending-${p.id}`} onClick={() => { logInteraction('view', p.id, p.category); addToRecentlyViewed(p); }}>
-              <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
+      {/* Active Offers Section */}
+      {activeOffers.length > 0 && (
+        <section className="content-visibility-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-1.5 bg-gradient-to-b from-amber-500 to-orange-500 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.4)]" />
+              <div className="space-y-1">
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Deals & Offers</h2>
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Exclusive savings for you</p>
+              </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 5. New Arrivals (Latest Additions) */}
-      <section className="content-visibility-auto space-y-8">
-        <div className="flex items-center gap-4">
-          <div className="h-10 w-1.5 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)]" />
-          <div className="space-y-1">
-            <h2 className="text-3xl font-black tracking-tight">New Arrivals</h2>
-            <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Freshly added to collection</p>
+            <button
+              onClick={() => navigate('/profile/coupons')}
+              className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5 hover:opacity-70 transition-opacity bg-primary/5 px-3 py-1.5 rounded-full"
+            >
+              View All <ChevronRight size={14} />
+            </button>
           </div>
-        </div>
-        <div className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
-          {regularProducts.slice(0, 6).map((p) => (
-            <div key={`new-${p.id}`} className="min-w-[180px] xs:min-w-[200px] md:min-w-[320px]" onClick={() => addToRecentlyViewed(p)}>
-              <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
+
+          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 -mx-2 px-2 snap-x snap-mandatory">
+            {activeOffers.map((offer, i) => {
+              const gradients = [
+                'from-amber-500 to-orange-600',
+                'from-emerald-500 to-teal-600',
+                'from-violet-500 to-purple-600',
+                'from-rose-500 to-pink-600',
+                'from-blue-500 to-indigo-600',
+              ];
+              const grad = gradients[i % gradients.length];
+
+              return (
+                <div
+                  key={offer.id}
+                  className="snap-center flex-shrink-0 w-[280px] md:w-[320px] rounded-[24px] bg-white border border-slate-100 shadow-lg overflow-hidden hover:shadow-xl transition-all duration-500 hover:-translate-y-1"
+                >
+                  {/* Gradient Accent */}
+                  <div className={`h-1.5 bg-gradient-to-r ${grad}`} />
+
+                  <div className="p-5 space-y-4">
+                    {/* Title + Type */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight truncate">{offer.title}</h3>
+                        {offer.description && (
+                          <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{offer.description}</p>
+                        )}
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-gradient-to-r ${grad} text-white flex-shrink-0`}>
+                        {offer.offer_type}
+                      </span>
+                    </div>
+
+                    {/* Discount */}
+                    <div className="flex items-center gap-4 py-3 px-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Discount</p>
+                        <p className="text-xl font-black text-slate-900 tracking-tighter">
+                          {offer.discount_type === 'percentage' ? `${offer.discount_value}%` : `₹${offer.discount_value}`}
+                          <span className="text-xs ml-1 text-primary font-black">OFF</span>
+                        </p>
+                      </div>
+                      {offer.min_order_amount > 0 && (
+                        <div className="border-l border-slate-200 pl-4">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Min. Order</p>
+                          <p className="text-sm font-black text-slate-700">₹{offer.min_order_amount}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Coupon Code */}
+                    {offer.coupon_code ? (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(offer.coupon_code);
+                          toast.success(`Copied: ${offer.coupon_code}`, {
+                            icon: '📋',
+                            style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontSize: '12px', fontWeight: 'bold' }
+                          });
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-sm font-black text-slate-700 uppercase tracking-widest hover:border-primary hover:bg-primary/5 transition-all active:scale-95"
+                      >
+                        <span>{offer.coupon_code}</span>
+                        <span className="text-[9px] text-slate-400 normal-case tracking-normal font-bold">Tap to copy</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
+                        <Zap size={12} className="text-emerald-500" />
+                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Auto-Applied at Checkout</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* 4. Trending Now (Curated Picks) — hidden when empty */}
+      {featuredProducts.length > 0 && (
+        <section className="content-visibility-auto space-y-10">
+          <div className="flex items-end justify-between">
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black tracking-tight">Trending Now</h2>
+              <p className="text-slate-400 font-bold italic">Curated essentials for your device</p>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+              <Zap size={24} fill="currentColor" className="animate-pulse" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            {featuredProducts.slice(0, 4).map(p => (
+              <div key={`trending-${p.id}`} onClick={() => { logInteraction('view', p.id, p.category); addToRecentlyViewed(p); }}>
+                <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 5. New Arrivals (Latest Additions) — hidden when empty */}
+      {regularProducts.length > 0 && (
+        <section className="content-visibility-auto space-y-8">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-1.5 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)]" />
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black tracking-tight">New Arrivals</h2>
+              <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Freshly added to collection</p>
+            </div>
+          </div>
+          <div className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
+            {regularProducts.slice(0, 6).map((p) => (
+              <div key={`new-${p.id}`} className="min-w-[180px] xs:min-w-[200px] md:min-w-[320px]" onClick={() => addToRecentlyViewed(p)}>
+                <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 6. Main Catalog (Elite Collection) */}
       <section className="content-visibility-auto space-y-10">

@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'

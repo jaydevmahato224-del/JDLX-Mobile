@@ -233,6 +233,7 @@ app.register_blueprint(support_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(refund_bp)
 app.register_blueprint(bug_bp)
+app.register_blueprint(offer_bp)
 
 
 # ==============================================================================
@@ -789,9 +790,17 @@ def admin_google_callback():
         if not code:
             return redirect(f"{frontend_url}/admin/login?error=oauth_failed&details=Missing authorization code")
 
-        # 1. Exchange code for token directly
-        import requests
-        token_resp = requests.post(
+        # 1. Exchange code for token directly (with retry + timeout for reliability)
+        import requests as req_lib
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+
+        http_session = req_lib.Session()
+        retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504],
+                        allowed_methods=['POST', 'GET'])
+        http_session.mount('https://', HTTPAdapter(max_retries=retries))
+
+        token_resp = http_session.post(
             'https://oauth2.googleapis.com/token',
             data={
                 'client_id': ADMIN_GOOGLE_CLIENT_ID,
@@ -799,7 +808,8 @@ def admin_google_callback():
                 'code': code,
                 'grant_type': 'authorization_code',
                 'redirect_uri': ADMIN_GOOGLE_REDIRECT_URI
-            }
+            },
+            timeout=15
         ).json()
 
         if 'error' in token_resp:
@@ -809,9 +819,10 @@ def admin_google_callback():
         access_token = token_resp.get('access_token')
         
         # 2. Fetch userinfo
-        userinfo = requests.get(
+        userinfo = http_session.get(
             'https://www.googleapis.com/oauth2/v3/userinfo',
-            headers={'Authorization': f'Bearer {access_token}'}
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=15
         ).json()
 
         if 'error' in userinfo or 'email' not in userinfo:
@@ -864,9 +875,17 @@ def google_callback():
         return error_response("Missing authorization code", 400)
 
     try:
-        # 1. Exchange code for token directly (Stateless)
-        import requests
-        token_resp = requests.post(
+        # 1. Exchange code for token directly (Stateless, with retry + timeout)
+        import requests as req_lib
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+
+        http_session = req_lib.Session()
+        retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504],
+                        allowed_methods=['POST', 'GET'])
+        http_session.mount('https://', HTTPAdapter(max_retries=retries))
+
+        token_resp = http_session.post(
             'https://oauth2.googleapis.com/token',
             data={
                 'client_id': GOOGLE_CLIENT_ID,
@@ -874,7 +893,8 @@ def google_callback():
                 'code': code,
                 'grant_type': 'authorization_code',
                 'redirect_uri': GOOGLE_REDIRECT_URI
-            }
+            },
+            timeout=15
         ).json()
 
         if 'error' in token_resp:
@@ -884,9 +904,10 @@ def google_callback():
         access_token = token_resp.get('access_token')
         
         # 2. Fetch userinfo
-        userinfo = requests.get(
+        userinfo = http_session.get(
             'https://www.googleapis.com/oauth2/v3/userinfo',
-            headers={'Authorization': f'Bearer {access_token}'}
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=15
         ).json()
 
         google_id = userinfo.get('sub')

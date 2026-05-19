@@ -20,6 +20,7 @@ const WarehouseRiderApplications = lazy(() => import('./pages/warehouse/Warehous
 const ManageRiders = lazy(() => import('./pages/warehouse/ManageRiders'))
 const WarehouseOrders = lazy(() => import('./pages/warehouse/WarehouseOrders'))
 const WarehouseProcurement = lazy(() => import('./pages/warehouse/WarehouseProcurement'))
+const WarehouseOffers = lazy(() => import('./pages/warehouse/WarehouseOffers'))
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
@@ -157,6 +158,11 @@ function App() {
             <Route path="/warehouse/procurement" element={
               <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'admin', 'super_admin']}>
                 <WarehouseProcurement />
+              </WarehouseRoute>
+            } />
+            <Route path="/warehouse/offers" element={
+              <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'admin', 'super_admin']}>
+                <WarehouseOffers />
               </WarehouseRoute>
             } />
           </Route>

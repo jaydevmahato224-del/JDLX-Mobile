@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useStore } from '../../store/useStore';
 import { resolveMediaUrl, API_BASE_URL } from '../../config';
+import { trackViewItem, trackAddToCart } from '../../utils/analytics';
 import ProductReviews from '../../components/ProductReviews';
 import DeviceModelSelector from '../../components/DeviceModelSelector';
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization';
@@ -85,6 +86,12 @@ export default function ProductDetails() {
     return availability?.scheduled_delivery_note || 'Reliable fulfillment from our central warehouse.';
   }, [deliveryMode, nearestStoreId, availability]);
 
+  useEffect(() => {
+    if (product) {
+      trackViewItem(product);
+    }
+  }, [product]);
+
   if (!product) return (
     <div className="container-standard py-20 text-center">
       <div className="glass-card px-6 py-20 animate-in fade-in zoom-in duration-500">
@@ -95,7 +102,7 @@ export default function ProductDetails() {
     </div>
   );
 
-  const stock = product.stock || 0;
+  const stock = product?.stock || 0;
   const rating = product.average_rating || 0;
   const canAdd = stock > 0;
   const requiresDeviceModel = isStickerProduct(product);
@@ -115,6 +122,7 @@ export default function ProductDetails() {
       return;
     }
     addToCart({ ...product, device_model: selectedDeviceModel || null, fitting });
+    trackAddToCart(product, 1);
     if (toCart) navigate('/cart');
     else toast.success('Added to collection');
   };

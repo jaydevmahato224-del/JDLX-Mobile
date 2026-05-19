@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { resolveMediaUrl, API_BASE_URL } from '../../config'
+import { trackRemoveFromCart } from '../../utils/analytics'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import PageLoader from '../../components/PageLoader'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
@@ -128,11 +130,11 @@ function Cart() {
                 </div>
 
                 {/* Trust Signal */}
-                <p className="mt-12 text-[10px] font-black text-[var(--color-on-surface-variant)]/40 uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="mt-12 text-[10px] font-black text-[var(--color-on-surface-variant)]/40 uppercase tracking-[0.3em] flex items-center gap-3">
                     <div className="h-px w-8 bg-current opacity-20" />
                     JDLX Premium {deliveryMode === 'quick' ? 'Hyperlocal' : 'Essentials'}
                     <div className="h-px w-8 bg-current opacity-20" />
-                </p>
+                </div>
             </div>
         )
     }
@@ -245,7 +247,16 @@ function Cart() {
                                     <div className="flex flex-col items-center gap-2 self-stretch justify-center md:border-l border-[var(--color-surface-high)] md:pl-8">
                                         <div className="flex items-center gap-4 bg-[var(--color-surface-white)] rounded-2xl p-1 border border-[var(--color-surface-high)] shadow-sm">
                                             <button
-                                                onClick={() => item.qty > 1 ? updateQuantity(item.id, item.qty - 1) : removeFromCart(item.id)}
+                                                onClick={() => {
+                                                    const qtyToRemove = 1;
+                                                    if (item.qty === 1) {
+                                                        trackRemoveFromCart(item, 1);
+                                                        removeFromCart(item.id);
+                                                    } else {
+                                                        trackRemoveFromCart(item, 1);
+                                                        updateQuantity(item.id, item.qty - 1);
+                                                    }
+                                                }}
                                                 className="w-10 h-10 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                                             >
                                                 {item.qty === 1 ? <Trash2 className="w-5 h-5" /> : <Minus className="w-5 h-5" />}

@@ -11,29 +11,37 @@ import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
 import PageLoader from './components/PageLoader'
 import SplashScreen from './components/SplashScreen'
+import AnalyticsTracker from './components/AnalyticsTracker'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
 
-console.log("%c JDLX DEBUG: API_BASE_URL is", "color: #f59e0b; font-weight: bold;", API_BASE_URL);
+if (import.meta.env.DEV) {
+  console.log("%c JDLX DEBUG: API_BASE_URL is", "color: #f59e0b; font-weight: bold;", API_BASE_URL);
+}
 
 // ─── Global Fetch Interceptor ─────────────────────────────────────────────────
 const _originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
   const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-  console.log(`%c JDLX FETCH: ${requestUrl}`, "color: #3b82f6;");
-  
+
+  if (import.meta.env.DEV) {
+    console.log(`%c JDLX FETCH: ${requestUrl}`, "color: #3b82f6;");
+  }
+
   // Only show loader for significant API calls
   const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs');
   if (!isBackgroundRequest) startLoading();
 
   try {
     const response = await _originalFetch(...args);
-    console.log(`%c JDLX STATUS: ${response.status} for ${requestUrl}`, "color: #10b981;");
-    
-    if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {
-      useStore.getState().logout();
+
+    if (import.meta.env.DEV) {
+      console.log(`%c JDLX STATUS: ${response.status} for ${requestUrl}`, "color: #10b981;");
+    }
+
+    if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {      useStore.getState().logout();
     }
     return response;
   } finally {
@@ -215,6 +223,7 @@ function App() {
       <TopLoader />
       <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />
       <Router>
+        <AnalyticsTracker />
         <RouteChangeTracker />
         <Suspense fallback={<PageLoader />}>
           <Routes>

@@ -57,6 +57,8 @@ export const useStore = create((set, get) => ({
     cart: JSON.parse(localStorage.getItem('cart') || '[]'),
     isCartLoaded: false,
     theme: localStorage.getItem('theme') || 'light',
+    storeBlocked: false,
+    setStoreBlocked: (val) => set({ storeBlocked: val }),
     fetchCart: async () => {
         set({ isCartLoaded: false });
         const state = get();
@@ -331,7 +333,11 @@ export const useStore = create((set, get) => ({
             if (res.ok && json.data) {
                 // Ensure banners is always an array
                 const bannersData = json.data.banners || [];
-                set({ banners: bannersData });
+                const isBlocked = json.data.store_blocked === 'true' || json.data.store_blocked === true;
+                set({ 
+                    banners: bannersData,
+                    storeBlocked: isBlocked
+                });
                 return bannersData;
             }
             return [];

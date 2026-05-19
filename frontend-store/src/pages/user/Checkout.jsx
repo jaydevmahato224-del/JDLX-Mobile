@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { 
@@ -7,6 +7,7 @@ import {
     Zap, CreditCard, Wallet, AlertTriangle, ArrowRight 
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
+import { trackBeginCheckout, trackPurchase } from '../../utils/analytics'
 import AddressPicker from '../../components/AddressPicker'
 import { toast } from 'react-hot-toast'
 
@@ -41,6 +42,15 @@ function Checkout() {
     const nearestStoreId = useStore(state => state.nearestStoreId);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
+    // Derived values
+    const subtotal = useMemo(() => cart.reduce((sum, item) => {
+        const price = Number(item.price || 0);
+        const qty = Number(item.qty || 1);
+        return sum + (price * qty);
+    }, 0), [cart]);
+
+    const productIds = useMemo(() => cart.map(item => item.id), [cart]);
+
     // Offers & Discounts
     const appliedOffer = useStore(state => state.appliedOffer);
     const applyAutomaticOffers = useStore(state => state.applyAutomaticOffers);
@@ -48,6 +58,12 @@ function Checkout() {
     const removeOffer = useStore(state => state.removeOffer);
     const [couponCode, setCouponCode] = useState('');
     const [couponLoading, setCouponLoading] = useState(false);
+
+    useEffect(() => {
+        if (cart && cart.length > 0) {
+            trackBeginCheckout(cart, subtotal);
+        }
+    }, [cart, subtotal]); // Include cart and subtotal for accuracy
 
     useEffect(() => {
         // Refresh inventory data on mount
@@ -114,21 +130,13 @@ function Checkout() {
         }, 800);
     };
 
-    const subtotal = cart.reduce((sum, item) => {
-        const price = Number(item.price || 0);
-        const qty = Number(item.qty || 1);
-        return sum + (price * qty);
-    }, 0);
-
-    const productIds = cart.map(item => item.id);
-
     useEffect(() => {
         if (subtotal > 0 && user) {
             applyAutomaticOffers(subtotal, productIds);
         } else {
             removeOffer();
         }
-    }, [subtotal, user]);
+    }, [subtotal, user, productIds, applyAutomaticOffers, removeOffer]);
 
     const handleApplyCoupon = async () => {
         if (!couponCode.trim()) return;
@@ -275,6 +283,9 @@ function Checkout() {
                 })
             });
             if (!verifyRes.ok) throw new Error("Payment verification failed");
+
+            // GA4 Purchase Tracking
+            trackPurchase(orderId, finalTotal, cart);
 
             // Record offer usage if applied
             if (appliedOffer) {

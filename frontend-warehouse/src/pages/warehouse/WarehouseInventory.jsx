@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { 
-    Package, 
-    Search, 
-    Filter, 
-    ArrowUpDown, 
-    AlertCircle, 
+import {
+    Package,
+    Search,
+    Filter,
+    ArrowUpDown,
+    AlertCircle,
     Plus,
     Edit2,
     Trash2,
@@ -70,8 +70,8 @@ const WarehouseInventory = () => {
             })
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'Failed to update status')
-            
-            setInventory(prev => prev.map(inv => 
+
+            setInventory(prev => prev.map(inv =>
                 inv.id === item.id ? { ...inv, is_featured: newStatus ? 1 : 0 } : inv
             ))
             showNotification(`Product ${newStatus ? 'marked as featured' : 'removed from featured'}`)
@@ -254,13 +254,13 @@ const WarehouseInventory = () => {
             })
             const result = await res.json()
             if (!res.ok) throw new Error(result.message || result.error || 'Failed to create brand')
-            
+
             // Select the new brand immediately
             setNewProductData(prev => ({
                 ...prev,
                 brand: result.data.name
             }))
-            
+
             // Refresh brands list
             await fetchBrands()
             setShowCreateBrandModal(false)
@@ -314,9 +314,9 @@ const WarehouseInventory = () => {
         if (location.state?.openAddProduct) {
             setShowAddProductView(true)
             if (location.state.productName) {
-                setNewProductData(prev => ({ 
-                    ...prev, 
-                    name: location.state.productName 
+                setNewProductData(prev => ({
+                    ...prev,
+                    name: location.state.productName
                 }))
                 // Also set the catalog search to the same name
                 setProductSearch(location.state.productName)
@@ -339,7 +339,7 @@ const WarehouseInventory = () => {
                 const params = new URLSearchParams()
                 if (productSearch.trim()) params.append('q', productSearch.trim())
                 if (selectedCategoryId) params.append('category_id', selectedCategoryId)
-                
+
                 const response = await fetch(`${API_BASE_URL}/products/search?${params.toString()}`)
                 if (!response.ok) throw new Error('Search failed')
                 const data = await response.json()
@@ -542,7 +542,7 @@ const WarehouseInventory = () => {
                     const fulfillment = data.data?.fulfillment;
                     const discovery = data.data?.discovery;
                     const analytics = data.data?.analytics;
-                    
+
                     setNewProductData(prev => ({
                         ...prev,
                         recommendations: controls ? {
@@ -604,7 +604,7 @@ const WarehouseInventory = () => {
     const handleDeleteItem = async (id) => {
         if (!warehouseToken) return
         if (!window.confirm('Are you sure you want to remove this SKU?')) return
-        
+
         try {
             const response = await fetch(`${API_BASE_URL}/warehouse/inventory/${id}`, {
                 method: 'DELETE',
@@ -635,7 +635,7 @@ const WarehouseInventory = () => {
             for (const file of files) {
                 const formData = new FormData();
                 formData.append('file', file);
-                
+
                 const response = await fetch(`${API_BASE_URL}/warehouse/upload`, {
                     method: 'POST',
                     headers: {
@@ -646,7 +646,7 @@ const WarehouseInventory = () => {
 
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || 'Upload failed');
-                
+
                 uploadedUrls.push(result.data.url);
             }
 
@@ -668,7 +668,7 @@ const WarehouseInventory = () => {
     const handleAddProduct = async (e) => {
         e.preventDefault()
         if (!warehouseToken) return
-        
+
         // Frontend Validation for Barcode format (Optional but must be 13 digits if provided)
         if (newProductData.barcode && (newProductData.barcode.length < 8 || newProductData.barcode.length > 14)) {
             showNotification('Barcode must be between 8 and 14 digits if provided', 'error')
@@ -680,30 +680,30 @@ const WarehouseInventory = () => {
             showNotification('A minimum of 3 product images are required.', 'error')
             return
         }
-        
+
         try {
             let endpoint = '';
             let method = 'POST';
-            
+
             if (editingItemId) {
                 endpoint = `${API_BASE_URL}/warehouse/inventory/${editingItemId}`;
                 method = 'PATCH';
             } else {
                 // Determine endpoint based on whether we selected an existing product
-                endpoint = newProductData.product_id 
+                endpoint = newProductData.product_id
                     ? `${API_BASE_URL}/warehouse/inventory` // Register existing catalog product
                     : `${API_BASE_URL}/warehouse/products`  // Create & Register brand new product
             }
-            
+
             let finalDescription = newProductData.description;
             if (newProductData.units_per_pack || newProductData.material) {
                 const parts = [];
                 if (newProductData.units_per_pack) parts.push(`Unit per pack - ${newProductData.units_per_pack}`);
                 if (newProductData.material) parts.push(`Material - ${newProductData.material}`);
-                
+
                 const detailsStr = parts.join('\n');
                 if (!finalDescription.includes(parts[0])) {
-                     finalDescription = finalDescription ? `${finalDescription}\n\n${detailsStr}` : detailsStr;
+                    finalDescription = finalDescription ? `${finalDescription}\n\n${detailsStr}` : detailsStr;
                 }
             }
 
@@ -753,7 +753,7 @@ const WarehouseInventory = () => {
                     return_window: parseInt(newProductData.fulfillment.return_window) || 7
                 }
             }
-            
+
             const response = await fetch(endpoint, {
                 method: method,
                 headers: {
@@ -762,10 +762,10 @@ const WarehouseInventory = () => {
                 },
                 body: JSON.stringify(payload)
             })
-            
+
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'Operation failed')
-            
+
             showNotification(editingItemId ? 'Product updated successfully' : 'Product added successfully')
             setShowAddProductView(false)
             setEditingItemId(null)
@@ -796,7 +796,7 @@ const WarehouseInventory = () => {
     const uniqueSubCategories = Array.from(new Set(inventory.map(item => item.sub_category).filter(Boolean)));
     const filteredInventory = inventory.filter(item => {
         const matchesSearch = (item.product_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             (item.sku || "").toLowerCase().includes(searchQuery.toLowerCase())
+            (item.sku || "").toLowerCase().includes(searchQuery.toLowerCase())
 
         const matchesLifecycle = lifecycleFilter === 'all' || item.lifecycle_state === lifecycleFilter
 
@@ -829,11 +829,10 @@ const WarehouseInventory = () => {
         <div className="space-y-8 animate-in fade-in duration-700">
             {/* Notification Toast */}
             {notification && (
-                <div className={`fixed top-24 right-8 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 fade-in border ${
-                    notification.type === 'error' 
-                    ? 'bg-rose-500/10 border-rose-500/20 text-rose-200' 
-                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
-                }`}>
+                <div className={`fixed top-24 right-8 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 fade-in border ${notification.type === 'error'
+                        ? 'bg-rose-500/10 border-rose-500/20 text-rose-200'
+                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
+                    }`}>
                     {notification.type === 'error' ? <XCircle size={20} /> : <CheckCircle2 size={20} />}
                     <span className="font-bold text-sm uppercase tracking-wide">{notification.message}</span>
                 </div>
@@ -843,7 +842,7 @@ const WarehouseInventory = () => {
                 <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                         <div>
-                            <button 
+                            <button
                                 onClick={() => {
                                     setShowAddProductView(false);
                                     setEditingItemId(null);
@@ -868,90 +867,88 @@ const WarehouseInventory = () => {
 
                     {/* Unified Search Section */}
                     {!editingItemId && (
-                    <div className="warehouse-panel p-8 border-amber-400/20 bg-amber-400/[0.02]">
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-4">
-                                <div className="h-px flex-1 bg-gradient-to-r from-amber-400/20 to-transparent" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500/80">Search Global Catalog</span>
-                                <div className="h-px flex-1 bg-gradient-to-l from-amber-400/20 to-transparent" />
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                                    {categories.map(cat => (
-                                        <button
-                                            key={cat.id}
-                                            type="button"
-                                            onClick={() => setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id)}
-                                            className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${
-                                                selectedCategoryId === cat.id 
-                                                ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-lg shadow-amber-400/20' 
-                                                : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/10'
-                                            }`}
-                                        >
-                                            {cat.emoji} &nbsp; {cat.name}
-                                        </button>
-                                    ))}
+                        <div className="warehouse-panel p-8 border-amber-400/20 bg-amber-400/[0.02]">
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-px flex-1 bg-gradient-to-r from-amber-400/20 to-transparent" />
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500/80">Search Global Catalog</span>
+                                    <div className="h-px flex-1 bg-gradient-to-l from-amber-400/20 to-transparent" />
                                 </div>
 
-                                <div className="relative group">
-                                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-amber-400 transition-colors" size={20} />
-                                    <input 
-                                        type="text"
-                                        placeholder="Start typing product name to search catalog..."
-                                        value={productSearch}
-                                        onChange={(e) => setProductSearch(e.target.value)}
-                                        className="w-full bg-slate-950 border border-white/5 rounded-[20px] py-5 pl-14 pr-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all shadow-inner"
-                                    />
-                                    {isSearchingProducts && (
-                                        <Loader2 className="absolute right-6 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" size={20} />
-                                    )}
-                                </div>
-
-                                {foundProducts.length > 0 && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                                        {foundProducts.map(p => (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                                        {categories.map(cat => (
                                             <button
-                                                key={p.id}
+                                                key={cat.id}
                                                 type="button"
-                                                onClick={() => {
-                                                    const generatedSku = newProductData.sku || (100000 + Math.floor(Math.random() * 900000)).toString();
-                                                    setNewProductData(prev => ({ 
-                                                        ...prev, 
-                                                        product_id: p.id,
-                                                        name: p.name,
-                                                        description: p.description || '',
-                                                        price: p.price,
-                                                        category_id: p.category_id,
-                                                        category: p.category_name || p.category,
-                                                        images: p.images || '',
-                                                        sku: generatedSku
-                                                    }))
-                                                    setProductSearch(p.name)
-                                                    setFoundProducts([])
-                                                    showNotification(`Linked to: ${p.name}`, 'info')
-                                                }}
-                                                className={`flex items-start gap-4 p-4 rounded-3xl border transition-all text-left group/item ${
-                                                    newProductData.product_id === p.id 
-                                                    ? 'bg-amber-400/10 border-amber-400/40 shadow-xl shadow-amber-400/5' 
-                                                    : 'bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.05]'
-                                                }`}
+                                                onClick={() => setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id)}
+                                                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${selectedCategoryId === cat.id
+                                                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-lg shadow-amber-400/20'
+                                                        : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/10'
+                                                    }`}
                                             >
-                                                <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-500 shrink-0">
-                                                    <Package size={24} />
-                                                </div>
-                                                <div className="min-w-0 pr-4">
-                                                    <div className="text-sm font-black text-white group-hover/item:text-amber-400 truncate transition-colors">{p.name}</div>
-                                                    <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{p.category_name || p.category}</div>
-                                                    <div className="text-sm font-black text-amber-400 mt-2">₹{p.price}</div>
-                                                </div>
+                                                {cat.emoji} &nbsp; {cat.name}
                                             </button>
                                         ))}
                                     </div>
-                                )}
+
+                                    <div className="relative group">
+                                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-amber-400 transition-colors" size={20} />
+                                        <input
+                                            type="text"
+                                            placeholder="Start typing product name to search catalog..."
+                                            value={productSearch}
+                                            onChange={(e) => setProductSearch(e.target.value)}
+                                            className="w-full bg-slate-950 border border-white/5 rounded-[20px] py-5 pl-14 pr-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all shadow-inner"
+                                        />
+                                        {isSearchingProducts && (
+                                            <Loader2 className="absolute right-6 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" size={20} />
+                                        )}
+                                    </div>
+
+                                    {foundProducts.length > 0 && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                            {foundProducts.map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const generatedSku = newProductData.sku || (100000 + Math.floor(Math.random() * 900000)).toString();
+                                                        setNewProductData(prev => ({
+                                                            ...prev,
+                                                            product_id: p.id,
+                                                            name: p.name,
+                                                            description: p.description || '',
+                                                            price: p.price,
+                                                            category_id: p.category_id,
+                                                            category: p.category_name || p.category,
+                                                            images: p.images || '',
+                                                            sku: generatedSku
+                                                        }))
+                                                        setProductSearch(p.name)
+                                                        setFoundProducts([])
+                                                        showNotification(`Linked to: ${p.name}`, 'info')
+                                                    }}
+                                                    className={`flex items-start gap-4 p-4 rounded-3xl border transition-all text-left group/item ${newProductData.product_id === p.id
+                                                            ? 'bg-amber-400/10 border-amber-400/40 shadow-xl shadow-amber-400/5'
+                                                            : 'bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.05]'
+                                                        }`}
+                                                >
+                                                    <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-500 shrink-0">
+                                                        <Package size={24} />
+                                                    </div>
+                                                    <div className="min-w-0 pr-4">
+                                                        <div className="text-sm font-black text-white group-hover/item:text-amber-400 truncate transition-colors">{p.name}</div>
+                                                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{p.category_name || p.category}</div>
+                                                        <div className="text-sm font-black text-amber-400 mt-2">₹{p.price}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
                     )}
 
                     <div className="relative">
@@ -962,7 +959,7 @@ const WarehouseInventory = () => {
                                     <div className="absolute top-0 right-0 p-1">
                                         <div className="w-20 h-20 bg-amber-400/5 blur-3xl rounded-full" />
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-500">
                                             <FileText size={22} />
@@ -983,7 +980,7 @@ const WarehouseInventory = () => {
                                                     </span>
                                                 )}
                                             </div>
-                                            <input 
+                                            <input
                                                 required
                                                 type="text"
                                                 placeholder="e.g. Ultra Fast Charger 65W"
@@ -995,7 +992,7 @@ const WarehouseInventory = () => {
 
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Description / Spec Sheet</label>
-                                            <textarea 
+                                            <textarea
                                                 rows="4"
                                                 placeholder="Detailed specifications, features, and model info..."
                                                 value={newProductData.description}
@@ -1007,7 +1004,7 @@ const WarehouseInventory = () => {
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Units per Pack</label>
-                                                <input 
+                                                <input
                                                     type="text"
                                                     placeholder="e.g. 1 unit, 2 pcs"
                                                     value={newProductData.units_per_pack}
@@ -1017,7 +1014,7 @@ const WarehouseInventory = () => {
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Material Type</label>
-                                                <input 
+                                                <input
                                                     type="text"
                                                     placeholder="e.g. Premium Glass, Silicone"
                                                     value={newProductData.material_type}
@@ -1032,7 +1029,7 @@ const WarehouseInventory = () => {
                                                 <span>Return Policy <span className="text-amber-500">*Mandatory</span></span>
                                                 <span className="text-[8px] text-slate-500 normal-case font-bold italic">Enter each point in a new line</span>
                                             </label>
-                                            <textarea 
+                                            <textarea
                                                 required
                                                 rows="3"
                                                 placeholder="1. 7 Days Replacement&#10;2. Original packaging required"
@@ -1041,12 +1038,12 @@ const WarehouseInventory = () => {
                                                 className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none resize-none"
                                             />
                                         </div>
-                                        
+
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between ml-1">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Product Images ({newProductData.images.length}/10) <span className="text-amber-500 ml-2">*Min 3 Required</span></label>
                                                 <div className="flex items-center gap-4">
-                                                    <input 
+                                                    <input
                                                         type="file"
                                                         hidden
                                                         multiple
@@ -1054,7 +1051,7 @@ const WarehouseInventory = () => {
                                                         accept="image/*"
                                                         onChange={handleImageUpload}
                                                     />
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         disabled={isWarehouseImageUploading || newProductData.images.length >= 10}
                                                         onClick={() => fileInputRef.current?.click()}
@@ -1069,19 +1066,20 @@ const WarehouseInventory = () => {
                                                 {newProductData.images.map((imgUrl, idx) => {
                                                     const src = resolveMediaUrl(imgUrl);
                                                     return (
-                                                    <div key={idx} className="relative aspect-square rounded-2xl bg-slate-950 border border-white/10 flex items-center justify-center overflow-hidden group shadow-inner">
-                                                        <img src={src} alt={`Preview ${idx+1}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => setNewProductData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
-                                                            className="absolute top-2 right-2 bg-slate-950/80 text-rose-400 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    </div>
-                                                )})}
+                                                        <div key={idx} className="relative aspect-square rounded-2xl bg-slate-950 border border-white/10 flex items-center justify-center overflow-hidden group shadow-inner">
+                                                            <img src={src} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNewProductData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
+                                                                className="absolute top-2 right-2 bg-slate-950/80 text-rose-400 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    )
+                                                })}
                                                 {newProductData.images.length < 10 && (
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={() => fileInputRef.current?.click()}
                                                         className="aspect-square rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-amber-400 hover:border-amber-400/30 transition-all bg-white/[0.02]"
@@ -1111,7 +1109,7 @@ const WarehouseInventory = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Brand Name</label>
-                                                <input 
+                                                <input
                                                     type="text"
                                                     list="brand-options"
                                                     placeholder="Select or type brand (e.g. Realme, Xiaomi)"
@@ -1124,7 +1122,7 @@ const WarehouseInventory = () => {
                                                         <option key={b.id} value={b.name} />
                                                     ))}
                                                 </datalist>
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setShowCreateBrandModal(true)}
                                                     className="mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-500 hover:text-amber-400 transition-colors"
@@ -1137,14 +1135,14 @@ const WarehouseInventory = () => {
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Primary Category</label>
                                                 <div className="relative">
-                                                    <select 
+                                                    <select
                                                         required
                                                         disabled={!!newProductData.product_id}
                                                         value={newProductData.category_id}
                                                         onChange={(e) => {
                                                             const cat = categories.find(c => c.id === parseInt(e.target.value))
-                                                            setNewProductData(prev => ({ 
-                                                                ...prev, 
+                                                            setNewProductData(prev => ({
+                                                                ...prev,
                                                                 category_id: e.target.value,
                                                                 category: cat ? cat.name : '',
                                                                 // Auto-populate return policy if current is empty or matches previous category policy
@@ -1175,7 +1173,7 @@ const WarehouseInventory = () => {
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Sub-Category</label>
                                                 {(!hasSubCategory && !newProductData.sub_category) ? (
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={() => setHasSubCategory(true)}
                                                         className="w-full h-[52px] border border-dashed border-white/10 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:border-amber-400/30 hover:text-amber-400 transition-all group"
@@ -1184,7 +1182,7 @@ const WarehouseInventory = () => {
                                                     </button>
                                                 ) : (
                                                     <div className="relative group/sub">
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             list="subcat-options"
                                                             placeholder="Select or type (e.g. Wired Headphones)"
@@ -1199,7 +1197,7 @@ const WarehouseInventory = () => {
                                                                 ))}
                                                             </datalist>
                                                         )}
-                                                        <button 
+                                                        <button
                                                             type="button"
                                                             onClick={() => {
                                                                 setNewProductData(prev => ({ ...prev, sub_category: '' }))
@@ -1217,15 +1215,15 @@ const WarehouseInventory = () => {
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between ml-1">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Global SKU Code</label>
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={generateRandomSku}
                                                     className="flex items-center gap-2 text-[9px] font-black text-amber-500 uppercase tracking-widest hover:text-amber-400 transition-colors"
                                                 >
                                                     <RefreshCw size={12} /> Auto-Generate
                                                 </button>
                                             </div>
-                                            <input 
+                                            <input
                                                 type="text"
                                                 placeholder="e.g. ELEC-CHG-65W"
                                                 value={newProductData.sku}
@@ -1245,7 +1243,7 @@ const WarehouseInventory = () => {
                                             </div>
                                             <div className="relative group/input">
                                                 <Maximize className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-700 group-focus-within/input:text-amber-500 transition-colors" size={18} />
-                                                <input 
+                                                <input
                                                     type="text"
                                                     placeholder="Scan or enter 13-digit barcode..."
                                                     value={newProductData.barcode}
@@ -1267,14 +1265,14 @@ const WarehouseInventory = () => {
                                                     </div>
                                                 </div>
                                                 <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input 
-                                                        type="checkbox" 
+                                                    <input
+                                                        type="checkbox"
                                                         className="sr-only peer"
                                                         checked={newProductData.has_variants}
                                                         onChange={(e) => {
                                                             const enabled = e.target.checked;
-                                                            setNewProductData(prev => ({ 
-                                                                ...prev, 
+                                                            setNewProductData(prev => ({
+                                                                ...prev,
                                                                 has_variants: enabled,
                                                                 variants: enabled && prev.variants.length === 0 ? [{ id: Date.now(), name: '', sku: '', price: prev.price, stock_quantity: 0 }] : prev.variants
                                                             }))
@@ -1289,7 +1287,7 @@ const WarehouseInventory = () => {
                                             <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
                                                 <div className="flex items-center justify-between">
                                                     <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Variant Configuration</h4>
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={() => setNewProductData(prev => ({
                                                             ...prev,
@@ -1316,7 +1314,7 @@ const WarehouseInventory = () => {
                                                             {newProductData.variants.map((variant, idx) => (
                                                                 <tr key={variant.id} className="group/row hover:bg-white/[0.02] transition-colors">
                                                                     <td className="p-3">
-                                                                        <input 
+                                                                        <input
                                                                             type="text"
                                                                             placeholder="Blue / 128GB"
                                                                             value={variant.name}
@@ -1329,7 +1327,7 @@ const WarehouseInventory = () => {
                                                                         />
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        <input 
+                                                                        <input
                                                                             type="text"
                                                                             placeholder="SKU"
                                                                             value={variant.sku}
@@ -1342,7 +1340,7 @@ const WarehouseInventory = () => {
                                                                         />
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        <input 
+                                                                        <input
                                                                             type="number"
                                                                             placeholder="Price"
                                                                             value={variant.price}
@@ -1355,7 +1353,7 @@ const WarehouseInventory = () => {
                                                                         />
                                                                     </td>
                                                                     <td className="p-3">
-                                                                        <input 
+                                                                        <input
                                                                             type="number"
                                                                             placeholder="Qty"
                                                                             value={variant.stock_quantity}
@@ -1368,7 +1366,7 @@ const WarehouseInventory = () => {
                                                                         />
                                                                     </td>
                                                                     <td className="p-3 text-right">
-                                                                        <button 
+                                                                        <button
                                                                             type="button"
                                                                             onClick={() => {
                                                                                 setNewProductData(prev => ({
@@ -1413,14 +1411,14 @@ const WarehouseInventory = () => {
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Initial Stock Quantity</label>
                                                 <div className="flex items-center gap-2">
-                                                    <input 
+                                                    <input
                                                         type="number"
                                                         min="0"
                                                         value={newProductData.stock_quantity}
                                                         onChange={(e) => setNewProductData(prev => ({ ...prev, stock_quantity: parseInt(e.target.value) || 0 }))}
                                                         className="flex-1 min-w-0 bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all outline-none"
                                                     />
-                                                    <select 
+                                                    <select
                                                         value={newProductData.unit}
                                                         onChange={(e) => setNewProductData(prev => ({ ...prev, unit: e.target.value }))}
                                                         className="w-24 bg-slate-900 border border-white/10 rounded-2xl py-4 px-2 text-[10px] font-black text-amber-500 uppercase tracking-widest focus:outline-none focus:border-amber-500 transition-all appearance-none text-center outline-none shrink-0"
@@ -1437,7 +1435,7 @@ const WarehouseInventory = () => {
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Low Stock Alert Threshold</label>
                                                 <div className="relative group/threshold">
-                                                    <input 
+                                                    <input
                                                         type="number"
                                                         min="1"
                                                         value={newProductData.low_stock_threshold}
@@ -1452,7 +1450,7 @@ const WarehouseInventory = () => {
                                         </div>
 
                                         {!showLocationMapping && !newProductData.rack_no && !newProductData.shelf_no && !newProductData.bin_id ? (
-                                            <button 
+                                            <button
                                                 type="button"
                                                 onClick={() => setShowLocationMapping(true)}
                                                 className="w-full py-8 border border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-3 text-slate-500 hover:border-amber-400/30 hover:text-amber-400 transition-all group bg-slate-950/20"
@@ -1467,7 +1465,7 @@ const WarehouseInventory = () => {
                                             </button>
                                         ) : (
                                             <div className="p-6 bg-slate-950/50 rounded-3xl border border-white/5 space-y-6 relative group/mapping">
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => {
                                                         setNewProductData(prev => ({ ...prev, rack_no: '', shelf_no: '', bin_id: '', bin_location: '' }))
@@ -1484,38 +1482,38 @@ const WarehouseInventory = () => {
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div className="space-y-2">
                                                         <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Rack No</label>
-                                                        <input 
-                                                            type="text" placeholder="R-01" 
+                                                        <input
+                                                            type="text" placeholder="R-01"
                                                             value={newProductData.rack_no}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, rack_no: e.target.value.toUpperCase() }))}
-                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none" 
+                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Shelf No</label>
-                                                        <input 
-                                                            type="text" placeholder="S-04" 
+                                                        <input
+                                                            type="text" placeholder="S-04"
                                                             value={newProductData.shelf_no}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, shelf_no: e.target.value.toUpperCase() }))}
-                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none" 
+                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Bin ID</label>
-                                                        <input 
-                                                            type="text" placeholder="B12" 
+                                                        <input
+                                                            type="text" placeholder="B12"
                                                             value={newProductData.bin_id}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, bin_id: e.target.value.toUpperCase() }))}
-                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none" 
+                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Legacy Loc.</label>
-                                                        <input 
-                                                            type="text" placeholder="A-01-04" 
+                                                        <input
+                                                            type="text" placeholder="A-01-04"
                                                             value={newProductData.bin_location}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, bin_location: e.target.value.toUpperCase() }))}
-                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none text-slate-400" 
+                                                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-amber-400/30 transition-all outline-none text-slate-400"
                                                         />
                                                     </div>
                                                 </div>
@@ -1542,7 +1540,7 @@ const WarehouseInventory = () => {
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Base Selling Price</label>
                                                 <div className="relative">
                                                     <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">₹</div>
-                                                    <input 
+                                                    <input
                                                         required
                                                         type="number"
                                                         min="0"
@@ -1550,8 +1548,8 @@ const WarehouseInventory = () => {
                                                         onChange={(e) => {
                                                             const s = parseFloat(e.target.value) || 0;
                                                             const m = parseFloat(newProductData.mrp) || 0;
-                                                            setNewProductData(prev => ({ 
-                                                                ...prev, 
+                                                            setNewProductData(prev => ({
+                                                                ...prev,
                                                                 price: e.target.value,
                                                                 discount_amt: m > 0 ? (m - s).toFixed(2) : 0,
                                                                 discount_pct: m > 0 ? (((m - s) / m) * 100).toFixed(2) : 0
@@ -1579,7 +1577,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="relative">
                                                     <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">₹</div>
-                                                    <input 
+                                                    <input
                                                         type="number"
                                                         min="0"
                                                         value={newProductData.cost_price}
@@ -1595,21 +1593,21 @@ const WarehouseInventory = () => {
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 lg:ml-1">Maximum Retail Price (MRP)</label>
                                                 <div className="relative">
                                                     <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600 font-bold text-xs">₹</div>
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="0.00" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0.00"
                                                         value={newProductData.mrp}
                                                         onChange={(e) => {
                                                             const m = parseFloat(e.target.value) || 0;
                                                             const s = parseFloat(newProductData.price) || 0;
-                                                            setNewProductData(prev => ({ 
-                                                                ...prev, 
+                                                            setNewProductData(prev => ({
+                                                                ...prev,
                                                                 mrp: e.target.value,
                                                                 discount_amt: m > 0 ? (m - s).toFixed(2) : 0,
                                                                 discount_pct: m > 0 ? (((m - s) / m) * 100).toFixed(2) : 0
                                                             }))
                                                         }}
-                                                        className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 pl-10 pr-4 text-xs text-white font-bold focus:outline-none focus:border-white/20 transition-all outline-none" 
+                                                        className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 pl-10 pr-4 text-xs text-white font-bold focus:outline-none focus:border-white/20 transition-all outline-none"
                                                     />
                                                 </div>
                                             </div>
@@ -1617,21 +1615,21 @@ const WarehouseInventory = () => {
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Discount (₹)</label>
                                                 <div className="relative">
                                                     <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600 font-bold text-xs">₹</div>
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="0" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0"
                                                         value={newProductData.discount_amt}
                                                         onChange={(e) => {
                                                             const d_amt = parseFloat(e.target.value) || 0;
                                                             const m = parseFloat(newProductData.mrp) || 0;
-                                                            setNewProductData(prev => ({ 
-                                                                ...prev, 
+                                                            setNewProductData(prev => ({
+                                                                ...prev,
                                                                 discount_amt: e.target.value,
                                                                 price: m > 0 ? (m - d_amt).toFixed(2) : prev.price,
                                                                 discount_pct: m > 0 ? ((d_amt / m) * 100).toFixed(2) : 0
                                                             }))
                                                         }}
-                                                        className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 pl-10 pr-4 text-xs text-white font-bold focus:outline-none focus:border-white/20 transition-all outline-none" 
+                                                        className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 pl-10 pr-4 text-xs text-white font-bold focus:outline-none focus:border-white/20 transition-all outline-none"
                                                     />
                                                 </div>
                                             </div>
@@ -1639,21 +1637,21 @@ const WarehouseInventory = () => {
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Discount Percentage</label>
                                                 <div className="relative">
                                                     <Percent className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-600" size={12} />
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="0" 
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0"
                                                         value={newProductData.discount_pct}
                                                         onChange={(e) => {
                                                             const d_pct = parseFloat(e.target.value) || 0;
                                                             const m = parseFloat(newProductData.mrp) || 0;
-                                                            setNewProductData(prev => ({ 
-                                                                ...prev, 
+                                                            setNewProductData(prev => ({
+                                                                ...prev,
                                                                 discount_pct: e.target.value,
-                                                                price: m > 0 ? (m * (1 - d_pct/100)).toFixed(2) : prev.price,
-                                                                discount_amt: m > 0 ? (m * (d_pct/100)).toFixed(2) : 0
+                                                                price: m > 0 ? (m * (1 - d_pct / 100)).toFixed(2) : prev.price,
+                                                                discount_amt: m > 0 ? (m * (d_pct / 100)).toFixed(2) : 0
                                                             }))
                                                         }}
-                                                        className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-white/20 transition-all outline-none" 
+                                                        className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-white/20 transition-all outline-none"
                                                     />
                                                 </div>
                                             </div>
@@ -1663,23 +1661,23 @@ const WarehouseInventory = () => {
                                                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">GST / Tax</span>
                                                         <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tight">{newProductData.apply_gst ? 'Enabled' : 'Disabled'}</span>
                                                     </div>
-                                                    <button 
+                                                    <button
                                                         type="button"
-                                                        onClick={() => setNewProductData(prev => ({ 
-                                                            ...prev, 
+                                                        onClick={() => setNewProductData(prev => ({
+                                                            ...prev,
                                                             apply_gst: !prev.apply_gst,
-                                                            gst_pct: !prev.apply_gst ? 18 : null 
+                                                            gst_pct: !prev.apply_gst ? 18 : null
                                                         }))}
                                                         className={`w-9 h-5 rounded-full p-0.5 transition-all ${newProductData.apply_gst ? 'bg-cyan-400' : 'bg-slate-800'}`}
                                                     >
                                                         <div className={`w-4 h-4 rounded-full bg-white transition-transform ${newProductData.apply_gst ? 'translate-x-4' : 'translate-x-0'} shadow-sm`} />
                                                     </button>
                                                 </div>
-                                                
+
                                                 {newProductData.apply_gst && (
                                                     <div className="relative animate-in slide-in-from-top-2 duration-300">
                                                         <Percent className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400/60" size={12} />
-                                                        <select 
+                                                        <select
                                                             value={newProductData.gst_pct || 18}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, gst_pct: parseInt(e.target.value) }))}
                                                             className="w-full bg-cyan-400/5 border border-cyan-400/20 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-cyan-400/40 transition-all appearance-none outline-none"
@@ -1699,7 +1697,7 @@ const WarehouseInventory = () => {
 
                                 {/* SECTION 5: LOGISTICS */}
                                 {!showLogistics && !newProductData.weight && !newProductData.dimensions && !newProductData.is_fragile && !newProductData.is_temp_sensitive ? (
-                                    <button 
+                                    <button
                                         type="button"
                                         onClick={() => setShowLogistics(true)}
                                         className="w-full py-8 border border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-3 text-slate-500 hover:border-indigo-400/30 hover:text-indigo-400 transition-all group bg-slate-950/20"
@@ -1714,7 +1712,7 @@ const WarehouseInventory = () => {
                                     </button>
                                 ) : (
                                     <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group relative overflow-hidden">
-                                        <button 
+                                        <button
                                             type="button"
                                             onClick={() => {
                                                 setNewProductData(prev => ({ ...prev, weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false }))
@@ -1743,7 +1741,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Physical Weight</label>
                                                     <div className="relative">
                                                         <Scale className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             placeholder="e.g. 0.450 kg"
                                                             value={newProductData.weight}
@@ -1757,7 +1755,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Box Dimensions</label>
                                                     <div className="relative">
                                                         <Maximize className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             placeholder="L x W x H (cm)"
                                                             value={newProductData.dimensions}
@@ -1771,7 +1769,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Promised Delivery Window</label>
                                                     <div className="relative">
                                                         <Zap className="absolute left-6 top-1/2 -translate-y-1/2 text-amber-500" size={16} />
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             placeholder="e.g. 10-30 mins or 2-4 Hours"
                                                             value={newProductData.delivery_time}
@@ -1784,14 +1782,13 @@ const WarehouseInventory = () => {
                                             </div>
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, is_fragile: !prev.is_fragile }))}
-                                                    className={`flex items-center justify-between p-5 rounded-3xl border transition-all ${
-                                                        newProductData.is_fragile 
-                                                        ? 'bg-rose-400/10 border-rose-400/30' 
-                                                        : 'bg-slate-950/30 border-white/5 hover:border-white/10'
-                                                    }`}
+                                                    className={`flex items-center justify-between p-5 rounded-3xl border transition-all ${newProductData.is_fragile
+                                                            ? 'bg-rose-400/10 border-rose-400/30'
+                                                            : 'bg-slate-950/30 border-white/5 hover:border-white/10'
+                                                        }`}
                                                 >
                                                     <div className="flex items-center gap-3 text-left">
                                                         <Shield size={18} className={newProductData.is_fragile ? 'text-rose-400' : 'text-slate-600'} />
@@ -1805,14 +1802,13 @@ const WarehouseInventory = () => {
                                                     </div>
                                                 </button>
 
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, is_temp_sensitive: !prev.is_temp_sensitive }))}
-                                                    className={`flex items-center justify-between p-5 rounded-3xl border transition-all ${
-                                                        newProductData.is_temp_sensitive 
-                                                        ? 'bg-blue-400/10 border-blue-400/30' 
-                                                        : 'bg-slate-950/30 border-white/5 hover:border-white/10'
-                                                    }`}
+                                                    className={`flex items-center justify-between p-5 rounded-3xl border transition-all ${newProductData.is_temp_sensitive
+                                                            ? 'bg-blue-400/10 border-blue-400/30'
+                                                            : 'bg-slate-950/30 border-white/5 hover:border-white/10'
+                                                        }`}
                                                 >
                                                     <div className="flex items-center gap-3 text-left">
                                                         <Thermometer size={18} className={newProductData.is_temp_sensitive ? 'text-blue-400' : 'text-slate-600'} />
@@ -1845,7 +1841,7 @@ const WarehouseInventory = () => {
                                     <div className="space-y-6">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Supplier / Vendor Name</label>
-                                            <input 
+                                            <input
                                                 type="text"
                                                 placeholder="e.g. Reliance Logistics Pvt Ltd"
                                                 value={newProductData.supplier_name}
@@ -1857,7 +1853,7 @@ const WarehouseInventory = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Contact Information</label>
-                                                <input 
+                                                <input
                                                     type="text"
                                                     placeholder="Phone or Email"
                                                     value={newProductData.contact_info}
@@ -1870,7 +1866,7 @@ const WarehouseInventory = () => {
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Purchase Date</label>
                                                 <div className="relative">
                                                     <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
-                                                    <input 
+                                                    <input
                                                         type="date"
                                                         value={newProductData.purchase_date}
                                                         onChange={(e) => setNewProductData(prev => ({ ...prev, purchase_date: e.target.value }))}
@@ -1901,7 +1897,7 @@ const WarehouseInventory = () => {
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Active Status</div>
                                                     <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Available for orders</div>
                                                 </div>
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, is_active: !prev.is_active }))}
                                                     className={`w-12 h-7 rounded-full p-1 transition-all ${newProductData.is_active ? 'bg-emerald-400' : 'bg-slate-800'}`}
@@ -1915,7 +1911,7 @@ const WarehouseInventory = () => {
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Store Visibility</div>
                                                     <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Visible to customers</div>
                                                 </div>
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, is_visible: !prev.is_visible }))}
                                                     className={`w-12 h-7 rounded-full p-1 transition-all ${newProductData.is_visible ? 'bg-amber-400' : 'bg-slate-800'}`}
@@ -1931,7 +1927,7 @@ const WarehouseInventory = () => {
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Perishable Goods</div>
                                                     <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Has short shelf life</div>
                                                 </div>
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, is_perishable: !prev.is_perishable }))}
                                                     className={`w-12 h-7 rounded-full p-1 transition-all ${newProductData.is_perishable ? 'bg-rose-400' : 'bg-slate-800'}`}
@@ -1945,7 +1941,7 @@ const WarehouseInventory = () => {
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Featured Product</div>
                                                     <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Show in Popular section</div>
                                                 </div>
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, is_featured: !prev.is_featured }))}
                                                     className={`w-12 h-7 rounded-full p-1 transition-all ${newProductData.is_featured ? 'bg-indigo-400' : 'bg-slate-800'}`}
@@ -1959,7 +1955,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Expiry Date</label>
                                                     <div className="relative">
                                                         <AlertCircle className="absolute right-6 top-1/2 -translate-y-1/2 text-rose-500" size={16} />
-                                                        <input 
+                                                        <input
                                                             type="date"
                                                             value={newProductData.expiry_date}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, expiry_date: e.target.value }))}
@@ -1980,7 +1976,7 @@ const WarehouseInventory = () => {
                                             </p>
                                         </div>
                                     </div>
-
+                                    o
                                     <div className="pt-6 border-t border-white/5">
                                         <div className="flex items-center gap-3 mb-4">
                                             <RefreshCw size={14} className="text-amber-500" />
@@ -1999,11 +1995,10 @@ const WarehouseInventory = () => {
                                                     key={state.value}
                                                     type="button"
                                                     onClick={() => setNewProductData(prev => ({ ...prev, lifecycle_state: state.value }))}
-                                                    className={`px-4 py-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${
-                                                        newProductData.lifecycle_state === state.value 
-                                                           ? 'bg-white/10 border-white/20' 
-                                                           : 'bg-slate-950/20 border-white/5 hover:border-white/10'
-                                                    }`}
+                                                    className={`px-4 py-3 rounded-2xl border transition-all flex flex-col items-center gap-2 ${newProductData.lifecycle_state === state.value
+                                                            ? 'bg-white/10 border-white/20'
+                                                            : 'bg-slate-950/20 border-white/5 hover:border-white/10'
+                                                        }`}
                                                 >
                                                     <div className={`w-2 h-2 rounded-full ${state.color} ${newProductData.lifecycle_state === state.value ? 'animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''}`} />
                                                     <span className={`text-[9px] font-black uppercase tracking-widest ${newProductData.lifecycle_state === state.value ? 'text-white' : 'text-slate-500'}`}>{state.label}</span>
@@ -2037,7 +2032,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">{rec.label}</label>
                                                     <div className="relative group/rec">
                                                         <Search className="absolute left-4 top-4 text-slate-700 group-focus-within/rec:text-indigo-400 transition-colors" size={14} />
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             placeholder={`Search to add ${rec.label.toLowerCase()}...`}
                                                             onFocus={(e) => {
@@ -2056,7 +2051,7 @@ const WarehouseInventory = () => {
                                                                         <img src={resolveMediaUrl(prod?.images?.[0])} alt="" className="w-full h-full object-cover" />
                                                                     </div>
                                                                     <span className="text-[10px] font-bold text-white max-w-[100px] truncate">{prod?.name || 'Unknown'}</span>
-                                                                    <button 
+                                                                    <button
                                                                         type="button"
                                                                         onClick={() => setNewProductData(prev => ({
                                                                             ...prev,
@@ -2086,7 +2081,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Manual Recommendation Priority</label>
                                                     <span className="text-xs font-black text-indigo-400">{newProductData.recommendation_priority}</span>
                                                 </div>
-                                                <input 
+                                                <input
                                                     type="range"
                                                     min="0"
                                                     max="100"
@@ -2102,7 +2097,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Smart Recommendation Weight</label>
                                                     <span className="text-xs font-black text-emerald-400">{newProductData.recommendation_weight}x</span>
                                                 </div>
-                                                <input 
+                                                <input
                                                     type="range"
                                                     min="0.1"
                                                     max="5.0"
@@ -2143,7 +2138,7 @@ const WarehouseInventory = () => {
                                         <div className="space-y-8">
                                             <div className="space-y-3">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Rich Overview (Main Tab)</label>
-                                                <textarea 
+                                                <textarea
                                                     rows="6"
                                                     placeholder="HTML/Markdown supported overview..."
                                                     value={newProductData.content.overview}
@@ -2158,7 +2153,7 @@ const WarehouseInventory = () => {
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between ml-1">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Key Highlights (Bullet Points)</label>
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={() => setNewProductData(prev => ({
                                                             ...prev,
@@ -2172,7 +2167,7 @@ const WarehouseInventory = () => {
                                                 <div className="space-y-2">
                                                     {newProductData.content.highlights.map((h, idx) => (
                                                         <div key={idx} className="flex gap-2 group/h">
-                                                            <input 
+                                                            <input
                                                                 type="text"
                                                                 placeholder={`Highlight #${idx + 1}`}
                                                                 value={h}
@@ -2186,7 +2181,7 @@ const WarehouseInventory = () => {
                                                                 }}
                                                                 className="flex-1 bg-slate-950/30 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-rose-400/30 transition-all outline-none"
                                                             />
-                                                            <button 
+                                                            <button
                                                                 type="button"
                                                                 onClick={() => setNewProductData(prev => ({
                                                                     ...prev,
@@ -2211,14 +2206,14 @@ const WarehouseInventory = () => {
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between ml-1">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Technical Specifications</label>
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={() => {
                                                             const key = `Param ${Object.keys(newProductData.content.specifications).length + 1}`;
                                                             setNewProductData(prev => ({
                                                                 ...prev,
-                                                                content: { 
-                                                                    ...prev.content, 
+                                                                content: {
+                                                                    ...prev.content,
                                                                     specifications: { ...prev.content.specifications, [key]: '' }
                                                                 }
                                                             }))
@@ -2231,7 +2226,7 @@ const WarehouseInventory = () => {
                                                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                                                     {Object.entries(newProductData.content.specifications).map(([key, val], idx) => (
                                                         <div key={idx} className="grid grid-cols-2 gap-2 group/s">
-                                                            <input 
+                                                            <input
                                                                 type="text"
                                                                 placeholder="Property (e.g. Battery)"
                                                                 value={key}
@@ -2247,20 +2242,20 @@ const WarehouseInventory = () => {
                                                                 className="bg-slate-950/30 border border-white/5 rounded-xl py-3 px-4 text-xs text-rose-400 font-black uppercase tracking-widest focus:outline-none focus:border-rose-400/30 transition-all outline-none"
                                                             />
                                                             <div className="relative">
-                                                                <input 
+                                                                <input
                                                                     type="text"
                                                                     placeholder="Value"
                                                                     value={val}
                                                                     onChange={(e) => setNewProductData(prev => ({
                                                                         ...prev,
-                                                                        content: { 
-                                                                            ...prev.content, 
+                                                                        content: {
+                                                                            ...prev.content,
                                                                             specifications: { ...prev.content.specifications, [key]: e.target.value }
                                                                         }
                                                                     }))}
                                                                     className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 px-4 text-xs text-white font-bold focus:outline-none focus:border-rose-400/30 transition-all outline-none pr-10"
                                                                 />
-                                                                <button 
+                                                                <button
                                                                     type="button"
                                                                     onClick={() => {
                                                                         const newS = { ...newProductData.content.specifications };
@@ -2283,7 +2278,7 @@ const WarehouseInventory = () => {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Compatibility</label>
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         placeholder="e.g. iPhone 15, Galaxy S24"
                                                         value={newProductData.content.compatibility}
@@ -2296,7 +2291,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">What's in the Box</label>
-                                                    <input 
+                                                    <input
                                                         type="text"
                                                         placeholder="e.g. Main Unit, User Manual"
                                                         value={newProductData.content.box_contents}
@@ -2312,7 +2307,7 @@ const WarehouseInventory = () => {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Warranty Info</label>
-                                                    <textarea 
+                                                    <textarea
                                                         rows="3"
                                                         placeholder="Coverage, duration, claim process..."
                                                         value={newProductData.content.warranty_info}
@@ -2325,7 +2320,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Usage Instructions</label>
-                                                    <textarea 
+                                                    <textarea
                                                         rows="3"
                                                         placeholder="Step-by-step setup or safety guide..."
                                                         value={newProductData.content.usage_instructions}
@@ -2372,8 +2367,8 @@ const WarehouseInventory = () => {
                                                             <span className="text-[10px] font-black uppercase tracking-widest text-white">{badge.label}</span>
                                                         </div>
                                                         <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input 
-                                                                type="checkbox" 
+                                                            <input
+                                                                type="checkbox"
                                                                 className="sr-only peer"
                                                                 checked={!!activeBadge}
                                                                 onChange={(e) => {
@@ -2393,14 +2388,14 @@ const WarehouseInventory = () => {
                                                             <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                                                         </label>
                                                     </div>
-                                                    
+
                                                     {activeBadge && (
                                                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                                             <div className="flex items-center justify-between">
                                                                 <label className="text-[8px] font-black uppercase tracking-tighter text-slate-500">Priority</label>
                                                                 <span className="text-[10px] font-black text-white">{activeBadge.priority}</span>
                                                             </div>
-                                                            <input 
+                                                            <input
                                                                 type="range"
                                                                 min="1"
                                                                 max="10"
@@ -2440,7 +2435,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Package Weight (kg)</label>
                                                     <div className="relative">
                                                         <Scale className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-700" size={18} />
-                                                        <input 
+                                                        <input
                                                             type="number"
                                                             step="0.01"
                                                             placeholder="0.00"
@@ -2455,7 +2450,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Shipping Tier</label>
-                                                    <select 
+                                                    <select
                                                         value={newProductData.fulfillment.shipping_tier}
                                                         onChange={(e) => setNewProductData(prev => ({
                                                             ...prev,
@@ -2481,7 +2476,7 @@ const WarehouseInventory = () => {
                                                     ].map((dim) => (
                                                         <div key={dim.key} className="space-y-1">
                                                             <div className="text-[8px] font-black uppercase tracking-tighter text-slate-600 ml-1">{dim.label}</div>
-                                                            <input 
+                                                            <input
                                                                 type="number"
                                                                 placeholder="0"
                                                                 value={newProductData.fulfillment[dim.key]}
@@ -2501,7 +2496,7 @@ const WarehouseInventory = () => {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Dispatch SLA (Hours)</label>
-                                                    <input 
+                                                    <input
                                                         type="number"
                                                         placeholder="24"
                                                         value={newProductData.fulfillment.dispatch_sla}
@@ -2514,7 +2509,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Return Window (Days)</label>
-                                                    <input 
+                                                    <input
                                                         type="number"
                                                         placeholder="7"
                                                         value={newProductData.fulfillment.return_window}
@@ -2536,8 +2531,8 @@ const WarehouseInventory = () => {
                                                     <div key={toggle.key} className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                         <span className="text-[9px] font-black text-white uppercase tracking-widest leading-tight">{toggle.label}</span>
                                                         <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input 
-                                                                type="checkbox" 
+                                                            <input
+                                                                type="checkbox"
                                                                 className="sr-only peer"
                                                                 checked={newProductData.fulfillment[toggle.key]}
                                                                 onChange={(e) => setNewProductData(prev => ({
@@ -2573,7 +2568,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meta Title (SEO)</label>
                                                     <span className={`text-[9px] font-black uppercase tracking-widest ${newProductData.discovery.meta_title.length > 60 ? 'text-rose-400' : 'text-slate-600'}`}>{newProductData.discovery.meta_title.length}/60</span>
                                                 </div>
-                                                <input 
+                                                <input
                                                     type="text"
                                                     placeholder="Focus keyword included title..."
                                                     value={newProductData.discovery.meta_title}
@@ -2590,7 +2585,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meta Description</label>
                                                     <span className={`text-[9px] font-black uppercase tracking-widest ${newProductData.discovery.meta_description.length > 160 ? 'text-rose-400' : 'text-slate-600'}`}>{newProductData.discovery.meta_description.length}/160</span>
                                                 </div>
-                                                <textarea 
+                                                <textarea
                                                     rows="4"
                                                     placeholder="Compelling summary for search results..."
                                                     value={newProductData.discovery.meta_description}
@@ -2613,7 +2608,7 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">{disco.label}</label>
                                                     <div className="relative group/disco">
                                                         <Plus className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700" size={14} />
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             placeholder={disco.placeholder}
                                                             onKeyDown={(e) => {
@@ -2623,9 +2618,9 @@ const WarehouseInventory = () => {
                                                                     if (!newProductData.discovery[disco.key].includes(val)) {
                                                                         setNewProductData(prev => ({
                                                                             ...prev,
-                                                                            discovery: { 
-                                                                                ...prev.discovery, 
-                                                                                [disco.key]: [...prev.discovery[disco.key], val] 
+                                                                            discovery: {
+                                                                                ...prev.discovery,
+                                                                                [disco.key]: [...prev.discovery[disco.key], val]
                                                                             }
                                                                         }));
                                                                     }
@@ -2639,7 +2634,7 @@ const WarehouseInventory = () => {
                                                         {newProductData.discovery[disco.key].map(tag => (
                                                             <div key={tag} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 group/tag">
                                                                 <span className={`text-[10px] font-black uppercase tracking-widest ${disco.color}`}>{tag}</span>
-                                                                <button 
+                                                                <button
                                                                     type="button"
                                                                     onClick={() => setNewProductData(prev => ({
                                                                         ...prev,
@@ -2711,22 +2706,22 @@ const WarehouseInventory = () => {
 
                             {/* Recommendation Search Overlay */}
                             {recSearchTarget && (
-                                <div 
-                                    className="fixed inset-0 z-[200]" 
+                                <div
+                                    className="fixed inset-0 z-[200]"
                                     onClick={() => setRecSearchTarget(null)}
                                 >
-                                    <div 
+                                    <div
                                         className="fixed w-[320px] max-h-[400px] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
-                                        style={{ 
-                                            top: Math.min(window.innerHeight - 420, recSearchTarget.rect.bottom + 10), 
-                                            left: recSearchTarget.rect.left 
+                                        style={{
+                                            top: Math.min(window.innerHeight - 420, recSearchTarget.rect.bottom + 10),
+                                            left: recSearchTarget.rect.left
                                         }}
                                         onClick={e => e.stopPropagation()}
                                     >
                                         <div className="p-3 border-b border-white/5 bg-slate-950/50 sticky top-0">
                                             <div className="relative">
                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                                                <input 
+                                                <input
                                                     autoFocus
                                                     type="text"
                                                     placeholder="Filter products..."
@@ -2784,9 +2779,9 @@ const WarehouseInventory = () => {
                                         <div className="text-xs font-black text-white uppercase tracking-widest">Unsaved Configuration</div>
                                         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">Review all sections before global registration</p>
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-4 w-full md:w-auto">
-                                        <button 
+                                        <button
                                             type="button"
                                             onClick={() => {
                                                 setShowAddProductView(false);
@@ -2820,325 +2815,320 @@ const WarehouseInventory = () => {
                 </div>
             ) : (
                 <>
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 rounded-lg bg-amber-400/10 text-amber-500">
-                            <Package size={20} />
-                        </div>
-                        <span className="text-sm font-black uppercase tracking-[0.2em] text-amber-500">Logistics Control</span>
-                    </div>
-                    <h1 className="text-4xl font-black text-white tracking-tight">Inventory Management</h1>
-                    <p className="text-slate-400 mt-2 font-medium">Monitor and manage your warehouse stock in real-time.</p>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                    <button 
-                        onClick={() => setShowAddProductView(true)}
-                        className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-slate-950 px-8 py-3.5 rounded-2xl font-black text-sm transition-all hover:scale-105 active:scale-95 shadow-xl shadow-amber-400/10 group"
-                    >
-                        <Plus size={18} className="transition-transform group-hover:rotate-90" />
-                        ADD NEW PRODUCT
-                    </button>
-                </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                    { label: 'Total SKUs', value: stats.totalItems, icon: Package, color: 'emerald' },
-                    { label: 'Low Stock', value: stats.lowStock, icon: AlertCircle, color: 'amber' },
-                    { label: 'Out of Stock', value: stats.outOfStock, icon: XCircle, color: 'rose' },
-                    { label: 'Featured', value: stats.featured, icon: Zap, color: 'indigo' },
-                    { label: 'Total Units', value: stats.totalUnits, icon: CheckCircle2, color: 'blue' }
-                ].map((stat, i) => (
-                    <div key={i} className="warehouse-panel p-6 border border-white/5 hover:border-white/10 transition-colors">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className={`p-2.5 rounded-xl bg-${stat.color}-400/10 text-${stat.color}-400`}>
-                                <stat.icon size={20} />
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                        <div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 rounded-lg bg-amber-400/10 text-amber-500">
+                                    <Package size={20} />
+                                </div>
+                                <span className="text-sm font-black uppercase tracking-[0.2em] text-amber-500">Logistics Control</span>
                             </div>
-                            <div className="h-1 w-8 rounded-full bg-white/5" />
+                            <h1 className="text-4xl font-black text-white tracking-tight">Inventory Management</h1>
+                            <p className="text-slate-400 mt-2 font-medium">Monitor and manage your warehouse stock in real-time.</p>
                         </div>
-                        <div className="text-2xl font-black text-white">{stat.value}</div>
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{stat.label}</div>
-                    </div>
-                ))}
-            </div>
 
-            {/* Controls & Table */}
-            <div className="warehouse-panel overflow-hidden border border-white/5">
-                {/* Search & Filter Bar */}
-                <div className="p-6 border-b border-white/5 flex flex-col lg:flex-row gap-4 justify-between bg-white/[0.02]">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                        <input 
-                            type="text"
-                            placeholder="Search by product name or SKU..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50 transition-all"
-                        />
-                    </div>
-                    
-                    <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0">
-                        {[
-                            { id: 'all', label: 'All Items' },
-                            { id: 'featured', label: 'Featured' },
-                            { id: 'low', label: 'Low Stock' },
-                            { id: 'out', label: 'Out of Stock' }
-                        ].map((btn) => (
+                        <div className="flex items-center gap-3">
                             <button
-                                key={btn.id}
-                                onClick={() => setFilterStatus(btn.id)}
-                                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                                    filterStatus === btn.id 
-                                    ? 'bg-white/10 text-white border border-white/20' 
-                                    : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                                }`}
+                                onClick={() => setShowAddProductView(true)}
+                                className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-slate-950 px-8 py-3.5 rounded-2xl font-black text-sm transition-all hover:scale-105 active:scale-95 shadow-xl shadow-amber-400/10 group"
                             >
-                                {btn.label}
+                                <Plus size={18} className="transition-transform group-hover:rotate-90" />
+                                ADD NEW PRODUCT
                             </button>
+                        </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[
+                            { label: 'Total SKUs', value: stats.totalItems, icon: Package, color: 'emerald' },
+                            { label: 'Low Stock', value: stats.lowStock, icon: AlertCircle, color: 'amber' },
+                            { label: 'Out of Stock', value: stats.outOfStock, icon: XCircle, color: 'rose' },
+                            { label: 'Featured', value: stats.featured, icon: Zap, color: 'indigo' },
+                            { label: 'Total Units', value: stats.totalUnits, icon: CheckCircle2, color: 'blue' }
+                        ].map((stat, i) => (
+                            <div key={i} className="warehouse-panel p-6 border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className={`p-2.5 rounded-xl bg-${stat.color}-400/10 text-${stat.color}-400`}>
+                                        <stat.icon size={20} />
+                                    </div>
+                                    <div className="h-1 w-8 rounded-full bg-white/5" />
+                                </div>
+                                <div className="text-2xl font-black text-white">{stat.value}</div>
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{stat.label}</div>
+                            </div>
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 border-l border-white/5 pl-4 ml-2">
-                        {[
-                            { id: 'all', label: 'All States' },
-                            { id: 'draft', label: 'Draft' },
-                            { id: 'testing', label: 'Testing' },
-                            { id: 'live', label: 'Live' },
-                            { id: 'archived', label: 'Archived' },
-                            { id: 'coming_soon', label: 'Coming Soon' }
-                        ].map((btn) => (
-                            <button
-                                key={btn.id}
-                                onClick={() => setLifecycleFilter(btn.id)}
-                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                                    lifecycleFilter === btn.id
-                                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                    : 'text-slate-600 hover:text-slate-400 border border-transparent'
-                                }`}
-                            >
-                                {btn.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                    {/* Controls & Table */}
+                    <div className="warehouse-panel overflow-hidden border border-white/5">
+                        {/* Search & Filter Bar */}
+                        <div className="p-6 border-b border-white/5 flex flex-col lg:flex-row gap-4 justify-between bg-white/[0.02]">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                <input
+                                    type="text"
+                                    placeholder="Search by product name or SKU..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-slate-900/50 border border-white/5 rounded-xl py-3 pl-12 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50 transition-all"
+                                />
+                            </div>
 
-                {/* Table */}
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-white/[0.01]">
-                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 whitespace-nowrap">Product Detail</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">SKU / Bin</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Available</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Status</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Lifecycle</th>
-                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 text-right">Operations</th>
+                            <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0">
+                                {[
+                                    { id: 'all', label: 'All Items' },
+                                    { id: 'featured', label: 'Featured' },
+                                    { id: 'low', label: 'Low Stock' },
+                                    { id: 'out', label: 'Out of Stock' }
+                                ].map((btn) => (
+                                    <button
+                                        key={btn.id}
+                                        onClick={() => setFilterStatus(btn.id)}
+                                        className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${filterStatus === btn.id
+                                                ? 'bg-white/10 text-white border border-white/20'
+                                                : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                                            }`}
+                                    >
+                                        {btn.label}
+                                    </button>
+                                ))}
+                            </div>
 
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            {filteredInventory.length > 0 ? filteredInventory.map((item) => {
-                                const isOut = item.stock_quantity <= 0;
-                                const isLow = item.stock_quantity <= (item.low_stock_threshold || 5) && item.stock_quantity > 0;
-                                
-                                return (
-                                    <tr key={item.id} onClick={() => setSelectedItem(item)} className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-800 border border-white/5 flex items-center justify-center text-slate-500 overflow-hidden group-hover:border-amber-400/20 transition-all">
-                                                    {(() => {
-                                                        let displayImage = null;
-                                                        if (item.images) {
-                                                            try {
-                                                                const parsed = JSON.parse(item.images);
-                                                                displayImage = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : item.images;
-                                                            } catch (e) {
-                                                                displayImage = item.images;
-                                                            }
-                                                        }
-                                                        if (displayImage) {
-                                                            if (displayImage.startsWith('/') || !displayImage.startsWith('http')) displayImage = resolveMediaUrl(displayImage);
-                                                            return <img src={displayImage} alt={item.product_name} className="w-full h-full object-cover" />;
-                                                        }
-                                                        return <Package size={20} />;
-                                                    })()}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-0.5">
-                                                        <div className="text-sm font-bold text-white">{item.product_name}</div>
-                                                        {(item.is_featured === 1 || item.is_featured === true) && (
-                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase tracking-tighter border border-indigo-500/20">
-                                                                <Zap size={8} fill="currentColor" />
-                                                                Featured
+                            <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 border-l border-white/5 pl-4 ml-2">
+                                {[
+                                    { id: 'all', label: 'All States' },
+                                    { id: 'draft', label: 'Draft' },
+                                    { id: 'testing', label: 'Testing' },
+                                    { id: 'live', label: 'Live' },
+                                    { id: 'archived', label: 'Archived' },
+                                    { id: 'coming_soon', label: 'Coming Soon' }
+                                ].map((btn) => (
+                                    <button
+                                        key={btn.id}
+                                        onClick={() => setLifecycleFilter(btn.id)}
+                                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${lifecycleFilter === btn.id
+                                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                                : 'text-slate-600 hover:text-slate-400 border border-transparent'
+                                            }`}
+                                    >
+                                        {btn.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-white/[0.01]">
+                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 whitespace-nowrap">Product Detail</th>
+                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">SKU / Bin</th>
+                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Available</th>
+                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Status</th>
+                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Lifecycle</th>
+                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 text-right">Operations</th>
+
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {filteredInventory.length > 0 ? filteredInventory.map((item) => {
+                                        const isOut = item.stock_quantity <= 0;
+                                        const isLow = item.stock_quantity <= (item.low_stock_threshold || 5) && item.stock_quantity > 0;
+
+                                        return (
+                                            <tr key={item.id} onClick={() => setSelectedItem(item)} className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-800 border border-white/5 flex items-center justify-center text-slate-500 overflow-hidden group-hover:border-amber-400/20 transition-all">
+                                                            {(() => {
+                                                                let displayImage = null;
+                                                                if (item.images) {
+                                                                    try {
+                                                                        const parsed = JSON.parse(item.images);
+                                                                        displayImage = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : item.images;
+                                                                    } catch (e) {
+                                                                        displayImage = item.images;
+                                                                    }
+                                                                }
+                                                                if (displayImage) {
+                                                                    if (displayImage.startsWith('/') || !displayImage.startsWith('http')) displayImage = resolveMediaUrl(displayImage);
+                                                                    return <img src={displayImage} alt={item.product_name} className="w-full h-full object-cover" />;
+                                                                }
+                                                                return <Package size={20} />;
+                                                            })()}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-0.5">
+                                                                <div className="text-sm font-bold text-white">{item.product_name}</div>
+                                                                {(item.is_featured === 1 || item.is_featured === true) && (
+                                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase tracking-tighter border border-indigo-500/20">
+                                                                        <Zap size={8} fill="currentColor" />
+                                                                        Featured
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-400/10 text-amber-500 border border-amber-400/10">
+                                                                    <span className="text-[9px] font-black">{item.average_rating || '0.0'}</span>
+                                                                    <Star size={8} fill="currentColor" />
+                                                                </div>
+                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.category || 'Uncategorized'}</span>
+                                                                {item.brand && (
+                                                                    <>
+                                                                        <span className="w-1 h-1 rounded-full bg-slate-700" />
+                                                                        <span className="text-[10px] font-bold text-amber-500/60 uppercase tracking-widest">{item.brand}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="text-xs font-black text-amber-500/80 mb-1">{item.sku}</div>
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                        <MapPin size={10} />
+                                                        {item.bin_location || 'NO BIN'}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-lg font-black text-white">{item.stock_quantity || 0}</span>
+                                                            <span className="text-[10px] font-bold text-slate-600 uppercase">Total {item.unit || 'Units'}</span>
+                                                        </div>
+                                                        <div className={`text-[11px] font-black uppercase tracking-tight ${(item.stock_quantity - (item.reserved_stock || 0)) <= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                                            {Math.max(0, item.stock_quantity - (item.reserved_stock || 0))} Available
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[9px] font-black uppercase tracking-widest mt-1">
+                                                        <span className="text-slate-500">Reserved: {item.reserved_stock || 0}</span>
+                                                        {(item.user_reserved > 0 || item.guest_reserved > 0) && (
+                                                            <span className="ml-1 opacity-50">
+                                                                (U: {item.user_reserved || 0} G: {item.guest_reserved || 0})
                                                             </span>
                                                         )}
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    {isOut ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-400/10 text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-400/20">
+                                                            <span className="w-1 h-1 rounded-full bg-rose-400 animate-pulse" />
+                                                            Out of Stock
+                                                        </span>
+                                                    ) : isLow ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 text-amber-400 text-[10px] font-black uppercase tracking-wider border border-amber-400/20">
+                                                            <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+                                                            Low Stock
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-400/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-400/20">
+                                                            Health Optimal
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-400/10 text-amber-500 border border-amber-400/10">
-                                                            <span className="text-[9px] font-black">{item.average_rating || '0.0'}</span>
-                                                            <Star size={8} fill="currentColor" />
-                                                        </div>
-                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.category || 'Uncategorized'}</span>
-                                                        {item.brand && (
-                                                            <>
-                                                                <span className="w-1 h-1 rounded-full bg-slate-700" />
-                                                                <span className="text-[10px] font-bold text-amber-500/60 uppercase tracking-widest">{item.brand}</span>
-                                                            </>
-                                                        )}
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${item.lifecycle_state === 'live' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                                                                item.lifecycle_state === 'draft' ? 'bg-slate-500' :
+                                                                    item.lifecycle_state === 'testing' ? 'bg-blue-500' :
+                                                                        item.lifecycle_state === 'archived' ? 'bg-rose-500' :
+                                                                            item.lifecycle_state === 'discontinued' ? 'bg-amber-700' :
+                                                                                'bg-purple-500'
+                                                            }`} />
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest ${item.lifecycle_state === 'live' ? 'text-emerald-400' : 'text-slate-500'
+                                                            }`}>
+                                                            {item.lifecycle_state || 'live'}
+                                                        </span>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <div className="text-xs font-black text-amber-500/80 mb-1">{item.sku}</div>
-                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                                <MapPin size={10} />
-                                                {item.bin_location || 'NO BIN'}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex flex-col">
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="text-lg font-black text-white">{item.stock_quantity || 0}</span>
-                                                    <span className="text-[10px] font-bold text-slate-600 uppercase">Total {item.unit || 'Units'}</span>
-                                                </div>
-                                                <div className={`text-[11px] font-black uppercase tracking-tight ${(item.stock_quantity - (item.reserved_stock || 0)) <= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                    {Math.max(0, item.stock_quantity - (item.reserved_stock || 0))} Available
-                                                </div>
-                                            </div>
-                                            <div className="text-[9px] font-black uppercase tracking-widest mt-1">
-                                                <span className="text-slate-500">Reserved: {item.reserved_stock || 0}</span>
-                                                {(item.user_reserved > 0 || item.guest_reserved > 0) && (
-                                                    <span className="ml-1 opacity-50">
-                                                        (U: {item.user_reserved || 0} G: {item.guest_reserved || 0})
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            {isOut ? (
-                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-400/10 text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-400/20">
-                                                    <span className="w-1 h-1 rounded-full bg-rose-400 animate-pulse" />
-                                                    Out of Stock
-                                                </span>
-                                            ) : isLow ? (
-                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 text-amber-400 text-[10px] font-black uppercase tracking-wider border border-amber-400/20">
-                                                    <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-                                                    Low Stock
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-400/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-400/20">
-                                                    Health Optimal
-                                                </span>
-                                            )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                                    item.lifecycle_state === 'live' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
-                                                    item.lifecycle_state === 'draft' ? 'bg-slate-500' :
-                                                    item.lifecycle_state === 'testing' ? 'bg-blue-500' :
-                                                    item.lifecycle_state === 'archived' ? 'bg-rose-500' :
-                                                    item.lifecycle_state === 'discontinued' ? 'bg-amber-700' :
-                                                    'bg-purple-500'
-                                                }`} />
-                                                <span className={`text-[9px] font-black uppercase tracking-widest ${
-                                                    item.lifecycle_state === 'live' ? 'text-emerald-400' : 'text-slate-500'
-                                                }`}>
-                                                    {item.lifecycle_state || 'live'}
-                                                </span>
-                                            </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
 
-                                            <div className="flex items-center justify-end gap-2">
-                                                {/* Stock IN */}
-                                                <button
-                                                    title="Stock IN"
-                                                    onClick={(e) => { e.stopPropagation(); openStockAdjust(item, 'IN'); }}
-                                                    className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all"
-                                                >
-                                                    <ArrowDownCircle size={16} />
-                                                </button>
-                                                {/* Stock OUT */}
-                                                <button
-                                                    title="Stock OUT"
-                                                    onClick={(e) => { e.stopPropagation(); openStockAdjust(item, 'OUT'); }}
-                                                    className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all"
-                                                >
-                                                    <ArrowUpCircle size={16} />
-                                                </button>
-                                                {/* Featured Toggle */}
-                                                <button
-                                                    title={item.is_featured ? "Remove from Featured" : "Mark as Featured"}
-                                                    onClick={(e) => { e.stopPropagation(); handleToggleFeatured(item); }}
-                                                    className={`p-2.5 rounded-xl border transition-all ${
-                                                        (item.is_featured === 1 || item.is_featured === true)
-                                                            ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
-                                                            : 'bg-white/5 border-white/5 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/20'
-                                                    }`}
-                                                >
-                                                    <Zap size={16} fill={(item.is_featured === 1 || item.is_featured === true) ? "currentColor" : "none"} />
-                                                </button>
-                                                {/* Edit */}
-                                                <button
-                                                    title="Edit Product"
-                                                    onClick={(e) => { e.stopPropagation(); handleEditItem(item); }}
-                                                    className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-blue-400 hover:border-blue-400/20 transition-all"
-                                                >
-                                                    <Edit2 size={16} />
-                                                </button>
-                                                {/* History */}
-                                                <button
-                                                    title="Movement History"
-                                                    onClick={(e) => { e.stopPropagation(); loadMovements(item); }}
-                                                    className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-amber-400 hover:border-amber-400/20 transition-all"
-                                                >
-                                                    <History size={16} />
-                                                </button>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
-                                                    className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-rose-400 hover:border-rose-400/20 transition-all"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            }) : (
-                                <tr>
-                                    <td colSpan="5" className="px-6 py-20 text-center">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <Package size={40} className="text-slate-800" />
-                                            <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No items matching criteria</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                
-                {/* Pagination Placeholder */}
-                <div className="p-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Showing {filteredInventory.length} of {inventory.length} items</p>
-                    <div className="flex items-center gap-2">
-                        <button className="p-2 rounded-lg border border-white/5 text-slate-600 cursor-not-allowed">
-                            <ChevronRight size={16} className="rotate-180" />
-                        </button>
-                        <button className="p-2 rounded-lg border border-white/10 text-white">
-                            <ChevronRight size={16} />
-                        </button>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {/* Stock IN */}
+                                                        <button
+                                                            title="Stock IN"
+                                                            onClick={(e) => { e.stopPropagation(); openStockAdjust(item, 'IN'); }}
+                                                            className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all"
+                                                        >
+                                                            <ArrowDownCircle size={16} />
+                                                        </button>
+                                                        {/* Stock OUT */}
+                                                        <button
+                                                            title="Stock OUT"
+                                                            onClick={(e) => { e.stopPropagation(); openStockAdjust(item, 'OUT'); }}
+                                                            className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all"
+                                                        >
+                                                            <ArrowUpCircle size={16} />
+                                                        </button>
+                                                        {/* Featured Toggle */}
+                                                        <button
+                                                            title={item.is_featured ? "Remove from Featured" : "Mark as Featured"}
+                                                            onClick={(e) => { e.stopPropagation(); handleToggleFeatured(item); }}
+                                                            className={`p-2.5 rounded-xl border transition-all ${(item.is_featured === 1 || item.is_featured === true)
+                                                                    ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
+                                                                    : 'bg-white/5 border-white/5 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/20'
+                                                                }`}
+                                                        >
+                                                            <Zap size={16} fill={(item.is_featured === 1 || item.is_featured === true) ? "currentColor" : "none"} />
+                                                        </button>
+                                                        {/* Edit */}
+                                                        <button
+                                                            title="Edit Product"
+                                                            onClick={(e) => { e.stopPropagation(); handleEditItem(item); }}
+                                                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-blue-400 hover:border-blue-400/20 transition-all"
+                                                        >
+                                                            <Edit2 size={16} />
+                                                        </button>
+                                                        {/* History */}
+                                                        <button
+                                                            title="Movement History"
+                                                            onClick={(e) => { e.stopPropagation(); loadMovements(item); }}
+                                                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-amber-400 hover:border-amber-400/20 transition-all"
+                                                        >
+                                                            <History size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
+                                                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-rose-400 hover:border-rose-400/20 transition-all"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )
+                                    }) : (
+                                        <tr>
+                                            <td colSpan="5" className="px-6 py-20 text-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <Package size={40} className="text-slate-800" />
+                                                    <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No items matching criteria</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination Placeholder */}
+                        <div className="p-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Showing {filteredInventory.length} of {inventory.length} items</p>
+                            <div className="flex items-center gap-2">
+                                <button className="p-2 rounded-lg border border-white/5 text-slate-600 cursor-not-allowed">
+                                    <ChevronRight size={16} className="rotate-180" />
+                                </button>
+                                <button className="p-2 rounded-lg border border-white/10 text-white">
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                </div>
-            </>
-        )}
-    </div>
+                </>
+            )}
+        </div>
     )
 
     return (
@@ -3155,139 +3145,137 @@ const WarehouseInventory = () => {
                 const isIN = stockAdjustModal.mode === 'IN'
                 const reasons = isIN ? IN_REASONS : OUT_REASONS
                 return (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setStockAdjustModal(null)} />
-                    <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-3 rounded-2xl ${isIN ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}>
-                                    {isIN ? <ArrowDownCircle size={22} /> : <ArrowUpCircle size={22} />}
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-black text-white">
-                                        Stock {isIN ? 'IN' : 'OUT'}
-                                    </h3>
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                        {stockAdjustModal.item.product_name}
-                                    </p>
-                                </div>
-                            </div>
-                            <button onClick={() => setStockAdjustModal(null)} className="p-2 rounded-xl text-slate-500 hover:text-white transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Current Stock */}
-                        <div className={`rounded-2xl p-4 mb-6 flex items-center justify-between ${isIN ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-rose-500/5 border border-rose-500/20'}`}>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Stock</span>
-                            <span className="text-2xl font-black text-white">{stockAdjustModal.item.stock_quantity} <span className="text-sm text-slate-500">{stockAdjustModal.item.unit || 'pcs'}</span></span>
-                        </div>
-
-                        <div className="space-y-5">
-                            {/* Quantity */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quantity</label>
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setStockAdjustModal(null)} />
+                        <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
-                                    <button 
-                                        type="button"
-                                        onClick={() => setAdjustQty(q => Math.max(1, q - 1))} 
-                                        className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xl hover:bg-white/10 transition-all flex items-center justify-center"
-                                    >
-                                        −
-                                    </button>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max={!isIN ? Math.max(0, stockAdjustModal.item.stock_quantity - (stockAdjustModal.item.reserved_stock || 0)) : undefined}
-                                        value={adjustQty}
-                                        onChange={e => {
-                                            let val = parseInt(e.target.value) || 1;
-                                            if (!isIN) {
-                                                const avail = Math.max(0, stockAdjustModal.item.stock_quantity - (stockAdjustModal.item.reserved_stock || 0));
-                                                val = Math.min(val, avail);
-                                            }
-                                            setAdjustQty(Math.max(1, val));
-                                        }}
-                                        className="flex-1 bg-slate-950 border border-white/10 rounded-2xl py-3 text-center text-xl font-black text-white focus:outline-none focus:border-amber-400/50"
-                                    />
-                                    <button 
-                                        type="button"
-                                        onClick={() => setAdjustQty(q => {
-                                            if (!isIN) {
-                                                const avail = Math.max(0, stockAdjustModal.item.stock_quantity - (stockAdjustModal.item.reserved_stock || 0));
-                                                if (q >= avail) return q;
-                                            }
-                                            return q + 1;
-                                        })} 
-                                        className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xl hover:bg-white/10 transition-all flex items-center justify-center"
-                                    >
-                                        +
-                                    </button>
+                                    <div className={`p-3 rounded-2xl ${isIN ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}>
+                                        {isIN ? <ArrowDownCircle size={22} /> : <ArrowUpCircle size={22} />}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-white">
+                                            Stock {isIN ? 'IN' : 'OUT'}
+                                        </h3>
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                            {stockAdjustModal.item.product_name}
+                                        </p>
+                                    </div>
                                 </div>
+                                <button onClick={() => setStockAdjustModal(null)} className="p-2 rounded-xl text-slate-500 hover:text-white transition-colors">
+                                    <X size={20} />
+                                </button>
                             </div>
 
-                            {/* Reason */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Reason</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {reasons.map(r => (
+                            {/* Current Stock */}
+                            <div className={`rounded-2xl p-4 mb-6 flex items-center justify-between ${isIN ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-rose-500/5 border border-rose-500/20'}`}>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Stock</span>
+                                <span className="text-2xl font-black text-white">{stockAdjustModal.item.stock_quantity} <span className="text-sm text-slate-500">{stockAdjustModal.item.unit || 'pcs'}</span></span>
+                            </div>
+
+                            <div className="space-y-5">
+                                {/* Quantity */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quantity</label>
+                                    <div className="flex items-center gap-3">
                                         <button
-                                            key={r}
-                                            onClick={() => setAdjustReason(r)}
-                                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${
-                                                adjustReason === r
-                                                    ? isIN ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-rose-500 text-white border-rose-500'
-                                                    : 'bg-white/5 text-slate-400 border-white/10 hover:border-white/20'
-                                            }`}
+                                            type="button"
+                                            onClick={() => setAdjustQty(q => Math.max(1, q - 1))}
+                                            className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xl hover:bg-white/10 transition-all flex items-center justify-center"
                                         >
-                                            {r}
+                                            −
                                         </button>
-                                    ))}
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max={!isIN ? Math.max(0, stockAdjustModal.item.stock_quantity - (stockAdjustModal.item.reserved_stock || 0)) : undefined}
+                                            value={adjustQty}
+                                            onChange={e => {
+                                                let val = parseInt(e.target.value) || 1;
+                                                if (!isIN) {
+                                                    const avail = Math.max(0, stockAdjustModal.item.stock_quantity - (stockAdjustModal.item.reserved_stock || 0));
+                                                    val = Math.min(val, avail);
+                                                }
+                                                setAdjustQty(Math.max(1, val));
+                                            }}
+                                            className="flex-1 bg-slate-950 border border-white/10 rounded-2xl py-3 text-center text-xl font-black text-white focus:outline-none focus:border-amber-400/50"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setAdjustQty(q => {
+                                                if (!isIN) {
+                                                    const avail = Math.max(0, stockAdjustModal.item.stock_quantity - (stockAdjustModal.item.reserved_stock || 0));
+                                                    if (q >= avail) return q;
+                                                }
+                                                return q + 1;
+                                            })}
+                                            className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xl hover:bg-white/10 transition-all flex items-center justify-center"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Remark */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Additional Remark <span className="text-slate-600 font-bold normal-case tracking-normal">(optional)</span></label>
-                                <textarea
-                                    rows={2}
-                                    value={adjustRemark}
-                                    onChange={e => setAdjustRemark(e.target.value)}
-                                    placeholder="e.g. Batch no. 202, supplier invoice #INV-445..."
-                                    className="w-full bg-slate-950 border border-white/10 rounded-2xl py-3 px-5 text-sm text-white font-medium focus:outline-none focus:border-amber-400/50 transition-all resize-none"
-                                />
-                            </div>
+                                {/* Reason */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Reason</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {reasons.map(r => (
+                                            <button
+                                                key={r}
+                                                onClick={() => setAdjustReason(r)}
+                                                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${adjustReason === r
+                                                        ? isIN ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-rose-500 text-white border-rose-500'
+                                                        : 'bg-white/5 text-slate-400 border-white/10 hover:border-white/20'
+                                                    }`}
+                                            >
+                                                {r}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
 
-                            {/* Preview */}
-                            {adjustQty > 0 && (
-                                <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Stock After</span>
-                                    <span className={`text-xl font-black ${isIN ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {isIN ? stockAdjustModal.item.stock_quantity + adjustQty : Math.max(0, stockAdjustModal.item.stock_quantity - adjustQty)} pcs
-                                        <span className={`text-[10px] font-bold ml-2 ${!isIN && adjustQty > stockAdjustModal.item.stock_quantity ? 'text-rose-500' : 'text-slate-600'}`}>
-                                            ({isIN ? '+' : '-'}{adjustQty})
+                                {/* Remark */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Additional Remark <span className="text-slate-600 font-bold normal-case tracking-normal">(optional)</span></label>
+                                    <textarea
+                                        rows={2}
+                                        value={adjustRemark}
+                                        onChange={e => setAdjustRemark(e.target.value)}
+                                        placeholder="e.g. Batch no. 202, supplier invoice #INV-445..."
+                                        className="w-full bg-slate-950 border border-white/10 rounded-2xl py-3 px-5 text-sm text-white font-medium focus:outline-none focus:border-amber-400/50 transition-all resize-none"
+                                    />
+                                </div>
+
+                                {/* Preview */}
+                                {adjustQty > 0 && (
+                                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Stock After</span>
+                                        <span className={`text-xl font-black ${isIN ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {isIN ? stockAdjustModal.item.stock_quantity + adjustQty : Math.max(0, stockAdjustModal.item.stock_quantity - adjustQty)} pcs
+                                            <span className={`text-[10px] font-bold ml-2 ${!isIN && adjustQty > stockAdjustModal.item.stock_quantity ? 'text-rose-500' : 'text-slate-600'}`}>
+                                                ({isIN ? '+' : '-'}{adjustQty})
+                                            </span>
                                         </span>
-                                    </span>
-                                </div>
-                            )}
+                                    </div>
+                                )}
 
-                            {/* Submit */}
-                            <button
-                                onClick={handleStockAdjust}
-                                disabled={adjusting}
-                                className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
-                                    isIN
-                                        ? 'bg-emerald-500 hover:bg-emerald-400 text-white disabled:opacity-50'
-                                        : 'bg-rose-500 hover:bg-rose-400 text-white disabled:opacity-50'
-                                }`}
-                            >
-                                {adjusting ? <Loader2 size={18} className="animate-spin" /> : (isIN ? <TrendingUp size={18} /> : <TrendingDown size={18} />)}
-                                {adjusting ? 'Processing...' : `Confirm Stock ${isIN ? 'IN' : 'OUT'}`}
-                            </button>
+                                {/* Submit */}
+                                <button
+                                    onClick={handleStockAdjust}
+                                    disabled={adjusting}
+                                    className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isIN
+                                            ? 'bg-emerald-500 hover:bg-emerald-400 text-white disabled:opacity-50'
+                                            : 'bg-rose-500 hover:bg-rose-400 text-white disabled:opacity-50'
+                                        }`}
+                                >
+                                    {adjusting ? <Loader2 size={18} className="animate-spin" /> : (isIN ? <TrendingUp size={18} /> : <TrendingDown size={18} />)}
+                                    {adjusting ? 'Processing...' : `Confirm Stock ${isIN ? 'IN' : 'OUT'}`}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
                 )
             })()}
 
@@ -3339,7 +3327,7 @@ const WarehouseInventory = () => {
                                         </div>
                                         <div className="text-right shrink-0">
                                             <p className="text-[10px] text-slate-600 font-bold">{m.stock_before} → {m.stock_after}</p>
-                                            <p className="text-[9px] text-slate-700 mt-1">{new Date(m.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</p>
+                                            <p className="text-[9px] text-slate-700 mt-1">{new Date(m.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -3377,7 +3365,7 @@ const WarehouseInventory = () => {
                         </div>
 
                         <div className="space-y-4">
-                             <div className="space-y-2">
+                            <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Brand Name</label>
                                 <input
                                     type="text"
@@ -3386,20 +3374,20 @@ const WarehouseInventory = () => {
                                     placeholder="e.g. Samsung, Apple..."
                                     className="w-full bg-slate-950 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-blue-400/50 transition-all outline-none"
                                 />
-                             </div>
+                            </div>
 
-                             <button
+                            <button
                                 onClick={handleCreateBrand}
                                 disabled={isCreatingBrand || !newBrandName.trim()}
                                 className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-xs shadow-lg shadow-blue-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                             >
+                            >
                                 {isCreatingBrand ? (
                                     <div className="flex items-center justify-center gap-2">
                                         <RefreshCw size={14} className="animate-spin" />
                                         Registering...
                                     </div>
                                 ) : 'Create Brand'}
-                             </button>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -3436,7 +3424,7 @@ const WarehouseInventory = () => {
                         <div className="space-y-2 mb-4">
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Category Emoji</label>
                             <div className="flex flex-wrap gap-2">
-                                {['📦','🛒','🔌','📱','💊','🍎','👕','🏠','🎮','🚗','🧴','📚','🧪','🎵','🌿','💎'].map(em => (
+                                {['📦', '🛒', '🔌', '📱', '💊', '🍎', '👕', '🏠', '🎮', '🚗', '🧴', '📚', '🧪', '🎵', '🌿', '💎'].map(em => (
                                     <button
                                         key={em}
                                         type="button"
@@ -3534,7 +3522,7 @@ const WarehouseInventory = () => {
                                     <div className="grid grid-cols-3 gap-3">
                                         {imageList.map((url, i) => (
                                             <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-white/5">
-                                                <img src={resolveMediaUrl(url)} alt={`img-${i+1}`} className="w-full h-full object-cover" />
+                                                <img src={resolveMediaUrl(url)} alt={`img-${i + 1}`} className="w-full h-full object-cover" />
                                             </div>
                                         ))}
                                     </div>
@@ -3570,10 +3558,10 @@ const WarehouseInventory = () => {
                             <div className="grid grid-cols-2 gap-3">
                                 {[
                                     { label: 'Stock', value: `${selectedItem.stock_quantity} ${selectedItem.unit || 'pcs'}`, color: selectedItem.stock_quantity === 0 ? 'text-rose-400' : selectedItem.stock_quantity <= selectedItem.low_stock_threshold ? 'text-amber-400' : 'text-emerald-400' },
-                                    { 
-                                        label: 'Reserved', 
-                                        value: `${selectedItem.reserved_stock || 0}${ (selectedItem.user_reserved > 0 || selectedItem.guest_reserved > 0) ? ` (U:${selectedItem.user_reserved || 0} G:${selectedItem.guest_reserved || 0})` : ''}`, 
-                                        color: 'text-slate-300' 
+                                    {
+                                        label: 'Reserved',
+                                        value: `${selectedItem.reserved_stock || 0}${(selectedItem.user_reserved > 0 || selectedItem.guest_reserved > 0) ? ` (U:${selectedItem.user_reserved || 0} G:${selectedItem.guest_reserved || 0})` : ''}`,
+                                        color: 'text-slate-300'
                                     },
                                     { label: 'Selling Price', value: (selectedItem.selling_price !== undefined && selectedItem.selling_price !== null) ? `₹${selectedItem.selling_price}` : '—', color: 'text-amber-400' },
                                     { label: 'Cost Price', value: (selectedItem.cost_price !== undefined && selectedItem.cost_price !== null) ? `₹${selectedItem.cost_price}` : '—', color: 'text-slate-300' },

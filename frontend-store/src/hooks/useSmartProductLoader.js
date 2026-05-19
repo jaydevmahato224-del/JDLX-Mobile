@@ -194,13 +194,27 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
         if (searchQuery) params.q = searchQuery
         if (storeId) params.store_id = String(storeId)
 
-        const response = await fetch(url)
+        let response;
+        try {
+          response = await fetch(url);
+        } catch (fetchErr) {
+          // Typically TypeError if network is down or CORS failed
+          if (!mountedRef.current) return;
+          console.error('useSmartProductLoader: network error', fetchErr);
+          setHasError(true);
+          setErrorMessage('Network error. Please check your internet connection.');
+          setError('NetworkError'); // Use a specific string for legacy/animation logic if needed
+          if (replace) setProducts([]);
+          setHasMore(false);
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(`Server error ${response.status}: ${response.statusText}`)
         }
         const data = await response.json()
 
-        if (!mountedRef.current) return
+        if (!mountedRef.current) return;
 
         const nextBatch = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
 

@@ -6,24 +6,9 @@ from flask import Blueprint, request, jsonify
 from database import get_db
 import jwt
 from utils.response_utils import success_response, error_response
+from auth.role_guard import _current_user_claims, require_admin
 
 offer_bp = Blueprint('offer_bp', __name__)
-JWT_SECRET = os.environ.get('JWT_SECRET', 'super-secret-key-jdlx')
-
-def _current_user_claims():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return None, ("Missing or invalid token", 401)
-    
-    token = auth_header.split(' ')[1]
-    try:
-        data = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-        request.user = data
-        return data, None
-    except jwt.ExpiredSignatureError:
-        return None, ("Token expired", 401)
-    except jwt.InvalidTokenError:
-        return None, ("Invalid token", 401)
 
 def token_required(f):
     @wraps(f)
@@ -35,17 +20,6 @@ def token_required(f):
         return f(*args, **kwargs)
     return decorated
 
-def require_admin(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        user_claims, error = _current_user_claims()
-        if error:
-            return error_response(error[0], error[1])
-        if user_claims.get('role') not in ['admin', 'super_admin']:
-            return error_response("Admin privileges required", 403)
-        return f(*args, **kwargs)
-    return decorated
-
 @offer_bp.route('/api/offers/active', methods=['GET'])
 def get_active_offers():
     conn = get_db()
@@ -53,8 +27,8 @@ def get_active_offers():
     cursor.execute("""
         SELECT * FROM offers 
         WHERE is_active = 1 
-        AND (start_date IS NULL OR start_date <= datetime('now'))
-        AND (end_date IS NULL OR end_date >= datetime('now'))
+        AND (start_date IS NULL OR start_date <= datetime('now', 'localtime'))
+        AND (end_date IS NULL OR end_date >= datetime('now', 'localtime'))
         AND (usage_limit IS NULL OR usage_count < usage_limit)
     """)
     offers = [dict(row) for row in cursor.fetchall()]
@@ -67,7 +41,7 @@ def get_active_offers():
             except:
                 offer['applicable_ids'] = []
                 
-    return success_response("Active offers retrieved successfully", offers)
+    return success_response(offers, "Active offers retrieved successfully")
 
 @offer_bp.route('/api/offers/banners', methods=['GET'])
 def get_offer_banners():
@@ -77,12 +51,12 @@ def get_offer_banners():
         SELECT id, title, description, banner_image, target_type, applicable_on, applicable_ids
         FROM offers 
         WHERE is_active = 1 AND banner_image IS NOT NULL
-        AND (start_date IS NULL OR start_date <= datetime('now'))
-        AND (end_date IS NULL OR end_date >= datetime('now'))
+        AND (start_date IS NULL OR start_date <= datetime('now', 'localtime'))
+        AND (end_date IS NULL OR end_date >= datetime('now', 'localtime'))
     """)
     banners = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    return success_response("Offer banners retrieved successfully", banners)
+    return success_response(banners, "Offer banners retrieved successfully")
 
 def calculate_discount(offer, cart_total, product_ids):
     if offer['applicable_on'] == 'product':
@@ -178,13 +152,13 @@ def validate_coupon():
         return error_response("Coupon not applicable to items in your cart")
         
     conn.close()
-    return success_response("Coupon applied successfully", {
+    return success_response({
         "valid": True,
         "discount_amount": discount,
         "offer_id": offer['id'],
         "title": offer['title'],
         "message": f"Coupon {coupon_code} applied: ₹{discount} off"
-    })
+    }, "Coupon applied successfully")
 
 @offer_bp.route('/api/offers/apply-automatic', methods=['POST'])
 @token_required
@@ -201,8 +175,8 @@ def apply_automatic():
         SELECT * FROM offers 
         WHERE offer_type IN ('automatic', 'seasonal', 'daily')
         AND is_active = 1
-        AND (start_date IS NULL OR start_date <= datetime('now'))
-        AND (end_date IS NULL OR end_date >= datetime('now'))
+        AND (start_date IS NULL OR start_date <= datetime('now', 'localtime'))
+        AND (end_date IS NULL OR end_date >= datetime('now', 'localtime'))
         AND (usage_limit IS NULL OR usage_count < usage_limit)
         AND min_order_amount <= ?
     """, (cart_total,))
@@ -243,11 +217,11 @@ def apply_automatic():
     final_discount = max_discount
     applied_offer = best_offer
     
-    return success_response("Automatic offers evaluated", {
+    return success_response({
         "applicable_offers": applicable_offers,
         "applied_offer": applied_offer,
         "total_discount": final_discount
-    })
+    }, "Automatic offers evaluated")
 
 @offer_bp.route('/api/offers/record-usage', methods=['POST'])
 @token_required
@@ -274,14 +248,14 @@ def record_usage():
     conn.commit()
     conn.close()
     
-    return success_response("Offer usage recorded successfully")
+    return success_response(None, "Offer usage recorded successfully")
 
 # ==============================================================================
 # ADMIN APIs
 # ==============================================================================
 
 @offer_bp.route('/api/admin/offers', methods=['GET'])
-@require_admin
+@require_admin()
 def admin_get_offers():
     conn = get_db()
     cursor = conn.cursor()
@@ -296,10 +270,10 @@ def admin_get_offers():
             except:
                 offer['applicable_ids'] = []
                 
-    return success_response("Offers retrieved", offers)
+    return success_response(offers, "Offers retrieved")
 
 @offer_bp.route('/api/admin/offers', methods=['POST'])
-@require_admin
+@require_admin()
 def admin_create_offer():
     data = request.json
     
@@ -344,10 +318,10 @@ def admin_create_offer():
     conn.commit()
     conn.close()
     
-    return success_response("Offer created successfully", {"id": offer_id})
+    return success_response({"id": offer_id}, "Offer created successfully")
 
 @offer_bp.route('/api/admin/offers/<int:offer_id>', methods=['PUT'])
-@require_admin
+@require_admin()
 def admin_update_offer(offer_id):
     data = request.json
     conn = get_db()
@@ -380,10 +354,10 @@ def admin_update_offer(offer_id):
     conn.commit()
     conn.close()
     
-    return success_response("Offer updated successfully")
+    return success_response(None, "Offer updated successfully")
 
 @offer_bp.route('/api/admin/offers/<int:offer_id>', methods=['DELETE'])
-@require_admin
+@require_admin()
 def admin_delete_offer(offer_id):
     conn = get_db()
     cursor = conn.cursor()
@@ -391,10 +365,10 @@ def admin_delete_offer(offer_id):
     cursor.execute("DELETE FROM offers WHERE id = ?", (offer_id,))
     conn.commit()
     conn.close()
-    return success_response("Offer deleted successfully")
+    return success_response(None, "Offer deleted successfully")
 
 @offer_bp.route('/api/admin/offers/<int:offer_id>/upload-banner', methods=['POST'])
-@require_admin
+@require_admin()
 def admin_upload_banner(offer_id):
     if 'file' not in request.files:
         return error_response("No file provided")
@@ -414,4 +388,4 @@ def admin_upload_banner(offer_id):
     conn.commit()
     conn.close()
     
-    return success_response("Banner uploaded successfully", {"banner_url": banner_url})
+    return success_response({"banner_url": banner_url}, "Banner uploaded successfully")

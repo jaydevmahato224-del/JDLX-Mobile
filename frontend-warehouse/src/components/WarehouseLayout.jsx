@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck } from 'lucide-react'
+import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL } from '../config'
@@ -123,6 +123,7 @@ export default function WarehouseLayout() {
     const navLinks = [
         { path: '/warehouse/dashboard', icon: LayoutDashboard, label: 'Operations Hub' },
         { path: '/warehouse/orders', icon: ShoppingBag, label: 'Orders' },
+        { path: '/warehouse/offers', icon: BadgePercent, label: 'Offers & Promos' },
         { path: '/warehouse/procurement', icon: Truck, label: 'Material Purchase' },
         { path: '/warehouse/inventory', icon: Package, label: 'Inventory' },
         { path: '/warehouse/analytics', icon: Activity, label: 'Analytics' },

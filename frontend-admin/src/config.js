@@ -28,10 +28,10 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL ||
 
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
-export function resolveMediaUrl(value) {
-  if (!value || typeof value !== 'string') return '';
-  if (/^(https?:|data:|blob:)/i.test(value)) return value;
-  if (value.startsWith('//')) return `https:${value}`;
-  if (value.startsWith('/')) return `${API_ORIGIN}${value}`;
-  return `${API_ORIGIN}/${value.replace(/^\.?\//, '')}`;
+export const resolveMediaUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith('/')) return `${API_ORIGIN}${url}`;
+  return `${API_ORIGIN}/${url.replace(/^\.?\//, '')}`;
 }

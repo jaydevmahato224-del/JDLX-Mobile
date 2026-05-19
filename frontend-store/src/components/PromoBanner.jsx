@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { ChevronRight, Zap } from 'lucide-react';
+import { resolveMediaUrl } from '../config';
 
 const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, badge, badge_text, gradient, overlay_opacity = 0.5, onClick }) {
   const displayBadge = badge || badge_text;
@@ -13,7 +14,7 @@ const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, bad
       {image && (
         <div className="absolute inset-0 z-0">
           <img 
-            src={image} 
+            src={resolveMediaUrl(image)} 
             alt={title} 
             className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-[2000ms]" 
           />

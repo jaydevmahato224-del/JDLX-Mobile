@@ -92,8 +92,9 @@ function Checkout() {
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    setSavedAddresses(data);
-                    const defaultAddr = data.find(a => a.is_default);
+                    const addresses = Array.isArray(data) ? data : [];
+                    setSavedAddresses(addresses);
+                    const defaultAddr = addresses.find(a => a.is_default);
                     if (defaultAddr) {
                         setSelectedAddressId(defaultAddr.id);
                         setFormData(prev => ({ ...prev, address: defaultAddr.address_text }));

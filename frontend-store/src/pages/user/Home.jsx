@@ -276,6 +276,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 })
 
 function CategoryChips({ categories, selected, onSelect }) {
+  const categoryList = Array.isArray(categories) ? categories : []
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2">
       <button
@@ -284,7 +285,7 @@ function CategoryChips({ categories, selected, onSelect }) {
       >
         All Products
       </button>
-      {categories.map((cat) => (
+      {categoryList.map((cat) => (
         <button
           key={cat.id || cat.name}
           onClick={() => onSelect(cat.id)}

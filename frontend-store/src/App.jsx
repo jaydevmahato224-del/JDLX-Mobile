@@ -1,17 +1,14 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react'
-import HomePage from './pages/user/Home'
-import Login from './pages/user/Login'
-import Cart from './pages/user/Cart'
-import ProductDetails from './pages/user/ProductDetails'
-import SearchPage from './pages/user/SearchPage'
 import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
 import PageLoader from './components/PageLoader'
 import SplashScreen from './components/SplashScreen'
 import AnalyticsTracker from './components/AnalyticsTracker'
+import PushNotificationManager from './components/PushNotificationManager'
+import { GlobalErrorOverlay } from './components/ErrorScreens'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
@@ -21,9 +18,16 @@ if (import.meta.env.DEV) {
 }
 
 // ─── Global Fetch Interceptor ─────────────────────────────────────────────────
+// ─── Consecutive Failure Tracker ───────────────────────────────────────────────
+// Only show global error overlay after multiple consecutive backend failures.
+// This prevents Render cold-start timeouts or transient glitches from blocking the entire UI.
+let _consecutiveBackendFailures = 0;
+const FAILURE_THRESHOLD = 3; // Number of consecutive failures before showing error overlay
+
 const _originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
+  const { setGlobalError, clearGlobalError, globalError } = useStore.getState();
   const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
 
   if (import.meta.env.DEV) {
@@ -31,8 +35,15 @@ window.fetch = async (...args) => {
   }
 
   // Only show loader for significant API calls
-  const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs');
+  const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs') || requestUrl.includes('/api/report-issue');
   if (!isBackgroundRequest) startLoading();
+
+  // Helper to identify if request is to our backend
+  const isBackendUrl = requestUrl.includes('localhost:5000') || 
+                       requestUrl.includes('10.0.2.2:5000') || 
+                       requestUrl.includes('jdlx-mobile.onrender.com') ||
+                       requestUrl.startsWith('/api/') ||
+                       (typeof API_BASE_URL === 'string' && requestUrl.includes(API_BASE_URL));
 
   try {
     const response = await _originalFetch(...args);
@@ -41,15 +52,51 @@ window.fetch = async (...args) => {
       console.log(`%c JDLX STATUS: ${response.status} for ${requestUrl}`, "color: #10b981;");
     }
 
-    if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {      useStore.getState().logout();
+    if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {
+      useStore.getState().logout();
     }
+
+    // Detection Logic for Server Errors - ONLY for our backend
+    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackgroundRequest) {
+      _consecutiveBackendFailures++;
+      if (_consecutiveBackendFailures >= FAILURE_THRESHOLD) {
+        setGlobalError('server');
+      }
+    } else if (isBackendUrl && response.ok) {
+      // Successful response — reset failure counter and auto-clear any existing error
+      _consecutiveBackendFailures = 0;
+      if (globalError) {
+        clearGlobalError();
+      }
+    }
+
     return response;
+  } catch (error) {
+    console.error("Fetch Error:", error);
+
+    // ONLY trigger global error screens for our backend API failures
+    if (isBackendUrl && !isBackgroundRequest) {
+      _consecutiveBackendFailures++;
+      if (_consecutiveBackendFailures >= FAILURE_THRESHOLD) {
+        if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          setGlobalError('network');
+        } else {
+          setGlobalError('server');
+        }
+      }
+    }
+    throw error;
   } finally {
     if (!isBackgroundRequest) stopLoading();
   }
 };
 
 // ─── Lazy Loaded Components ──────────────────────────────────────────────────
+const HomePage = lazy(() => import('./pages/user/Home'))
+const Login = lazy(() => import('./pages/user/Login'))
+const Cart = lazy(() => import('./pages/user/Cart'))
+const ProductDetails = lazy(() => import('./pages/user/ProductDetails'))
+const SearchPage = lazy(() => import('./pages/user/SearchPage'))
 const Checkout = lazy(() => import('./pages/user/Checkout'))
 const OrderTracking = lazy(() => import('./pages/user/OrderTracking'))
 const Profile = lazy(() => import('./pages/user/Profile'))
@@ -220,6 +267,8 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <GlobalErrorOverlay />
+      <PushNotificationManager />
       <TopLoader />
       <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />
       <Router>

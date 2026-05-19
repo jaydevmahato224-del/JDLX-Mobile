@@ -5,80 +5,35 @@ import { Toaster } from 'react-hot-toast'
 
 
 import ErrorBoundary from './components/ErrorBoundary'
+import { GlobalErrorOverlay } from './components/ErrorScreens'
 import AdminRoute from './components/AdminRoute'
 import AdminLayout from './components/AdminLayout'
-import AdminLogin from './pages/admin/AdminLogin'
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'))
 import { useStore } from './store/useStore'
 import TopLoader from './components/TopLoader'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
 
-function BackendDownDetector() {
-  const [isOffline, setIsOffline] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    // Don't check if we are already on the server control page or login page
-    if (location.pathname.includes('server-control') || location.pathname.includes('login')) {
-      setIsOffline(false);
-      return;
-    }
-
-    const checkBackend = async () => {
-      try {
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
-        clearTimeout(id);
-        if (!res.ok) throw new Error();
-        setIsOffline(false);
-      } catch (err) {
-        setIsOffline(true);
-      }
-    };
-
-    checkBackend();
-    const interval = setInterval(checkBackend, 10000);
-    return () => clearInterval(interval);
-  }, [location.pathname]);
-
-  if (!isOffline) return null;
-
-  return (
-    <div className="fixed inset-0 z-[9999] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-6 text-center">
-      <div className="max-w-md w-full bg-white rounded-[2rem] p-8 shadow-2xl space-y-6">
-        <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto">
-          <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Main Server Offline</h2>
-          <p className="text-gray-500 mt-2">The JDLX backend is currently unreachable. You need to start the server to continue.</p>
-        </div>
-        <button 
-          onClick={() => {
-            setIsOffline(false);
-            navigate('/admin/server-control');
-          }}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
-        >
-          <Server className="w-5 h-5" />
-          Go to Server Control
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
 // Global fetch interceptor to trigger TopLoader on API calls
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
-  startLoading();
+  const { setGlobalError } = useStore.getState();
+  const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+
+  // Skip loading for report-issue
+  const isBackground = requestUrl.includes('/api/report-issue');
+  if (!isBackground) startLoading();
+
+  // Helper to identify if request is to our backend
+  const isBackendUrl = requestUrl.includes('localhost:5000') || 
+                       requestUrl.includes('10.0.2.2:5000') || 
+                       requestUrl.includes('jdlx-mobile.onrender.com') ||
+                       requestUrl.startsWith('/api/') ||
+                       (typeof API_BASE_URL === 'string' && requestUrl.includes(API_BASE_URL));
+
   try {
     const response = await originalFetch(...args);
-    const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
 
     if (
       response.status === 401 &&
@@ -89,9 +44,26 @@ window.fetch = async (...args) => {
       window.location.replace('/admin/login?reason=session_expired');
     }
 
+    // Detection Logic for Server Errors - ONLY for our backend
+    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground) {
+      setGlobalError('server');
+    }
+
     return response;
+  } catch (error) {
+    console.error("Fetch Error:", error);
+
+    // ONLY trigger global error screens for our backend API failures
+    if (isBackendUrl && !isBackground) {
+      if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        setGlobalError('network');
+      } else {
+        setGlobalError('server');
+      }
+    }
+    throw error;
   } finally {
-    stopLoading();
+    if (!isBackground) stopLoading();
   }
 };
 
@@ -209,10 +181,10 @@ const AdminLayoutWrapper = () => (
 function App() {
   return (
     <ErrorBoundary>
+      <GlobalErrorOverlay />
       <TopLoader />
       <Toaster position="top-right" />
       <Router>
-        <BackendDownDetector />
         <RouteChangeTracker />
 
         <Routes>

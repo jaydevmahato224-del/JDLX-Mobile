@@ -54,7 +54,7 @@ export const useStore = create((set, get) => ({
     warehouseToken: localStorage.getItem('warehouseToken') || null,
     warehouseRequestUser: safeParse('warehouseRequestUser'),
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
-    cart: JSON.parse(localStorage.getItem('cart') || '[]'),
+    cart: safeParse('cart') || [],
     isCartLoaded: false,
     theme: localStorage.getItem('theme') || 'light',
     storeBlocked: false,
@@ -544,5 +544,10 @@ export const useStore = create((set, get) => ({
             return { valid: false, message: 'Failed to validate coupon' };
         }
     },
-    removeOffer: () => set({ appliedOffer: null })
+    removeOffer: () => set({ appliedOffer: null }),
+
+    // Global Error State
+    globalError: null, // null | 'network' | 'server'
+    setGlobalError: (error) => set({ globalError: error }),
+    clearGlobalError: () => set({ globalError: null })
 }))

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, RefreshCcw, Home } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -12,40 +12,37 @@ class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, errorInfo) {
-        // Log to backend in production
         console.error("Uncaught error:", error, errorInfo);
+
+        // Filter out non-backend errors (Firebase, Push, Browser APIs)
+        const errorStr = error?.toString() || '';
+        const isThirdPartyError = 
+            errorStr.includes('PushManager') || 
+            errorStr.includes('ServiceWorker') || 
+            errorStr.includes('Firebase') ||
+            errorStr.includes('applicationServerKey') ||
+            errorStr.includes('InvalidAccessError') ||
+            errorStr.includes('messaging');
+
+        if (isThirdPartyError) {
+            console.warn("Ignoring third-party/browser API error in ErrorBoundary:", errorStr);
+            return;
+        }
+
+        // Only trigger global error screens if it looks like a network failure.
+        const isNetworkError = !navigator.onLine || error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('network');
+        
+        if (isNetworkError) {
+            useStore.getState().setGlobalError(navigator.onLine ? 'server' : 'network');
+        } else {
+            console.error("Admin Frontend Rendering Error (Not a Server Error):", error);
+        }
     }
 
     render() {
         if (this.state.hasError) {
-            return (
-                <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 text-center">
-                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
-                        <AlertTriangle size={40} className="text-red-500" />
-                    </div>
-                    <h1 className="text-3xl font-black text-gray-800 mb-2">Something went wrong</h1>
-                    <p className="text-gray-500 mb-8 max-w-md mx-auto font-medium">
-                        An unexpected error occurred. We've been notified and are working on a fix.
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs">
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="flex-1 py-4 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                        >
-                            <RefreshCcw size={20} /> Reload App
-                        </button>
-                        <a
-                            href="/"
-                            className="flex-1 py-4 bg-white text-gray-800 border-2 border-gray-100 rounded-2xl font-black shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
-                        >
-                            <Home size={20} /> Go Home
-                        </a>
-                    </div>
-                </div>
-            );
+            return null; // Let GlobalErrorOverlay handle the UI
         }
-
         return this.props.children;
     }
 }

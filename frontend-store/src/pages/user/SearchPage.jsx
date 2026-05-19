@@ -174,6 +174,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 })
 
 function CategoryChips({ categories, selected, onSelect }) {
+  const categoryList = Array.isArray(categories) ? categories : []
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2">
       <button
@@ -182,7 +183,7 @@ function CategoryChips({ categories, selected, onSelect }) {
       >
         All Products
       </button>
-      {categories.map((cat) => (
+      {categoryList.map((cat) => (
         <button
           key={cat.id || cat.name}
           onClick={() => onSelect(cat.id)}
@@ -369,10 +370,9 @@ export default function SearchPage() {
           <div className="flex items-center gap-3">
             <div className="h-8 w-1 bg-primary rounded-full" />
             <h2 className="text-xl font-black tracking-tight text-[var(--color-on-surface)]">
-              {selectedCategory === 'All' ? (debouncedQuery ? 'Search Results' : 'All Products') : `${categories.find(c => c.id === selectedCategory)?.name || 'Filtered'} Selection`}
+              {selectedCategory === 'All' ? (debouncedQuery ? 'Search Results' : 'All Products') : `${(Array.isArray(categories) ? categories : []).find(c => c.id === selectedCategory)?.name || 'Filtered'} Selection`}
               {displayProducts.length > 0 && <span className="ml-2 text-sm font-medium text-[var(--color-on-surface)]/40">({displayProducts.length})</span>}
-            </h2>
-          </div>
+            </h2>          </div>
           {(pageRefreshing || (loading && hasLoadedOnce)) && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/5 text-primary text-[10px] font-black uppercase tracking-widest animate-in fade-in">
               <RefreshCw size={12} className="animate-spin" />

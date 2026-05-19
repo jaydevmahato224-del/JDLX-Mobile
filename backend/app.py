@@ -56,6 +56,7 @@ from support_routes import support_bp
 from report_routes import report_bp
 from refund_routes import refund_bp
 from bug_routes import bug_bp
+from issue_routes import issue_bp
 from offer_routes import offer_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
@@ -233,6 +234,7 @@ app.register_blueprint(support_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(refund_bp)
 app.register_blueprint(bug_bp)
+app.register_blueprint(issue_bp)
 app.register_blueprint(offer_bp)
 
 
@@ -1637,7 +1639,6 @@ def remove_admin_permission():
 # ==============================================================================
 
 @app.route('/api/categories', methods=['GET'])
-@cache.cached(timeout=300, key_prefix='all_categories')
 def get_categories():
     """Retrieves all product categories."""
     conn = get_db()
@@ -1973,7 +1974,6 @@ def remove_from_wishlist(product_id):
 
 
 @app.route('/api/brands', methods=['GET'])
-@cache.cached(timeout=300, key_prefix='all_brands')
 def get_brands():
     """Retrieves all product brands."""
     conn = get_db()
@@ -2200,7 +2200,6 @@ def get_products():
 
 
 @app.route('/api/products/recommendations', methods=['GET'])
-@cache.cached(timeout=3600, query_string=True)
 def get_recommendations():
     """Get recommended products based on ratings and popularity."""
     limit = request.args.get('limit', default=8, type=int)
@@ -2218,7 +2217,8 @@ def get_recommendations():
                 
         return success_response(products, "Recommendations retrieved successfully")
     except Exception as e:
-        logger.error(f"Error fetching recommendations: {str(e)}")
+        import traceback
+        logger.error(f"Error fetching recommendations: {str(e)}\n{traceback.format_exc()}")
         return error_response("Failed to fetch recommendations", 500)
 
 
@@ -5106,6 +5106,38 @@ def read_all_notifications():
         conn.commit()
         conn.close()
         return success_response(None, "All marked as read", 200)
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/notifications/register-token', methods=['POST'])
+@token_required
+def register_push_token():
+    """Registers an FCM token for push notifications."""
+    data = request.json
+    user_id = request.user['user_id']
+    token = data.get('token')
+    device_type = data.get('device_type', 'web')
+
+    if not token:
+        return error_response("Token is required", 400)
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        # Insert or update if token already exists for another user? 
+        # Usually tokens are unique per device.
+        cursor.execute('''
+            INSERT INTO user_push_tokens (user_id, fcm_token, device_type)
+            VALUES (?, ?, ?)
+            ON CONFLICT(fcm_token) DO UPDATE SET
+                user_id = excluded.user_id,
+                device_type = excluded.device_type,
+                updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, token, device_type))
+        conn.commit()
+        conn.close()
+        return success_response(None, "Push token registered successfully")
     except Exception as e:
         return error_response(str(e), 500)
 

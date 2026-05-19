@@ -1,13 +1,69 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Outlet, Navigate } from 'react-router-dom'
 import { Suspense, lazy, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/ErrorBoundary'
+import { GlobalErrorOverlay } from './components/ErrorScreens'
 import WarehouseRoute from './components/WarehouseRoute'
 import WarehouseLayout from './components/WarehouseLayout'
-import WarehouseLogin from './pages/warehouse/WarehouseLogin'
+const WarehouseLogin = lazy(() => import('./pages/warehouse/WarehouseLogin'))
 import { useStore } from './store/useStore'
 import TopLoader from './components/TopLoader'
 import { useLoadingStore } from './store/useLoadingStore'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// Global fetch interceptor
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const { startLoading, stopLoading } = useLoadingStore.getState();
+  const { setGlobalError } = useStore.getState();
+  const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+
+  const isBackground = requestUrl.includes('/api/report-issue');
+  if (!isBackground) startLoading();
+
+  // Helper to identify if request is to our backend
+  const isBackendUrl = requestUrl.includes('localhost:5000') || 
+                       requestUrl.includes('10.0.2.2:5000') || 
+                       requestUrl.includes('jdlx-mobile.onrender.com') ||
+                       requestUrl.startsWith('/api/') ||
+                       (typeof API_BASE_URL === 'string' && requestUrl.includes(API_BASE_URL));
+
+  try {
+    const response = await originalFetch(...args);
+
+    if (
+      response.status === 401 &&
+      requestUrl.includes('/api/') &&
+      !window.location.pathname.startsWith('/warehouse/login')
+    ) {
+      useStore.getState().warehouseLogout();
+      window.location.replace('/warehouse/login?reason=session_expired');
+    }
+
+    // Detection Logic for Server Errors - ONLY for our backend
+    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground) {
+      setGlobalError('server');
+    }
+
+    return response;
+  } catch (error) {
+    console.error("Fetch Error:", error);
+
+    // ONLY trigger global error screens for our backend API failures
+    if (isBackendUrl && !isBackground) {
+      if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        setGlobalError('network');
+      } else {
+        setGlobalError('server');
+      }
+    }
+    throw error;
+  } finally {
+    if (!isBackground) stopLoading();
+  }
+};
 
 // Lazy Loading
 const WarehouseDashboard = lazy(() => import('./pages/warehouse/WarehouseDashboard'))
@@ -103,6 +159,8 @@ const WarehouseLayoutWrapper = () => (
 function App() {
   return (
     <ErrorBoundary>
+      <Toaster position="top-center" reverseOrder={false} />
+      <GlobalErrorOverlay />
       <TopLoader />
       <Router>
         <RouteChangeTracker />

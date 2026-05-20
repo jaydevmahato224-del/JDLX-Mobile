@@ -1,6 +1,12 @@
 import os
 import json
+import cloudinary
+import cloudinary.uploader
 from datetime import datetime
+
+# Configure cloudinary for persistent storage
+if os.environ.get('CLOUDINARY_URL'):
+    cloudinary.config(cloudinary_url=os.environ.get('CLOUDINARY_URL'))
 from functools import wraps
 from flask import Blueprint, request, jsonify
 from database import get_db
@@ -375,12 +381,23 @@ def admin_upload_banner(offer_id):
     file = request.files['file']
     if file.filename == '':
         return error_response("No file selected")
-        
-    filename = f"offer_banner_{offer_id}_{int(datetime.now().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}"
-    filepath = os.path.join('static', 'images', filename)
-    file.save(filepath)
     
-    banner_url = f"/static/images/{filename}"
+    # Use Cloudinary if configured
+    if os.environ.get('CLOUDINARY_URL'):
+        try:
+            upload_result = cloudinary.uploader.upload(file, folder="offer_banners")
+            banner_url = upload_result.get('secure_url')
+        except Exception as e:
+            # Fallback to local
+            filename = f"offer_banner_{offer_id}_{int(datetime.now().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}"
+            filepath = os.path.join('static', 'images', filename)
+            file.save(filepath)
+            banner_url = f"/static/images/{filename}"
+    else:
+        filename = f"offer_banner_{offer_id}_{int(datetime.now().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}"
+        filepath = os.path.join('static', 'images', filename)
+        file.save(filepath)
+        banner_url = f"/static/images/{filename}"
     
     conn = get_db()
     cursor = conn.cursor()

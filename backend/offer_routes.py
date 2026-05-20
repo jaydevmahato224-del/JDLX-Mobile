@@ -388,15 +388,19 @@ def admin_upload_banner(offer_id):
     except Exception as e:
         logger.error(f"Cloud upload failed inside admin_upload_banner: {str(e)}")
 
-    # 2. Fallback to local storage if cloud storage fails or is unconfigured
+    # 2. Fallback to Base64 Data URL to store directly in Turso if cloud upload fails/is blocked
     if not banner_url:
-        logger.warning("Cloud upload failed for offer banner. Falling back to ephemeral local storage.")
-        filename = f"offer_banner_{offer_id}_{int(datetime.now().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}"
-        filepath = os.path.join('static', 'images', filename)
-        # Ensure directories exist
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        file.save(filepath)
-        banner_url = f"/static/images/{filename}"
+        try:
+            import base64
+            file_data = file.read()
+            file.seek(0)
+            encoded = base64.b64encode(file_data).decode('utf-8')
+            mime_type = file.mimetype or "image/jpeg"
+            banner_url = f"data:{mime_type};base64,{encoded}"
+            logger.info("Successfully fell back to Base64 Data URL for offer banner persistent storage in Turso.")
+        except Exception as ex:
+            logger.error(f"Base64 fallback failed for offer banner: {str(ex)}")
+            return error_response("Cloud upload and Base64 fallback both failed", 500)
     
     conn = get_db()
     cursor = conn.cursor()

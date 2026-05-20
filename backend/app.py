@@ -4832,12 +4832,19 @@ def admin_upload_image():
         except Exception as e:
             logger.error(f"Cloud upload failed inside admin_upload_image: {str(e)}")
 
-        # 2. Fallback to local storage if cloud storage fails or is unconfigured
-        logger.warning("Cloud upload failed or was bypassed. Falling back to ephemeral local storage.")
-        filename = secure_filename(f"{datetime.datetime.now().timestamp()}_{file.filename}")
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        file_url = f"/static/uploads/{filename}"
-        return jsonify({"url": file_url}), 201
+        # 2. Fallback to Base64 Data URL to store directly in Turso if cloud upload fails/is blocked
+        try:
+            import base64
+            file_data = file.read()
+            file.seek(0)
+            encoded = base64.b64encode(file_data).decode('utf-8')
+            mime_type = file.mimetype or "image/jpeg"
+            base64_url = f"data:{mime_type};base64,{encoded}"
+            logger.info("Successfully fell back to Base64 Data URL for persistent storage in Turso.")
+            return jsonify({"url": base64_url}), 201
+        except Exception as ex:
+            logger.error(f"Base64 fallback failed: {str(ex)}")
+            return error_response("Cloud upload and Base64 fallback both failed", 500)
     return error_response("File type not allowed", 400)
 
 

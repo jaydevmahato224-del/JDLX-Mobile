@@ -1,13 +1,9 @@
-import sqlite3
 import os
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATABASE_PATH = os.path.join(BASE_DIR, "jdlx.db")
+from database import get_db
 
 
 def get_system_stats():
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
 
     # Single aggregated read for lightweight dashboard polling.

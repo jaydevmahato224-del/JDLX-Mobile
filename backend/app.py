@@ -120,7 +120,6 @@ cors_origins = [
     r"^https?://(www\.)?jdlxmobile\.in$",
     r"^https?://.*\.jdlxmobile\.in$",
     r"^https?://.*\.vercel\.app$",
-    r"^https?://jdlx-mobile-admin\.vercel\.app$",
     r"^https?://.*\.onrender\.com$",
 ]
 if cors_origins_env:

@@ -20,12 +20,6 @@ load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
 # --- Third-Party Imports ---
 import jwt
-import cloudinary
-import cloudinary.uploader
-
-# Cloudinary Configuration for persistent storage
-if os.environ.get('CLOUDINARY_URL'):
-    cloudinary.config(cloudinary_url=os.environ.get('CLOUDINARY_URL'))
 from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -4815,16 +4809,6 @@ def admin_upload_image():
     if file.filename == '':
         return error_response("No selected file", 400)
     if file and allowed_file(file.filename):
-        # Use Cloudinary if configured for persistent storage (e.g., on Render.com)
-        if os.environ.get('CLOUDINARY_URL'):
-            try:
-                upload_result = cloudinary.uploader.upload(file, folder="jdlx_uploads")
-                file_url = upload_result.get('secure_url')
-                return jsonify({"url": file_url}), 201
-            except Exception as e:
-                logger.error(f"Cloudinary upload failed: {str(e)}")
-                # Fallback to local storage if Cloudinary fails
-        
         filename = secure_filename(f"{datetime.datetime.now().timestamp()}_{file.filename}")
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         file_url = f"/static/uploads/{filename}"

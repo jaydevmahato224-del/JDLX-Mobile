@@ -416,11 +416,7 @@ export default function Home() {
   const regularProducts = useMemo(() => products.filter(p => !p.is_featured), [products])
 
   const allBanners = useMemo(() => {
-    const apiBanners = banners.map(b => ({ 
-      ...b, 
-      image: resolveMediaUrl(b.image_url || b.image), 
-      type: 'promo' 
-    }));
+    const apiBanners = banners.map(b => ({ ...b, image: resolveMediaUrl(b.image_url), type: 'promo' }));
     const productBanners = featuredProducts.slice(0, 3).map(p => ({
       id: `prod-${p.id}`,
       title: p.name,
@@ -738,7 +734,7 @@ export default function Home() {
                  }
               }}
             >
-              <img src={resolveMediaUrl(offer.banner_image)} alt={offer.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <img src={offer.banner_image} alt={offer.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
                  <h3 className="text-white font-black text-sm tracking-tight">{offer.title}</h3>
                  <p className="text-white/80 text-[10px] font-bold uppercase tracking-widest">{offer.description || 'Exclusive Offer'}</p>

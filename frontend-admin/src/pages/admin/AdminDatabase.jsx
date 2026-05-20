@@ -18,7 +18,7 @@ import {
   CheckCircle2,
   Filter
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../../config';
 import { useStore } from '../../store/useStore';
 

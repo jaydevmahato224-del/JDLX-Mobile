@@ -2972,10 +2972,23 @@ def user_profile():
         if 'file' in request.files:
             file = request.files['file']
             if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                image_url = f"/static/uploads/{filename}"
+                # 1. Try uploading to persistent cloud storage first
+                try:
+                    from services.cloud_image_service import upload_file_object_to_cloud
+                    cloud_url = upload_file_object_to_cloud(file)
+                    if cloud_url:
+                        logger.info(f"Successfully uploaded profile image to cloud: {cloud_url}")
+                        image_url = cloud_url
+                except Exception as e:
+                    logger.error(f"Cloud upload failed for profile image: {str(e)}")
+
+                # 2. Fallback to local storage if cloud storage fails or is unconfigured
+                if not image_url:
+                    logger.warning("Cloud upload failed for profile image. Falling back to ephemeral local storage.")
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    image_url = f"/static/uploads/{filename}"
                 
         try:
             conn = get_db()
@@ -4809,6 +4822,18 @@ def admin_upload_image():
     if file.filename == '':
         return error_response("No selected file", 400)
     if file and allowed_file(file.filename):
+        # 1. Try uploading to persistent cloud storage first
+        try:
+            from services.cloud_image_service import upload_file_object_to_cloud
+            cloud_url = upload_file_object_to_cloud(file)
+            if cloud_url:
+                logger.info(f"Successfully uploaded admin image to cloud: {cloud_url}")
+                return jsonify({"url": cloud_url}), 201
+        except Exception as e:
+            logger.error(f"Cloud upload failed inside admin_upload_image: {str(e)}")
+
+        # 2. Fallback to local storage if cloud storage fails or is unconfigured
+        logger.warning("Cloud upload failed or was bypassed. Falling back to ephemeral local storage.")
         filename = secure_filename(f"{datetime.datetime.now().timestamp()}_{file.filename}")
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         file_url = f"/static/uploads/{filename}"

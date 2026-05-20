@@ -1,10 +1,25 @@
 import sqlite3
 import os
-
-import os
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE_PATH = os.path.join(BASE_DIR, 'jdlx.db')
+
+# Initialize Firebase Admin
+try:
+    # Look for service account in environment or local file
+    service_account_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON") or os.path.join(BASE_DIR, 'firebase-service-account.json')
+    if os.path.exists(service_account_path):
+        cred = credentials.Certificate(service_account_path)
+        firebase_admin.initialize_app(cred)
+        FIREBASE_ENABLED = True
+    else:
+        print("[FIREBASE WARNING] Service account file not found. Push notifications will be simulated.")
+        FIREBASE_ENABLED = False
+except Exception as e:
+    print(f"[FIREBASE ERROR] Failed to initialize: {e}")
+    FIREBASE_ENABLED = False
 
 class NotificationService:
     def __init__(self):
@@ -17,7 +32,7 @@ class NotificationService:
 
     def notify_user_internal(self, user_id, title, message, type='SYSTEM'):
         """
-        Persists a notification to the database and simulates a push alert.
+        Persists a notification to the database and sends a push alert via FCM.
         """
         try:
             print(f"[NOTIFY DEBUG] Attempting to notify User {user_id}: {title}")
@@ -28,14 +43,43 @@ class NotificationService:
                 VALUES (?, ?, ?, ?)
             ''', (user_id, title, message, type))
             conn.commit()
+
+            # Fetch FCM tokens for this user
+            cursor.execute("SELECT fcm_token FROM user_push_tokens WHERE user_id = ?", (user_id,))
+            tokens = [row['fcm_token'] for row in cursor.fetchall()]
             conn.close()
             
-            # Simulate FCM Push Alert
-            print(f"[FCM PUSH SUCCESS] To User {user_id}: {title}")
+            if tokens and FIREBASE_ENABLED:
+                self.send_push_notification(tokens, title, message)
+            else:
+                # Simulate FCM Push Alert if not enabled or no tokens
+                print(f"[FCM PUSH SIMULATED] To User {user_id}: {title} (Tokens: {len(tokens)})")
+            
             return True
         except Exception as e:
-            print(f"[NOTIFY ERROR] Failed to insert notification for User {user_id}: {e}")
+            print(f"[NOTIFY ERROR] Failed to insert/send notification for User {user_id}: {e}")
             return False
+
+    def send_push_notification(self, tokens, title, message):
+        """Sends FCM push notifications to a list of tokens."""
+        if not tokens or not FIREBASE_ENABLED:
+            return
+
+        message_obj = messaging.MulticastMessage(
+            notification=messaging.Notification(
+                title=title,
+                body=message,
+            ),
+            tokens=tokens,
+        )
+        try:
+            response = messaging.send_multicast(message_obj)
+            print(f"[FCM PUSH SUCCESS] Sent {response.success_count} messages. {response.failure_count} failed.")
+            # Optional: handle invalid tokens (clean up database)
+            if response.failure_count > 0:
+                pass # Logic to remove invalid tokens could go here
+        except Exception as e:
+            print(f"[FCM PUSH ERROR] {e}")
 
     def send_order_notification(self, user_id, order_id, status):
         """

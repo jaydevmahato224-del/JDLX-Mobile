@@ -89,5 +89,10 @@ export const useStore = create((set) => ({
             item.id === productId ? { ...item, qty } : item
         )
     })),
-    clearCart: () => set({ cart: [] })
+    clearCart: () => set({ cart: [] }),
+
+    // Global Error State
+    globalError: null, // null | 'network' | 'server'
+    setGlobalError: (error) => set({ globalError: error }),
+    clearGlobalError: () => set({ globalError: null })
 }))

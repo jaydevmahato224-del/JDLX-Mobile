@@ -376,11 +376,27 @@ def admin_upload_banner(offer_id):
     if file.filename == '':
         return error_response("No file selected")
         
-    filename = f"offer_banner_{offer_id}_{int(datetime.now().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}"
-    filepath = os.path.join('static', 'images', filename)
-    file.save(filepath)
+    banner_url = None
     
-    banner_url = f"/static/images/{filename}"
+    # 1. Try uploading to persistent cloud storage first
+    try:
+        from services.cloud_image_service import upload_file_object_to_cloud
+        cloud_url = upload_file_object_to_cloud(file)
+        if cloud_url:
+            logger.info(f"Successfully uploaded offer banner to cloud: {cloud_url}")
+            banner_url = cloud_url
+    except Exception as e:
+        logger.error(f"Cloud upload failed inside admin_upload_banner: {str(e)}")
+
+    # 2. Fallback to local storage if cloud storage fails or is unconfigured
+    if not banner_url:
+        logger.warning("Cloud upload failed for offer banner. Falling back to ephemeral local storage.")
+        filename = f"offer_banner_{offer_id}_{int(datetime.now().timestamp())}.{file.filename.rsplit('.', 1)[1].lower()}"
+        filepath = os.path.join('static', 'images', filename)
+        # Ensure directories exist
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        file.save(filepath)
+        banner_url = f"/static/images/{filename}"
     
     conn = get_db()
     cursor = conn.cursor()

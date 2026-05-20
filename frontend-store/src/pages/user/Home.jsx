@@ -734,7 +734,7 @@ export default function Home() {
                  }
               }}
             >
-              <img src={offer.banner_image} alt={offer.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <img src={resolveMediaUrl(offer.banner_image)} alt={offer.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
                  <h3 className="text-white font-black text-sm tracking-tight">{offer.title}</h3>
                  <p className="text-white/80 text-[10px] font-bold uppercase tracking-widest">{offer.description || 'Exclusive Offer'}</p>

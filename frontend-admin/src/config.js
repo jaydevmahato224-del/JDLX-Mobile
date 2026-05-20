@@ -33,5 +33,5 @@ export const resolveMediaUrl = (url) => {
   if (/^(https?:|data:|blob:)/i.test(url)) return url;
   if (url.startsWith('//')) return `https:${url}`;
   if (url.startsWith('/')) return `${API_ORIGIN}${url}`;
-  return `${API_ORIGIN}/${url.replace(/^\.?\//, '')}`;
-}
+  return `${API_ORIGIN}/${url}`;
+};

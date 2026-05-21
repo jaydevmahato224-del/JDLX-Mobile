@@ -21,7 +21,11 @@ const SEO = ({ title, description, image, url, price }) => {
     updateMetaTag('property', 'og:title', fullTitle);
     updateMetaTag('property', 'og:description', fullDescription);
     updateMetaTag('property', 'og:image', image);
-    updateMetaTag('property', 'og:url', url || window.location.href);
+    
+    // Safety check for URL to avoid exposing /product/:id in metadata
+    const safeUrl = url && !url.includes('/product/') ? url : (window.location.href.includes('/product/') ? '' : window.location.href);
+    if (safeUrl) updateMetaTag('property', 'og:url', safeUrl);
+    
     updateMetaTag('property', 'og:type', 'product');
     updateMetaTag('property', 'og:site_name', 'JDLX MOBILE');
 
@@ -30,7 +34,7 @@ const SEO = ({ title, description, image, url, price }) => {
     updateMetaTag('name', 'twitter:title', fullTitle);
     updateMetaTag('name', 'twitter:description', fullDescription);
     updateMetaTag('name', 'twitter:image', image);
-    updateMetaTag('name', 'twitter:url', url || window.location.href);
+    if (safeUrl) updateMetaTag('name', 'twitter:url', safeUrl);
 
   }, [title, description, image, url, price]);
 

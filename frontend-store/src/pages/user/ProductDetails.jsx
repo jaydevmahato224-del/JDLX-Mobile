@@ -78,9 +78,13 @@ export default function ProductDetails() {
   }, [id, resolvedToken, products, tokenProduct]);
 
   // TASK 5: Redirect from /product/:id to secure slug route
+  // Aggressive replacement to ensure browser bar updates instantly
   useEffect(() => {
     if (id && product && !loadingToken) {
       const secureUrl = getProductUrl(product);
+      // Use replaceState to update browser bar without adding to history
+      window.history.replaceState(null, '', secureUrl);
+      // Also notify router of the change
       navigate(secureUrl, { replace: true });
     }
   }, [id, product, loadingToken, navigate]);

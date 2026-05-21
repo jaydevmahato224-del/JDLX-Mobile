@@ -738,7 +738,11 @@ export default function Home() {
                     // Find product in our list to get its share_token for a secure URL
                     const p = products.find(prod => String(prod.id) === String(offer.applicable_ids[0]));
                     if (p) navigate(getProductUrl(p));
-                    else navigate('/product/' + offer.applicable_ids[0]); // Fallback will redirect securely in ProductDetails
+                    else {
+                      // If product not found in local state, we must still go to the redirect route
+                      // but we do it silently. The ProductDetails will handle the transition.
+                      navigate(`/product/${offer.applicable_ids[0]}`, { replace: true });
+                    }
                  } else {
                     navigate('/search?q=offers');
                  }

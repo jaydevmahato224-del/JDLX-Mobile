@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate, useParams } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react'
 import Layout from './components/Layout'
@@ -96,6 +96,30 @@ const HomePage = lazy(() => import('./pages/user/Home'))
 const Login = lazy(() => import('./pages/user/Login'))
 const Cart = lazy(() => import('./pages/user/Cart'))
 const ProductDetails = lazy(() => import('./pages/user/ProductDetails'))
+const ProductRedirector = lazy(() => Promise.resolve({
+  default: () => {
+    const { id } = useParams();
+    const { products, fetchProducts } = useStore();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      if (!products || products.length === 0) {
+        fetchProducts();
+        return;
+      }
+      const product = products.find(p => String(p.id) === String(id));
+      if (product) {
+        const slug = product.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
+        navigate(`/p/${slug}-${product.share_token}`, { replace: true });
+      } else {
+        // Fallback for unknown product - ProductDetails will handle remote fetch
+        navigate(`/p/${id}`, { replace: true });
+      }
+    }, [id, products, fetchProducts, navigate]);
+
+    return <PageLoader />;
+  }
+}))
 const SearchPage = lazy(() => import('./pages/user/SearchPage'))
 const Checkout = lazy(() => import('./pages/user/Checkout'))
 const OrderTracking = lazy(() => import('./pages/user/OrderTracking'))
@@ -292,7 +316,7 @@ function App() {
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/cart" element={<Cart />} />
-                    <Route path="/product/:id" element={<ProductDetails />} />
+                    <Route path="/product/:id" element={<ProductRedirector />} />
                     <Route path="/p/:token" element={<ProductDetails />} />
                     <Route path="/p/:slugToken" element={<ProductDetails />} />
                     <Route path="/s/:token" element={<ShareRedirect />} />

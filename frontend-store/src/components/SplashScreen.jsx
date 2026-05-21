@@ -77,19 +77,9 @@ const SplashScreen = ({ onFinish, dataReady }) => {
           )}
         </>
       ) : (
-        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-700">
-          <img 
-            src="/logo192.png" 
-            alt="JDLX Logo" 
-            className="w-24 h-24 mb-6 animate-pulse" 
-          />
-          <h2 className="text-[#F5C518] font-black text-xl tracking-[0.3em]">JDLX MOBILE</h2>
-          {/* Subtle indicator for fallback mode when data is taking time */}
-          {!dataReady && (
-             <div className="mt-8 h-1 w-32 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-[#F5C518] animate-[shimmer_2s_infinite]" style={{ width: '40%' }}></div>
-             </div>
-          )}
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
+          <div className="h-10 w-10 border-4 border-[#F5C518]/20 border-t-[#F5C518] rounded-full animate-spin" />
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#F5C518]">Loading...</span>
         </div>
       )}
     </div>

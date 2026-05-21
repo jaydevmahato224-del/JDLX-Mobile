@@ -89,6 +89,7 @@ from recovery.recovery_service import (
 )
 from utils.response_utils import success_response, error_response
 from utils.product_optimizer import optimizer
+from utils.token_gen import generate_share_token
 from services.health_monitor import get_system_health_metrics
 from services.auto_healer import trigger_system_scan
 
@@ -2220,6 +2221,26 @@ def get_recommendations():
         import traceback
         logger.error(f"Error fetching recommendations: {str(e)}\n{traceback.format_exc()}")
         return error_response("Failed to fetch recommendations", 500)
+
+
+@app.route('/api/products/s/<token>', methods=['GET'])
+def get_product_by_token(token):
+    """Retrieves detailed information for a single product by its secure share token."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM products WHERE share_token = ?", (token,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return error_response("Product not found", 404)
+        
+        product_id = row['id']
+        conn.close()
+        return get_product(product_id)
+    except Exception as e:
+        logger.error(f"Error fetching product by token: {str(e)}")
+        return error_response("Failed to fetch product", 500)
 
 
 @app.route('/api/products/<int:product_id>', methods=['GET'])
@@ -4461,9 +4482,10 @@ def admin_add_product():
     try:
         conn = get_db()
         cursor = conn.cursor()
+        share_token = generate_share_token()
         cursor.execute(
-            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0))
+            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token)
         )
         product_id = cursor.lastrowid
         conn.commit()
@@ -4494,7 +4516,7 @@ def admin_update_product(product_id):
         cursor = conn.cursor()
         updates = []
         params = []
-        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
+        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state', 'share_token']:
             if key in data:
                 updates.append(f"{key}=?")
                 params.append(data[key])

@@ -121,6 +121,7 @@ const AboutSite = lazy(() => import('./pages/user/AboutSite'))
 const TermsAndConditions = lazy(() => import('./pages/user/TermsAndConditions'))
 const BugReportPage = lazy(() => import('./pages/user/BugReportPage'))
 const MyBugReportsPage = lazy(() => import('./pages/user/MyBugReportsPage'))
+const ShareRedirect = lazy(() => import('./pages/user/ShareRedirect'))
 
 // ─── Protected Route Wrapper ──────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
@@ -287,6 +288,9 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/product/:id" element={<ProductDetails />} />
+                    <Route path="/p/:token" element={<ProductDetails />} />
+                    <Route path="/p/:slugToken" element={<ProductDetails />} />
+                    <Route path="/s/:token" element={<ShareRedirect />} />
                     <Route path="/admin/*" element={<OperationalRedirect />} />
                     <Route path="/warehouse/*" element={<OperationalRedirect />} />
                     

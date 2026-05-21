@@ -38,6 +38,7 @@ from google.auth.transport import requests as google_requests
 # Local imports
 from database import get_db as _db_get_db
 from utils.response_utils import success_response, error_response
+from utils.token_gen import generate_share_token
 from notifier import (
     send_warehouse_application_email, 
     send_warehouse_registration_confirmation_email,
@@ -1957,6 +1958,7 @@ def warehouse_create_product():
                 return error_response(f"Product with barcode {barcode} already exists in global catalog.", 409)
 
         # 1. Insert into products
+        share_token = generate_share_token()
         cursor.execute(
             """
             INSERT INTO products (
@@ -1964,9 +1966,9 @@ def warehouse_create_product():
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
                 weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                 is_featured, has_variants, is_parent, recommendation_priority, recommendation_weight,
-                lifecycle_state
+                lifecycle_state, share_token
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name, description, data.get('sub_category'), price or 0, category, category_id, images, 
@@ -1975,7 +1977,7 @@ def warehouse_create_product():
                 data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
                 data.get('is_perishable', 0), data.get('expiry_date'),
                 data.get('is_featured', 0), 1 if has_variants else 0, 1 if has_variants else 0,
-                rec_priority, rec_weight, lifecycle_state
+                rec_priority, rec_weight, lifecycle_state, share_token
             )
         )
         product_id = cursor.lastrowid

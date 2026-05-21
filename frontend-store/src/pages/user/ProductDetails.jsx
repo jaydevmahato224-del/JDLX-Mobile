@@ -1,11 +1,14 @@
-import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, ShieldCheck, ShoppingCart, Star, Store, Truck, Zap, Undo2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Store, Truck, Zap, Undo2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useStore } from '../../store/useStore';
 import { resolveMediaUrl, API_BASE_URL } from '../../config';
 import { trackViewItem, trackAddToCart } from '../../utils/analytics';
+import { shareProduct } from '../../utils/share';
+import SEO from '../../components/SEO';
 import ProductReviews from '../../components/ProductReviews';
+import ShareModal from '../../components/ShareModal';
 import DeviceModelSelector from '../../components/DeviceModelSelector';
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization';
 
@@ -32,11 +35,13 @@ function getProductImages(product) {
 }
 
 export default function ProductDetails() {
-  const { id } = useParams();
+  const { id, token, slugToken } = useParams();
   const navigate = useNavigate();
   const { products: storeProducts, fetchProducts, addToCart, cart, wishlist, toggleWishlist, updateQuantity, removeFromCart, deliveryMode, nearestStoreId, user, registerForNotification } = useStore();
   
   const [remoteProducts, setRemoteProducts] = useState([]);
+  const [tokenProduct, setTokenProduct] = useState(null);
+  const [loadingToken, setLoadingToken] = useState(!!(token || slugToken));
   const [activeTab, setActiveTab] = useState('overview');
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
@@ -44,12 +49,49 @@ export default function ProductDetails() {
   const [isNotified, setIsNotified] = useState(false);
   const [fitting, setFitting] = useState(false);
   const [availability, setAvailability] = useState(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  // Extract token from either :token or :slugToken (e.g. iphone-15-Ag9Kx2Pq7R -> Ag9Kx2Pq7R)
+  const resolvedToken = useMemo(() => {
+    if (token) return token;
+    if (slugToken) {
+      const parts = slugToken.split('-');
+      return parts.length > 0 ? parts[parts.length - 1] : slugToken;
+    }
+    return null;
+  }, [token, slugToken]);
 
   const products = useMemo(() => (storeProducts?.length ? storeProducts : remoteProducts), [storeProducts, remoteProducts]);
-  const product = useMemo(() => products.find((p) => String(p.id) === String(id)), [id, products]);
-  const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(id)), [cart, id]);
+  
+  const product = useMemo(() => {
+    if (id) return products.find((p) => String(p.id) === String(id));
+    if (resolvedToken) {
+      const p = products.find((p) => p.share_token === resolvedToken);
+      return p || tokenProduct;
+    }
+    return null;
+  }, [id, resolvedToken, products, tokenProduct]);
+
+  // If we have a token but product is not in local list, fetch it directly
+  useEffect(() => {
+    if (!resolvedToken || product) {
+      if (product) setLoadingToken(false);
+      return;
+    }
+
+    setLoadingToken(true);
+    fetch(`${API_BASE_URL}/products/s/${resolvedToken}`)
+      .then(r => r.json())
+      .then(p => {
+        if (p.id) setTokenProduct(p);
+      })
+      .catch(e => console.error('Token resolution failed:', e))
+      .finally(() => setLoadingToken(false));
+  }, [resolvedToken, product]);
+
+  const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(product?.id)), [cart, product?.id]);
   const quantity = Number(cartItem?.qty || 0);
-  const isInWishlist = useMemo(() => wishlist.some(item => String(item.id) === String(id)), [wishlist, id]);
+  const isInWishlist = useMemo(() => wishlist.some(item => String(item.id) === String(product?.id)), [wishlist, product?.id]);
 
   useEffect(() => {
     if (!storeProducts?.length) fetchProducts();
@@ -92,29 +134,22 @@ export default function ProductDetails() {
     }
   }, [product]);
 
-  if (!product) return (
-    <div className="container-standard py-20 text-center">
-      <div className="glass-card px-6 py-20 animate-in fade-in zoom-in duration-500">
-        <h2 className="text-4xl font-black tracking-tighter">Product not found</h2>
-        <p className="mt-4 text-slate-500">This item is currently unavailable.</p>
-        <Link to="/" className="btn-primary mt-8 inline-flex items-center gap-2"><ArrowLeft size={16} /> Back to home</Link>
-      </div>
-    </div>
-  );
-
   const stock = product?.stock || 0;
-  const rating = product.average_rating || 0;
+  const rating = product?.average_rating || 0;
   const canAdd = stock > 0;
   const requiresDeviceModel = isStickerProduct(product);
-  const productImages = getProductImages(product);
-  const highlights = [
-    `${product.category || 'Accessory'} essential ready for ${deliveryMode === 'quick' ? 'quick delivery' : 'secure fulfillment'}`,
+  
+  const productImages = useMemo(() => getProductImages(product), [product]);
+  
+  const highlights = useMemo(() => [
+    `${product?.category || 'Accessory'} essential ready for ${deliveryMode === 'quick' ? 'quick delivery' : 'secure fulfillment'}`,
     `Available quantity: ${stock}`,
     `Dispatch window: ${deliveryTimeDisplay}`,
     deliveryMode === 'quick' ? 'Dark-store packed for hyperlocal delivery' : 'Central warehouse dispatched for reliable fulfillment',
-  ];
+  ], [product?.category, deliveryMode, stock, deliveryTimeDisplay]);
 
-  const handleAddToCart = (toCart = false) => {
+  const handleAddToCart = useCallback((toCart = false) => {
+    if (!product) return;
     const selectedDeviceModel = getDeviceModelValue(deviceModel);
     if (requiresDeviceModel && !selectedDeviceModel) {
       toast.error('Select Device Model');
@@ -125,10 +160,58 @@ export default function ProductDetails() {
     trackAddToCart(product, 1);
     if (toCart) navigate('/cart');
     else toast.success('Added to collection');
-  };
+  }, [addToCart, deviceModel, fitting, navigate, product, requiresDeviceModel]);
+
+  const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+    ? window.location.origin 
+    : 'https://jdlxmobile.in', []);
+
+  const shareUrl = useMemo(() => product?.share_token 
+    ? `${origin}/p/${product.share_token}` 
+    : product?.id ? `${origin}/product/${product.id}` : origin, [product?.share_token, product?.id, origin]);
+
+  const handleShare = useCallback(async () => {
+    if (!product) return;
+    const success = await shareProduct(product, shareUrl);
+    if (!success) setShowShareModal(true);
+  }, [product, shareUrl]);
+
+  // Ensure SEO image is always a public production URL (crawlers can't see localhost)
+  const seoImage = useMemo(() => {
+    const rawImage = productImages[0] || FALLBACK_IMAGE;
+    return (rawImage.includes('localhost') || rawImage.includes('127.0.0.1') || rawImage.includes('10.0.2.2'))
+      ? rawImage.replace(/https?:\/\/[^\/]+/, 'https://jdlx-mobile.onrender.com')
+      : rawImage;
+  }, [productImages]);
+
+  if (loadingToken) return (
+    <div className="container-standard py-20 text-center">
+      <div className="glass-card px-6 py-20">
+        <div className="flex justify-center mb-8"><div className="h-16 w-16 rounded-3xl border-4 border-primary/20 border-t-primary animate-spin" /></div>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Loading Premium Selection...</p>
+      </div>
+    </div>
+  );
+
+  if (!product) return (
+    <div className="container-standard py-20 text-center">
+      <div className="glass-card px-6 py-20 animate-in fade-in zoom-in duration-500">
+        <h2 className="text-4xl font-black tracking-tighter">Product not found</h2>
+        <p className="mt-4 text-slate-500">This item is currently unavailable.</p>
+        <Link to="/" className="btn-primary mt-8 inline-flex items-center gap-2"><ArrowLeft size={16} /> Back to home</Link>
+      </div>
+    </div>
+  );
 
   return (
     <div className="reveal-staggered pb-48 md:pb-0">
+      <SEO 
+        title={product.name}
+        description={product.description}
+        price={product.price}
+        image={seoImage}
+        url={shareUrl}
+      />
       <button onClick={() => navigate(-1)} className="fixed top-4 left-4 z-[110] md:hidden h-10 w-10 flex items-center justify-center rounded-full bg-slate-900/40 backdrop-blur-md text-white border border-white/10 active:scale-90 transition-all shadow-xl"><ArrowLeft size={20} /></button>
 
       <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr] animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -211,6 +294,7 @@ export default function ProductDetails() {
                     <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1)} className="text-white active:scale-75 transition-all disabled:opacity-20"><Plus size={24} /></button>
                   </div>
                   <Link to="/cart" className="flex-1 h-16 rounded-3xl bg-primary text-slate-950 font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center active:scale-95 transition-all">View in Cart</Link>
+                  <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-3xl border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -219,11 +303,15 @@ export default function ProductDetails() {
                     {canAdd ? (
                       <><button onClick={() => handleAddToCart()} className="flex-[2] h-16 rounded-[2rem] bg-slate-900 text-white font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><ShoppingCart size={20} /> Add to Cart</button>
                         <button onClick={() => handleAddToCart(true)} className="flex-1 h-16 rounded-[2rem] bg-primary text-slate-950 font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all">Buy Now</button>
-                        <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed' : 'Saved'); }} className={`h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 transition-all active:scale-90 ${isInWishlist ? 'bg-red-50 border-red-100 text-red-500' : 'bg-slate-50 border-slate-100 text-slate-400 hover:text-red-500'}`}><Heart size={28} fill={isInWishlist ? 'currentColor' : 'none'} /></button></>
+                        <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed' : 'Saved'); }} className={`h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 transition-all active:scale-90 ${isInWishlist ? 'bg-red-50 border-red-100 text-red-500' : 'bg-slate-50 border-slate-100 text-slate-400 hover:text-red-500'}`}><Heart size={28} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
+                        <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button></>
                     ) : (
-                      <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-16 w-full rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
-                        {isNotified ? <CheckCircle2 size={24} /> : <Bell size={24} />} {isNotified ? 'Notified' : 'Notify on Restock'}
-                      </button>
+                      <div className="flex items-center gap-4 w-full">
+                        <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-16 flex-1 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
+                          {isNotified ? <CheckCircle2 size={24} /> : <Bell size={24} />} {isNotified ? 'Notified' : 'Notify on Restock'}
+                        </button>
+                        <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -276,6 +364,7 @@ export default function ProductDetails() {
                         <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1)} className="text-white active:scale-75 disabled:opacity-20"><Plus size={18} /></button>
                     </div>
                     <Link to="/cart" className="flex h-12 flex-[1.5] items-center justify-center rounded-2xl bg-primary text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">View in Cart</Link>
+                    <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
                 </div>
             ) : (
               <div className="flex w-full gap-2">
@@ -284,17 +373,27 @@ export default function ProductDetails() {
                     <button onClick={() => handleAddToCart()} className="flex-1 h-12 rounded-2xl bg-white/10 text-white text-[11px] font-black uppercase tracking-widest border border-white/10 active:scale-95 flex items-center justify-center gap-2"><ShoppingCart size={14} /> Add</button>
                     <button onClick={() => handleAddToCart(true)} className="flex-[1.5] h-12 rounded-2xl bg-primary text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">Buy Now</button>
                     <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed' : 'Saved'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-red-50 border-red-500 text-white' : 'bg-white/10 border-white/10 text-white'}`}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
+                    <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
                   </>
                 ) : (
-                  <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-12 w-full rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
-                    {isNotified ? <CheckCircle2 size={16} /> : <Bell size={16} />} {isNotified ? 'Notified' : 'Notify on Restock'}
-                  </button>
+                  <div className="flex w-full gap-2">
+                    <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-12 flex-1 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
+                      {isNotified ? <CheckCircle2 size={16} /> : <Bell size={16} />} {isNotified ? 'Notified' : 'Notify on Restock'}
+                    </button>
+                    <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
+                  </div>
                 )}
               </div>
             )}
          </div>
       </div>
       <div className="mt-20"><ProductRecommendationScroller currentProduct={product} allProducts={products} /></div>
+
+      <ShareModal 
+        isOpen={showShareModal} 
+        onClose={() => setShowShareModal(false)} 
+        product={product} 
+      />
     </div>
   );
 }

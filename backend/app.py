@@ -89,8 +89,11 @@ from recovery.recovery_service import (
 )
 from utils.response_utils import success_response, error_response
 from utils.product_optimizer import optimizer
-from utils.token_gen import generate_share_token
-from utils.slug_gen import generate_product_slug
+from utils.product_url_utils import (
+    generate_share_token, 
+    generate_seo_slug, 
+    generate_product_url
+)
 from services.health_monitor import get_system_health_metrics
 from services.auto_healer import trigger_system_scan
 
@@ -4504,7 +4507,7 @@ def admin_add_product():
         conn = get_db()
         cursor = conn.cursor()
         share_token = generate_share_token()
-        seo_slug = generate_product_slug(name)
+        seo_slug = generate_seo_slug(name)
         cursor.execute(
             "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug)
@@ -4544,7 +4547,7 @@ def admin_update_product(product_id):
                 params.append(data[key])
                 if key == 'name':
                     updates.append("seo_slug=?")
-                    params.append(generate_product_slug(data['name']))
+                    params.append(generate_seo_slug(data['name']))
         
         if not updates:
             return success_response(None, "No updates provided", 400)

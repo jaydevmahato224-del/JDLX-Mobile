@@ -6,8 +6,10 @@ import sqlite3
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database import init_db, get_db
-from utils.token_gen import generate_share_token
-from utils.slug_gen import generate_product_slug
+from utils.product_url_utils import (
+    generate_share_token, 
+    generate_seo_slug
+)
 
 def backfill_share_tokens():
     print("Initializing database...")

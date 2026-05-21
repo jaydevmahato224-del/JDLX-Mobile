@@ -9,18 +9,26 @@
 export const generateProductSlug = (product) => {
   if (!product) return '';
   
-  const nameSlug = (product.name || 'product')
+  // Use existing seo_slug from backend if available, otherwise generate dynamically
+  const nameSlug = product.seo_slug || (product.name || 'product')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
     
-  const token = product.share_token || '';
+  const token = product.share_token;
   
-  return token ? `${nameSlug}-${token}` : nameSlug;
+  if (!token) {
+    console.error("[SECURITY ASSERTION] Missing share_token for product ID:", product.id);
+    // Use ID as fallback token if share_token is missing (backend handles this as last resort)
+    return `${nameSlug}-${product.id || 'unknown'}`;
+  }
+  
+  return `${nameSlug}-${token}`;
 };
 
 /**
  * Generates a full product URL using the secure slug system.
+ * ALWAYS returns /p/slug-token format.
  * 
  * @param {Object} product - The product object
  * @param {string} origin - The site origin (optional)

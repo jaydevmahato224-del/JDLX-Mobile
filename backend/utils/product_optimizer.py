@@ -167,7 +167,7 @@ class ProductQueryOptimizer:
         Prioritizes items with higher ratings, but falls back to newest available items.
         """
         query = '''
-            SELECT p.id, p.name, p.price, p.images, p.category, p.is_featured, p.share_token, c.name as category_name,
+            SELECT p.id, p.name, p.price, p.images, p.category, p.is_featured, p.share_token, p.seo_slug, c.name as category_name,
                    COALESCE(c.device_customization_enabled, 0) as device_customization_enabled,
                    COALESCE(AVG(r.rating), 0.0) as average_rating, 
                    COUNT(r.id) as total_reviews

@@ -2094,7 +2094,7 @@ def get_products():
         if store_id:
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only, p.share_token,
+                       p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
                        wi.stock_quantity as physical_stock,
                        wi.stock_quantity as stock,
                        wi.reserved_stock as reserved_stock,
@@ -2117,7 +2117,7 @@ def get_products():
         else:
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only, p.share_token,
+                       p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
                        0 as reserved_stock,
                        COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as cart_reserved,
                        p.low_stock_threshold, p.status,
@@ -2247,6 +2247,11 @@ def get_product_by_token(token):
             cursor.execute("SELECT id FROM products WHERE share_token = ?", (potential_token,))
             row = cursor.fetchone()
 
+        # 4. Try exact ID lookup as last resort (for migration/redirect support)
+        if not row and token.isdigit():
+            cursor.execute("SELECT id FROM products WHERE id = ?", (int(token),))
+            row = cursor.fetchone()
+            
         if not row:
             conn.close()
             return error_response("Product not found", 404)

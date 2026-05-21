@@ -109,10 +109,11 @@ const ProductRedirector = lazy(() => Promise.resolve({
       }
       const product = products.find(p => String(p.id) === String(id));
       if (product) {
-        const slug = product.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
-        navigate(`/p/${slug}-${product.share_token}`, { replace: true });
+        // Use unified utility for guaranteed format
+        navigate(getProductUrl(product), { replace: true });
       } else {
-        // Fallback for unknown product - ProductDetails will handle remote fetch
+        // Fallback for unknown product - ProductDetails will handle remote fetch by ID
+        // We use /p/:id which backend now supports as last-resort fallback
         navigate(`/p/${id}`, { replace: true });
       }
     }, [id, products, fetchProducts, navigate]);

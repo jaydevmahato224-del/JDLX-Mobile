@@ -58,16 +58,19 @@ export default function ProductDetails() {
     const rawToken = token || slugToken;
     if (!rawToken) return null;
     
-    console.log('[DEBUG] Incoming Slug/Token:', rawToken);
-    
     // Handle slugified tokens by taking the last part after the last dash
-    // Backend also handles this now, but we do it here for local lookup
     if (rawToken.includes('-')) {
       const parts = rawToken.split('-');
-      const potentialToken = parts[parts.length - 1];
-      // If the last part looks like a share_token (length >= 8), return it
+      const lastPart = parts[parts.length - 1];
+      
+      // If last part is numeric, it's an ID fallback
+      if (lastPart && /^\d+$/.test(lastPart)) return lastPart;
+      
+      // If last part looks like a share_token (length >= 8), return it
+      if (lastPart && lastPart.length >= 8) return lastPart;
+      
       // Otherwise return the whole thing as a possible seo_slug
-      return potentialToken.length >= 8 ? potentialToken : rawToken;
+      return rawToken;
     }
     return rawToken;
   }, [token, slugToken]);
@@ -77,17 +80,22 @@ export default function ProductDetails() {
   const product = useMemo(() => {
     if (id) return products.find((p) => String(p.id) === String(id));
     if (resolvedToken) {
+      console.log('[DEBUG] Resolving Token:', resolvedToken);
       // 1. Match by share_token
       let p = products.find((p) => p.share_token === resolvedToken);
       // 2. Match by seo_slug
       if (!p) p = products.find((p) => p.seo_slug === resolvedToken);
-      // 3. Match by full slugToken if different
+      // 3. Match by numeric ID (fallback)
+      if (!p && /^\d+$/.test(resolvedToken)) {
+        p = products.find((p) => String(p.id) === String(resolvedToken));
+      }
+      // 4. Match by full slugToken if different
       const rawToken = token || slugToken;
       if (!p && rawToken && rawToken !== resolvedToken) {
          p = products.find((p) => p.seo_slug === rawToken);
       }
       
-      if (p) console.log('[DEBUG] Matched product ID:', p.id);
+      if (p) console.log('[DEBUG] Found Product:', p.name, '(ID:', p.id, ')');
       return p || tokenProduct;
     }
     return null;
@@ -98,10 +106,11 @@ export default function ProductDetails() {
   useEffect(() => {
     if (id && product && !loadingToken) {
       const secureUrl = getProductUrl(product);
-      // Use replaceState to update browser bar without adding to history
-      window.history.replaceState(null, '', secureUrl);
-      // Also notify router of the change
-      navigate(secureUrl, { replace: true });
+      if (!window.location.pathname.includes('/p/')) {
+        console.log('[DEBUG] Aggressive Redirect to:', secureUrl);
+        window.history.replaceState(null, '', secureUrl);
+        navigate(secureUrl, { replace: true });
+      }
     }
   }, [id, product, loadingToken, navigate]);
 
@@ -114,13 +123,17 @@ export default function ProductDetails() {
     }
 
     setLoadingToken(true);
+    console.log('[DEBUG] Remote Fetching for Token:', rawToken);
+    
     // Try resolving with the raw token (whole slug) - backend handles the split logic
     fetch(`${API_BASE_URL}/products/s/${rawToken}`)
       .then(r => r.json())
       .then(p => {
         if (p.id) {
-          console.log('[DEBUG] Remote matched product ID:', p.id);
+          console.log('[DEBUG] Remote matched Product:', p.name, '(ID:', p.id, ')');
           setTokenProduct(p);
+        } else {
+          console.error('[DEBUG] Remote resolution failed for:', rawToken);
         }
       })
       .catch(e => console.error('Token resolution failed:', e))

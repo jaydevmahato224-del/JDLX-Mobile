@@ -2,17 +2,27 @@ import React, { useMemo } from 'react';
 import { X, Copy, MessageCircle, Send, Facebook, Twitter, Link as LinkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const ShareModal = ({ isOpen, onClose, product }) => {
+const ShareModal = ({ isOpen, onClose, product, url }) => {
   const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? window.location.origin 
     : 'https://jdlxmobile.in', []);
 
-  const shareUrl = useMemo(() => {
+  const internalShareUrl = useMemo(() => {
     if (!product) return '';
-    return product.share_token 
-      ? `${origin}/p/${product.share_token}` 
-      : `${origin}/product/${product.id}`;
+    if (product.share_token) {
+      // Create a clean slug from the product name
+      const slug = product.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') || 'product';
+      
+      return `${origin}/p/${slug}-${product.share_token}`;
+    }
+    // Fallback only if share_token is missing
+    return `${origin}/product/${product.id}`;
   }, [product, origin]);
+
+  const shareUrl = url || internalShareUrl;
     
   const premiumText = useMemo(() => {
     if (!product) return '';

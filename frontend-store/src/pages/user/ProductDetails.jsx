@@ -53,12 +53,15 @@ export default function ProductDetails() {
 
   // Extract token from either :token or :slugToken (e.g. iphone-15-Ag9Kx2Pq7R -> Ag9Kx2Pq7R)
   const resolvedToken = useMemo(() => {
-    if (token) return token;
-    if (slugToken) {
-      const parts = slugToken.split('-');
-      return parts.length > 0 ? parts[parts.length - 1] : slugToken;
+    const rawToken = token || slugToken;
+    if (!rawToken) return null;
+    
+    // Handle slugified tokens by taking the last part after the last dash
+    if (rawToken.includes('-')) {
+      const parts = rawToken.split('-');
+      return parts[parts.length - 1];
     }
-    return null;
+    return rawToken;
   }, [token, slugToken]);
 
   const products = useMemo(() => (storeProducts?.length ? storeProducts : remoteProducts), [storeProducts, remoteProducts]);
@@ -166,9 +169,20 @@ export default function ProductDetails() {
     ? window.location.origin 
     : 'https://jdlxmobile.in', []);
 
-  const shareUrl = useMemo(() => product?.share_token 
-    ? `${origin}/p/${product.share_token}` 
-    : product?.id ? `${origin}/product/${product.id}` : origin, [product?.share_token, product?.id, origin]);
+  const shareUrl = useMemo(() => {
+    if (!product) return origin;
+    if (product.share_token) {
+      // Create a clean slug from the product name
+      const slug = product.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') || 'product';
+      
+      return `${origin}/p/${slug}-${product.share_token}`;
+    }
+    // Fallback only if share_token is missing (should not happen with new products)
+    return product.id ? `${origin}/product/${product.id}` : origin;
+  }, [product, origin]);
 
   const handleShare = useCallback(async () => {
     if (!product) return;
@@ -205,6 +219,13 @@ export default function ProductDetails() {
 
   return (
     <div className="reveal-staggered pb-48 md:pb-0">
+      <style>{`
+        @keyframes heartPop {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.35); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
       <SEO 
         title={product.name}
         description={product.description}
@@ -223,6 +244,25 @@ export default function ProductDetails() {
                 {stock <= LOW_STOCK_LIMIT && stock > 0 && <span className="bg-primary text-slate-900 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-500/20 shadow-lg">Only {stock} Left</span>}
                 {stock <= 0 && <span className="bg-red-500 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-red-600 shadow-lg animate-pulse">Sold Out</span>}
               </div>
+
+              {/* Floating Favorite (Heart) Button with Pop Animation */}
+              <button 
+                onClick={() => { 
+                  toggleWishlist(product); 
+                  toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); 
+                }} 
+                className={`absolute top-4 right-4 z-20 h-11 w-11 flex items-center justify-center rounded-full backdrop-blur-md border shadow-lg transition-all duration-300 active:scale-75 ${
+                  isInWishlist 
+                    ? 'bg-rose-500 border-rose-500 text-white hover:bg-rose-600' 
+                    : 'bg-white/80 border-slate-100 text-slate-700 hover:text-rose-500 hover:bg-white'
+                }`}
+                style={{
+                  animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none'
+                }}
+                aria-label="Add to Favorites"
+              >
+                <Heart size={20} fill={isInWishlist ? 'currentColor' : 'none'} className="transition-transform duration-300" />
+              </button>
               <div className="overflow-hidden bg-white">
                 <img src={productImages[activeImageIndex]} alt={product.name} className="h-[400px] w-full object-contain transition-all duration-700 sm:h-[540px] md:rounded-[28px]" />
               </div>
@@ -364,6 +404,7 @@ export default function ProductDetails() {
                         <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1)} className="text-white active:scale-75 disabled:opacity-20"><Plus size={18} /></button>
                     </div>
                     <Link to="/cart" className="flex h-12 flex-[1.5] items-center justify-center rounded-2xl bg-primary text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">View in Cart</Link>
+                    <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-rose-500 border-rose-500 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white'}`} style={{ animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none' }}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
                     <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
                 </div>
             ) : (
@@ -372,7 +413,7 @@ export default function ProductDetails() {
                   <>
                     <button onClick={() => handleAddToCart()} className="flex-1 h-12 rounded-2xl bg-white/10 text-white text-[11px] font-black uppercase tracking-widest border border-white/10 active:scale-95 flex items-center justify-center gap-2"><ShoppingCart size={14} /> Add</button>
                     <button onClick={() => handleAddToCart(true)} className="flex-[1.5] h-12 rounded-2xl bg-primary text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">Buy Now</button>
-                    <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed' : 'Saved'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-red-50 border-red-500 text-white' : 'bg-white/10 border-white/10 text-white'}`}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
+                    <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-rose-500 border-rose-500 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white'}`} style={{ animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none' }}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
                     <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
                   </>
                 ) : (
@@ -380,6 +421,7 @@ export default function ProductDetails() {
                     <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-12 flex-1 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
                       {isNotified ? <CheckCircle2 size={16} /> : <Bell size={16} />} {isNotified ? 'Notified' : 'Notify on Restock'}
                     </button>
+                    <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-rose-500 border-rose-500 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white'}`} style={{ animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none' }}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
                     <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
                   </div>
                 )}
@@ -392,7 +434,8 @@ export default function ProductDetails() {
       <ShareModal 
         isOpen={showShareModal} 
         onClose={() => setShowShareModal(false)} 
-        product={product} 
+        product={product}
+        url={shareUrl}
       />
     </div>
   );

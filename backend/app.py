@@ -2093,7 +2093,7 @@ def get_products():
         if store_id:
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only,
+                       p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only, p.share_token,
                        wi.stock_quantity as physical_stock,
                        wi.stock_quantity as stock,
                        wi.reserved_stock as reserved_stock,
@@ -2116,7 +2116,7 @@ def get_products():
         else:
             query = '''
                 SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only,
+                       p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only, p.share_token,
                        0 as reserved_stock,
                        COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as cart_reserved,
                        p.low_stock_threshold, p.status,

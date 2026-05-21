@@ -19,8 +19,9 @@ const ShareRedirect = () => {
         if (!response.ok) throw new Error('Product not found');
         
         const product = await response.json();
-        // Redirect to the actual product page
-        navigate(`/product/${product.id}`, { replace: true });
+        // Redirect to the actual product page using the secure token format
+        const slug = product.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
+        navigate(`/p/${slug}-${product.share_token || token}`, { replace: true });
       } catch (err) {
         console.error('Failed to resolve share token:', err);
         setError(true);

@@ -739,9 +739,9 @@ export default function Home() {
                     const p = products.find(prod => String(prod.id) === String(offer.applicable_ids[0]));
                     if (p) navigate(getProductUrl(p));
                     else {
-                      // If product not found in local state, we must still go to the redirect route
-                      // but we do it silently. The ProductDetails will handle the transition.
-                      navigate(`/product/${offer.applicable_ids[0]}`, { replace: true });
+                      // If product not found in local state, we use the secure utility with just the ID
+                      // This will generate /p/product-:id which is safer than /product/:id
+                      navigate(getProductUrl({ id: offer.applicable_ids[0] }), { replace: true });
                     }
                  } else {
                     navigate('/search?q=offers');

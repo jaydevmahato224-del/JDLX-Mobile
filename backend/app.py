@@ -92,7 +92,8 @@ from utils.product_optimizer import optimizer
 from utils.product_url_utils import (
     generate_share_token, 
     generate_seo_slug, 
-    generate_product_url
+    generate_product_url,
+    repair_product_data
 )
 from services.health_monitor import get_system_health_metrics
 from services.auto_healer import trigger_system_scan
@@ -2247,8 +2248,15 @@ def get_product_by_token(token):
         if not row and '-' in token:
             parts = token.split('-')
             potential_token = parts[-1]
+            
+            # Try matching by share_token
             cursor.execute("SELECT id FROM products WHERE share_token = ?", (potential_token,))
             row = cursor.fetchone()
+            
+            # If still not found and potential_token is numeric, try as ID
+            if not row and potential_token.isdigit():
+                cursor.execute("SELECT id FROM products WHERE id = ?", (int(potential_token),))
+                row = cursor.fetchone()
 
         # 4. Try exact ID lookup as last resort (for migration/redirect support)
         if not row and token.isdigit():
@@ -4506,8 +4514,10 @@ def admin_add_product():
     try:
         conn = get_db()
         cursor = conn.cursor()
+        # Mandatory Secure URL Generation
         share_token = generate_share_token()
         seo_slug = generate_seo_slug(name)
+        
         cursor.execute(
             "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug)
@@ -4524,7 +4534,15 @@ def admin_add_product():
             f"Created product {name}",
         )
         run_admin_anomaly_check(request.user.get('user_id'), "admin_updated_product")
-        return success_response({"id": product_id}, "Product added", 201)
+        
+        # Build success payload with standardized URL
+        product_obj = {"id": product_id, "name": name, "share_token": share_token, "seo_slug": seo_slug}
+        success_payload = {
+            **product_obj,
+            "share_url": generate_product_url(product_obj)
+        }
+        
+        return success_response(success_payload, "Product added", 201)
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -4539,17 +4557,38 @@ def admin_update_product(product_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
+        
+        # Fetch current product to ensure stability and repair missing data
+        cursor.execute("SELECT name, share_token, seo_slug FROM products WHERE id = ?", (product_id,))
+        current = cursor.fetchone()
+        if not current:
+            conn.close()
+            return error_response("Product not found", 404)
+            
         updates = []
         params = []
-        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state', 'share_token']:
+        
+        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
             if key in data:
                 updates.append(f"{key}=?")
                 params.append(data[key])
-                if key == 'name':
+                # Auto-generate fresh slug if name changes
+                if key == 'name' and data['name'] != current['name']:
                     updates.append("seo_slug=?")
                     params.append(generate_seo_slug(data['name']))
         
+        # Auto-repair share_token if somehow missing
+        if not current['share_token']:
+            updates.append("share_token=?")
+            params.append(generate_share_token())
+            
+        # Auto-repair seo_slug if somehow missing (and not already being updated by name change)
+        if not current['seo_slug'] and 'name' not in data:
+            updates.append("seo_slug=?")
+            params.append(generate_seo_slug(current['name']))
+        
         if not updates:
+            conn.close()
             return success_response(None, "No updates provided", 400)
             
         params.append(product_id)
@@ -4578,7 +4617,18 @@ def admin_update_product(product_id):
             "Updated product details",
         )
         run_admin_anomaly_check(request.user.get('user_id'), "admin_updated_product")
-        return success_response(None, "Product updated")
+        
+        # Fetch updated record to return latest slugs/tokens
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, share_token, seo_slug FROM products WHERE id = ?", (product_id,))
+        updated_product = dict(cursor.fetchone())
+        conn.close()
+        
+        return success_response({
+            "seo_slug": updated_product['seo_slug'],
+            "share_token": updated_product['share_token'],
+            "share_url": generate_product_url(updated_product)
+        }, "Product updated")
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -4594,6 +4644,22 @@ def get_pincode_rules():
         rules = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(rules)
+    except Exception as e:
+        return error_response(str(e), 500)
+
+@app.route('/api/admin/repair-product-data', methods=['POST'])
+@token_required
+@require_admin()
+@require_permission("manage_products")
+def admin_repair_products():
+    """Trigger internal repair of product slugs and tokens."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        count = repair_product_data(cursor)
+        conn.commit()
+        conn.close()
+        return success_response({"repaired_count": count}, f"Repaired {count} products successfully")
     except Exception as e:
         return error_response(str(e), 500)
 

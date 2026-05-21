@@ -49,3 +49,41 @@ def generate_product_url(product, origin=None):
         return f"{origin}/p/{slug}-{product.get('id')}"
         
     return f"{origin}/p/{slug}-{token}"
+
+def repair_product_data(cursor):
+    """
+    Scans all products and repairs missing or malformed seo_slug/share_token.
+    Internal utility for maintaining data integrity.
+    """
+    cursor.execute("SELECT id, name, share_token, seo_slug FROM products")
+    products = cursor.fetchall()
+    
+    repaired_count = 0
+    for product in products:
+        product_id = product['id']
+        name = product['name']
+        token = product['share_token']
+        slug = product['seo_slug']
+        
+        updates = []
+        params = []
+        
+        # Repair missing or malformed token
+        if not token or len(token) < 8:
+            new_token = generate_share_token()
+            updates.append("share_token = ?")
+            params.append(new_token)
+            
+        # Repair missing slug or generate fresh from name
+        correct_slug = generate_seo_slug(name)
+        if not slug or slug != correct_slug:
+            updates.append("seo_slug = ?")
+            params.append(correct_slug)
+            
+        if updates:
+            params.append(product_id)
+            cursor.execute(f"UPDATE products SET {', '.join(updates)} WHERE id = ?", tuple(params))
+            repaired_count += 1
+            
+    return repaired_count
+

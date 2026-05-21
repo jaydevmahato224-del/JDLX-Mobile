@@ -8,7 +8,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from database import init_db, get_db
 from utils.product_url_utils import (
     generate_share_token, 
-    generate_seo_slug
+    generate_seo_slug,
+    repair_product_data
 )
 
 def backfill_share_tokens():
@@ -18,50 +19,10 @@ def backfill_share_tokens():
     conn = get_db()
     cursor = conn.cursor()
     
-    # 1. Backfill share_token
-    print("Fetching products without share tokens...")
-    cursor.execute("SELECT id, name FROM products WHERE share_token IS NULL OR share_token = ''")
-    products = cursor.fetchall()
-    
-    if products:
-        print(f"Generating tokens for {len(products)} products...")
-        updated_count = 0
-        for product in products:
-            product_id = product['id']
-            token = generate_share_token()
-            
-            # Ensure uniqueness
-            attempts = 0
-            while attempts < 10:
-                try:
-                    cursor.execute("UPDATE products SET share_token = ? WHERE id = ?", (token, product_id))
-                    conn.commit()
-                    updated_count += 1
-                    break
-                except sqlite3.IntegrityError:
-                    token = generate_share_token()
-                    attempts += 1
-        print(f"Successfully backfilled {updated_count} product share tokens.")
-    else:
-        print("All products already have share tokens.")
-
-    # 2. Backfill seo_slug
-    print("Fetching products without SEO slugs...")
-    cursor.execute("SELECT id, name FROM products WHERE seo_slug IS NULL OR seo_slug = ''")
-    products = cursor.fetchall()
-    
-    if products:
-        print(f"Generating SEO slugs for {len(products)} products...")
-        updated_count = 0
-        for product in products:
-            product_id = product['id']
-            slug = generate_product_slug(product['name'])
-            cursor.execute("UPDATE products SET seo_slug = ? WHERE id = ?", (slug, product_id))
-            updated_count += 1
-        conn.commit()
-        print(f"Successfully backfilled {updated_count} product SEO slugs.")
-    else:
-        print("All products already have SEO slugs.")
+    print("Repairing and backfilling product slugs and tokens...")
+    repaired_count = repair_product_data(cursor)
+    conn.commit()
+    print(f"Successfully processed and repaired {repaired_count} products.")
     
     print("Creating unique indexes...")
     try:

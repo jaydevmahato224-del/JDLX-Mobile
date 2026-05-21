@@ -14,6 +14,7 @@ import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import { isStickerProduct } from '../../utils/stickerCustomization'
+import { getProductUrl } from '../../utils/productSlug'
 
 const LOW_STOCK_LIMIT = 2
 
@@ -160,7 +161,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
   return (
     <article className="gpu-accelerated group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 hover:border-primary/20">
-      <div onClick={() => navigate(`/product/${product.id}`)} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
+      <div onClick={() => navigate(getProductUrl(product))} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-1 md:gap-2">
           {outOfStock ? (
@@ -425,7 +426,7 @@ export default function Home() {
       image: getProductImage(p),
       badge_text: "Featured",
       gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-      link_url: `/product/${p.id}`,
+      link_url: getProductUrl(p),
       type: 'product'
     }));
     return [...apiBanners, ...productBanners];
@@ -734,7 +735,10 @@ export default function Home() {
                  if (offer.applicable_on === 'category' && offer.applicable_ids?.length) {
                     navigate('/?category_id=' + offer.applicable_ids[0]);
                  } else if (offer.applicable_on === 'product' && offer.applicable_ids?.length) {
-                    navigate('/product/' + offer.applicable_ids[0]);
+                    // Find product in our list to get its share_token for a secure URL
+                    const p = products.find(prod => String(prod.id) === String(offer.applicable_ids[0]));
+                    if (p) navigate(getProductUrl(p));
+                    else navigate('/product/' + offer.applicable_ids[0]); // Fallback will redirect securely in ProductDetails
                  } else {
                     navigate('/search?q=offers');
                  }

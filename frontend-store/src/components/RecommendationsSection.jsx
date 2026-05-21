@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import { useStore } from '../store/useStore';
 import { isStickerProduct } from '../utils/stickerCustomization';
 
+import { getProductUrl } from '../utils/productSlug';
+
 function extractFirstMediaUrl(value) {
   if (!value) {
     return null;
@@ -76,7 +78,7 @@ const RecommendedCard = memo(({ product, onAddToCart }) => {
   return (
     <div className="perf-card flex-shrink-0 w-[280px] group relative glass-luxury rounded-[32px] overflow-hidden border-white/40 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
       <div className="relative aspect-[4/5] overflow-hidden">
-        <Link to={`/product/${product.id}`} className="block h-full w-full">
+        <Link to={getProductUrl(product)} className="block h-full w-full">
           <BlurImage
             src={resolvedUrl}
             alt={product.name}
@@ -100,7 +102,7 @@ const RecommendedCard = memo(({ product, onAddToCart }) => {
           onClick={() => {
             if (isStickerProduct(product)) {
               toast('Select your device model on the product page');
-              navigate(`/product/${product.id}`);
+              navigate(getProductUrl(product));
               return;
             }
             onAddToCart(product);

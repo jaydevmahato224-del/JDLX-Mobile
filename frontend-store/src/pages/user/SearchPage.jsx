@@ -13,6 +13,7 @@ import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import { isStickerProduct } from '../../utils/stickerCustomization'
+import { getProductUrl } from '../../utils/productSlug'
 
 const LOW_STOCK_LIMIT = 2
 
@@ -62,7 +63,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
   return (
     <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-xl hover:-translate-y-1.5 hover:border-primary/20">
-      <div onClick={() => window.location.href=`/product/${product.id}`} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
+      <div onClick={() => navigate(getProductUrl(product))} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">
           {outOfStock ? (
@@ -155,7 +156,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
                 e.stopPropagation();
                 if (isStickerProduct(product)) {
                   toast('Select device on product page');
-                  navigate(`/product/${product.id}`);
+                  navigate(getProductUrl(product));
                   return;
                 }
                 onAddToCart(product);

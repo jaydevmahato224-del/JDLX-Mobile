@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Search, Loader2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../config'
+import { getProductUrl } from '../utils/productSlug'
 
 function SearchBar() {
     const [query, setQuery] = useState('')
@@ -78,7 +79,7 @@ function SearchBar() {
         setQuery('')
         setIsOpen(false)
         setSuggestions([])
-        navigate(`/product/${product.id}`)
+        navigate(getProductUrl(product))
     }
 
     const clearSearch = () => {

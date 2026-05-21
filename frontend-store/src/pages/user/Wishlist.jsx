@@ -5,6 +5,7 @@ import { useStore } from '../../store/useStore'
 import BlurImage from '../../components/BlurImage'
 import { resolveMediaUrl } from '../../config'
 import toast from 'react-hot-toast'
+import { getProductUrl } from '../../utils/productSlug'
 
 export default function Wishlist() {
     const navigate = useNavigate();
@@ -98,7 +99,7 @@ export default function Wishlist() {
                         return (
                             <div key={product.id} className="glass-card group overflow-hidden flex flex-col md:flex-row items-center gap-6 p-4 md:p-6 hover:border-primary/20 transition-all duration-300">
                                 {/* Product Image */}
-                                <Link to={`/product/${product.id}`} className="relative w-full md:w-32 aspect-square rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0">
+                                <Link to={getProductUrl(product)} className="relative w-full md:w-32 aspect-square rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0">
                                     <BlurImage 
                                         src={getProductImage(product)}
                                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -115,7 +116,7 @@ export default function Wishlist() {
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                                         <div>
                                             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{product.category}</div>
-                                            <Link to={`/product/${product.id}`} className="text-lg font-black text-slate-900 hover:text-primary transition-colors line-clamp-1">{product.name}</Link>
+                                            <Link to={getProductUrl(product)} className="text-lg font-black text-slate-900 hover:text-primary transition-colors line-clamp-1">{product.name}</Link>
                                             
                                             {product.average_rating > 0 && (
                                                 <div className="mt-1 flex items-center justify-center md:justify-start gap-1.5">
@@ -159,7 +160,7 @@ export default function Wishlist() {
                                         <Trash2 size={20} />
                                     </button>
                                     <Link 
-                                        to={`/product/${product.id}`}
+                                        to={getProductUrl(product)}
                                         className="flex-1 md:flex-none btn-primary h-12 px-10 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
                                     >
                                         <Eye size={18} />

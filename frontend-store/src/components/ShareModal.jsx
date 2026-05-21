@@ -1,26 +1,13 @@
 import React, { useMemo } from 'react';
-import { X, Copy, MessageCircle, Send, Facebook, Twitter, Link as LinkIcon } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { X, MessageCircle, Send, Facebook, Twitter, Link as LinkIcon } from 'lucide-react';
+import { getProductUrl } from '../utils/productSlug';
 
 const ShareModal = ({ isOpen, onClose, product, url }) => {
   const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? window.location.origin 
     : 'https://jdlxmobile.in', []);
 
-  const internalShareUrl = useMemo(() => {
-    if (!product) return '';
-    if (product.share_token) {
-      // Create a clean slug from the product name
-      const slug = product.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '') || 'product';
-      
-      return `${origin}/p/${slug}-${product.share_token}`;
-    }
-    // Fallback only if share_token is missing
-    return `${origin}/product/${product.id}`;
-  }, [product, origin]);
+  const internalShareUrl = useMemo(() => getProductUrl(product, origin), [product, origin]);
 
   const shareUrl = url || internalShareUrl;
     
@@ -58,16 +45,6 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
 
   if (!isOpen || !product) return null;
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Link copied to clipboard!');
-      onClose();
-    } catch (err) {
-      toast.error('Failed to copy link');
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-6">
       {/* Backdrop */}
@@ -97,7 +74,7 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
         </div>
 
         <div className="p-8">
-          <div className="grid grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-4 gap-4">
             {shareOptions.map((option) => (
               <a
                 key={option.name}
@@ -116,21 +93,6 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
               </a>
             ))}
           </div>
-
-          <div className="space-y-4">
-            <div className="ui-label text-slate-400 mb-2">Direct Link</div>
-            <div 
-              onClick={handleCopyLink}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100 cursor-pointer hover:bg-slate-100 active:scale-[0.98] transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"
-            >
-              <div className="truncate text-xs font-bold text-slate-500 flex-1 group-hover:text-slate-900 transition-colors">
-                {shareUrl}
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg group-active:bg-slate-800 transition-colors">
-                <Copy size={14} className="group-hover:rotate-12 transition-transform" /> Copy
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="p-6 bg-slate-50 border-t border-slate-100 text-center">
@@ -144,3 +106,4 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
 };
 
 export default ShareModal;
+

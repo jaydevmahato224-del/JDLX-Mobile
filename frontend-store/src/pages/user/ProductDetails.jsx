@@ -12,6 +12,8 @@ import ShareModal from '../../components/ShareModal';
 import DeviceModelSelector from '../../components/DeviceModelSelector';
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization';
 
+import { getProductUrl } from '../../utils/productSlug';
+
 const LOW_STOCK_LIMIT = 2;
 const FALLBACK_IMAGE = 'https://placehold.co/800x800/f8fafc/0f172a?text=JDLX';
 
@@ -74,6 +76,14 @@ export default function ProductDetails() {
     }
     return null;
   }, [id, resolvedToken, products, tokenProduct]);
+
+  // TASK 5: Redirect from /product/:id to secure slug route
+  useEffect(() => {
+    if (id && product && !loadingToken) {
+      const secureUrl = getProductUrl(product);
+      navigate(secureUrl, { replace: true });
+    }
+  }, [id, product, loadingToken, navigate]);
 
   // If we have a token but product is not in local list, fetch it directly
   useEffect(() => {
@@ -169,20 +179,7 @@ export default function ProductDetails() {
     ? window.location.origin 
     : 'https://jdlxmobile.in', []);
 
-  const shareUrl = useMemo(() => {
-    if (!product) return origin;
-    if (product.share_token) {
-      // Create a clean slug from the product name
-      const slug = product.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '') || 'product';
-      
-      return `${origin}/p/${slug}-${product.share_token}`;
-    }
-    // Fallback only if share_token is missing (should not happen with new products)
-    return product.id ? `${origin}/product/${product.id}` : origin;
-  }, [product, origin]);
+  const shareUrl = useMemo(() => getProductUrl(product, origin), [product, origin]);
 
   const handleShare = useCallback(async () => {
     if (!product) return;
@@ -448,7 +445,7 @@ function ProductRecommendationScroller({ currentProduct, allProducts }) {
     <div className="mt-20 border-t border-slate-100 pt-16">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10"><div><span className="ui-label text-primary mb-3 block">From the same aisle</span><h2 className="text-3xl font-black tracking-tighter">You May Also Like</h2></div><Link to="/" className="text-sm font-bold text-primary flex items-center gap-2 group">View Collection <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" /></Link></div>
       <div className="flex gap-6 overflow-x-auto pb-8 no-scrollbar reveal-staggered">
-        {recommendations.map(p => (<Link key={p.id} to={`/product/${p.id}`} className="flex-shrink-0 w-64 glass-card rounded-[32px] overflow-hidden group hover:-translate-y-2 transition-all duration-500"><div className="aspect-square bg-slate-50 overflow-hidden"><img src={getProductImages(p)[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div><div className="p-6"><h4 className="font-bold text-slate-900 truncate mb-1">{p.name}</h4><div className="text-lg font-black text-primary">₹{p.price}</div></div></Link>))}
+        {recommendations.map(p => (<Link key={p.id} to={getProductUrl(p)} className="flex-shrink-0 w-64 glass-card rounded-[32px] overflow-hidden group hover:-translate-y-2 transition-all duration-500"><div className="aspect-square bg-slate-50 overflow-hidden"><img src={getProductImages(p)[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div><div className="p-6"><h4 className="font-bold text-slate-900 truncate mb-1">{p.name}</h4><div className="text-lg font-black text-primary">₹{p.price}</div></div></Link>))}
       </div>
     </div>
   );

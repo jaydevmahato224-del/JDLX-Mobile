@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
 import PageLoader from '../../components/PageLoader';
+import { getProductUrl } from '../../utils/productSlug';
 
 /**
  * ShareRedirect handles incoming short URLs (/s/:token).
@@ -20,8 +21,7 @@ const ShareRedirect = () => {
         
         const product = await response.json();
         // Redirect to the actual product page using the secure token format
-        const slug = product.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
-        navigate(`/p/${slug}-${product.share_token || token}`, { replace: true });
+        navigate(getProductUrl(product), { replace: true });
       } catch (err) {
         console.error('Failed to resolve share token:', err);
         setError(true);

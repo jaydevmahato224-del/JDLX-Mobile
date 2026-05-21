@@ -90,6 +90,7 @@ from recovery.recovery_service import (
 from utils.response_utils import success_response, error_response
 from utils.product_optimizer import optimizer
 from utils.token_gen import generate_share_token
+from utils.slug_gen import generate_product_slug
 from services.health_monitor import get_system_health_metrics
 from services.auto_healer import trigger_system_scan
 
@@ -2225,16 +2226,31 @@ def get_recommendations():
 
 @app.route('/api/products/s/<token>', methods=['GET'])
 def get_product_by_token(token):
-    """Retrieves detailed information for a single product by its secure share token."""
+    """Retrieves detailed information for a single product by its secure share token or SEO slug."""
     try:
         conn = get_db()
         cursor = conn.cursor()
+
+        # 1. Try exact share_token lookup
         cursor.execute("SELECT id FROM products WHERE share_token = ?", (token,))
         row = cursor.fetchone()
+
+        # 2. Try exact seo_slug lookup
+        if not row:
+            cursor.execute("SELECT id FROM products WHERE seo_slug = ?", (token,))
+            row = cursor.fetchone()
+
+        # 3. Try parsing slug-token format (e.g. name-slug-TOKEN)
+        if not row and '-' in token:
+            parts = token.split('-')
+            potential_token = parts[-1]
+            cursor.execute("SELECT id FROM products WHERE share_token = ?", (potential_token,))
+            row = cursor.fetchone()
+
         if not row:
             conn.close()
             return error_response("Product not found", 404)
-        
+
         product_id = row['id']
         conn.close()
         return get_product(product_id)
@@ -4483,9 +4499,10 @@ def admin_add_product():
         conn = get_db()
         cursor = conn.cursor()
         share_token = generate_share_token()
+        seo_slug = generate_product_slug(name)
         cursor.execute(
-            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token)
+            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug)
         )
         product_id = cursor.lastrowid
         conn.commit()
@@ -4520,6 +4537,9 @@ def admin_update_product(product_id):
             if key in data:
                 updates.append(f"{key}=?")
                 params.append(data[key])
+                if key == 'name':
+                    updates.append("seo_slug=?")
+                    params.append(generate_product_slug(data['name']))
         
         if not updates:
             return success_response(None, "No updates provided", 400)

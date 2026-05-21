@@ -58,10 +58,16 @@ export default function ProductDetails() {
     const rawToken = token || slugToken;
     if (!rawToken) return null;
     
+    console.log('[DEBUG] Incoming Slug/Token:', rawToken);
+    
     // Handle slugified tokens by taking the last part after the last dash
+    // Backend also handles this now, but we do it here for local lookup
     if (rawToken.includes('-')) {
       const parts = rawToken.split('-');
-      return parts[parts.length - 1];
+      const potentialToken = parts[parts.length - 1];
+      // If the last part looks like a share_token (length >= 8), return it
+      // Otherwise return the whole thing as a possible seo_slug
+      return potentialToken.length >= 8 ? potentialToken : rawToken;
     }
     return rawToken;
   }, [token, slugToken]);
@@ -71,11 +77,21 @@ export default function ProductDetails() {
   const product = useMemo(() => {
     if (id) return products.find((p) => String(p.id) === String(id));
     if (resolvedToken) {
-      const p = products.find((p) => p.share_token === resolvedToken);
+      // 1. Match by share_token
+      let p = products.find((p) => p.share_token === resolvedToken);
+      // 2. Match by seo_slug
+      if (!p) p = products.find((p) => p.seo_slug === resolvedToken);
+      // 3. Match by full slugToken if different
+      const rawToken = token || slugToken;
+      if (!p && rawToken && rawToken !== resolvedToken) {
+         p = products.find((p) => p.seo_slug === rawToken);
+      }
+      
+      if (p) console.log('[DEBUG] Matched product ID:', p.id);
       return p || tokenProduct;
     }
     return null;
-  }, [id, resolvedToken, products, tokenProduct]);
+  }, [id, resolvedToken, token, slugToken, products, tokenProduct]);
 
   // TASK 5: Redirect from /product/:id to secure slug route
   // Aggressive replacement to ensure browser bar updates instantly
@@ -91,20 +107,25 @@ export default function ProductDetails() {
 
   // If we have a token but product is not in local list, fetch it directly
   useEffect(() => {
-    if (!resolvedToken || product) {
+    const rawToken = token || slugToken;
+    if (!rawToken || product) {
       if (product) setLoadingToken(false);
       return;
     }
 
     setLoadingToken(true);
-    fetch(`${API_BASE_URL}/products/s/${resolvedToken}`)
+    // Try resolving with the raw token (whole slug) - backend handles the split logic
+    fetch(`${API_BASE_URL}/products/s/${rawToken}`)
       .then(r => r.json())
       .then(p => {
-        if (p.id) setTokenProduct(p);
+        if (p.id) {
+          console.log('[DEBUG] Remote matched product ID:', p.id);
+          setTokenProduct(p);
+        }
       })
       .catch(e => console.error('Token resolution failed:', e))
       .finally(() => setLoadingToken(false));
-  }, [resolvedToken, product]);
+  }, [token, slugToken, product]);
 
   const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(product?.id)), [cart, product?.id]);
   const quantity = Number(cartItem?.qty || 0);

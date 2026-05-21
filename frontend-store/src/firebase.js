@@ -16,14 +16,33 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
 
+/**
+ * Converts a base64 string to a Uint8Array.
+ * Necessary for VAPID key conversion in some browser environments.
+ */
+function urlBase64ToUint8Array(base64String) {
+  if (!base64String || base64String.includes('YOUR_')) return null;
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export const requestForToken = async () => {
   if (!messaging) return null;
   
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
+      const vapidKey = 'YOUR_VAPID_KEY'; // Replace with your Public VAPID Key from Firebase Console
+      const convertedVapidKey = urlBase64ToUint8Array(vapidKey);
+      
       const currentToken = await getToken(messaging, {
-        vapidKey: 'YOUR_VAPID_KEY' // Replace with your Public VAPID Key from Firebase Console
+        vapidKey: convertedVapidKey || vapidKey 
       });
       if (currentToken) {
         return currentToken;

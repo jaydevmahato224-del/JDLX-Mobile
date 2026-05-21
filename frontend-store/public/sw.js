@@ -27,21 +27,29 @@ self.addEventListener('fetch', (event) => {
     }
 
     const requestUrl = new URL(event.request.url);
+    
+    // Bypass service worker for API calls
+    if (requestUrl.pathname.startsWith('/api/') || requestUrl.host.includes('onrender.com')) {
+        return;
+    }
+
     const acceptHeader = event.request.headers.get('accept') || '';
     const isNavigationRequest =
-        event.request.mode === 'navigate' || acceptHeader.includes('text/html');
+        event.request.mode === 'navigate' || 
+        (event.request.method === 'GET' && acceptHeader.includes('text/html'));
 
     if (isNavigationRequest) {
         event.respondWith(
             fetch(event.request)
                 .then((response) => {
-                    if (response.ok) {
+                    if (response && response.ok) {
                         const responseClone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => {
                             cache.put('/index.html', responseClone);
                         });
+                        return response;
                     }
-                    return response;
+                    return caches.match('/index.html');
                 })
                 .catch(() => caches.match('/index.html'))
         );
@@ -56,14 +64,15 @@ self.addEventListener('fetch', (event) => {
         caches.match(event.request).then((cachedResponse) => {
             const networkResponse = fetch(event.request)
                 .then((response) => {
-                    if (response.ok) {
+                    if (response && response.ok) {
                         const responseClone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => {
                             cache.put(event.request, responseClone);
                         });
                     }
                     return response;
-                });
+                })
+                .catch(() => cachedResponse); // Fallback to cache on network failure
 
             return cachedResponse || networkResponse;
         })

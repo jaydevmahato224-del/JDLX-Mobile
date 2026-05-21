@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database import init_db, get_db
 from utils.token_gen import generate_share_token
+from utils.slug_gen import generate_product_slug
 
 def backfill_share_tokens():
     print("Initializing database...")
@@ -15,43 +16,59 @@ def backfill_share_tokens():
     conn = get_db()
     cursor = conn.cursor()
     
+    # 1. Backfill share_token
     print("Fetching products without share tokens...")
-    cursor.execute("SELECT id, name FROM products WHERE share_token IS NULL")
+    cursor.execute("SELECT id, name FROM products WHERE share_token IS NULL OR share_token = ''")
     products = cursor.fetchall()
     
-    if not products:
+    if products:
+        print(f"Generating tokens for {len(products)} products...")
+        updated_count = 0
+        for product in products:
+            product_id = product['id']
+            token = generate_share_token()
+            
+            # Ensure uniqueness
+            attempts = 0
+            while attempts < 10:
+                try:
+                    cursor.execute("UPDATE products SET share_token = ? WHERE id = ?", (token, product_id))
+                    conn.commit()
+                    updated_count += 1
+                    break
+                except sqlite3.IntegrityError:
+                    token = generate_share_token()
+                    attempts += 1
+        print(f"Successfully backfilled {updated_count} product share tokens.")
+    else:
         print("All products already have share tokens.")
-        conn.close()
-        return
 
-    print(f"Generating tokens for {len(products)} products...")
+    # 2. Backfill seo_slug
+    print("Fetching products without SEO slugs...")
+    cursor.execute("SELECT id, name FROM products WHERE seo_slug IS NULL OR seo_slug = ''")
+    products = cursor.fetchall()
     
-    updated_count = 0
-    for product in products:
-        product_id = product['id']
-        token = generate_share_token()
-        
-        # Ensure uniqueness (though highly unlikely to collide)
-        attempts = 0
-        while attempts < 10:
-            try:
-                cursor.execute("UPDATE products SET share_token = ? WHERE id = ?", (token, product_id))
-                conn.commit()
-                updated_count += 1
-                break
-            except sqlite3.IntegrityError:
-                token = generate_share_token()
-                attempts += 1
+    if products:
+        print(f"Generating SEO slugs for {len(products)} products...")
+        updated_count = 0
+        for product in products:
+            product_id = product['id']
+            slug = generate_product_slug(product['name'])
+            cursor.execute("UPDATE products SET seo_slug = ? WHERE id = ?", (slug, product_id))
+            updated_count += 1
+        conn.commit()
+        print(f"Successfully backfilled {updated_count} product SEO slugs.")
+    else:
+        print("All products already have SEO slugs.")
     
-    print(f"Successfully backfilled {updated_count} product share tokens.")
-    
-    print("Creating unique index on share_token...")
+    print("Creating unique indexes...")
     try:
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_share_token ON products(share_token)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_seo_slug ON products(seo_slug)")
         conn.commit()
-        print("Unique index created successfully.")
+        print("Indexes created successfully.")
     except Exception as e:
-        print(f"Failed to create unique index: {e}")
+        print(f"Failed to create indexes: {e}")
         
     conn.close()
 

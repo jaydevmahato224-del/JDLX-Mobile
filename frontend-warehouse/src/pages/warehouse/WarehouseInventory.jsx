@@ -1976,7 +1976,7 @@ const WarehouseInventory = () => {
                                             </p>
                                         </div>
                                     </div>
-                                    o
+                                
                                     <div className="pt-6 border-t border-white/5">
                                         <div className="flex items-center gap-3 mb-4">
                                             <RefreshCw size={14} className="text-amber-500" />

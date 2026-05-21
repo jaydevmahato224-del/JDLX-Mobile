@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, RefreshCw, Heart as HeartIcon, Zap, Clock } from 'lucide-react'
 import { useStore } from '../store/useStore'
@@ -13,15 +13,14 @@ import Footer from './Footer'
 function Layout({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const cart = useStore((state) => state.cart)
-  const wishlist = useStore((state) => state.wishlist)
+  
+  const cartItemCount = useStore((state) => 
+    state.cart.reduce((acc, item) => acc + Number(item.qty || 0), 0))
+  const wishlistCount = useStore((state) => state.wishlist.length)
   const user = useStore((state) => state.user)
   const theme = useStore((state) => state.theme)
   const deliveryMode = useStore((state) => state.deliveryMode)
-
   const isCheckingLocation = useStore((state) => state.isCheckingLocation)
-
-  const cartItemCount = useMemo(() => cart.reduce((acc, item) => acc + Number(item.qty || 0), 0), [cart])
 
   const [tickerText, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
   const [loadingSettings, setLoadingSettings] = useState(true)
@@ -68,6 +67,7 @@ function Layout({ children }) {
                       src="/logo192.png" 
                       alt="JDLX Logo" 
                       className="h-8 w-8 object-contain transition-all group-hover:scale-110" 
+                      fetchpriority="high"
                     />
                   </Link>
                   
@@ -120,10 +120,10 @@ function Layout({ children }) {
                 className="relative h-10 w-10 flex items-center justify-center rounded-full hover:bg-[var(--color-surface-low)] transition-all active:scale-90"
                 aria-label="Wishlist"
               >
-                <HeartIcon size={20} className={wishlist.length > 0 ? "text-red-500" : "text-[var(--color-on-surface-variant)]"} fill={wishlist.length > 0 ? "currentColor" : "none"} />
-                {wishlist.length > 0 && (
+                <HeartIcon size={20} className={wishlistCount > 0 ? "text-red-500" : "text-[var(--color-on-surface-variant)]"} fill={wishlistCount > 0 ? "currentColor" : "none"} />
+                {wishlistCount > 0 && (
                   <span className="absolute top-1.5 right-1.5 h-4 min-w-[16px] px-1 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                    {wishlist.length}
+                    {wishlistCount}
                   </span>
                 )}
               </Link>

@@ -5,10 +5,10 @@
  * On error, shows a premium dark-background text fallback instead of a broken icon.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import './BlurImage.css'
 
-function BlurImageInner({ src, alt, className = '', containerClassName = '', onLoad, ...props }) {
+const BlurImageInner = memo(({ src, alt, className = '', containerClassName = '', onLoad, ...props }) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
   const imgRef = useRef(null)
@@ -97,10 +97,10 @@ function BlurImageInner({ src, alt, className = '', containerClassName = '', onL
       />
     </div>
   )
-}
+})
 
-function BlurImage(props) {
+const BlurImage = memo((props) => {
   return <BlurImageInner key={props.src || 'blur-image'} {...props} />
-}
+})
 
 export default BlurImage

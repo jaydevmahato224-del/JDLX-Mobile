@@ -154,7 +154,15 @@ const LocationManager = () => {
     );
   };
 
+  const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    let timerId = null;
+
     const checkPermissionAndDetect = async () => {
       try {
         if (!navigator.geolocation) return;
@@ -173,18 +181,20 @@ const LocationManager = () => {
         if (permission.state === 'granted') {
           handleGetLocation(true);
         } else if (hasExplicitlyDenied) {
-          if (!bannerShownThisSession) {
+          if (!bannerShownThisSession && mountedRef.current) {
             setShowBanner(true);
             sessionStorage.setItem('location_banner_shown', 'true');
           }
         } else if (!promptShownThisSession) {
-          const timer = setTimeout(() => setShowPrompt(true), 1500);
-          return () => clearTimeout(timer);
+          timerId = setTimeout(() => {
+            if (mountedRef.current) setShowPrompt(true);
+          }, 1500);
         }
       } catch (err) {
         if (!userLocation && !sessionStorage.getItem('location_prompt_shown')) {
-          const timer = setTimeout(() => setShowPrompt(true), 1500);
-          return () => clearTimeout(timer);
+          timerId = setTimeout(() => {
+            if (mountedRef.current) setShowPrompt(true);
+          }, 1500);
         }
       }
     };
@@ -192,10 +202,13 @@ const LocationManager = () => {
     checkPermissionAndDetect();
 
     const interval = setInterval(() => {
-      if (userLocation) handleGetLocation(true);
+      if (userLocation && mountedRef.current) handleGetLocation(true);
     }, 120000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (timerId) clearTimeout(timerId);
+      clearInterval(interval);
+    };
   }, [userLocation]);
 
   return (

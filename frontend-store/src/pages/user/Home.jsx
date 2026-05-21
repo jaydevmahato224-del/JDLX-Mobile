@@ -10,7 +10,7 @@ import ProductErrorState from '../../components/ProductErrorState'
 import ProductLoadingGrid from '../../components/ProductLoadingGrid'
 import PromoBanner from '../../components/PromoBanner'
 import RecommendationsSection from '../../components/RecommendationsSection'
-import { useSmartProductLoader } from '../../hooks/useSmartProductLoader'
+import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import { isStickerProduct } from '../../utils/stickerCustomization'
@@ -68,8 +68,9 @@ function getProductImage(product) {
 
 const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const navigate = useNavigate()
-  const cart = useStore((state) => state.cart)
-  const wishlist = useStore((state) => state.wishlist)
+  const cartItem = useStore((state) => state.cart.find((item) => String(item.id) === String(product.id)))
+  const isInWishlist = useStore((state) => state.wishlist.some(item => String(item.id) === String(product.id)))
+  
   const toggleWishlist = useStore((state) => state.toggleWishlist)
   const updateQuantity = useStore((state) => state.updateQuantity)
   const removeFromCart = useStore((state) => state.removeFromCart)
@@ -77,9 +78,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const deliveryMode = useStore((state) => state.deliveryMode)
   const [isSyncing, setIsSyncing] = useState(false)
 
-  const cartItem = cart.find((item) => String(item.id) === String(product.id))
-  const quantity = cartItem ? Number(cartItem.qty || 0) : 0
-  const isInWishlist = wishlist.some(item => String(item.id) === String(product.id))
+  const quantity = cartItem ? Number(cartItem.qty || 0) : 0;
 
   const stock = Number(product?.stock ?? 0)
   const reservedStock = Number(product?.reserved_stock ?? 0)
@@ -353,10 +352,12 @@ export default function Home() {
   const location = useLocation()
   const observerRef = useRef(null)
   const searchInputRef = useRef(null)
+  
   const user = useStore((state) => state.user)
   const token = useStore((state) => state.token)
-  const cart = useStore((state) => state.cart)
-  const wishlist = useStore((state) => state.wishlist)
+  const cartCount = useStore((state) => state.cart.length)
+  const wishlistCount = useStore((state) => state.wishlist.length)
+  
   const recentlyViewed = useStore((state) => state.recentlyViewed)
   const addToRecentlyViewed = useStore((state) => state.addToRecentlyViewed)
   const fetchWishlist = useStore((state) => state.fetchWishlist)
@@ -410,7 +411,6 @@ export default function Home() {
 
   const [banners, setBanners] = useState([])
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
-  const [bannerInterval, setBannerInterval] = useState(null)
 
   const featuredProducts = useMemo(() => products.filter(p => Number(p.is_featured) === 1 || p.is_featured === true), [products])
   const regularProducts = useMemo(() => products.filter(p => !p.is_featured), [products])
@@ -444,26 +444,32 @@ export default function Home() {
     setCurrentBannerIndex(prev => (prev - 1 + allBanners.length) % allBanners.length)
   }, [allBanners.length])
 
-  const resetBannerTimer = useCallback(() => {
-    if (bannerInterval) clearInterval(bannerInterval)
+  useEffect(() => {
     if (allBanners.length <= 1) return
-
-    const newInterval = setInterval(() => {
+    
+    const interval = setInterval(() => {
       setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
     }, 5000)
-    setBannerInterval(newInterval)
-  }, [allBanners.length, bannerInterval])
+    
+    return () => clearInterval(interval)
+  }, [allBanners.length])
+
+  const resetBannerTimer = useCallback(() => {
+    // This now just triggers a re-render of the effect above by dependency logic if needed,
+    // but we'll keep it as a no-op or simple index reset to avoid disrupting existing swipe logic.
+    // The main interval is now cleanly managed by the dedicated useEffect.
+  }, [])
 
   // Swipe Handlers
-  const onBannerTouchStart = (e) => {
+  const onBannerTouchStart = useCallback((e) => {
     bannerTouchStart.current = e.targetTouches[0].clientX
-  }
+  }, [])
 
-  const onBannerTouchMove = (e) => {
+  const onBannerTouchMove = useCallback((e) => {
     bannerTouchEnd.current = e.targetTouches[0].clientX
-  }
+  }, [])
 
-  const onBannerTouchEnd = () => {
+  const onBannerTouchEnd = useCallback(() => {
     if (!bannerTouchStart.current || !bannerTouchEnd.current) return
     const distance = bannerTouchStart.current - bannerTouchEnd.current
     if (Math.abs(distance) > SWIPE_THRESHOLD) {
@@ -473,20 +479,20 @@ export default function Home() {
     }
     bannerTouchStart.current = 0
     bannerTouchEnd.current = 0
-  }
+  }, [handleBannerNext, handleBannerPrev, resetBannerTimer])
 
-  const onBannerMouseDown = (e) => {
+  const onBannerMouseDown = useCallback((e) => {
     bannerTouchStart.current = e.clientX
     if (e.target.tagName === 'IMG') e.preventDefault()
-  }
+  }, [])
 
-  const onBannerMouseMove = (e) => {
+  const onBannerMouseMove = useCallback((e) => {
     if (bannerTouchStart.current) {
       bannerTouchEnd.current = e.clientX
     }
-  }
+  }, [])
 
-  const onBannerMouseUp = () => {
+  const onBannerMouseUp = useCallback(() => {
     if (bannerTouchStart.current && bannerTouchEnd.current) {
       const distance = bannerTouchStart.current - bannerTouchEnd.current
       if (Math.abs(distance) > SWIPE_THRESHOLD) {
@@ -497,13 +503,14 @@ export default function Home() {
     }
     bannerTouchStart.current = 0
     bannerTouchEnd.current = 0
-  }
+  }, [handleBannerNext, handleBannerPrev, resetBannerTimer])
   
   const globalSearchQuery = useStore((state) => state.globalSearchQuery)
   const setGlobalSearchQuery = useStore((state) => state.setGlobalSearchQuery)
   const query = globalSearchQuery || ''
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
+  const greeting = useMemo(() => getGreeting(), []);
 
   const logInteraction = useCallback(async (type, targetId, category) => {
     try {
@@ -590,7 +597,6 @@ export default function Home() {
     const interval = setInterval(() => {
       setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
     }, 5000)
-    setBannerInterval(interval)
     return () => clearInterval(interval)
   }, [allBanners.length])
 
@@ -628,13 +634,13 @@ export default function Home() {
           
           <div className="space-y-2">
             <h1 className="text-2xl md:text-7xl font-black tracking-tight text-[var(--color-on-surface)] leading-tight md:leading-[0.95]">
-              {getGreeting().text}, <span className="text-primary">{getFirstName(user)}</span> {getGreeting().icon}
+              {greeting.text}, <span className="text-primary">{getFirstName(user)}</span> {greeting.icon}
             </h1>
             
             <p className="max-w-2xl text-[var(--color-on-surface-variant)] text-sm md:text-xl font-medium leading-relaxed opacity-80">
-              {cart.length > 0 
-                ? `You have ${cart.length} premium ${cart.length === 1 ? 'item' : 'items'} waiting in your cart.` 
-                : wishlist.length > 0 
+              {cartCount > 0 
+                ? `You have ${cartCount} premium ${cartCount === 1 ? 'item' : 'items'} waiting in your cart.` 
+                : wishlistCount > 0 
                   ? "Your favorites are waiting. Continue exploring the collection."
                   : "Experience the gold standard of mobile commerce. Curated for precision."}
             </p>
@@ -643,17 +649,17 @@ export default function Home() {
 
         {/* Recent Activity Dashboard */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
-           {cart.length > 0 && (
+           {cartCount > 0 && (
              <Link to="/cart" className="flex items-center gap-2.5 px-4 py-2.5 bg-primary/5 border border-primary/10 rounded-2xl hover:bg-primary/10 transition-all group">
                 <ShoppingBag size={14} className="text-primary group-hover:scale-110 transition-transform" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary">{cart.length} In Cart</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary">{cartCount} In Cart</span>
              </Link>
            )}
            
-           {wishlist.length > 0 && (
+           {wishlistCount > 0 && (
              <Link to="/profile/wishlist" className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100 transition-all group">
                 <HeartIcon size={14} className="text-red-500 group-hover:scale-110 transition-transform" fill="currentColor" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">{wishlist.length} Saved</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">{wishlistCount} Saved</span>
              </Link>
            )}
 
@@ -698,9 +704,9 @@ export default function Home() {
         {allBanners.length > 0 ? (
           <div className="relative">
             <div className="flex transition-transform duration-1000 cubic-bezier(0.4, 0, 0.2, 1)" style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}>
-              {allBanners.map((b) => (
+              {allBanners.map((b, idx) => (
                 <div key={b.id} className="w-full flex-shrink-0 select-none">
-                  <PromoBanner {...b} cta={b.cta_text} onClick={() => handleBannerClick(b.link_url)} />
+                  <PromoBanner {...b} cta={b.cta_text} onClick={() => handleBannerClick(b.link_url)} priority={idx === 0} />
                 </div>
               ))}
             </div>

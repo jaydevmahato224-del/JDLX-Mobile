@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { ChevronRight, Zap } from 'lucide-react';
 
-const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, badge, badge_text, gradient, overlay_opacity = 0.5, onClick }) {
+const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, badge, badge_text, gradient, overlay_opacity = 0.5, onClick, priority = false }) {
   const displayBadge = badge || badge_text;
 
   return (
@@ -16,6 +16,9 @@ const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, bad
             src={image} 
             alt={title} 
             className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-[2000ms]" 
+            decoding="async"
+            loading={priority ? "eager" : "lazy"}
+            fetchpriority={priority ? "high" : "auto"}
           />
           <div className="absolute inset-0" style={{ background: `linear-gradient(to right, rgba(0,0,0,${overlay_opacity + 0.2}), rgba(0,0,0,${overlay_opacity / 2}))` }} />
         </div>

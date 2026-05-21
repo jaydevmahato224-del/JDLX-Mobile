@@ -211,15 +211,12 @@ body::before {
   border-color: var(--glass-stroke);
 }
 
-.card-standard, .ui-card-standard {
-  background: var(--color-surface-card); 
-  backdrop-filter: blur(28px);
-  border: 1.5px solid var(--color-surface-high); 
-  border-radius: 28px;
-  transition: all var(--transition-speed) var(--transition-cubic); 
-  overflow: hidden;
+@media (hover: hover) {
+  .card-standard:hover, .ui-card-standard:hover { 
+    transform: translateY(-8px) scale(1.02); 
+    border-color: var(--color-primary); 
+  }
 }
-.card-standard:hover { transform: translateY(-8px) scale(1.02); border-color: var(--color-primary); }
 
 .glass-card, .card-glass { 
   background: var(--glass-bg); 
@@ -241,10 +238,13 @@ body::before {
   background-color: var(--color-primary);
   color: var(--color-on-primary);
 }
-.btn-primary:hover {
-  background-color: var(--color-primary-dark);
-  color: var(--color-on-primary);
-  transform: translateY(-2px);
+
+@media (hover: hover) {
+  .btn-primary:hover {
+    background-color: var(--color-primary-dark);
+    color: var(--color-on-primary);
+    transform: translateY(-2px);
+  }
 }
 
 .category-chip { 
@@ -287,12 +287,46 @@ body::before {
   background: linear-gradient(135deg, #121212 0%, #1a1a1a 100%); 
 }
 .product-card-stitch { 
-  @apply rounded-2xl overflow-hidden shadow-sm transition-all hover:-translate-y-1 hover:shadow-md; 
+  @apply rounded-2xl overflow-hidden shadow-sm transition-all; 
   background: var(--color-surface-card);
 }
 
+@media (hover: hover) {
+  .product-card-stitch:hover {
+    @apply -translate-y-1 shadow-md;
+  }
+}
+
 /* ------------------------------------------------------------------------------
-   5. ANIMATIONS & EFFECTS
+   5. RESPONSIVE HOVER SYSTEM
+   ------------------------------------------------------------------------------ */
+/* Prevent "sticky hover" on touch devices by only allowing hover effects 
+   when a primary pointing device (like a mouse) is present. */
+@media (hover: none) {
+  [class*="hover:"]:hover,
+  [class*="group-hover:"]:hover {
+    transition: none !important;
+    transform: none !important;
+  }
+  
+  /* Preserve active/tap states specifically */
+  [class*="active:"]:active {
+    transition: transform 0.1s ease-out !important;
+  }
+}
+
+/* Optimization for mobile tap delay and scroll performance */
+@media (max-width: 1024px) {
+  button, 
+  a, 
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ------------------------------------------------------------------------------
+   6. ANIMATIONS & EFFECTS
    ------------------------------------------------------------------------------ */
 @keyframes float-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }

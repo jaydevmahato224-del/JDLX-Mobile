@@ -202,7 +202,12 @@ function OperationalRedirect() {
 }
 
 function App() {
-  const { token, fetchCart, fetchWishlist, fetchProducts, fetchBanners } = useStore()
+  const token = useStore((state) => state.token)
+  const fetchCart = useStore((state) => state.fetchCart)
+  const fetchWishlist = useStore((state) => state.fetchWishlist)
+  const fetchProducts = useStore((state) => state.fetchProducts)
+  const fetchBanners = useStore((state) => state.fetchBanners)
+  
   const [showSplash, setShowSplash] = useState(() => {
     // Show splash only if:
     // 1. App is running in standalone (PWA) mode

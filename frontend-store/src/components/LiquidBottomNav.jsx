@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Search, ShoppingBag, User } from 'lucide-react';
 import { useStore } from '../store/useStore';
@@ -23,14 +23,14 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
     { id: 'profile', to: user ? '/profile' : '/login', icon: User, label: user ? 'Account' : 'Login' },
   ], [cartItemCount, user]);
 
-  const isActive = (path) => {
+  const isActive = useCallback((path) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
-  };
+  }, [location.pathname]);
 
-  const activeIndex = navItems.findIndex(item => isActive(item.to));
+  const activeIndex = useMemo(() => navItems.findIndex(item => isActive(item.to)), [navItems, isActive]);
   const showHighlight = activeIndex !== -1 && !isSearching;
-  const itemWidthPercent = 100 / navItems.length;
+  const itemWidthPercent = useMemo(() => 100 / navItems.length, [navItems.length]);
 
   useEffect(() => {
     if (location.pathname !== '/' && location.pathname !== '/search' && isSearching) {

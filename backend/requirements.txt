@@ -6,7 +6,7 @@ requests
 python-dotenv
 flask-limiter
 flask-talisman
-flask-cachingiskoye 
+flask-caching
 APScheduler
 razorpay
 Authlib

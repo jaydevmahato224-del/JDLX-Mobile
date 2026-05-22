@@ -38,7 +38,7 @@ from google.auth.transport import requests as google_requests
 # Local imports
 from database import get_db as _db_get_db
 from utils.response_utils import success_response, error_response
-from utils.token_gen import generate_share_token
+from utils.product_url_utils import generate_share_token
 from notifier import (
     send_warehouse_application_email, 
     send_warehouse_registration_confirmation_email,

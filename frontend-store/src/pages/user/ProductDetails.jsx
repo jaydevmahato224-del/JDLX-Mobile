@@ -13,6 +13,7 @@ import DeviceModelSelector from '../../components/DeviceModelSelector';
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization';
 
 import { getProductUrl } from '../../utils/productSlug';
+import { useAnalyticsContext } from '../../context/AnalyticsContext';
 
 const LOW_STOCK_LIMIT = 2;
 const FALLBACK_IMAGE = 'https://placehold.co/800x800/f8fafc/0f172a?text=JDLX';
@@ -40,6 +41,7 @@ export default function ProductDetails() {
   const { id, token, slugToken } = useParams();
   const navigate = useNavigate();
   const { products: storeProducts, fetchProducts, addToCart, cart, wishlist, toggleWishlist, updateQuantity, removeFromCart, deliveryMode, nearestStoreId, user, registerForNotification } = useStore();
+  const { trackEvent } = useAnalyticsContext();
   
   const [remoteProducts, setRemoteProducts] = useState([]);
   const [tokenProduct, setTokenProduct] = useState(null);
@@ -182,8 +184,9 @@ export default function ProductDetails() {
   useEffect(() => {
     if (product) {
       trackViewItem(product);
+      trackEvent('page_view', 'product', product.name, product.id);
     }
-  }, [product]);
+  }, [product, trackEvent]);
 
   const stock = product?.stock || 0;
   const rating = product?.average_rating || 0;
@@ -209,6 +212,7 @@ export default function ProductDetails() {
     }
     addToCart({ ...product, device_model: selectedDeviceModel || null, fitting });
     trackAddToCart(product, 1);
+    trackEvent('add_to_cart', 'product', product.name, product.id);
     if (toCart) navigate('/cart');
     else toast.success('Added to collection');
   }, [addToCart, deviceModel, fitting, navigate, product, requiresDeviceModel]);

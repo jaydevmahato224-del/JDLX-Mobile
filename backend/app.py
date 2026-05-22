@@ -58,6 +58,7 @@ from refund_routes import refund_bp
 from bug_routes import bug_bp
 from issue_routes import issue_bp
 from offer_routes import offer_bp
+from analytics_routes import analytics_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location
@@ -242,6 +243,7 @@ app.register_blueprint(refund_bp)
 app.register_blueprint(bug_bp)
 app.register_blueprint(issue_bp)
 app.register_blueprint(offer_bp)
+app.register_blueprint(analytics_bp)
 
 
 # ==============================================================================

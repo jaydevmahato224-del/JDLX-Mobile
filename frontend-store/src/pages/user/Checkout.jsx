@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { trackBeginCheckout, trackPurchase } from '../../utils/analytics'
+import { useAnalyticsContext } from '../../context/AnalyticsContext'
 import AddressPicker from '../../components/AddressPicker'
 import { toast } from 'react-hot-toast'
 
@@ -17,6 +18,7 @@ function Checkout() {
     const user = useStore(state => state.user);
     const clearCart = useStore(state => state.clearCart);
     const removeFromCart = useStore(state => state.removeFromCart);
+    const { trackEvent } = useAnalyticsContext();
 
     const [formData, setFormData] = useState({
         name: user?.name || '',
@@ -287,6 +289,7 @@ function Checkout() {
 
             // GA4 Purchase Tracking
             trackPurchase(orderId, finalTotal, cart);
+            trackEvent('purchase', 'order', String(orderId), finalTotal);
 
             // Record offer usage if applied
             if (appliedOffer) {

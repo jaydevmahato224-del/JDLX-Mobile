@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2 } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
@@ -14,6 +14,7 @@ function AdminLayout({ children }) {
 
     const navLinks = [
         { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', allowedRoles: ['super_admin', 'admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'] },
+        { path: '/admin/analytics', icon: BarChart2, label: 'Analytics', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-400 font-black tracking-wide' },
         { path: '/admin/offers', icon: BadgePercent, label: 'Offers & Promotions', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-rose-500 font-bold' },
         { path: '/admin/banners', icon: LayoutDashboard, label: 'Banner Manager', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/system-health', icon: Activity, label: 'System Health', allowedRoles: ['super_admin'] },

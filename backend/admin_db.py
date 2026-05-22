@@ -583,3 +583,294 @@ def admin_update_bug_report(report_id):
         return error_response(str(e))
     finally:
         conn.close()
+
+# --- Analytics Dashboard Routes ---
+
+@admin_db_bp.route('/api/admin/analytics/realtime', methods=['GET'])
+@require_admin()
+def get_realtime_analytics():
+    conn = get_db()
+    try:
+        # Get count of sessions where last_seen_at > now - 5 minutes
+        active_users = conn.execute(
+            "SELECT COUNT(*) FROM analytics_sessions WHERE last_seen_at >= datetime('now', '-5 minutes')"
+        ).fetchone()[0]
+
+        # Get list of active pages
+        active_pages = conn.execute("""
+            SELECT page_path, COUNT(*) as count
+            FROM page_views
+            WHERE created_at >= datetime('now', '-5 minutes')
+            GROUP BY page_path ORDER BY count DESC LIMIT 5
+        """).fetchall()
+
+        return success_response({
+            "active_users": active_users,
+            "active_pages": [dict(row) for row in active_pages]
+        })
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/traffic', methods=['GET'])
+@require_admin()
+def get_traffic_analytics():
+    period = request.args.get('period', 'today')
+    conn = get_db()
+    try:
+        if period == 'today':
+            query = """
+                SELECT strftime('%H', created_at) as label,
+                       COUNT(*) as visits,
+                       COUNT(DISTINCT session_id) as unique_visits
+                FROM page_views
+                WHERE created_at >= datetime('now', '-24 hours')
+                GROUP BY label ORDER BY label
+            """
+        elif period == 'week':
+            query = """
+                SELECT date(created_at) as label,
+                       COUNT(*) as visits,
+                       COUNT(DISTINCT session_id) as unique_visits
+                FROM page_views
+                WHERE created_at >= datetime('now', '-7 days')
+                GROUP BY label ORDER BY label
+            """
+        else: # month
+            query = """
+                SELECT date(created_at) as label,
+                       COUNT(*) as visits,
+                       COUNT(DISTINCT session_id) as unique_visits
+                FROM page_views
+                WHERE created_at >= datetime('now', '-30 days')
+                GROUP BY label ORDER BY label
+            """
+
+        rows = conn.execute(query).fetchall()
+        data = {
+            "labels": [row['label'] for row in rows],
+            "visits": [row['visits'] for row in rows],
+            "unique_visits": [row['unique_visits'] for row in rows]
+        }
+        return success_response(data)
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/top-pages', methods=['GET'])
+@require_admin()
+def get_top_pages():
+    conn = get_db()
+    try:
+        query = """
+            SELECT page_path, page_title,
+                   COUNT(*) as views,
+                   COUNT(DISTINCT session_id) as unique_views,
+                   AVG(duration_seconds) as avg_duration
+            FROM page_views
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY page_path
+            ORDER BY views DESC LIMIT 10
+        """
+        rows = conn.execute(query).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/traffic-sources', methods=['GET'])
+@require_admin()
+def get_traffic_sources():
+    conn = get_db()
+    try:
+        query = """
+            SELECT
+                CASE
+                  WHEN utm_source IS NOT NULL AND utm_source != '' THEN utm_source
+                  WHEN referrer LIKE '%google%' THEN 'Google'
+                  WHEN referrer LIKE '%facebook%' THEN 'Facebook'
+                  WHEN referrer LIKE '%instagram%' THEN 'Instagram'
+                  WHEN referrer IS NULL OR referrer = '' THEN 'Direct'
+                  ELSE 'Other'
+                END as source,
+                COUNT(*) as visits
+            FROM page_views
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY source ORDER BY visits DESC
+        """
+        rows = conn.execute(query).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/devices', methods=['GET'])
+@require_admin()
+def get_device_analytics():
+    conn = get_db()
+    try:
+        details = conn.execute("""
+            SELECT device_type, browser, os, COUNT(*) as count
+            FROM page_views
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY device_type, browser, os
+            ORDER BY count DESC
+        """).fetchall()
+
+        summary = conn.execute("""
+            SELECT 
+                SUM(CASE WHEN device_type = 'mobile' THEN 1 ELSE 0 END) as mobile,
+                SUM(CASE WHEN device_type = 'desktop' THEN 1 ELSE 0 END) as desktop,
+                SUM(CASE WHEN device_type = 'tablet' THEN 1 ELSE 0 END) as tablet
+            FROM page_views
+            WHERE created_at >= datetime('now', '-30 days')
+        """).fetchone()
+
+        return success_response({
+            "summary": dict(summary) if summary else {"mobile": 0, "desktop": 0, "tablet": 0},
+            "details": [dict(row) for row in details]
+        })
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/searches', methods=['GET'])
+@require_admin()
+def get_search_analytics():
+    conn = get_db()
+    try:
+        query = """
+            SELECT query, COUNT(*) as count,
+                   AVG(results_count) as avg_results
+            FROM search_queries
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY query ORDER BY count DESC LIMIT 20
+        """
+        rows = conn.execute(query).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/funnel', methods=['GET'])
+@require_admin()
+def get_funnel_analytics():
+    conn = get_db()
+    try:
+        # Step 1 - Total sessions
+        total_sessions = conn.execute(
+            "SELECT COUNT(DISTINCT session_id) FROM analytics_sessions WHERE started_at >= datetime('now', '-30 days')"
+        ).fetchone()[0] or 0
+
+        # Step 2 - Product views
+        product_views = conn.execute("""
+            SELECT COUNT(DISTINCT session_id) FROM page_views
+            WHERE page_path LIKE '/product/%'
+            AND created_at >= datetime('now', '-30 days')
+        """).fetchone()[0] or 0
+
+        # Step 3 - Add to cart
+        add_to_cart = conn.execute("""
+            SELECT COUNT(DISTINCT session_id) FROM analytics_events
+            WHERE event_type = 'add_to_cart'
+            AND created_at >= datetime('now', '-30 days')
+        """).fetchone()[0] or 0
+
+        # Step 4 - Purchase
+        purchase = conn.execute("""
+            SELECT COUNT(DISTINCT session_id) FROM analytics_events
+            WHERE event_type = 'purchase'
+            AND created_at >= datetime('now', '-30 days')
+        """).fetchone()[0] or 0
+
+        steps = [
+            {"name": "Total Sessions", "count": total_sessions, "percentage": 100},
+            {"name": "Product Views", "count": product_views, "percentage": round((product_views / total_sessions * 100), 2) if total_sessions > 0 else 0},
+            {"name": "Add to Cart", "count": add_to_cart, "percentage": round((add_to_cart / total_sessions * 100), 2) if total_sessions > 0 else 0},
+            {"name": "Purchase", "count": purchase, "percentage": round((purchase / total_sessions * 100), 2) if total_sessions > 0 else 0}
+        ]
+
+        return success_response({"steps": steps})
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/user-journeys', methods=['GET'])
+@require_admin()
+def get_user_journeys():
+    conn = get_db()
+    try:
+        query = """
+            SELECT pv1.page_path as from_page,
+                   pv2.page_path as to_page,
+                   COUNT(*) as count
+            FROM page_views pv1
+            JOIN page_views pv2 ON pv1.session_id = pv2.session_id
+              AND pv2.created_at > pv1.created_at
+            WHERE pv1.created_at >= datetime('now', '-30 days')
+            GROUP BY from_page, to_page
+            ORDER BY count DESC LIMIT 10
+        """
+        rows = conn.execute(query).fetchall()
+        return success_response([dict(row) for row in rows])
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+@admin_db_bp.route('/api/admin/analytics/summary', methods=['GET'])
+@require_admin()
+def get_analytics_summary():
+    conn = get_db()
+    try:
+        total_visits_today = conn.execute(
+            "SELECT COUNT(*) FROM page_views WHERE created_at >= date('now')"
+        ).fetchone()[0] or 0
+
+        total_visits_week = conn.execute(
+            "SELECT COUNT(*) FROM page_views WHERE created_at >= datetime('now', '-7 days')"
+        ).fetchone()[0] or 0
+
+        unique_visitors_today = conn.execute(
+            "SELECT COUNT(DISTINCT session_id) FROM page_views WHERE created_at >= date('now')"
+        ).fetchone()[0] or 0
+
+        total_sessions = conn.execute("SELECT COUNT(*) FROM analytics_sessions").fetchone()[0] or 0
+        bounced_sessions = conn.execute("SELECT COUNT(*) FROM analytics_sessions WHERE is_bounce = 1").fetchone()[0] or 0
+        bounce_rate = round((bounced_sessions / total_sessions * 100), 2) if total_sessions > 0 else 0
+
+        avg_session_duration = conn.execute("""
+            SELECT AVG(session_duration) FROM (
+                SELECT session_id, SUM(duration_seconds) as session_duration
+                FROM page_views
+                GROUP BY session_id
+            )
+        """).fetchone()[0] or 0
+
+        top_product_search = conn.execute("""
+            SELECT query FROM search_queries
+            WHERE created_at >= date('now')
+            GROUP BY query ORDER BY COUNT(*) DESC LIMIT 1
+        """).fetchone()
+
+        summary = {
+            "total_visits_today": total_visits_today,
+            "total_visits_week": total_visits_week,
+            "unique_visitors_today": unique_visitors_today,
+            "bounce_rate": bounce_rate,
+            "avg_session_duration": round(avg_session_duration, 2),
+            "top_product_search": top_product_search[0] if top_product_search else None
+        }
+
+        return success_response(summary)
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()

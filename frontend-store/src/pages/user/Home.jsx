@@ -15,6 +15,7 @@ import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import { isStickerProduct } from '../../utils/stickerCustomization'
 import { getProductUrl } from '../../utils/productSlug'
+import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
 const LOW_STOCK_LIMIT = 2
 
@@ -363,6 +364,7 @@ export default function Home() {
   const addToRecentlyViewed = useStore((state) => state.addToRecentlyViewed)
   const fetchWishlist = useStore((state) => state.fetchWishlist)
   const addToCart = useStore((state) => state.addToCart)
+  const { trackEvent } = useAnalyticsContext();
 
   useEffect(() => {
     if (token) {
@@ -395,6 +397,7 @@ export default function Home() {
 
   const handleBannerClick = (url) => {
     if (!url) return;
+    trackEvent('click', 'banner', url);
     let finalUrl = url.trim();
     const isExternal = /^(https?:\/\/)?(www\.)?(youtube\.com|instagram\.com|facebook\.com|twitter\.com|t\.me|googl\.com|linktr\.ee)/i.test(finalUrl);
     
@@ -731,6 +734,7 @@ export default function Home() {
               key={offer.id} 
               className="snap-center shrink-0 w-[280px] h-[120px] rounded-2xl overflow-hidden shadow-lg cursor-pointer bg-slate-100 relative group"
               onClick={() => {
+                 trackEvent('click', 'offer_banner', offer.title);
                  // Determine route based on applicable_on
                  if (offer.applicable_on === 'category' && offer.applicable_ids?.length) {
                     navigate('/?category_id=' + offer.applicable_ids[0]);
@@ -790,6 +794,7 @@ export default function Home() {
               return (
                 <div
                   key={offer.id}
+                  onClick={() => trackEvent('click', 'offer_card', offer.title)}
                   className="snap-center flex-shrink-0 w-[280px] md:w-[320px] rounded-[24px] bg-white border border-slate-100 shadow-lg overflow-hidden hover:shadow-xl transition-all duration-500 hover:-translate-y-1"
                 >
                   {/* Gradient Accent */}

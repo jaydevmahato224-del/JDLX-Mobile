@@ -14,6 +14,7 @@ import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import { isStickerProduct } from '../../utils/stickerCustomization'
 import { getProductUrl } from '../../utils/productSlug'
+import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
 const LOW_STOCK_LIMIT = 2
 
@@ -258,6 +259,7 @@ export default function SearchPage() {
   
   const globalSearchQuery = useStore((state) => state.globalSearchQuery)
   const setGlobalSearchQuery = useStore((state) => state.setGlobalSearchQuery)
+  const { trackEvent, trackSearch } = useAnalyticsContext()
   
   const query = globalSearchQuery || ''
   const setQuery = setGlobalSearchQuery
@@ -290,6 +292,13 @@ export default function SearchPage() {
     }, 400)
     return () => clearTimeout(timer)
   }, [query])
+
+  useEffect(() => {
+    if (debouncedQuery && !initialLoading && hasLoadedOnce) {
+      trackSearch(debouncedQuery, products.length)
+      trackEvent('search', 'product', debouncedQuery, products.length)
+    }
+  }, [debouncedQuery, initialLoading, hasLoadedOnce, products.length, trackSearch, trackEvent])
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/categories`)

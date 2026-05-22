@@ -95,6 +95,7 @@ const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications')
 const AdminReviews = lazy(() => import('./pages/admin/AdminReviews'))
 const AdminDeviceModels = lazy(() => import('./pages/admin/AdminDeviceModels'))
 const AdminDatabase = lazy(() => import('./pages/admin/AdminDatabase'))
+const Analytics = lazy(() => import('./pages/admin/Analytics'))
 
 
 const LoadingSpinner = () => (
@@ -233,7 +234,7 @@ function App() {
             } />
             <Route path="analytics" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
-                <AdminDashboard />
+                <Analytics />
               </AdminRoute>
             } />
             <Route path="intelligence" element={

@@ -634,6 +634,67 @@ def init_db():
         FOREIGN KEY(order_id) REFERENCES orders(id)
     )''')
 
+    # --- Analytics ---
+    cursor.execute('''CREATE TABLE IF NOT EXISTS page_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      user_id INTEGER,
+      page_path TEXT NOT NULL,
+      page_title TEXT,
+      referrer TEXT,
+      utm_source TEXT,
+      utm_medium TEXT,
+      utm_campaign TEXT,
+      device_type TEXT,
+      browser TEXT,
+      os TEXT,
+      screen_resolution TEXT,
+      country TEXT,
+      duration_seconds INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS analytics_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      user_id INTEGER,
+      event_type TEXT NOT NULL,
+      event_category TEXT NOT NULL,
+      event_label TEXT,
+      event_value TEXT,
+      page_path TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS analytics_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT UNIQUE NOT NULL,
+      user_id INTEGER,
+      started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      page_count INTEGER DEFAULT 1,
+      is_bounce INTEGER DEFAULT 1,
+      device_type TEXT,
+      browser TEXT,
+      os TEXT,
+      referrer TEXT,
+      utm_source TEXT,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS search_queries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      user_id INTEGER,
+      query TEXT NOT NULL,
+      results_count INTEGER DEFAULT 0,
+      clicked_product_id INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
     # --- Seeding & Defaults ---
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('platform_fee', '7')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('free_delivery_threshold', '499')")

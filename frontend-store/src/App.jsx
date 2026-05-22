@@ -12,6 +12,8 @@ import { GlobalErrorOverlay } from './components/ErrorScreens'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
+import { useAnalytics } from './hooks/useAnalytics'
+import { AnalyticsContext } from './context/AnalyticsContext'
 
 if (import.meta.env.DEV) {
   console.log("%c JDLX DEBUG: API_BASE_URL is", "color: #f59e0b; font-weight: bold;", API_BASE_URL);
@@ -226,6 +228,18 @@ function OperationalRedirect() {
   return <PageLoader />
 }
 
+function AnalyticsWrapper({ children }) {
+  const user = useStore((state) => state.user)
+  const userId = user?.id || null
+  const analytics = useAnalytics(userId)
+
+  return (
+    <AnalyticsContext.Provider value={analytics}>
+      {children}
+    </AnalyticsContext.Provider>
+  )
+}
+
 function App() {
   const token = useStore((state) => state.token)
   const fetchCart = useStore((state) => state.fetchCart)
@@ -303,61 +317,63 @@ function App() {
       <TopLoader />
       <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />
       <Router>
-        <AnalyticsTracker />
-        <RouteChangeTracker />
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/*" element={
-              <>
-                <OAuthCallbackBridge />
-                <Layout>
-                  <Routes>
-                    {/* Public Routes */}
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/search" element={<SearchPage />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/cart" element={<Cart />} />
-                    <Route path="/product/:id" element={<ProductRedirector />} />
-                    <Route path="/p/:token" element={<ProductDetails />} />
-                    <Route path="/p/:slugToken" element={<ProductDetails />} />
-                    <Route path="/s/:token" element={<ShareRedirect />} />
-                    <Route path="/admin/*" element={<OperationalRedirect />} />
-                    <Route path="/warehouse/*" element={<OperationalRedirect />} />
-                    
-                    {/* Protected User Routes */}
-                    <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-                    <Route path="/track/:orderId" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                    <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
-                    <Route path="/profile/orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
-                    <Route path="/profile/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
-                    <Route path="/profile/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
-                    <Route path="/profile/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
-                    <Route path="/profile/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
-                    <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                    <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
-                    <Route path="/profile/support" element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
-                    <Route path="/profile/support/ticket/:ticket_id" element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
-                    <Route path="/profile/complaint" element={<ProtectedRoute><ComplaintPage /></ProtectedRoute>} />
-                    <Route path="/profile/order-report" element={<ProtectedRoute><OrderReportPage /></ProtectedRoute>} />
-                    <Route path="/profile/my-reports" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
-                    <Route path="/profile/refund-request" element={<ProtectedRoute><RefundRequestPage /></ProtectedRoute>} />
-                    <Route path="/profile/my-refunds" element={<ProtectedRoute><MyRefundsPage /></ProtectedRoute>} />
-                    <Route path="/my-requests" element={<ProtectedRoute><MyRequestsPage /></ProtectedRoute>} />
-                    <Route path="/profile/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
-                    <Route path="/profile/about-site" element={<AboutSite />} />
-                    <Route path="/profile/terms" element={<TermsAndConditions />} />
-                    <Route path="/profile/bug-report" element={<ProtectedRoute><BugReportPage /></ProtectedRoute>} />
-                    <Route path="/profile/my-bug-reports" element={<ProtectedRoute><MyBugReportsPage /></ProtectedRoute>} />
-                    
-                    {/* Fallback */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Layout>
-              </>
-            } />
-          </Routes>
-        </Suspense>
+        <AnalyticsWrapper>
+          <AnalyticsTracker />
+          <RouteChangeTracker />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/*" element={
+                <>
+                  <OAuthCallbackBridge />
+                  <Layout>
+                    <Routes>
+                      {/* Public Routes */}
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/search" element={<SearchPage />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/cart" element={<Cart />} />
+                      <Route path="/product/:id" element={<ProductRedirector />} />
+                      <Route path="/p/:token" element={<ProductDetails />} />
+                      <Route path="/p/:slugToken" element={<ProductDetails />} />
+                      <Route path="/s/:token" element={<ShareRedirect />} />
+                      <Route path="/admin/*" element={<OperationalRedirect />} />
+                      <Route path="/warehouse/*" element={<OperationalRedirect />} />
+                      
+                      {/* Protected User Routes */}
+                      <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                      <Route path="/track/:orderId" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
+                      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                      <Route path="/profile/settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
+                      <Route path="/profile/orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
+                      <Route path="/profile/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
+                      <Route path="/profile/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
+                      <Route path="/profile/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+                      <Route path="/profile/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
+                      <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                      <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+                      <Route path="/profile/support" element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
+                      <Route path="/profile/support/ticket/:ticket_id" element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>} />
+                      <Route path="/profile/complaint" element={<ProtectedRoute><ComplaintPage /></ProtectedRoute>} />
+                      <Route path="/profile/order-report" element={<ProtectedRoute><OrderReportPage /></ProtectedRoute>} />
+                      <Route path="/profile/my-reports" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
+                      <Route path="/profile/refund-request" element={<ProtectedRoute><RefundRequestPage /></ProtectedRoute>} />
+                      <Route path="/profile/my-refunds" element={<ProtectedRoute><MyRefundsPage /></ProtectedRoute>} />
+                      <Route path="/my-requests" element={<ProtectedRoute><MyRequestsPage /></ProtectedRoute>} />
+                      <Route path="/profile/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
+                      <Route path="/profile/about-site" element={<AboutSite />} />
+                      <Route path="/profile/terms" element={<TermsAndConditions />} />
+                      <Route path="/profile/bug-report" element={<ProtectedRoute><BugReportPage /></ProtectedRoute>} />
+                      <Route path="/profile/my-bug-reports" element={<ProtectedRoute><MyBugReportsPage /></ProtectedRoute>} />
+                      
+                      {/* Fallback */}
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Layout>
+                </>
+              } />
+            </Routes>
+          </Suspense>
+        </AnalyticsWrapper>
       </Router>
     </ErrorBoundary>
   )

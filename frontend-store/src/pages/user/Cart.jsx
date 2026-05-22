@@ -8,6 +8,7 @@ import { trackRemoveFromCart } from '../../utils/analytics'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import PageLoader from '../../components/PageLoader'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
+import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
 function getProductImage(item) {
     let images = item.images;
@@ -42,6 +43,7 @@ function Cart() {
     const deliveryMode = useStore(state => state.deliveryMode);
     const token = useStore(state => state.token);
     const isCartLoaded = useStore(state => state.isCartLoaded);
+    const { trackEvent } = useAnalyticsContext();
     const [isSyncing, setIsSyncing] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [availability, setAvailability] = useState(null);
@@ -263,7 +265,10 @@ function Cart() {
                                             </button>
                                             <span className="w-6 text-center text-[16px] font-black text-[var(--color-on-surface)]">{Number(item.qty || 1)}</span>
                                             <button
-                                                onClick={() => updateQuantity(item.id, item.qty + 1)}
+                                                onClick={() => {
+                                                  updateQuantity(item.id, item.qty + 1);
+                                                  trackEvent('add_to_cart', 'product', item.name, item.id);
+                                                }}
                                                 className="w-10 h-10 flex items-center justify-center text-primary hover:bg-[var(--color-surface-low)] rounded-xl transition-all disabled:opacity-20 disabled:cursor-not-allowed"
                                                 disabled={isUnavailable || atMaxStock}
                                             >

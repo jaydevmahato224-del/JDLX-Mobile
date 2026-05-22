@@ -1,10 +1,31 @@
 const CACHE_NAME = 'jdlx-cache-v2';
-const APP_SHELL = ['/', '/index.html', '/manifest.json'];
+const APP_SHELL = [
+    '/',
+    '/index.html',
+    '/manifest.json',
+    '/favicon.ico',
+    '/logo192.png',
+    '/logo512.png'
+];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then((cache) => cache.addAll(APP_SHELL))
+            .then((cache) => {
+                const cachePromises = APP_SHELL.map((url) => {
+                    return fetch(url)
+                        .then((response) => {
+                            if (response.ok) {
+                                return cache.put(url, response);
+                            }
+                            throw new Error(`Response not OK for ${url}`);
+                        })
+                        .catch((err) => {
+                            console.warn('Gracefully skipped caching on install:', url, err);
+                        });
+                });
+                return Promise.all(cachePromises);
+            })
             .then(() => self.skipWaiting())
     );
 });
@@ -45,7 +66,9 @@ self.addEventListener('fetch', (event) => {
                     if (response && response.ok) {
                         const responseClone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => {
-                            cache.put('/index.html', responseClone);
+                            cache.put('/index.html', responseClone).catch((err) => {
+                                console.warn('Cache put index.html failed:', err);
+                            });
                         });
                         return response;
                     }
@@ -67,7 +90,9 @@ self.addEventListener('fetch', (event) => {
                     if (response && response.ok) {
                         const responseClone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => {
-                            cache.put(event.request, responseClone);
+                            cache.put(event.request, responseClone).catch((err) => {
+                                console.warn('Cache put failed in fetch event:', err);
+                            });
                         });
                     }
                     return response;

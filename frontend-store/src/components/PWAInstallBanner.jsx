@@ -19,7 +19,43 @@ const PWAInstallBanner = () => {
   });
 
   const isPreview = new URLSearchParams(window.location.search).get('preview_pwa') === '1';
-  const shouldShowBanner = (isInstallable || isPreview) && !isInstalled && !isDismissed && config.enabled;
+  // Show banner on all devices where the app is not installed, so older devices and iOS also get PWA benefits
+  const shouldShowBanner = !isInstalled && !isDismissed && config.enabled;
+
+  const handleInstallClickWithFallback = async () => {
+    if (isInstallable) {
+      await handleInstallClick();
+    } else {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        toast('Tap the "Share" icon in Safari and select "Add to Home Screen" to install JDLX.', {
+          duration: 7000,
+          icon: '📲',
+          style: {
+            borderRadius: '16px',
+            background: '#0a0a0c',
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontWeight: 'bold',
+            fontSize: '13px'
+          }
+        });
+      } else {
+        toast('To install, tap the three dots in your browser and select "Install App" or "Add to Home Screen".', {
+          duration: 7000,
+          icon: 'ℹ️',
+          style: {
+            borderRadius: '16px',
+            background: '#0a0a0c',
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontWeight: 'bold',
+            fontSize: '13px'
+          }
+        });
+      }
+    }
+  };
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/settings`)
@@ -77,7 +113,7 @@ const PWAInstallBanner = () => {
           {/* Actions */}
           <div className="flex flex-col gap-2">
             <button
-              onClick={isPreview ? () => toast.error('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClick}
+              onClick={isPreview ? () => toast.error('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClickWithFallback}
               className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-slate-900/20 transition-all hover:bg-slate-800 active:scale-95"
             >
               <Download size={14} />

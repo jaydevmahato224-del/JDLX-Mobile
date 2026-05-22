@@ -13,7 +13,7 @@ export function usePWAInstall() {
     if (typeof window === 'undefined') {
       return false;
     }
-    return window.matchMedia('(display-mode: standalone)').matches;
+    return window.matchMedia('(display-mode: standalone)').matches || !!(window.navigator && window.navigator.standalone);
   });
 
   const isInstallable = !!installPrompt;

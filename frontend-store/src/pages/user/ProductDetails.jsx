@@ -196,7 +196,7 @@ export default function ProductDetails() {
     `${product?.category || 'Accessory'} essential ready for ${deliveryMode === 'quick' ? 'quick delivery' : 'secure fulfillment'}`,
     `Available quantity: ${stock}`,
     `Dispatch window: ${deliveryTimeDisplay}`,
-    deliveryMode === 'quick' ? 'Dark-store packed for hyperlocal delivery' : 'Central warehouse dispatched for reliable fulfillment',
+    deliveryMode === 'quick' ? 'Dark-store packed for instant express delivery' : 'Central warehouse dispatched for reliable fulfillment',
   ], [product?.category, deliveryMode, stock, deliveryTimeDisplay]);
 
   const handleAddToCart = useCallback((toCart = false) => {

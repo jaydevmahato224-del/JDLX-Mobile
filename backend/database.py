@@ -361,15 +361,68 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    # --- Razorpay Payments ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_id INTEGER NOT NULL,
-        payment_status TEXT DEFAULT 'pending',
-        amount REAL NOT NULL,
-        payment_method TEXT,
-        transaction_id TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(order_id) REFERENCES orders(id)
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      razorpay_order_id TEXT UNIQUE NOT NULL,
+      razorpay_payment_id TEXT,
+      razorpay_signature TEXT,
+      amount INTEGER NOT NULL,
+      currency TEXT DEFAULT 'INR',
+      status TEXT DEFAULT 'created',
+      payment_method TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(order_id) REFERENCES orders(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+    ensure_columns('payments', [
+        ('razorpay_order_id', 'TEXT'),
+        ('razorpay_payment_id', 'TEXT'),
+        ('razorpay_signature', 'TEXT'),
+        ('status', "TEXT DEFAULT 'created'"),
+        ('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+    ])
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS payment_webhooks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      razorpay_order_id TEXT,
+      razorpay_payment_id TEXT,
+      payload TEXT NOT NULL,
+      processed INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # --- Shiprocket Shipments ---
+    cursor.execute('''CREATE TABLE IF NOT EXISTS shipments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      shiprocket_order_id TEXT,
+      shiprocket_shipment_id TEXT,
+      awb_code TEXT,
+      courier_name TEXT,
+      courier_id INTEGER,
+      status TEXT DEFAULT 'pending',
+      estimated_delivery TEXT,
+      pickup_scheduled_date TEXT,
+      tracking_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(order_id) REFERENCES orders(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS shipment_tracking (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shipment_id INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      location TEXT,
+      description TEXT,
+      timestamp TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(shipment_id) REFERENCES shipments(id)
     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS refund_requests (
@@ -552,6 +605,14 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS system_settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, value TEXT NOT NULL)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS banners (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     ensure_columns('banners', [('subtitle', 'TEXT'), ('cta_text', 'TEXT'), ('image_url', 'TEXT'), ('badge_text', 'TEXT'), ('gradient', 'TEXT'), ('link_url', 'TEXT'), ('is_active', 'INTEGER DEFAULT 1'), ('overlay_opacity', 'REAL DEFAULT 0.5')])
+
+    # --- Pincode Rules ---
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pincode_rules (
+        pincode TEXT PRIMARY KEY,
+        cod_allowed INTEGER DEFAULT 1,
+        prepaid_only INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
 
     # --- User Interactions ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_interactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, interaction_type TEXT NOT NULL, target_id TEXT, category TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')

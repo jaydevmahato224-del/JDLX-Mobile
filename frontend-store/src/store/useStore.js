@@ -59,6 +59,9 @@ export const useStore = create((set, get) => ({
     theme: localStorage.getItem('theme') || 'light',
     storeBlocked: false,
     setStoreBlocked: (val) => set({ storeBlocked: val }),
+    constructionMode: false,
+    constructionModeMessage: 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!',
+    setConstructionMode: (val) => set({ constructionMode: val }),
     fetchCart: async () => {
         set({ isCartLoaded: false });
         const state = get();
@@ -334,9 +337,13 @@ export const useStore = create((set, get) => ({
                 // Ensure banners is always an array
                 const bannersData = json.data.banners || [];
                 const isBlocked = json.data.store_blocked === 'true' || json.data.store_blocked === true;
+                const isConstruction = json.data.construction_mode === 'true' || json.data.construction_mode === true;
+                const constructionMsg = json.data.construction_mode_message || 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!';
                 set({ 
                     banners: bannersData,
-                    storeBlocked: isBlocked
+                    storeBlocked: isBlocked,
+                    constructionMode: isConstruction,
+                    constructionModeMessage: constructionMsg
                 });
                 return bannersData;
             }

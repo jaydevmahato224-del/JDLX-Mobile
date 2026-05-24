@@ -2559,15 +2559,13 @@ def checkout():
         best_store, error_msg = select_best_warehouse(user_lat, user_lng, stores, items, cursor)
         
         delivery_message = None
-        if error_msg and delivery_type == 'quick':
-            # FIX 1: Fallout Logic
-            delivery_type = 'scheduled'
-            delivery_message = "Quick delivery unavailable in your area. Your order will be delivered via Scheduled Delivery."
-            # In scheduled mode, we pick the first available store or central hub for Shiprocket sync
+        if error_msg:
+            # FALLBACK TO SHIPROCKET
+            delivery_type = 'shiprocket'
+            delivery_message = "Local delivery unavailable. Order will be shipped via courier."
+            # In shiprocket mode, we pick the first available store or central hub for Shiprocket sync
             best_store = stores[0] # Pick first as fallback for metadata
-            est_time = "3-5 days"
-        elif error_msg:
-            return error_response(error_msg, 400)
+            est_time = "3-5 business days"
         else:
             est_time = f"{best_store['estimated_time']} mins"
             
@@ -2655,7 +2653,9 @@ def checkout():
         actual_delivery_fee = 0
         free_delivery_applied = 0
         
-        if free_delivery_enabled and total_amount >= free_thresh:
+        if delivery_type == 'shiprocket':
+            actual_delivery_fee = 99
+        elif free_delivery_enabled and total_amount >= free_thresh:
             actual_delivery_fee = 0
             free_delivery_applied = 1
         elif payment_type == 'PREPAID':
@@ -2678,6 +2678,10 @@ def checkout():
 
         # 3. Insert Order with correct column names and delivery_type
         order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+        
+        # Fix estimated_delivery string formatting
+        estimated_delivery_str = f"{est_time} mins" if delivery_type == 'quick' else est_time
+        
         cursor.execute('''
             INSERT INTO orders (
                 order_number, user_id, customer_name, customer_phone, delivery_address, 
@@ -2689,7 +2693,7 @@ def checkout():
             VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
-            phone, address, final_total, store_id, f"{est_time} mins", 
+            phone, address, final_total, store_id, estimated_delivery_str, 
             user_lat, user_lng, delivery_type, platform_fee, actual_delivery_fee, fitting_charge,
             payment_type, cod_advance_paid, cod_remaining_amount, free_delivery_applied
         ))
@@ -2798,6 +2802,15 @@ def checkout():
         }
         send_order_email(user_info['email'], order_details)
         
+        if delivery_type == 'shiprocket':
+            return jsonify({
+                "order_id": order_id,
+                "delivery_type": "shiprocket",
+                "message": "Local delivery unavailable. Order will be shipped via courier.",
+                "estimated_days": "3-5 business days",
+                "delivery_charge": 99
+            }), 201
+
         return jsonify({
             "message": delivery_message or "Order placed successfully", 
             "order_id": order_id,

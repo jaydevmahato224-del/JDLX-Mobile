@@ -42,6 +42,13 @@ function Checkout() {
     const [checkingPincode, setCheckingPincode] = useState(false);
     const deliveryMode = useStore(state => state.deliveryMode);
     const nearestStoreId = useStore(state => state.nearestStoreId);
+    const isShiprocket = !nearestStoreId;
+
+    useEffect(() => {
+        if (isShiprocket && paymentMethod === 'COD') {
+            setPaymentMethod('PREPAID');
+        }
+    }, [isShiprocket, paymentMethod]);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
     // Derived values
@@ -179,9 +186,11 @@ function Checkout() {
     const codAlertText = availability?.cod_alert_text || 'Save more with prepaid orders! FREE delivery on orders above ₹499.';
 
     // Delivery Charge Calculation
-    const deliveryCharge = (isFreeDeliveryEnabled && subtotal >= freeThreshold)
-        ? 0
-        : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
+    const deliveryCharge = isShiprocket 
+        ? 99 
+        : (isFreeDeliveryEnabled && subtotal >= freeThreshold)
+            ? 0
+            : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
 
     const discountAmount = appliedOffer ? appliedOffer.discount_amount : 0;
     const finalTotal = Math.max(0, subtotal - discountAmount) + platformFee + deliveryCharge + fittingTotal;
@@ -542,7 +551,7 @@ function Checkout() {
                             </div>
 
                             {/* COD Card */}
-                            {codEnabled && (
+                            {codEnabled && !isShiprocket && (
                                 <div 
                                     onClick={() => !isCodDisabledByAmount && setPaymentMethod('COD')}
                                     className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer group ${isCodDisabledByAmount ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${paymentMethod === 'COD' ? 'border-amber-500 bg-amber-500/[0.03] shadow-lg ring-4 ring-amber-500/5' : 'border-slate-100 bg-white hover:border-amber-500/30'}`}
@@ -737,8 +746,8 @@ function Checkout() {
                                 </span>
                             </div>
 
-                            {/* COD Breakdown */}
-                            {paymentMethod === 'COD' && (
+                            {/* COD Breakdown / Shiprocket Info */}
+                            {paymentMethod === 'COD' && !isShiprocket ? (
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in zoom-in">
                                     <div className="flex justify-between text-[13px] font-black text-slate-900">
                                         <span className="flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Pay Now (Advance)</span>
@@ -749,7 +758,19 @@ function Checkout() {
                                         <span>₹{remainingCodAmount.toLocaleString()}</span>
                                     </div>
                                 </div>
-                            )}
+                            ) : isShiprocket ? (
+                                <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 space-y-2 animate-in fade-in zoom-in">
+                                    <div className="flex items-center gap-3">
+                                        <Truck className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                                        <div className="space-y-0.5">
+                                            <p className="text-[13px] font-black text-blue-800">Standard Logistics</p>
+                                            <p className="text-[11px] font-medium text-blue-600">
+                                                Delivery via Shiprocket courier (3-5 business days)
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
 
                             <div className="pt-2">
                                 <button
@@ -765,7 +786,9 @@ function Checkout() {
                                         </>
                                     ) : (
                                         <>
-                                            <span className="text-xl">Authorize {paymentMethod === 'COD' ? 'Advance' : 'Payment'}</span>
+                                            <span className="text-xl">
+                                                {isShiprocket ? 'Pay Now' : (paymentMethod === 'COD' ? 'Authorize Advance' : 'Authorize Payment')}
+                                            </span>
                                             <ArrowRight size={24} className="opacity-50" />
                                         </>
                                     )}

@@ -52,7 +52,11 @@ export default function AdminSettings() {
     // Content Pages (Storefront)
     about_us_content: '',
     terms_and_conditions_content: '',
-    ticker_text: 'Free delivery on orders above ₹499 • Better experience with fast delivery'
+    ticker_text: 'Free delivery on orders above ₹499 • Better experience with fast delivery',
+
+    // Under Construction Settings
+    construction_mode: 'false',
+    construction_mode_message: 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!'
   })
 
   // Helper Toggle Component
@@ -606,6 +610,47 @@ export default function AdminSettings() {
                  </div>
                </div>
             </div>
+          </div>
+        </section>
+
+        {/* Under Construction Alert Section */}
+        <section className="ui-card-standard p-6 md:p-10 border border-amber-200/50 bg-gradient-to-br from-white to-amber-50/20">
+          <div className="mb-10">
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+              <span className="flex h-3 w-3 relative">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${settings.construction_mode === 'true' ? 'bg-amber-500' : 'bg-slate-400'}`}></span>
+                <span className={`relative inline-flex rounded-full h-3 w-3 ${settings.construction_mode === 'true' ? 'bg-amber-500' : 'bg-slate-400'}`}></span>
+              </span>
+              Under Construction Mode
+            </h2>
+            <p className="text-slate-500 font-medium mt-1">
+              Display a beautiful, full-screen announcement overlay on the storefront when you are preparing for launch.
+            </p>
+          </div>
+
+          <div className="space-y-8">
+            <Toggle 
+              label="Enable Under Construction Mode" 
+              description="Activate this to block visitor navigation and show a gorgeous launching announcement page."
+              enabled={settings.construction_mode}
+              onChange={(val) => handleChange('construction_mode', val)}
+            />
+
+            {settings.construction_mode === 'true' && (
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">English Announcement Message</label>
+                  <textarea
+                    value={settings.construction_mode_message || ''}
+                    onChange={(e) => handleChange('construction_mode_message', e.target.value)}
+                    rows={4}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-amber-500 transition-all resize-none"
+                    placeholder="We're launching JDLX Mobile very soon! Stay tuned..."
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">This message will be shown on the storefront under-construction splash overlay in English.</p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

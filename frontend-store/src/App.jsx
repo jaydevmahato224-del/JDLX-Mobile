@@ -9,6 +9,7 @@ import SplashScreen from './components/SplashScreen'
 import AnalyticsTracker from './components/AnalyticsTracker'
 import PushNotificationManager from './components/PushNotificationManager'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
+import UnderConstructionOverlay from './components/UnderConstructionOverlay'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
@@ -262,6 +263,11 @@ function App() {
   const [dataReady, setDataReady] = useState(false)
   const [splashFinished, setSplashFinished] = useState(false)
 
+  // Always load global settings and banners on mount
+  useEffect(() => {
+    fetchBanners()
+  }, [fetchBanners])
+
   useEffect(() => {
     // BUG 1 FIX: Only preload in App.jsx if we are showing the splash screen.
     // Otherwise, let individual pages (like Home.jsx) handle their own loading.
@@ -313,6 +319,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <UnderConstructionOverlay />
       <GlobalErrorOverlay />
       <PushNotificationManager />
       <TopLoader />

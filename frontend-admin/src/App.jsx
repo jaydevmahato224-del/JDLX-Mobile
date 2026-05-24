@@ -89,6 +89,7 @@ const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
 const AdminWarehouseApplications = lazy(() => import('./pages/admin/AdminWarehouseApplications'))
 const AdminDeliveryApplications = lazy(() => import('./pages/admin/AdminDeliveryApplications'))
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'))
+const AdminShipments = lazy(() => import('./pages/admin/AdminShipments'))
 const AdminServerControl = lazy(() => import('./pages/admin/AdminServerControl'))
 const AdminBanners = lazy(() => import('./pages/admin/AdminBanners'))
 const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'))
@@ -96,6 +97,7 @@ const AdminReviews = lazy(() => import('./pages/admin/AdminReviews'))
 const AdminDeviceModels = lazy(() => import('./pages/admin/AdminDeviceModels'))
 const AdminDatabase = lazy(() => import('./pages/admin/AdminDatabase'))
 const Analytics = lazy(() => import('./pages/admin/Analytics'))
+const AdminComplaints = lazy(() => import('./pages/admin/AdminComplaints'))
 
 
 const LoadingSpinner = () => (
@@ -220,6 +222,16 @@ function App() {
             <Route path="orders" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'delivery_admin']}>
                 <AdminOrders />
+              </AdminRoute>
+            } />
+            <Route path="complaints" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+                <AdminComplaints />
+              </AdminRoute>
+            } />
+            <Route path="shipments" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'delivery_admin']}>
+                <AdminShipments />
               </AdminRoute>
             } />
             <Route path="inventory" element={

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Package, Clock, Printer, Calendar, MapPin, Map, AlertCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Package, Clock, Printer, Calendar, MapPin, Map, AlertCircle, RotateCcw, Loader2, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
+import toast from 'react-hot-toast'
 
 function AdminOrders() {
     const [orders, setOrders] = useState([]);
@@ -13,7 +14,59 @@ function AdminOrders() {
     const [dateRange, setDateRange] = useState('all'); // all, today, week, month
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [selectedPartner, setSelectedPartner] = useState('');
+    const [shipmentCreating, setShipmentCreating] = useState(false);
+    const [courierAssigning, setCourierAssigning] = useState(false);
+    const [weight, setWeight] = useState(0.5);
     const navigate = useNavigate();
+
+    const handleCreateShipment = async (orderId) => {
+        if (!window.confirm("Create Shiprocket shipment for this order?")) return;
+        setShipmentCreating(true);
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/admin/shipment/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ order_id: orderId, weight_kg: weight })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success("Shiprocket order created!");
+                fetchOrderDetails(orderId);
+            } else {
+                toast.error(data.message || "Failed to create shipment");
+            }
+        } catch (err) {
+            toast.error("Network error");
+        } finally {
+            setShipmentCreating(false);
+        }
+    };
+
+    const handleAssignCourier = async (orderId) => {
+        setCourierAssigning(true);
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/admin/shipment/assign-courier/${orderId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success(`Assigned: ${data.data.courier_name} (AWB: ${data.data.awb_code})`);
+                fetchOrderDetails(orderId);
+            } else {
+                toast.error(data.message || "Courier assignment failed");
+            }
+        } catch (err) {
+            toast.error("Network error");
+        } finally {
+            setCourierAssigning(false);
+        }
+    };
 
     const fetchOrders = () => {
         setLoading(true);
@@ -246,6 +299,7 @@ function AdminOrders() {
                                 <th className="p-4 font-semibold text-gray-600 text-sm whitespace-nowrap">Customer</th>
                                 <th className="p-4 font-semibold text-gray-600 text-sm whitespace-nowrap">Amount</th>
                                 <th className="p-4 font-semibold text-gray-600 text-sm whitespace-nowrap">Store / Rider</th>
+                                <th className="p-4 font-semibold text-gray-600 text-sm whitespace-nowrap">Shipment</th>
                                 <th className="p-4 font-semibold text-gray-600 text-sm whitespace-nowrap">Status</th>
                                 <th className="p-4 font-semibold text-gray-600 text-sm whitespace-nowrap">Actions</th>
                             </tr>
@@ -288,6 +342,19 @@ function AdminOrders() {
                                                 {order.delivery_partner_id ? <span className="text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded flex items-center gap-1 w-max"><UserPlus className="w-3 h-3" /> Rider #{order.delivery_partner_id}</span> : <span className="text-xs text-gray-400">-</span>}
                                                 {order.estimated_delivery && <span className="text-xs text-orange-600 font-medium">ETA: {order.estimated_delivery}</span>}
                                             </div>
+                                        </td>
+                                        <td className="p-4">
+                                            {order.shipment_status ? (
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                    order.shipment_status?.toLowerCase().includes('delivered') ? 'bg-green-100 text-green-700' :
+                                                    order.shipment_status === 'assigned' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    {order.shipment_status}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-gray-400 italic">No Shipment</span>
+                                            )}
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${getStatusStyle(order.status)}`}>
@@ -377,6 +444,91 @@ function AdminOrders() {
                                             : 'Waiting for assignment'}
                                     </p>
                                 </div>
+                            </div>
+
+                            {/* Shipment Management Section */}
+                            <div className="bg-slate-900 text-white rounded-2xl p-5 flex flex-col gap-4 shadow-xl border border-slate-800 no-print">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                    <h3 className="font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                        <Truck className="w-4 h-4 text-indigo-400" /> Shiprocket Management
+                                    </h3>
+                                    {selectedOrder.shipment_status && (
+                                        <span className="px-2 py-0.5 bg-indigo-500 text-white text-[9px] font-black rounded-full uppercase">
+                                            {selectedOrder.shipment_status}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {!selectedOrder.shiprocket_order_id ? (
+                                    <div className="flex flex-col gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1">
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Package Weight (KG)</p>
+                                                <input 
+                                                    type="number" 
+                                                    value={weight} 
+                                                    onChange={e => setWeight(e.target.value)}
+                                                    step="0.1"
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                />
+                                            </div>
+                                            <button 
+                                                onClick={() => handleCreateShipment(selectedOrder.id)}
+                                                disabled={shipmentCreating || selectedOrder.order_status?.toLowerCase() !== 'confirmed'}
+                                                className="mt-5 h-10 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-2"
+                                            >
+                                                {shipmentCreating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Package className="w-3 h-3" />}
+                                                Create Order
+                                            </button>
+                                        </div>
+                                        {selectedOrder.order_status?.toLowerCase() !== 'confirmed' && (
+                                            <p className="text-[10px] font-bold text-rose-400 italic">* Order must be CONFIRMED to create shipment</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-3 bg-slate-800 rounded-xl border border-slate-700">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">SR Order ID</p>
+                                                <p className="text-xs font-bold text-indigo-300">{selectedOrder.shiprocket_order_id}</p>
+                                            </div>
+                                            <div className="p-3 bg-slate-800 rounded-xl border border-slate-700">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">AWB Code</p>
+                                                <p className="text-xs font-bold text-emerald-400">{selectedOrder.awb_code || 'PENDING'}</p>
+                                            </div>
+                                        </div>
+
+                                        {!selectedOrder.awb_code ? (
+                                            <button 
+                                                onClick={() => handleAssignCourier(selectedOrder.id)}
+                                                disabled={courierAssigning}
+                                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                            >
+                                                {courierAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                                                Auto-Assign Courier & AWB
+                                            </button>
+                                        ) : (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="p-3 bg-slate-800 rounded-xl border border-slate-700 flex justify-between items-center">
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Courier Partner</p>
+                                                        <p className="text-xs font-bold text-white">{selectedOrder.courier_name}</p>
+                                                    </div>
+                                                    {selectedOrder.tracking_url && (
+                                                        <a 
+                                                            href={selectedOrder.tracking_url} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-indigo-400 transition-colors"
+                                                        >
+                                                            <ExternalLink size={14} />
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Customer Details */}

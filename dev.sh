@@ -21,7 +21,7 @@ trap cleanup SIGINT
 # 1. Start Backend
 echo -e "${GREEN}📡 Starting Backend Server...${NC}"
 cd backend
-python3 app.py &
+./venv_linux/bin/python3 app.py &
 BACKEND_PID=$!
 cd ..
 

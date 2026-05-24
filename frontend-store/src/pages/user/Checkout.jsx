@@ -197,6 +197,107 @@ function Checkout() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handlePayment = async (orderId) => {
+        try {
+            setIsProcessing(true);
+            const token = localStorage.getItem('token');
+
+            // Step 1: Create Razorpay order
+            const res = await fetch(`${API_BASE_URL}/payment/create-order`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ order_id: orderId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Payment initiation failed');
+
+            // Step 2: Open Razorpay checkout
+            const options = {
+                key: data.key_id,
+                amount: data.amount,
+                currency: data.currency,
+                name: 'JDLX Mobile',
+                description: `Order #${orderId}`,
+                order_id: data.razorpay_order_id,
+                prefill: {
+                    name: user?.name || '',
+                    email: user?.email || '',
+                    contact: formData.phone || user?.phone || ''
+                },
+                theme: { color: '#6366f1' },
+                handler: async (response) => {
+                    // Step 3: Verify payment
+                    const verifyRes = await fetch(`${API_BASE_URL}/payment/verify`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    });
+                    
+                    if (verifyRes.ok) {
+                        // GA4 Purchase Tracking
+                        trackPurchase(orderId, finalTotal, cart);
+                        trackEvent('purchase', 'order', String(orderId), finalTotal);
+
+                        // Record offer usage if applied
+                        if (appliedOffer) {
+                            try {
+                                await fetch(`${API_BASE_URL}/offers/record-usage`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify({
+                                        offer_id: appliedOffer.offer_id,
+                                        order_id: orderId,
+                                        discount_applied: discountAmount
+                                    })
+                                });
+                            } catch (e) {
+                                console.error('Failed to record offer usage', e);
+                            }
+                        }
+
+                        toast.success('Payment successful!');
+                        clearCart();
+                        navigate(`/order-success/${orderId}`);
+                    } else {
+                        const verifyData = await verifyRes.json();
+                        toast.error(verifyData.message || 'Payment verification failed');
+                        setIsProcessing(false);
+                    }
+                },
+                modal: {
+                    ondismiss: () => {
+                        setIsProcessing(false);
+                        toast.error('Payment cancelled');
+                    }
+                }
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', (response) => {
+                toast.error(`Payment failed: ${response.error.description}`);
+                setIsProcessing(false);
+            });
+            rzp.open();
+
+        } catch (err) {
+            toast.error(err.message || 'Something went wrong');
+            setIsProcessing(false);
+        }
+    };
+
     const handlePlaceOrder = async (e) => {
         e.preventDefault();
 
@@ -239,7 +340,7 @@ function Checkout() {
                 email: formData.email,
                 delivery_type: useStore.getState().deliveryMode,
                 customer_name: formData.name,
-                payment_type: paymentMethod, // Pass payment_type
+                payment_type: paymentMethod,
                 offer_id: appliedOffer ? appliedOffer.offer_id : null,
                 discount_applied: discountAmount
             };
@@ -257,69 +358,13 @@ function Checkout() {
             if (!orderRes.ok) throw new Error(orderData.error || "Order creation failed");
 
             const orderId = orderData.order_id;
+            
+            // Start Razorpay Payment Flow
+            await handlePayment(orderId);
 
-            // Handle Payment Flow
-            const paymentRes = await fetch(`${API_BASE_URL}/payment/create`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ order_id: orderId, payment_method: 'RAZORPAY' })
-            });
-            const paymentData = await paymentRes.json();
-            if (!paymentRes.ok) throw new Error(paymentData.error || "Payment initialization failed");
-
-            // Verify simulated success
-            const verifyRes = await fetch(`${API_BASE_URL}/payment/verify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    order_id: orderId,
-                    razorpay_order_id: paymentData.id,
-                    razorpay_payment_id: "pay_simulated_success",
-                    razorpay_signature: "simulated_signature",
-                    payment_method: 'RAZORPAY'
-                })
-            });
-            if (!verifyRes.ok) throw new Error("Payment verification failed");
-
-            // GA4 Purchase Tracking
-            trackPurchase(orderId, finalTotal, cart);
-            trackEvent('purchase', 'order', String(orderId), finalTotal);
-
-            // Record offer usage if applied
-            if (appliedOffer) {
-                try {
-                    await fetch(`${API_BASE_URL}/offers/record-usage`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                            offer_id: appliedOffer.offer_id,
-                            order_id: orderId,
-                            discount_applied: discountAmount
-                        })
-                    });
-                } catch (e) {
-                    console.error('Failed to record offer usage', e);
-                }
-            }
-
-            setOrderPlaced(true);
-            setTimeout(() => {
-                clearCart();
-                navigate(`/track/${orderId}`);
-            }, 3000);
         } catch (error) {
             console.error('Checkout Error:', error);
             toast.error(error.message);
-        } finally {
             setIsProcessing(false);
         }
     };

@@ -21,6 +21,8 @@ function AdminLayout({ children }) {
         { path: '/admin/server-control', icon: Server, label: 'Server Control', allowedRoles: ['super_admin'], extraStyle: 'text-blue-500 font-bold' },
 
         { path: '/admin/orders', icon: ShoppingBag, label: 'Orders', allowedRoles: ['super_admin', 'admin', 'manager', 'delivery_admin'] },
+        { path: '/admin/complaints', icon: MessageSquare, label: 'Complaints', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-amber-500 font-bold' },
+        { path: '/admin/shipments', icon: Truck, label: 'Shipments', allowedRoles: ['super_admin', 'admin', 'delivery_admin'], extraStyle: 'text-indigo-400 font-bold' },
         { path: '/admin/notifications', icon: Bell, label: 'Notifications', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/reviews', icon: MessageSquare, label: 'Customer Reviews', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-emerald-500 font-bold' },
         { path: '/admin/settings', icon: Settings, label: 'System Settings', allowedRoles: ['super_admin', 'admin'] },

@@ -51,12 +51,16 @@ function MyOrders() {
                                             {order.delivery_type}
                                         </span>
                                     )}
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                        order.shipment_status === 'DELIVERED' || order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
+                                        ['IN_TRANSIT', 'SHIPPED', 'In Transit'].includes(order.shipment_status) ? 'bg-orange-100 text-orange-700' :
+                                        order.shipment_status === 'assigned' ? 'bg-blue-100 text-blue-700' :
+                                        ['RTO', 'RETURNED'].includes(order.shipment_status) ? 'bg-red-100 text-red-700' :
                                         order.status === 'OUT_FOR_DELIVERY' ? 'bg-blue-100 text-blue-700' :
-                                            order.status === 'PACKING' ? 'bg-purple-100 text-purple-700' :
-                                                'bg-yellow-100 text-yellow-700'
-                                        }`}>
-                                        {order.status}
+                                        order.status === 'PACKING' ? 'bg-purple-100 text-purple-700' :
+                                        'bg-yellow-100 text-yellow-700'
+                                    }`}>
+                                        {order.shipment_status || order.status}
                                     </span>
                                 </div>
                             </div>

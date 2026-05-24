@@ -19,6 +19,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
 # --- Third-Party Imports ---
+import razorpay
 import jwt
 from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory
 from flask_cors import CORS
@@ -59,6 +60,8 @@ from bug_routes import bug_bp
 from issue_routes import issue_bp
 from offer_routes import offer_bp
 from analytics_routes import analytics_bp
+from payment_routes import payment_bp
+from shiprocket_routes import shiprocket_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location
@@ -107,6 +110,14 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# --- Razorpay Configuration ---
+razorpay_client = razorpay.Client(
+    auth=(
+        os.environ.get('RAZORPAY_KEY_ID'),
+        os.environ.get('RAZORPAY_KEY_SECRET')
+    )
+)
 
 # --- CORS Configuration ---
 # Enable CORS for Store/Admin/Warehouse frontends.
@@ -244,6 +255,8 @@ app.register_blueprint(bug_bp)
 app.register_blueprint(issue_bp)
 app.register_blueprint(offer_bp)
 app.register_blueprint(analytics_bp)
+app.register_blueprint(payment_bp)
+app.register_blueprint(shiprocket_bp)
 
 
 # ==============================================================================
@@ -2835,7 +2848,15 @@ def get_user_orders():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, order_number, created_at, order_status as status, total_amount, delivery_type FROM orders WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+        query = """
+            SELECT o.id, o.order_number, o.created_at, o.order_status as status, 
+                   o.total_amount, o.delivery_type, s.status as shipment_status
+            FROM orders o
+            LEFT JOIN shipments s ON o.id = s.order_id
+            WHERE o.user_id = ? 
+            ORDER BY o.created_at DESC
+        """
+        cursor.execute(query, (user_id,))
         orders = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(orders), 200
@@ -3851,10 +3872,12 @@ def get_admin_orders():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT o.*, u.name as customer_name, u.email as customer_email,
-                   ds.store_code, ds.name as store_name 
+                   ds.store_code, ds.name as store_name,
+                   s.status as shipment_status
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
             LEFT JOIN dark_stores ds ON o.store_id = ds.id
+            LEFT JOIN shipments s ON o.id = s.order_id
             ORDER BY o.created_at DESC
         """)
         orders = [dict(row) for row in cursor.fetchall()]
@@ -3902,11 +3925,14 @@ def admin_get_order_details(order_id):
         cursor.execute("""
             SELECT o.*, u.name as customer_name, u.email as customer_email,
                    ds.store_code, ds.name as store_name,
-                   dp.name as partner_name, dp.phone as partner_phone
+                   dp.name as partner_name, dp.phone as partner_phone,
+                   s.shiprocket_order_id, s.shiprocket_shipment_id, s.awb_code, 
+                   s.courier_name, s.status as shipment_status, s.tracking_url
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
             LEFT JOIN dark_stores ds ON o.store_id = ds.id
             LEFT JOIN delivery_partners dp ON o.delivery_partner_id = dp.id
+            LEFT JOIN shipments s ON o.id = s.order_id
             WHERE o.id = ?
         """, (order_id,))
         order = cursor.fetchone()

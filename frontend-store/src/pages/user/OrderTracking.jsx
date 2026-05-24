@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 
 function OrderTracking() {
@@ -11,6 +11,8 @@ function OrderTracking() {
     const [riderLocation, setRiderLocation] = useState(null);
     const [routeData, setRouteData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [shipmentLoading, setShipmentLoading] = useState(false);
+    const [shipmentData, setShipmentData] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [refundReason, setRefundReason] = useState('');
     const [showRefundForm, setShowRefundForm] = useState(false);
@@ -114,6 +116,28 @@ function OrderTracking() {
         }
         return () => clearInterval(routeInterval);
     }, [order?.delivery_partner_id, order?.status, orderId]);
+
+    useEffect(() => {
+        const fetchShipmentTracking = async () => {
+            if (!order || order.delivery_type === 'quick') return;
+            setShipmentLoading(true);
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/shipment/track/${orderId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setShipmentData(data.data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch shipment tracking');
+            } finally {
+                setShipmentLoading(false);
+            }
+        };
+        fetchShipmentTracking();
+    }, [order, orderId]);
 
     const handleCancel = async () => {
         if (!window.confirm("Are you sure you want to cancel this order?")) return;
@@ -331,6 +355,82 @@ function OrderTracking() {
                     <span className="text-lg font-black text-gray-900">₹{order?.total_amount}</span>
                 </div>
             </div>
+
+            {/* Shipment Tracking Section (Shiprocket) */}
+            {shipmentData && (
+                <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="glass-card p-5 flex flex-col gap-4 border-l-4 border-l-primary">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight">Shipment Details</h3>
+                                <p className="text-[10px] font-bold text-gray-400">Via {shipmentData.courier_name}</p>
+                            </div>
+                            <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black rounded-full uppercase tracking-wider">
+                                {shipmentData.current_status}
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 py-2 border-y border-gray-50">
+                            <div>
+                                <p className="text-[9px] font-black text-gray-400 uppercase">AWB Code</p>
+                                <p className="text-xs font-bold text-gray-800">{shipmentData.awb_code}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black text-gray-400 uppercase">Est. Delivery</p>
+                                <p className="text-xs font-bold text-gray-800">{shipmentData.estimated_delivery || 'Calculating...'}</p>
+                            </div>
+                        </div>
+
+                        {shipmentData.tracking_url && (
+                            <a 
+                                href={shipmentData.tracking_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
+                            >
+                                Track on courier website <ExternalLink size={12} />
+                            </a>
+                        )}
+                    </div>
+
+                    <div className="glass-card p-6 flex flex-col gap-6">
+                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight">Tracking Timeline</h3>
+                        
+                        <div className="relative flex flex-col gap-8">
+                            {/* Vertical Line */}
+                            <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-100"></div>
+
+                            {shipmentData.events && shipmentData.events.length > 0 ? (
+                                shipmentData.events.map((event, idx) => (
+                                    <div key={idx} className="flex gap-4 items-start relative z-10">
+                                        <div className={`w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-primary border-primary ring-4 ring-primary/20' : 'bg-white border-gray-200'} mt-1`}></div>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start">
+                                                <h4 className={`text-sm font-black ${idx === 0 ? 'text-gray-900' : 'text-gray-600'}`}>
+                                                    {event.status}
+                                                </h4>
+                                                <span className="text-[9px] font-bold text-gray-400">
+                                                    {event.date}
+                                                </span>
+                                            </div>
+                                            {event.location && (
+                                                <p className="text-[10px] font-bold text-gray-400 flex items-center gap-1 mt-0.5">
+                                                    <MapPin size={10} /> {event.location}
+                                                </p>
+                                            )}
+                                            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                                                {event.activity}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-gray-400 italic">No tracking events found yet.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Order Actions Section */}
             {(['PLACED', 'PACKING', 'PENDING_PAYMENT', 'DELIVERED'].includes(order?.status)) && (

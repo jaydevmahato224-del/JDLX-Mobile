@@ -49,7 +49,7 @@ export default function UnderConstructionOverlay() {
     };
 
     return (
-        <div className="fixed inset-0 z-[99999] bg-[#0b0f19] flex flex-col items-center justify-between p-6 md:p-12 text-center overflow-y-auto select-none">
+        <div className="fixed inset-0 z-[99999] bg-[#0b0f19] flex flex-col items-center justify-between p-6 md:p-12 text-center overflow-y-auto">
             {/* Animated Ambient Background Glows */}
             <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-amber-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse duration-[6000ms]"></div>
             <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse duration-[8000ms]"></div>
@@ -177,6 +177,7 @@ export default function UnderConstructionOverlay() {
                                 </button>
                                 <button
                                     type="submit"
+                                    onClick={handleBypassSubmit}
                                     className="py-3 bg-amber-400 hover:bg-amber-500 text-[#0b0f19] font-bold rounded-xl text-xs transition-all shadow-lg shadow-amber-400/10"
                                 >
                                     Confirm

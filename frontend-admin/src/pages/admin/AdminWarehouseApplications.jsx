@@ -100,7 +100,9 @@ function assetUrl(path) {
 }
 
 function AdminWarehouseApplications() {
-    const adminToken = useStore((state) => state.adminToken) || useStore((state) => state.token)
+    const storeAdminToken = useStore((state) => state.adminToken)
+    const storeToken = useStore((state) => state.token)
+    const adminToken = storeAdminToken || storeToken
     const adminUser = useStore((state) => state.adminUser)
     const [applications, setApplications] = useState([])
     const [loading, setLoading] = useState(true)

@@ -137,7 +137,7 @@ const Footer = () => {
       </div>
 
       {/* Bottom Bar */}
-      <div className="border-t border-slate-50 py-8">
+      <div className="border-t border-slate-50 py-8 pb-28 md:pb-8">
         <div className="max-w-[1400px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs font-bold text-slate-400">
             © {new Date().getFullYear()} JDLX Mobile Elite. All rights reserved.

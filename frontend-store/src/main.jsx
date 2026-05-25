@@ -3,7 +3,14 @@ import ReactDOM from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import App from './App.jsx'
 import './index.css'
+import './styles/fpsOptimize.css'
+import { initFrameRateDetection } from './hooks/useFrameRate'
+import { initPerformanceManager } from './utils/performanceManager'
 import { useStore } from './store/useStore'
+
+// Initialize 60/90/120fps display rate detection and runtime performance optimizations
+initFrameRateDetection();
+initPerformanceManager();
 
 // Using a placeholder client ID for now. User must configure this later.
 const GOOGLE_CLIENT_ID = "473832938691-0et3o47opidpim0k0ufau8tq1qtn4sc9.apps.googleusercontent.com"

@@ -52,6 +52,30 @@ function AdminRestocking() {
         } catch (err) { console.error(err); }
     };
 
+    const createRequest = async (productId, quantity) => {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/admin/restock-request`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ product_id: productId, requested_quantity: quantity })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message || 'Restock request created');
+                fetchDashboardData();
+            } else {
+                alert(data.error || data.message || 'Failed to create restock request');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to create restock request');
+        }
+    };
+
     useEffect(() => {
         if (activeTab === 'dashboard') fetchDashboardData();
         if (activeTab === 'suppliers') fetchSuppliers();

@@ -15,6 +15,7 @@ import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
 import { useAnalytics } from './hooks/useAnalytics'
 import { AnalyticsContext } from './context/AnalyticsContext'
+import { getProductUrl } from './utils/productSlug'
 
 if (import.meta.env.DEV) {
   console.log("%c JDLX DEBUG: API_BASE_URL is", "color: #f59e0b; font-weight: bold;", API_BASE_URL);

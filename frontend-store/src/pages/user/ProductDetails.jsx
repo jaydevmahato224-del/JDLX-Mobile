@@ -215,7 +215,7 @@ export default function ProductDetails() {
     trackEvent('add_to_cart', 'product', product.name, product.id);
     if (toCart) navigate('/cart');
     else toast.success('Added to collection');
-  }, [addToCart, deviceModel, fitting, navigate, product, requiresDeviceModel]);
+  }, [addToCart, deviceModel, fitting, navigate, product, requiresDeviceModel, trackEvent]);
 
   const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? window.location.origin 
@@ -433,7 +433,7 @@ export default function ProductDetails() {
       )}
 
       {/* Mobile Sticky Bar */}
-      <div className="fixed bottom-[100px] inset-x-0 z-[100] px-4 md:hidden">
+      <div className="fixed bottom-[104px] inset-x-0 z-[90] px-4 md:hidden">
          <div className="bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-3 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-full duration-700">
             {quantity > 0 ? (
                 <div className="flex w-full items-center gap-3">

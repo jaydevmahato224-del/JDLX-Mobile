@@ -145,16 +145,7 @@
   animation: ripple 0.6s ease-out;
 }
 
-/* ===========================
-   GLASS MORPHISM CARDS
-   =========================== */
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 1rem;
-}
+/* Glass card styles defined in index.css design system */
 
 /* ===========================
    LOADING STATES
@@ -368,9 +359,7 @@ a:focus-visible {
   color: #4b5563;
 }
 
-.text-primary {
-  color: #4f46e5;
-}
+/* text-primary is managed by the Tailwind theme in index.css */
 
 /* ===========================
    LOADING STATE OVERLAY

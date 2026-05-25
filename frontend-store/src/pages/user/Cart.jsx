@@ -380,7 +380,7 @@ function Cart() {
             )}
             
             {/* Bottom spacing for mobile nav */}
-            <div className="h-20 lg:hidden" />
+            <div className="h-28 lg:hidden" />
         </div>
     )
 }

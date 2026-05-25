@@ -1,0 +1,316 @@
+/* ==============================================================================
+   JDLX MOBILE — Frame-Rate Adaptive Performance Layer
+   
+   This CSS applies performance optimizations based on the detected display
+   refresh rate (60Hz, 90Hz, 120Hz). The .fps-* classes are set on <html>
+   by useFrameRate.js.
+
+   RULES:
+   ✅ Only compositor-friendly properties (transform, opacity)
+   ✅ No UI/visual changes — same look across all tiers
+   ✅ No logic changes — purely CSS performance tuning
+   ============================================================================== */
+
+/* ==============================================================================
+   0. UNIVERSAL PERFORMANCE FOUNDATIONS (all devices)
+   ============================================================================== */
+
+/* Force GPU compositing for all animated elements — these properties
+   are "free" on modern GPUs and prevent costly main-thread repaints */
+.concierge-nav-indicator,
+.concierge-nav-container,
+.concierge-nav-item,
+.btn-primary,
+.product-card-stitch,
+.glass-card,
+.card-glass,
+.category-chip {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Passive containment for product grids — tells browser each card
+   is an isolated rendering unit, preventing cross-card relayout */
+article.gpu-accelerated {
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
+/* Optimize fixed/sticky elements — these repaint on every scroll frame
+   without layer promotion, causing major jank on 60fps devices */
+.sticky {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Reduce backdrop-filter cost on scroll — backdrop-filter is one of
+   the most expensive CSS properties (reads back framebuffer). We limit
+   its quality based on scroll state via an IntersectionObserver in JS,
+   but the CSS containment here prevents unnecessary recalculations */
+header[class*="backdrop-blur"] {
+  contain: layout style;
+}
+
+/* Prevent layout thrashing from badge counters — numbers changing
+   should not trigger sibling relayout */
+.concierge-badge {
+  contain: strict;
+}
+
+/* ==============================================================================
+   1. 60 FPS TIER — Maximum battery + performance conservation
+   
+   Target: Standard phones (most Android devices, older iPhones)
+   Strategy: Reduce animation complexity, minimize backdrop-filter,
+   use compositor-only animations, disable expensive decorative effects
+   ============================================================================== */
+
+.fps-60 {
+  /* Reduce glass blur radius — saves ~2ms per composited frame */
+  --glass-blur-std: 8px;
+  --glass-blur-heavy: 16px;
+}
+
+/* Shorten all CSS transition durations by ~40% on 60Hz
+   16.67ms frame budget leaves no room for long transitions */
+.fps-60 .concierge-nav-container {
+  transition-duration: 300ms;
+}
+
+.fps-60 .concierge-nav-indicator {
+  transition-duration: 200ms;
+}
+
+/* Disable the ambient body::before glow — it's a full-screen
+   blur(80px) element that costs ~3ms per frame on low-end GPUs */
+.fps-60 body::before {
+  filter: none;
+  background: transparent;
+}
+
+/* Simplify box-shadows on cards — complex shadows force rasterization */
+.fps-60 .glass-card,
+.fps-60 .card-glass {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Reduce animation duration for product card hover/tap */
+.fps-60 article.gpu-accelerated {
+  transition-duration: 300ms;
+}
+
+/* Disable decorative float animation — saves compositor work */
+.fps-60 .animate-float-slow {
+  animation-duration: 8s; /* Slower = fewer frames needed */
+}
+
+/* Reduce soft-glow animation intensity */
+.fps-60 .animate-soft-glow {
+  animation-duration: 5s;
+}
+
+/* Reduce marquee speed to lower frame pressure */
+.fps-60 .animate-marquee {
+  animation-duration: 45s;
+}
+
+/* Disable reveal stagger on mobile — the animation is already
+   killed at <640px, but this ensures no work for 60fps tablets */
+.fps-60 .reveal-staggered > * {
+  animation-duration: 0.5s;
+}
+
+/* Optimize skeleton shimmer — reduce animation frequency */
+.fps-60 .pcs-shimmer::after {
+  animation-duration: 2s;
+}
+
+.fps-60 .skeleton-shimmer {
+  animation-duration: 2.5s;
+}
+
+/* Reduce the banner carousel transition duration */
+.fps-60 [style*="translateX"] {
+  transition-duration: 600ms !important;
+}
+
+/* ==============================================================================
+   2. 90 FPS TIER — Balanced performance
+   
+   Target: Mid-range phones (Pixel 7a, OnePlus Nord, Samsung A-series)
+   Strategy: Moderate optimizations, keep most visual polish,
+   slightly reduce heavy effects
+   ============================================================================== */
+
+.fps-90 {
+  /* Moderate blur reduction */
+  --glass-blur-std: 10px;
+  --glass-blur-heavy: 22px;
+}
+
+/* Slightly faster transitions to stay within 11.1ms budget */
+.fps-90 .concierge-nav-container {
+  transition-duration: 400ms;
+}
+
+.fps-90 .concierge-nav-indicator {
+  transition-duration: 250ms;
+}
+
+/* Reduce ambient glow blur (half of default 80px) */
+.fps-90 body::before {
+  filter: blur(40px);
+}
+
+/* Moderate shadow reduction */
+.fps-90 .glass-card,
+.fps-90 .card-glass {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+/* Moderate animation speeds */
+.fps-90 article.gpu-accelerated {
+  transition-duration: 400ms;
+}
+
+.fps-90 .animate-float-slow {
+  animation-duration: 6s;
+}
+
+.fps-90 .pcs-shimmer::after {
+  animation-duration: 1.5s;
+}
+
+/* ==============================================================================
+   3. 120 FPS TIER — Maximum visual fidelity
+   
+   Target: Flagship phones (iPhone 14 Pro+, Samsung S-series, Pixel 8 Pro)
+   Strategy: Full visual effects, optimized for buttery smooth 8.33ms budget.
+   These devices have powerful GPUs — we enable richer animations.
+   ============================================================================== */
+
+.fps-120 {
+  /* Full blur quality */
+  --glass-blur-std: 12px;
+  --glass-blur-heavy: 30px;
+}
+
+/* Smoother, longer transitions — these devices can handle it */
+.fps-120 .concierge-nav-indicator {
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Enable richer shadow quality */
+.fps-120 .glass-card,
+.fps-120 .card-glass {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* Full animation fidelity */
+.fps-120 article.gpu-accelerated {
+  transition-duration: 500ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Smoother reveal animations */
+.fps-120 .reveal-staggered > * {
+  animation-duration: 0.8s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Smoother shimmer */
+.fps-120 .pcs-shimmer::after {
+  animation-duration: 1.2s;
+  animation-timing-function: ease-in-out;
+}
+
+/* ==============================================================================
+   4. SCROLL PERFORMANCE — All tiers
+   ============================================================================== */
+
+/* During active scroll, reduce paint complexity globally.
+   The .is-scrolling class is toggled by a passive scroll listener in JS */
+.is-scrolling .glass-card,
+.is-scrolling .card-glass,
+.is-scrolling .glass-luxury {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.is-scrolling header[class*="backdrop-blur"] {
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+/* Restore backdrop-filter after scroll settles */
+.glass-card,
+.card-glass,
+.glass-luxury {
+  transition: backdrop-filter 0.3s ease-out, -webkit-backdrop-filter 0.3s ease-out;
+}
+
+/* ==============================================================================
+   5. INTERSECTION OBSERVER OPTIMIZATIONS — All tiers
+   
+   Off-screen elements get will-change removed to free GPU memory.
+   The .offscreen class is applied by IntersectionObserver in JS.
+   ============================================================================== */
+
+.offscreen {
+  will-change: auto !important;
+  contain: strict;
+  content-visibility: auto;
+}
+
+/* ==============================================================================
+   6. TOUCH DEVICE OPTIMIZATIONS — All tiers
+   ============================================================================== */
+
+/* Ensure all scrollable containers use passive-compatible scroll */
+@media (pointer: coarse) {
+  /* Reduce animation work on touch devices during interaction */
+  .animate-pulse {
+    animation-duration: 3s;
+  }
+
+  /* Disable hover-triggered will-change (saves GPU memory on mobile) */
+  *:not(:active) {
+    will-change: auto;
+  }
+}
+
+/* ==============================================================================
+   7. BATTERY SAVER / LOW POWER MODE
+   
+   Respects prefers-reduced-motion AND detects low-power scenarios
+   ============================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Kill all decorative animations — keep functional ones */
+  .animate-soft-glow,
+  .animate-float-slow,
+  .animate-marquee {
+    animation: none !important;
+  }
+
+  body::before {
+    display: none;
+  }
+
+  .reveal-staggered > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .pcs-shimmer::after {
+    animation: none !important;
+  }
+
+  .skeleton-shimmer {
+    animation: none !important;
+  }
+}

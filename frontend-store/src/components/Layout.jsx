@@ -142,16 +142,14 @@ function Layout({ children }) {
         </header>
       </div>
 
-      <main className="container-standard py-8">
+      <main className="container-standard py-8 pb-28 md:pb-8">
         {children}
       </main>
 
       <Footer />
 
       {/* Bottom Navigation (Mobile) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50">
-        <LiquidBottomNav cartItemCount={cartItemCount} user={user} />
-      </div>
+      <LiquidBottomNav cartItemCount={cartItemCount} user={user} />
 
       <TermsGate />
       <PWAInstallBanner />

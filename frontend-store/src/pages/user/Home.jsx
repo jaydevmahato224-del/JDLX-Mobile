@@ -597,14 +597,6 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (allBanners.length <= 1) return
-    const interval = setInterval(() => {
-      setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [allBanners.length])
-
-  useEffect(() => {
     const effectiveStoreId = deliveryMode === 'quick' ? nearestStoreId : null
     loadInitialProducts(selectedCategory, debouncedQuery, effectiveStoreId)
   }, [selectedCategory, debouncedQuery, loadInitialProducts, deliveryMode, nearestStoreId])
@@ -728,7 +720,7 @@ export default function Home() {
 
       {/* Offer Banners */}
       {Array.isArray(offerBanners) && offerBanners.length > 0 && (
-        <section className="content-visibility-auto -mx-6 px-6 overflow-x-auto no-scrollbar snap-x snap-mandatory flex gap-4 pb-4">
+        <section className="content-visibility-auto -mx-4 px-4 md:-mx-6 md:px-6 overflow-x-auto no-scrollbar snap-x snap-mandatory flex gap-4 pb-4">
           {offerBanners.map(offer => (
             <div 
               key={offer.id} 

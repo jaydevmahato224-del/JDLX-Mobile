@@ -357,19 +357,24 @@ function DarkStoresContent() {
                                                     <button onClick={() => { setSelectedStore(store); fetchInventory(store.id); }} className="px-3 py-1.5 bg-gray-100 font-bold text-xs text-gray-700 rounded-lg shadow-sm hover:bg-white transition-all transform hover:-translate-y-0.5" title="Manage Internal Inventory">
                                                         Inspect
                                                     </button>
-                                                    {store.source_type === 'dark_store' ? (
+                                                    {(!store.source_type || store.source_type === 'dark_store') ? (
                                                         <>
-                                                            <button onClick={() => openEditForm(store)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Edit Hub Profil">
+                                                            <button onClick={() => openEditForm(store)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Edit Hub Profile">
                                                                 <Edit2 className="w-4 h-4" />
                                                             </button>
-                                                            <button onClick={() => handleDeleteStore(store.id)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Permanently Subvert">
+                                                            <button onClick={() => handleDeleteStore(store.id)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Permanently Delete Store">
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
                                                         </>
                                                     ) : (
-                                                        <span className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
-                                                            Synced from approvals
-                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                                                                Synced from approvals
+                                                            </span>
+                                                            <button onClick={() => handleDeleteStore(store.id)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Permanently Delete Store">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </td>
@@ -418,7 +423,7 @@ function DarkStoresContent() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        {selectedStore?.source_type === 'dark_store' ? (
+                                        {(!selectedStore?.source_type || selectedStore?.source_type === 'dark_store') ? (
                                             <button 
                                                 onClick={() => openEditForm(selectedStore)} 
                                                 className="p-3 bg-white border border-gray-100 text-gray-500 hover:text-primary hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 rounded-2xl transition-all duration-300"
@@ -431,6 +436,16 @@ function DarkStoresContent() {
                                                 <AlertTriangle className="w-5 h-5" />
                                             </div>
                                         )}
+                                        <button 
+                                            onClick={() => {
+                                                handleDeleteStore(selectedStore.id);
+                                                setSelectedStore(null);
+                                            }} 
+                                            className="p-3 bg-red-50 border border-red-100 text-red-500 hover:bg-red-100 hover:text-red-600 hover:shadow-lg hover:shadow-red-500/5 rounded-2xl transition-all duration-300"
+                                            title="Delete Hub Permanently"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">

@@ -303,10 +303,9 @@ body::before {
 /* Prevent "sticky hover" on touch devices by only allowing hover effects 
    when a primary pointing device (like a mouse) is present. */
 @media (hover: none) {
-  [class*="hover:"]:hover,
-  [class*="group-hover:"]:hover {
-    transition: none !important;
-    transform: none !important;
+  /* Only suppress hover-triggered visual changes, preserve active tap states */
+  [class*="hover:"]:hover {
+    --tw-translate-y: 0 !important;
   }
   
   /* Preserve active/tap states specifically */
@@ -334,10 +333,6 @@ body::before {
 
 .animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
 .animate-marquee { display: flex; width: max-content; animation: marquee 30s linear infinite; }
-
-.reveal-staggered > * { opacity: 0; transform: translateY(20px); animation: reveal-in 0.8s forwards; }
-.reveal-staggered > *:nth-child(1) { animation-delay: 0.1s; }
-.reveal-staggered > *:nth-child(2) { animation-delay: 0.2s; }
 
 /* ------------------------------------------------------------------------------
    6. RESPONSIVE & MOBILE FIXES

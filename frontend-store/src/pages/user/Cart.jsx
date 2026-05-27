@@ -55,6 +55,17 @@ function Cart() {
             .then(res => res.json())
             .then(data => setAvailability(data))
             .catch(e => console.error('Failed to load availability:', e));
+
+        // Safety timeout: prevent infinite loading if API is unresponsive
+        const safetyTimer = setTimeout(() => {
+            const state = useStore.getState();
+            if (!state.isCartLoaded) {
+                console.warn('Cart loading timeout - forcing loaded state');
+                useStore.setState({ isCartLoaded: true, _fetchCartInProgress: false });
+            }
+        }, 8000);
+
+        return () => clearTimeout(safetyTimer);
     }, [fetchCart]);
 
     if (!isCartLoaded) {

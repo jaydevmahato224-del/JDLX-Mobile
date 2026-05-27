@@ -56,6 +56,7 @@ export const useStore = create((set, get) => ({
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
     cart: safeParse('cart') || [],
     isCartLoaded: false,
+    _fetchCartInProgress: false,
     theme: localStorage.getItem('theme') || 'light',
     storeBlocked: false,
     setStoreBlocked: (val) => set({ storeBlocked: val }),
@@ -63,7 +64,15 @@ export const useStore = create((set, get) => ({
     constructionModeMessage: 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!',
     setConstructionMode: (val) => set({ constructionMode: val }),
     fetchCart: async () => {
-        set({ isCartLoaded: false });
+        // Guard: prevent overlapping fetchCart calls causing race conditions
+        if (get()._fetchCartInProgress) return;
+        set({ _fetchCartInProgress: true });
+
+        // Only show loading screen if we have NO cached cart at all
+        const cachedCart = safeParse('cart');
+        if (!cachedCart || cachedCart.length === 0) {
+            set({ isCartLoaded: false });
+        }
         const state = get();
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
@@ -151,7 +160,14 @@ export const useStore = create((set, get) => ({
             }
         } catch (e) {
             console.error('Failed to fetch cart:', e);
+            // On failure, still show cart (use cached data from localStorage)
+            const fallbackCart = safeParse('cart') || [];
+            if (fallbackCart.length > 0 && get().cart.length === 0) {
+                set({ cart: fallbackCart });
+            }
             set({ isCartLoaded: true });
+        } finally {
+            set({ _fetchCartInProgress: false });
         }
     },
     setUser: (user, token) => {

@@ -1,6 +1,45 @@
 import { create } from 'zustand'
 
-export const useStore = create((set) => ({
+/**
+ * Generate a session fingerprint based on browser characteristics.
+ * Used to detect token theft across different devices/browsers.
+ */
+function generateSessionFingerprint() {
+    const components = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width + 'x' + screen.height,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+    ];
+    // Simple hash — not cryptographic, but sufficient for tamper detection
+    let hash = 0;
+    const str = components.join('|');
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString(36);
+}
+
+/**
+ * Basic JWT structure validation (does NOT verify signature — that's the server's job).
+ * Checks: 3-part structure, valid base64, not expired.
+ */
+function isTokenStructureValid(token) {
+    if (!token || typeof token !== 'string') return false;
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    try {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.exp && payload.exp * 1000 < Date.now()) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export const useStore = create((set, get) => ({
     user: JSON.parse(localStorage.getItem('user')) || null,
     token: localStorage.getItem('token') || null,
     adminUser: JSON.parse(localStorage.getItem('adminUser')) || null,
@@ -9,6 +48,7 @@ export const useStore = create((set) => ({
     warehouseToken: localStorage.getItem('warehouseToken') || null,
     warehouseRequestUser: JSON.parse(localStorage.getItem('warehouseRequestUser')) || null,
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
+    isReauthenticating: false,
     cart: [],
     setUser: (user, token) => {
         if (user && token) {
@@ -27,18 +67,55 @@ export const useStore = create((set) => ({
     },
     setAdminUser: (adminUser, adminToken) => {
         if (adminUser && adminToken) {
+            // Validate token structure before storing
+            if (!isTokenStructureValid(adminToken)) {
+                console.error('Admin login blocked: invalid token structure');
+                return;
+            }
             localStorage.setItem('adminUser', JSON.stringify(adminUser));
             localStorage.setItem('adminToken', adminToken);
+            // Store session fingerprint for tamper detection
+            localStorage.setItem('adminSessionFingerprint', generateSessionFingerprint());
         } else {
             localStorage.removeItem('adminUser');
             localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminSessionFingerprint');
         }
         set({ adminUser, adminToken });
     },
+    setReauthenticating: (val) => set({ isReauthenticating: val }),
     adminLogout: () => {
         localStorage.removeItem('adminUser');
         localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminSessionFingerprint');
         set({ adminUser: null, adminToken: null });
+    },
+    /**
+     * Validates the current admin session:
+     * - Token structure (3-part JWT, not expired)
+     * - Session fingerprint (same device/browser)
+     * Returns true if valid, auto-logs out and returns false if not.
+     */
+    validateAdminSession: () => {
+        const state = get();
+        if (!state.adminToken || !state.adminUser) return false;
+
+        // Check token structure & expiry
+        if (!isTokenStructureValid(state.adminToken)) {
+            console.warn('Admin session expired or token invalid');
+            get().adminLogout();
+            return false;
+        }
+
+        // Check session fingerprint
+        const storedFingerprint = localStorage.getItem('adminSessionFingerprint');
+        if (storedFingerprint && storedFingerprint !== generateSessionFingerprint()) {
+            console.warn('Session fingerprint mismatch — possible session theft');
+            get().adminLogout();
+            return false;
+        }
+
+        return true;
     },
     setWarehouseUser: (warehouseUser, warehouseToken) => {
         if (warehouseUser && warehouseToken) {

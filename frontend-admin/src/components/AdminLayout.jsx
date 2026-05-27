@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore'
 import { useState } from 'react'
 import adminLogo from '../assets/admin-logo.svg'
 import NotificationBell from './NotificationBell'
+import AdminReauthModal from './AdminReauthModal'
 
 function AdminLayout({ children }) {
     const location = useLocation();
@@ -171,6 +172,7 @@ function AdminLayout({ children }) {
                     </div>
                 </main>
             </div>
+            <AdminReauthModal />
         </div>
     )
 }

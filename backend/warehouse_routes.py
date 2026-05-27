@@ -792,12 +792,30 @@ def warehouse_availability():
             """
         ).fetchone()
 
+        # Query system settings
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM system_settings")
+        all_settings = cursor.fetchall()
+        settings = {row['key']: row['value'] for row in all_settings}
+
         if not wh:
             return jsonify({
                 "ordering_enabled": False,
                 "can_order": False,
                 "message": "No active store found in your area.",
                 "weather_status": "clear",
+                "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
+                "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
+                "platform_fee": float(settings.get('platform_fee', 7)),
+                "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),
+                "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
+                "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
+                "min_order_cod": float(settings.get('min_order_cod', 0)),
+                "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
+                "cod_enabled_shiprocket": settings.get('cod_enabled_shiprocket', 'false').lower() == 'true',
+                "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
+                "priority_dispatch_enabled": settings.get('priority_dispatch_enabled', 'true').lower() == 'true',
+                "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
             }), 200
 
         ops_status = (wh["operations_status"] or "closed").lower().strip()
@@ -829,7 +847,19 @@ def warehouse_availability():
             "service_radius_km": radius,
             "active_products": product_count,
             "message": msg,
-            "success": True # Add success: true to satisfy both raw and wrapped expectations
+            "success": True,
+            "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
+            "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
+            "platform_fee": float(settings.get('platform_fee', 7)),
+            "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),
+            "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
+            "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
+            "min_order_cod": float(settings.get('min_order_cod', 0)),
+            "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
+            "cod_enabled_shiprocket": settings.get('cod_enabled_shiprocket', 'false').lower() == 'true',
+            "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
+            "priority_dispatch_enabled": settings.get('priority_dispatch_enabled', 'true').lower() == 'true',
+            "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
         }
         # Return directly for frontend compatibility
         return jsonify(data)

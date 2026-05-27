@@ -693,3 +693,54 @@ def send_product_restock_alert(to_email, product_name):
     except Exception as e:
         print(f"Failed to send restock alert: {e}")
         return False
+
+def send_security_logout_email(to_email, user_name):
+    """Notifies the user that their account has been logged out from all devices for security reasons."""
+    msg = MIMEMultipart()
+    msg['From'] = f"JDLX Mobile Security <{GMAIL_USER}>"
+    msg['To'] = to_email
+    msg['Subject'] = "Security Alert: Account Logged Out from All Devices"
+
+    body = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
+        <div style="background: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 20px;">SECURITY ALERT</h1>
+        </div>
+        
+        <h2>Hello {user_name},</h2>
+        
+        <p style="color: #334155; line-height: 1.6;">
+            This is an automated security notification to inform you that your JDLX Mobile account has been <b>logged out from all active devices</b> by a system administrator.
+        </p>
+        
+        <div style="background: #fff7ed; border-left: 4px solid #f97316; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #9a3412; font-size: 14px;">
+                <b>Why did this happen?</b><br/>
+                This action is typically taken to protect your account if suspicious activity was detected or if you requested a global session reset.
+            </p>
+        </div>
+        
+        <p style="color: #334155; line-height: 1.6;">
+            <b>What should you do now?</b><br/>
+            1. You can now log back into your account using your preferred method.<br/>
+            2. If you did not request this, we recommend reviewing your account security settings immediately.
+        </p>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #94a3b8; font-size: 12px;">
+            © 2026 JDLX Mobile Security Team. All rights reserved.
+        </div>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(GMAIL_USER, GMAIL_PASS)
+        server.sendmail(GMAIL_USER, to_email, msg.as_string())
+        server.quit()
+        print(f"[SECURITY MAIL] Global logout notification sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"[SECURITY MAIL ERROR] Failed to send logout notification: {e}")
+        return False

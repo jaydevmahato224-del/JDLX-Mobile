@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe } from 'lucide-react'
+import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
@@ -27,6 +27,7 @@ export default function AdminSettings() {
     
     // New Delivery & Payment Settings
     cod_enabled: 'true',
+    cod_enabled_shiprocket: 'false',
     prepaid_delivery_charge: '49',
     cod_delivery_charge: '99',
     cod_advance_amount: '49',
@@ -355,25 +356,31 @@ export default function AdminSettings() {
                 </div>
               </div>
             </section>
-
-            {/* Delivery & Payment Controls */}
+            {/* Card 1: Payment & Checkout Switches */}
             <section className="ui-card-standard p-6 md:p-10 animate-in fade-in duration-300">
-              <div className="mb-10">
-                <h2 className="text-2xl font-black text-slate-900">Delivery & Payment Controls</h2>
-                <p className="text-slate-500 font-medium mt-1">Configure global delivery fees, COD rules, and checkout incentives.</p>
+              <div className="mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-600">
+                    <CreditCard size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Payment & Checkout Gateway</h2>
+                    <p className="text-slate-500 font-medium text-xs mt-0.5">Enable or disable Cash on Delivery globally and adjust thresholds.</p>
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   <Toggle 
                     label="Enable Cash on Delivery (COD)" 
-                    description="Allow customers to pay during delivery."
+                    description="Allow customers to choose Cash on Delivery at checkout."
                     enabled={settings.cod_enabled}
                     onChange={(val) => handleChange('cod_enabled', val)}
                   />
                   <Toggle 
                     label="Enable Free Delivery" 
-                    description="Automatically apply ₹0 delivery fee above threshold."
+                    description="Automatically waive delivery fee when threshold is met."
                     enabled={settings.free_delivery_enabled}
                     onChange={(val) => handleChange('free_delivery_enabled', val)}
                   />
@@ -391,7 +398,7 @@ export default function AdminSettings() {
                         type="number"
                         value={settings.prepaid_delivery_charge || ''}
                         onChange={(e) => handleChange('prepaid_delivery_charge', e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 transition-all"
                       />
                     </div>
                     <div className="space-y-2">
@@ -400,7 +407,7 @@ export default function AdminSettings() {
                         type="number"
                         value={settings.free_delivery_threshold || ''}
                         onChange={(e) => handleChange('free_delivery_threshold', e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 transition-all"
                       />
                     </div>
                   </div>
@@ -439,112 +446,156 @@ export default function AdminSettings() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </section>
 
-                <div className="space-y-6 pt-10 border-t border-slate-100">
-                   <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Incentives & Badges</h3>
-                   </div>
-                   
-                   <div className="grid gap-6 md:grid-cols-2">
-                     <Toggle 
-                        label="Prepaid Recommendation" 
-                        description="Show 'Recommended' tag on prepaid option."
-                        enabled={settings.prepaid_recommendation_enabled}
-                        onChange={(val) => handleChange('prepaid_recommendation_enabled', val)}
-                      />
-                      <Toggle 
-                        label="Priority Dispatch Badge" 
-                        description="Show lightning badge for prepaid orders."
-                        enabled={settings.priority_dispatch_enabled}
-                        onChange={(val) => handleChange('priority_dispatch_enabled', val)}
-                      />
-                   </div>
+            {/* Card 2: Checkout Incentives & Badges */}
+            <section className="ui-card-standard p-6 md:p-10 animate-in fade-in duration-300">
+              <div className="mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-600">
+                    <Zap size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Checkout Trust Signals</h2>
+                    <p className="text-slate-500 font-medium text-xs mt-0.5">Configure badges and warnings to encourage prepaid orders and build customer trust.</p>
+                  </div>
+                </div>
+              </div>
 
-                   <div className="space-y-2 pt-4">
-                      <label className="text-xs font-black uppercase tracking-widest text-slate-400">COD Alert Banner Text</label>
-                      <textarea
-                        value={settings.cod_alert_text || ''}
-                        onChange={(e) => handleChange('cod_alert_text', e.target.value)}
-                        rows={2}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-700 outline-none focus:bg-white focus:border-primary transition-all resize-none"
-                        placeholder="Message shown when COD is selected..."
-                      />
-                      <p className="text-[10px] text-slate-400 font-medium">This text is shown in the yellow alert box on the checkout page when COD is selected.</p>
+              <div className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
+                  <Toggle 
+                     label="Prepaid Recommendation Tag" 
+                     description="Show a prominent 'Recommended' tag on the prepaid checkout option."
+                     enabled={settings.prepaid_recommendation_enabled}
+                     onChange={(val) => handleChange('prepaid_recommendation_enabled', val)}
+                  />
+                  <Toggle 
+                     label="Priority Dispatch Badge" 
+                     description="Render a lightning priority shipping status badge on prepaid payments."
+                     enabled={settings.priority_dispatch_enabled}
+                     onChange={(val) => handleChange('priority_dispatch_enabled', val)}
+                  />
+                </div>
+
+                <div className="space-y-2 pt-4 border-t border-slate-100">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">COD Alert Banner Warning Text</label>
+                  <textarea
+                    value={settings.cod_alert_text || ''}
+                    onChange={(e) => handleChange('cod_alert_text', e.target.value)}
+                    rows={2}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-700 outline-none focus:bg-white focus:border-blue-500 transition-all resize-none"
+                    placeholder="Message shown when COD is selected..."
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">This notice appears at checkout when a customer clicks on the COD option to guide them toward prepaid benefits.</p>
+                </div>
+              </div>
+            </section>
+
+            {/* Card 3: Local Hyperlocal Operations */}
+            <section className="ui-card-standard p-6 md:p-10 animate-in fade-in duration-300">
+              <div className="mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-purple-500/10 rounded-2xl text-purple-600">
+                    <MapPin size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Local Hyperlocal Dispatch</h2>
+                    <p className="text-slate-500 font-medium text-xs mt-0.5">Configure operating limits and transactional platform fees for immediate store dispatch.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-8 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Delivery Radius Limit (KM)</label>
+                  <input
+                    type="number"
+                    value={settings.quick_delivery_max_distance || ''}
+                    onChange={(e) => handleChange('quick_delivery_max_distance', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-purple-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Fixed Platform Fee (₹)</label>
+                  <input
+                    type="number"
+                    value={settings.platform_fee || ''}
+                    onChange={(e) => handleChange('platform_fee', e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-purple-500 transition-all"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Card 4: Shiprocket Nationwide Courier */}
+            <section className="ui-card-standard p-6 md:p-10 animate-in fade-in duration-300">
+              <div className="mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-[#6322b2]/10 rounded-2xl text-[#6322b2]">
+                    <Send size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                      Shiprocket Courier & Standard Shipping
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Shiprocket_Logo.svg/1200px-Shiprocket_Logo.svg.png" className="h-3 ml-1" alt="" />
+                    </h2>
+                    <p className="text-slate-500 font-medium text-xs mt-0.5">Connect your Shiprocket credentials to support automated nationwide shipping and manage Courier COD status.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
+                   <div className="space-y-2">
+                     <label className="text-xs font-black uppercase tracking-widest text-slate-400">API Email Address</label>
+                     <input
+                       type="email"
+                       value={settings.shiprocket_email || ''}
+                       onChange={(e) => handleChange('shiprocket_email', e.target.value)}
+                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <label className="text-xs font-black uppercase tracking-widest text-slate-400">API Password Key</label>
+                     <input
+                       type="password"
+                       value={settings.shiprocket_password || ''}
+                       onChange={(e) => handleChange('shiprocket_password', e.target.value)}
+                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
+                     />
+                   </div>
+                   <div className="space-y-2 md:col-span-2">
+                     <label className="text-xs font-black uppercase tracking-widest text-slate-400">Registered Warehouse Pickup Location</label>
+                     <input
+                       type="text"
+                       value={settings.shiprocket_pickup_location || ''}
+                       onChange={(e) => handleChange('shiprocket_pickup_location', e.target.value)}
+                       placeholder="e.g., Primary, Warehouse-1"
+                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
+                     />
                    </div>
                 </div>
 
-                <div className="space-y-6 pt-10 border-t border-slate-100">
-                   <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1.5 h-6 bg-purple-600 rounded-full"></div>
-                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Delivery Logistics</h3>
-                   </div>
-                   <div className="grid gap-8 md:grid-cols-2">
-                     <div className="space-y-2">
-                       <label className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Delivery Radius (KM)</label>
-                       <input
-                         type="number"
-                         value={settings.quick_delivery_max_distance || ''}
-                         onChange={(e) => handleChange('quick_delivery_max_distance', e.target.value)}
-                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
-                       />
-                     </div>
-                     <div className="space-y-2">
-                       <label className="text-xs font-black uppercase tracking-widest text-slate-400">Fixed Platform Fee (₹)</label>
-                       <input
-                         type="number"
-                         value={settings.platform_fee || ''}
-                         onChange={(e) => handleChange('platform_fee', e.target.value)}
-                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
-                       />
-                     </div>
-                   </div>
-                </div>
-
-                <div className="space-y-6 pt-8 mt-8 border-t border-slate-100">
-                   <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1.5 h-6 bg-[#6322b2] rounded-full"></div>
-                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-                         Shiprocket Integration
-                         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Shiprocket_Logo.svg/1200px-Shiprocket_Logo.svg.png" className="h-3 ml-2" alt="" />
-                      </h3>
-                   </div>
-                   
-                   <div className="grid gap-6 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">API Email</label>
-                        <input
-                          type="email"
-                          value={settings.shiprocket_email || ''}
-                          onChange={(e) => handleChange('shiprocket_email', e.target.value)}
-                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">API Password</label>
-                        <input
-                          type="password"
-                          value={settings.shiprocket_password || ''}
-                          onChange={(e) => handleChange('shiprocket_password', e.target.value)}
-                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Registered Pickup Location</label>
-                        <input
-                          type="text"
-                          value={settings.shiprocket_pickup_location || ''}
-                          onChange={(e) => handleChange('shiprocket_pickup_location', e.target.value)}
-                          placeholder="e.g., Primary, Warehouse-1"
-                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
-                        />
-                      </div>
-                   </div>
-                   <div className="mt-4 p-4 rounded-2xl bg-[#6322b2]/5 border border-[#6322b2]/10 flex items-start gap-3">
-                     <p className="text-[10px] font-medium text-[#6322b2] leading-relaxed">
-                       Connecting your Shiprocket account allows JDLX to automatically create shipments, request pickups, and track orders in real-time. Make sure your pickup address matches what is registered in Shiprocket panel.
+                <div className="p-6 bg-purple-500/[0.03] rounded-3xl border border-purple-500/10 space-y-4">
+                  <Toggle 
+                     label="Enable Cash on Delivery (COD) for Courier Shipments" 
+                     description="Turn ON to allow long-distance customers to place orders using COD through Shiprocket couriers."
+                     enabled={settings.cod_enabled_shiprocket}
+                     onChange={(val) => handleChange('cod_enabled_shiprocket', val)}
+                  />
+                  <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
+                     <p className="text-[10.5px] font-semibold text-amber-700 leading-relaxed">
+                       ⚠️ <strong>RTO Warning:</strong> Nationwide Courier COD carries higher Return to Origin (RTO) risks. Ensure you monitor shipment rejections and verify customer addresses before dispatch.
                      </p>
                   </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-[#6322b2]/5 border border-[#6322b2]/10 flex items-start gap-3">
+                  <p className="text-[10px] font-medium text-[#6322b2] leading-relaxed">
+                    Connecting JDLX to your Shiprocket API lets the system automatically sync delivery addresses, request courier pickup agents, and update storefront order tracking in real-time.
+                  </p>
                 </div>
               </div>
             </section>

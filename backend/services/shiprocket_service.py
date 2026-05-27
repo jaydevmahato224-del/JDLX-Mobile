@@ -62,7 +62,7 @@ class ShiprocketService:
                     "selling_price": item['price']
                 } for item in order_data['items']
             ],
-            "payment_method": "Prepaid" if order_data.get('payment_status') == 'PAID' else "COD",
+            "payment_method": "Prepaid" if str(order_data.get('payment_status', '')).upper() == 'PAID' else "COD",
             "sub_total": order_data['total_amount'],
             "length": 10,
             "breadth": 10,

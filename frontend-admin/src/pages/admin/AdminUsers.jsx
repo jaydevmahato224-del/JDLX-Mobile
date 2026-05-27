@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Filter, ShieldAlert, CheckCircle, Ban, X, Mail, Send, AlertTriangle, Info, Bell } from 'lucide-react';
+import { Users, Search, Filter, ShieldAlert, CheckCircle, Ban, X, Mail, Send, AlertTriangle, Info, Bell, LogOut, Loader2 } from 'lucide-react';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
+import toast from 'react-hot-toast';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -23,6 +24,7 @@ const AdminUsers = () => {
     const [sendingMail, setSendingMail] = useState(false);
     const [mailBanner, setMailBanner] = useState(null);
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [actionLoading, setActionLoading] = useState(null);
 
     // Bulk Mail Tab State
     const [activeTab, setActiveTab] = useState('list'); // 'list' | 'bulk'
@@ -143,6 +145,31 @@ const AdminUsers = () => {
             setMailBanner({ type: 'error', text: err.message });
         } finally {
             setSendingMail(false);
+        }
+    };
+
+    const handleLogoutAll = async (userId) => {
+        if (!window.confirm("Are you sure you want to logout this user from all devices? They will need to login again.")) return;
+
+        try {
+            setActionLoading(userId);
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/logout-all`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || 'User logged out from all devices');
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to logout from all devices');
+            }
+        } catch (err) {
+            toast.error('Network error');
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -482,6 +509,15 @@ const AdminUsers = () => {
                                                         className={`mt-2 py-2 font-bold rounded text-xs border ${selectedUser.cod_restricted ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}
                                                     >
                                                         {selectedUser.cod_restricted ? 'REMOVE COD RESTRICTION' : 'RESTRICT COD (FAKE PROTECTION)'}
+                                                    </button>
+
+                                                    <button 
+                                                        onClick={() => handleLogoutAll(selectedUser.id)} 
+                                                        disabled={actionLoading === selectedUser.id}
+                                                        className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 bg-slate-900 text-white font-bold rounded-xl text-[10px] hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50"
+                                                    >
+                                                        {actionLoading === selectedUser.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                                                        LOGOUT FROM ALL DEVICES
                                                     </button>
                                                 </div>
                                             </div>

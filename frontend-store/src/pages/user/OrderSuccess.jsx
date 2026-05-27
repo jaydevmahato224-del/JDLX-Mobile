@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { CheckCircle2, Package, ShoppingBag, ArrowRight, Home, Truck, ShieldCheck } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
-import PageLoader from '../../components/PageLoader'
+import LoadingScreen from '../../components/LoadingScreen'
 
 function OrderSuccess() {
   const { orderId } = useParams()
@@ -30,7 +30,7 @@ function OrderSuccess() {
     fetchOrder()
   }, [orderId])
 
-  if (loading) return <PageLoader />
+  if (loading) return <LoadingScreen />
 
   return (
     <div className="container-standard py-12 flex flex-col items-center justify-center min-h-[80vh] animate-in fade-in zoom-in duration-700">

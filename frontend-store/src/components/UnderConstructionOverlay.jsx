@@ -83,19 +83,19 @@ export default function UnderConstructionOverlay() {
 
                     {/* Announcement Title */}
                     <div className="mb-4">
-                        <span className="inline-block px-4 py-1.5 rounded-full bg-amber-400/10 text-amber-400 text-[10px] font-black tracking-widest uppercase mb-3 border border-amber-400/20">
+                        <span className="inline-block px-4 py-1.5 rounded-full bg-amber-400/20 text-amber-400 text-[10px] font-black tracking-widest uppercase mb-3 border border-amber-400/30">
                             Coming Soon
                         </span>
-                        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+                        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]">
                             We Are Under <br />
-                            <span className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 bg-clip-text text-transparent">
+                            <span className="bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500 bg-clip-text text-transparent filter drop-shadow-[0_2px_10px_rgba(251,191,36,0.2)]">
                                 Construction
                             </span>
                         </h1>
                     </div>
 
                     {/* Custom Announcement Message (in English) */}
-                    <p className="text-slate-400 text-sm md:text-base leading-relaxed mb-10 max-w-md font-medium">
+                    <p className="text-slate-300 text-sm md:text-base leading-relaxed mb-10 max-w-md font-semibold drop-shadow-sm">
                         {constructionModeMessage || "Our site is currently undergoing scheduled maintenance and upgrades. We will be back online with exciting new premium products shortly."}
                     </p>
 

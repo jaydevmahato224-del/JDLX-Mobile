@@ -107,7 +107,7 @@ function Layout({ children }) {
                     JDLX MOBILE
                   </div>
                   <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">
-                    {deliveryMode === 'quick' ? 'Hyperlocal Quick Commerce' : 'Premium Mobile Store'}
+                    {deliveryMode === 'quick' ? 'Quick Commerce' : 'Premium Mobile Store'}
                   </div>
                 </div>
               </Link>

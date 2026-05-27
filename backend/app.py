@@ -4,9 +4,12 @@
 
 # --- Standard Library Imports ---
 import datetime
+import hashlib
+import hmac
 import json
 import math
 import os
+import secrets
 import sqlite3
 import time
 import uuid
@@ -425,8 +428,9 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 SECRET_KEY = os.environ.get("JWT_SECRET")
 if not SECRET_KEY:
-    SECRET_KEY = "jdlx_secret_keys_123"
-    logger.warning("JWT_SECRET not found in environment. Using insecure default fallback secret.")
+    # Auto-generate a strong secret per process (safe for dev, but sessions won't persist across restarts)
+    SECRET_KEY = secrets.token_hex(32)
+    logger.warning("JWT_SECRET not found in environment! Generated ephemeral secret. Set JWT_SECRET for production.")
 app.secret_key = SECRET_KEY
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -535,12 +539,157 @@ def token_required(f):
         try:
             token = token.split(" ")[1] # Bearer <token>
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            
+            # Global Logout Check: Verify if token was issued before min_token_iat
+            user_id = data.get('user_id')
+            iat = data.get('iat')
+            if user_id and iat:
+                conn = get_db()
+                user_record = conn.execute("SELECT min_token_iat FROM users WHERE id = ?", (user_id,)).fetchone()
+                conn.close()
+                if user_record and user_record['min_token_iat'] and iat < user_record['min_token_iat']:
+                    return error_response('Session invalidated. Please login again.', 401)
+
             data['role'] = normalize_role(data.get('role'))
             request.user = data
         except Exception as e:
             return error_response('Token is invalid!', 401)
         return f(*args, **kwargs)
     return decorated
+
+
+# --- Admin OTP Store for Re-authentication ---
+admin_otp_store = {}
+
+@app.route('/api/auth/verify-token', methods=['GET'])
+@token_required
+def verify_token():
+    """Verifies the current JWT token and returns the user's session info.
+    Used by the admin frontend to validate sessions on app mount."""
+    user = request.user
+    return jsonify({
+        "valid": True,
+        "user_id": user.get("user_id"),
+        "email": user.get("email"),
+        "role": user.get("role"),
+        "expires_at": datetime.datetime.utcfromtimestamp(user.get("exp", 0)).isoformat() if user.get("exp") else None
+    })
+
+@app.route('/api/admin/request-otp', methods=['POST'])
+def admin_request_otp():
+    """Requests an OTP for admin session re-authentication."""
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    if not email:
+        return error_response("Email is required", 400)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
+    user = cursor.fetchone()
+    conn.close()
+
+    if not user:
+        return error_response("Admin account not found", 404)
+
+    role = normalize_role(user.get('role'))
+    admin_roles = ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']
+    if role not in admin_roles:
+        return error_response("Unauthorized: This account is not an admin", 403)
+
+    # Generate 6-digit OTP
+    import random
+    import string
+    otp = ''.join(random.choices(string.digits, k=6))
+    
+    # Store OTP with 5-minute expiry
+    admin_otp_store[email] = {
+        'otp': otp,
+        'expiry': time.time() + 300,
+        'user_id': user['id'],
+        'role': role,
+        'name': user['name']
+    }
+
+    # Send OTP via email in a background thread
+    from threading import Thread
+    subject = "Admin Session Re-authentication OTP"
+    message = f"Your OTP for JDLX Admin Panel session re-authentication is: <br/><br/><b style='font-size: 24px; color: #4F46E5;'>{otp}</b><br/><br/>It will expire in 5 minutes."
+    Thread(target=send_individual_email, args=(email, user['name'] or 'Admin', subject, message)).start()
+
+    return success_response(None, "OTP sent successfully to your registered email")
+
+@app.route('/api/admin/verify-otp', methods=['POST'])
+def admin_verify_otp():
+    """Verifies OTP and issues a new admin token."""
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    otp = data.get('otp', '').strip()
+
+    if not email or not otp:
+        return error_response("Email and OTP are required", 400)
+
+    stored_data = admin_otp_store.get(email)
+    if not stored_data:
+        return error_response("No OTP requested for this email", 400)
+
+    if time.time() > stored_data['expiry']:
+        del admin_otp_store[email]
+        return error_response("OTP has expired. Please request a new one.", 401)
+
+    if stored_data['otp'] != otp:
+        return error_response("Invalid OTP", 401)
+
+    # OTP verified!
+    user_id = stored_data['user_id']
+    user_role = stored_data['role']
+    user_name = stored_data['name']
+
+    # Generate new token
+    now_utc = datetime.datetime.utcnow()
+    token_expiry = datetime.timedelta(hours=8)
+    payload = {
+        'user_id': user_id,
+        'email': email,
+        'role': user_role,
+        'iat': now_utc,
+        'jti': secrets.token_hex(16),
+        'exp': now_utc + token_expiry
+    }
+    jwt_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+    # Fetch fresh user data
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+
+    user_data = {
+        "id": user.get('id'),
+        "name": user.get('name'),
+        "email": user.get('email'),
+        "profile_image": user.get('profile_image'),
+        "role": user_role
+    }
+
+    # Clean up OTP store
+    del admin_otp_store[email]
+
+    # Log successful re-auth
+    log_admin_event(
+        user_id,
+        "admin_reauth_otp",
+        "auth",
+        user_id,
+        "Admin re-authenticated via OTP successfully",
+    )
+
+    return jsonify({
+        "success": True,
+        "token": jwt_token,
+        "user": user_data
+    })
 
 
 def run_admin_anomaly_check(admin_id, action_type):
@@ -673,11 +822,17 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         )
         run_admin_anomaly_check(user_dict['id'], "admin_login")
 
+    # Admin sessions expire in 8 hours; regular users get 24 hours
+    is_admin = user_role in ('admin', 'super_admin')
+    token_expiry = datetime.timedelta(hours=8) if is_admin else datetime.timedelta(hours=24)
+    now_utc = datetime.datetime.utcnow()
     payload = {
         'user_id': user_dict['id'],
         'email': user_dict['email'],
         'role': user_role,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        'iat': now_utc,
+        'jti': secrets.token_hex(16),
+        'exp': now_utc + token_expiry
     }
     jwt_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     user_data = {
@@ -759,6 +914,10 @@ def login_google():
     state_payload = f"{flow}|{frontend_url}"
     
     from urllib.parse import urlencode
+    # Include CSRF nonce for OAuth state validation
+    csrf_nonce = secrets.token_urlsafe(16)
+    session['oauth_csrf_nonce'] = csrf_nonce
+    state_payload = f"{state_payload}|{csrf_nonce}"
     params = {
         'client_id': GOOGLE_CLIENT_ID,
         'redirect_uri': GOOGLE_REDIRECT_URI,
@@ -787,13 +946,17 @@ def admin_login_google():
 
     # Build manual redirect URL to bypass Authlib and use stateless frontend URL passing
     from urllib.parse import urlencode
+    # Include CSRF nonce for OAuth state validation
+    csrf_nonce = secrets.token_urlsafe(16)
+    session['admin_oauth_csrf_nonce'] = csrf_nonce
+    state_with_nonce = f"{frontend_url}|{csrf_nonce}"
     params = {
         'client_id': ADMIN_GOOGLE_CLIENT_ID,
         'redirect_uri': ADMIN_GOOGLE_REDIRECT_URI,
         'response_type': 'code',
         'scope': 'openid email profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
         'prompt': 'select_account',
-        'state': frontend_url
+        'state': state_with_nonce
     }
     auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
     return redirect(auth_url)
@@ -802,9 +965,18 @@ def admin_login_google():
 @app.route('/admin/auth/google/callback', methods=['GET'])
 def admin_google_callback():
     """Callback for admin authentication; enforces admin role requirements."""
-    # Retrieve the dynamic frontend URL passed through the state parameter
-    state = request.args.get('state')
-    frontend_url = state if state and state.startswith('http') else ADMIN_FRONTEND_URL
+    # Retrieve the dynamic frontend URL and validate CSRF nonce from state
+    state = request.args.get('state', '')
+    state_parts = state.split('|', 1)
+    raw_frontend_url = state_parts[0] if state_parts else ''
+    received_nonce = state_parts[1] if len(state_parts) > 1 else ''
+    frontend_url = raw_frontend_url if raw_frontend_url.startswith('http') else ADMIN_FRONTEND_URL
+
+    # Validate CSRF nonce (soft-check: log warning if missing, block if mismatched)
+    stored_nonce = session.pop('admin_oauth_csrf_nonce', None)
+    if stored_nonce and received_nonce and not hmac.compare_digest(stored_nonce, received_nonce):
+        logger.warning(f"Admin OAuth CSRF nonce mismatch. Expected={stored_nonce}, Got={received_nonce}")
+        return redirect(f"{frontend_url}/admin/login?error=csrf_validation_failed")
     
     try:
         # Bypassing Authlib's strict session state validation which often fails on localhost
@@ -877,9 +1049,8 @@ def admin_google_callback():
             
     except Exception as exc:
         logger.error(f"Admin Google OAuth callback failed: {str(exc)}", exc_info=True)
-        # We use a broader try-except to ensure any DB or logic errors redirect back to the login page 
-        # with the error details instead of crashing into a JSON response.
-        return redirect(f"{frontend_url}/admin/login?error=auth_error&details={quote(str(exc))}")
+        # Security: Never expose internal exception details to the client
+        return redirect(f"{frontend_url}/admin/login?error=auth_error&details=Authentication+failed.+Please+try+again.")
 
 
 @app.route('/google/callback', methods=['GET'])
@@ -887,7 +1058,9 @@ def google_callback():
     """General Google OAuth callback; dispatches based on state-encoded flow."""
     state_payload = request.args.get('state', '')
     if '|' in state_payload:
-        flow, frontend_url = state_payload.split('|', 1)
+        parts = state_payload.split('|')
+        flow = parts[0]
+        frontend_url = parts[1] if len(parts) > 1 else FRONTEND_BASE_URL
     else:
         flow = 'user'
         frontend_url = state_payload if state_payload.startswith('http') else FRONTEND_BASE_URL
@@ -2602,7 +2775,7 @@ def checkout():
                 is_prepaid_only_order = True
 
         # Get dynamic fees from settings
-        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled', 'free_delivery_enabled')")
+        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled', 'cod_enabled_shiprocket', 'free_delivery_enabled')")
         settings_rows = cursor.fetchall()
         settings = {row['key']: row['value'] for row in settings_rows}
         
@@ -2613,11 +2786,16 @@ def checkout():
         cod_fee = float(settings.get('cod_delivery_charge', 99))
         cod_advance = float(settings.get('cod_advance_amount', 49))
         cod_enabled = settings.get('cod_enabled', 'true').lower() == 'true'
+        cod_enabled_shiprocket = settings.get('cod_enabled_shiprocket', 'false').lower() == 'true'
 
         payment_type = data.get('payment_type', 'PREPAID').upper()
         if payment_type == 'COD':
-            if not cod_enabled:
-                return error_response("Cash on Delivery is currently disabled", 400)
+            if delivery_type == 'shiprocket':
+                if not cod_enabled_shiprocket:
+                    return error_response("Cash on Delivery is currently disabled for standard shipping courier", 400)
+            else:
+                if not cod_enabled:
+                    return error_response("Cash on Delivery is currently disabled", 400)
             
             # 1. Check for prepaid-only products
             if locals().get('is_prepaid_only_order', False):
@@ -2653,11 +2831,13 @@ def checkout():
         actual_delivery_fee = 0
         free_delivery_applied = 0
         
-        if delivery_type == 'shiprocket':
-            actual_delivery_fee = 99
-        elif free_delivery_enabled and total_amount >= free_thresh:
+        if free_delivery_enabled and total_amount >= free_thresh:
+            # Free delivery applies to ALL delivery types (quick + shiprocket)
             actual_delivery_fee = 0
             free_delivery_applied = 1
+        elif delivery_type == 'shiprocket':
+            # Shiprocket uses the same prepaid/cod fee structure
+            actual_delivery_fee = cod_fee if payment_type == 'COD' else prepaid_fee
         elif payment_type == 'PREPAID':
             actual_delivery_fee = prepaid_fee
         else: # COD
@@ -2690,7 +2870,7 @@ def checkout():
                 platform_fee, delivery_fee, fitting_charge, payment_type,
                 cod_advance_paid, cod_remaining_amount, free_delivery_applied
             )
-            VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
             phone, address, final_total, store_id, estimated_delivery_str, 
@@ -2768,7 +2948,7 @@ def checkout():
                     "delivery_address": address,
                     "total_amount": final_total,
                     "items": items,
-                    "payment_status": "PENDING"
+                    "payment_status": "pending"
                 }
                 sr_res = sync_to_shiprocket(order_payload, cursor)
                 if sr_res and 'order_id' in sr_res:
@@ -2808,7 +2988,7 @@ def checkout():
                 "delivery_type": "shiprocket",
                 "message": "Local delivery unavailable. Order will be shipped via courier.",
                 "estimated_days": "3-5 business days",
-                "delivery_charge": 99
+                "delivery_charge": actual_delivery_fee
             }), 201
 
         return jsonify({
@@ -3495,6 +3675,46 @@ def update_user_account_status(user_id):
 
         conn.close()
         return success_response(None, f"User status updated to {status}")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/users/<int:user_id>/logout-all', methods=['POST'])
+@token_required
+@require_admin()
+@require_permission("manage_users")
+def admin_logout_user_all_devices(user_id):
+    """Invalidates all current sessions for a user by updating min_token_iat."""
+    try:
+        now_ts = int(time.time())
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Check if user exists
+        user = cursor.execute("SELECT id, name, email FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            conn.close()
+            return error_response("User not found", 404)
+            
+        cursor.execute("UPDATE users SET min_token_iat = ? WHERE id = ?", (now_ts, user_id))
+        conn.commit()
+        
+        # Log admin action
+        log_admin_event(
+            request.user['user_id'],
+            "user_logout_all_devices",
+            "users",
+            user_id,
+            f"Logged out user {user['email']} from all devices",
+        )
+
+        # Trigger Security Email Notification in Background
+        from threading import Thread
+        from notifier import send_security_logout_email
+        Thread(target=send_security_logout_email, args=(user['email'], user['name'])).start()
+        
+        conn.close()
+        return success_response(None, f"User {user['name']} has been logged out from all devices.")
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -4674,6 +4894,126 @@ def admin_update_product(product_id):
         return error_response(str(e), 500)
 
 
+@app.route('/api/pincode/check/<string:pincode>', methods=['GET'])
+def check_pincode_serviceability(pincode):
+    if not pincode or len(pincode) != 6 or not pincode.isdigit():
+        return error_response("Invalid pincode format", 400)
+        
+    try:
+        # 1. Verify general pincode validity via Postal API (SSL verify=False for development environment stability)
+        is_valid_pincode = True
+        city_detected = None
+        state_detected = None
+        
+        try:
+            import requests
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            res_postal = requests.get(f"https://api.postalpincode.in/pincode/{pincode}", headers=headers, verify=False, timeout=5)
+            if res_postal.status_code == 200:
+                postal_data = res_postal.json()
+                if postal_data and postal_data[0]:
+                    status = postal_data[0].get('Status')
+                    if status == 'Error' or "no records found" in str(postal_data[0].get('Message', '')).lower():
+                        is_valid_pincode = False
+                    elif postal_data[0].get('PostOffice'):
+                        office = postal_data[0]['PostOffice'][0]
+                        city_detected = office.get('District')
+                        state_detected = office.get('State')
+        except Exception as ex:
+            print(f"Backend postal api lookup failed: {ex}")
+            # Network fallback: assume valid if network is completely offline to avoid blocking
+            is_valid_pincode = True
+            
+        if not is_valid_pincode:
+            return success_response({
+                "pincode": pincode,
+                "serviceable": False,
+                "invalid": True,
+                "cod_allowed": False,
+                "prepaid_only": False,
+                "message": "Invalid Pincode! No postal records found."
+            })
+            
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Check local rules first
+        cursor.execute("SELECT cod_allowed, prepaid_only FROM pincode_rules WHERE pincode = ?", (pincode,))
+        rule = cursor.fetchone()
+        
+        cod_allowed = True
+        prepaid_only = False
+        
+        if rule:
+            cod_allowed = bool(rule['cod_allowed'])
+            prepaid_only = bool(rule['prepaid_only'])
+            
+        # Get active dark store's pincode as pickup postcode
+        cursor.execute("SELECT pincode FROM dark_stores WHERE active = 1 LIMIT 1")
+        store = cursor.fetchone()
+        pickup_pincode = store['pincode'] if store and store['pincode'] else '110001'
+        
+        conn.close()
+        
+        # Check with Shiprocket Serviceability API
+        shiprocket_verified = False
+        shiprocket_cod_allowed = True
+        shiprocket_serviceable = True
+        
+        try:
+            from shiprocket_client import sr_headers, SHIPROCKET_API
+            headers = sr_headers()
+            if headers:
+                res = requests.get(
+                    f"{SHIPROCKET_API}/courier/serviceability/",
+                    params={
+                        "pickup_postcode": pickup_pincode,
+                        "delivery_postcode": pincode,
+                        "weight": "0.5",
+                        "cod": "1"
+                    },
+                    headers=headers,
+                    timeout=5
+                )
+                if res.status_code == 200:
+                    sr_data = res.json()
+                    status_code = sr_data.get('status')
+                    
+                    if status_code == 200:
+                        shiprocket_verified = True
+                        data_payload = sr_data.get('data', {})
+                        available_couriers = data_payload.get('available_courier_companies', [])
+                        
+                        if not available_couriers:
+                            shiprocket_serviceable = False
+                        else:
+                            has_cod = any(int(c.get('cod', 0)) == 1 for c in available_couriers)
+                            shiprocket_cod_allowed = has_cod
+                    elif status_code == 404 or "not serviceable" in str(sr_data.get('message', '')).lower():
+                        shiprocket_verified = True
+                        shiprocket_serviceable = False
+        except Exception as e:
+            print(f"Error checking Shiprocket serviceability: {e}")
+            
+        final_serviceable = shiprocket_serviceable if shiprocket_verified else True
+        final_cod = cod_allowed and shiprocket_cod_allowed
+        
+        return success_response({
+            "pincode": pincode,
+            "serviceable": final_serviceable,
+            "invalid": False,
+            "cod_allowed": final_cod,
+            "prepaid_only": prepaid_only or not final_cod,
+            "city": city_detected,
+            "state": state_detected,
+            "message": "Serviceable via Standard Express Delivery" if final_serviceable else "Delivery not available to this pincode"
+        })
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
 @app.route('/api/admin/pincode-rules', methods=['GET'])
 @token_required
 @require_admin()
@@ -5197,7 +5537,7 @@ def verify_payment():
         
         if data.get('payment_method') == 'COD' and payment_type == 'COD' and user_row['cod_advance_paid'] <= 0:
             # Pure COD with no advance (if we ever support it)
-            cursor.execute("UPDATE orders SET status = 'PLACED', payment_status = 'PENDING' WHERE id = ?", (order_id,))
+            cursor.execute("UPDATE orders SET order_status = 'PLACED', payment_status = 'pending' WHERE id = ?", (order_id,))
             cursor.execute("UPDATE payments SET payment_status = 'SUCCESS' WHERE order_id = ?", (order_id,))
             if user_id:
                 notification_service.send_order_notification(user_id, order_id, 'PLACED')
@@ -5209,8 +5549,8 @@ def verify_payment():
         is_valid = True 
         
         if is_valid:
-            new_payment_status = 'PAID' if payment_type == 'PREPAID' else 'ADVANCE_PAID'
-            cursor.execute("UPDATE orders SET status = 'PLACED', payment_status = ? WHERE id = ?", (new_payment_status, order_id))
+            new_payment_status = 'paid' if payment_type == 'PREPAID' else 'advance_paid'
+            cursor.execute("UPDATE orders SET order_status = 'PLACED', payment_status = ? WHERE id = ?", (new_payment_status, order_id))
             cursor.execute('UPDATE payments SET payment_status = "SUCCESS", transaction_id = ? WHERE order_id = ?', (razorpay_payment_id, order_id))
             if user_id:
                 notification_service.send_order_notification(user_id, order_id, 'PLACED')
@@ -5929,9 +6269,8 @@ def warehouse_availability():
         all_settings = cursor.fetchall()
         settings = {row['key']: row['value'] for row in all_settings}
 
-        conn.close()
-
         if not store:
+            conn.close()
             return success_response({
                 "ordering_enabled": False,
                 "can_order": False,
@@ -5939,7 +6278,19 @@ def warehouse_availability():
                 "message": "No stores are currently available near you.",
                 "store_name": None,
                 "scheduled_delivery_time": settings.get('scheduled_delivery_time', 'Tomorrow'),
-                "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.')
+                "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.'),
+                "cod_enabled_shiprocket": settings.get('cod_enabled_shiprocket', 'false').lower() == 'true',
+                "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
+                "platform_fee": float(settings.get('platform_fee', 7)),
+                "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
+                "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
+                "delivery_fee": float(settings.get('delivery_fee', 49)),
+                "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),
+                "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
+                "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
+                "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
+                "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
+                "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true'
             }, "Availability checked")
 
         # Check user-specific COD restriction if logged in
@@ -5959,6 +6310,8 @@ def warehouse_availability():
             except:
                 pass
 
+        conn.close()
+
         return success_response({
             "ordering_enabled": True,
             "can_order": True,
@@ -5975,6 +6328,7 @@ def warehouse_availability():
             "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
             "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
             "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
+            "cod_enabled_shiprocket": settings.get('cod_enabled_shiprocket', 'false').lower() == 'true',
             "user_cod_restricted": user_cod_restricted,
             "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
             "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
@@ -6002,19 +6356,18 @@ def health_check():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
+        conn.close()
         return jsonify({
             "status": "healthy",
             "database": "connected",
-            "allowed_origins": cors_origins,
             "timestamp": datetime.datetime.now().isoformat(),
             "version": "1.0.0"
         }), 200
     except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
         return jsonify({
             "status": "unhealthy",
             "database": "error",
-            "error": str(e),
-            "allowed_origins": cors_origins
         }), 500
 
 

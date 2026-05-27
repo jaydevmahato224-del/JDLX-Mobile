@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
-import PageLoader from '../../components/PageLoader';
+import LoadingScreen from '../../components/LoadingScreen';
 import { getProductUrl } from '../../utils/productSlug';
 
 /**
@@ -38,7 +38,7 @@ const ShareRedirect = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">
-        <PageLoader />
+        <LoadingScreen />
         <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
           Resolving Premium Link...
         </p>

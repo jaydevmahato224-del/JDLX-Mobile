@@ -177,7 +177,7 @@ export default function ProductDetails() {
   }, [deliveryMode, nearestStoreId, product, availability]);
 
   const deliveryNoteDisplay = useMemo(() => {
-    if (deliveryMode === 'quick' && nearestStoreId) return availability?.quick_delivery_note || 'Hyperlocal dispatch from the active dark store.';
+    if (deliveryMode === 'quick' && nearestStoreId) return availability?.quick_delivery_note || 'Dispatch from the active dark store.';
     return availability?.scheduled_delivery_note || 'Reliable fulfillment from our central warehouse.';
   }, [deliveryMode, nearestStoreId, availability]);
 
@@ -360,7 +360,7 @@ export default function ProductDetails() {
               <div className="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/20">
                 <div className="flex items-center gap-2 mb-3"><Zap size={16} className="text-amber-400" /><span className="ui-label text-slate-400">Dispatch</span></div>
                 <div className="text-xl font-black tracking-tight">{deliveryTimeDisplay}</div>
-                <p className="mt-1 text-[11px] font-bold text-slate-400">{deliveryMode === 'quick' ? 'Hyperlocal' : 'Standard'}</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-400">{deliveryMode === 'quick' ? '' : 'Standard'}</p>
               </div>
             </div>
 

@@ -6,7 +6,7 @@ import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, In
 import { resolveMediaUrl, API_BASE_URL } from '../../config'
 import { trackRemoveFromCart } from '../../utils/analytics'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
-import PageLoader from '../../components/PageLoader'
+import LoadingScreen from '../../components/LoadingScreen'
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
@@ -43,20 +43,22 @@ function Cart() {
     const deliveryMode = useStore(state => state.deliveryMode);
     const token = useStore(state => state.token);
     const isCartLoaded = useStore(state => state.isCartLoaded);
+    const fetchCart = useStore(state => state.fetchCart);
     const { trackEvent } = useAnalyticsContext();
     const [isSyncing, setIsSyncing] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [availability, setAvailability] = useState(null);
 
     useEffect(() => {
+        fetchCart();
         fetch(`${API_BASE_URL}/warehouse/availability`)
             .then(res => res.json())
             .then(data => setAvailability(data))
             .catch(e => console.error('Failed to load availability:', e));
-    }, []);
+    }, [fetchCart]);
 
     if (!isCartLoaded) {
-        return <PageLoader />;
+        return <LoadingScreen />;
     }
 
     // Robust ID matching and numeric conversions
@@ -134,7 +136,7 @@ function Cart() {
                 {/* Trust Signal */}
                 <div className="mt-12 text-[10px] font-black text-[var(--color-on-surface-variant)]/40 uppercase tracking-[0.3em] flex items-center gap-3">
                     <div className="h-px w-8 bg-current opacity-20" />
-                    JDLX Premium {deliveryMode === 'quick' ? 'Hyperlocal' : 'Essentials'}
+                    JDLX Premium {deliveryMode === 'quick' ? '' : 'Essentials'}
                     <div className="h-px w-8 bg-current opacity-20" />
                 </div>
             </div>

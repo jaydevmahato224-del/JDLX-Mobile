@@ -4,7 +4,7 @@ import { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react'
 import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
-import PageLoader from './components/PageLoader'
+import LoadingScreen from './components/LoadingScreen'
 import SplashScreen from './components/SplashScreen'
 import AnalyticsTracker from './components/AnalyticsTracker'
 import PushNotificationManager from './components/PushNotificationManager'
@@ -122,7 +122,7 @@ const ProductRedirector = lazy(() => Promise.resolve({
       }
     }, [id, products, fetchProducts, navigate]);
 
-    return <PageLoader />;
+    return <LoadingScreen />;
   }
 }))
 const SearchPage = lazy(() => import('./pages/user/SearchPage'))
@@ -228,7 +228,7 @@ function OperationalRedirect() {
     
     window.location.replace(target)
   }, [location])
-  return <PageLoader />
+  return <LoadingScreen />
 }
 
 function AnalyticsWrapper({ children }) {
@@ -274,6 +274,13 @@ function App() {
     // Otherwise, let individual pages (like Home.jsx) handle their own loading.
     if (!showSplash) {
       setDataReady(true)
+      const hasOAuthParams = window.location.search.includes('oauth_token');
+      if (!hasOAuthParams) {
+        fetchCart()
+        if (token) {
+          fetchWishlist()
+        }
+      }
       return
     }
 
@@ -329,7 +336,7 @@ function App() {
         <AnalyticsWrapper>
           <AnalyticsTracker />
           <RouteChangeTracker />
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/*" element={
                 <>

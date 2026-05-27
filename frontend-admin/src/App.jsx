@@ -16,6 +16,8 @@ import { API_BASE_URL } from './config'
 
 // Global fetch interceptor to trigger TopLoader on API calls
 const originalFetch = window.fetch;
+// Expose original fetch for internal security checks (e.g., AdminRoute token verification)
+window.__originalFetch = originalFetch;
 window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
   const { setGlobalError } = useStore.getState();
@@ -40,8 +42,10 @@ window.fetch = async (...args) => {
       requestUrl.includes('/api/admin/') &&
       !window.location.pathname.startsWith('/admin/login')
     ) {
-      useStore.getState().adminLogout();
-      window.location.replace('/admin/login?reason=session_expired');
+      // Instead of logging out, trigger the re-authentication modal
+      useStore.getState().setReauthenticating(true);
+      // We don't redirect anymore, the modal will handle it
+      // window.location.replace('/admin/login?reason=session_expired');
     }
 
     // Detection Logic for Server Errors - ONLY for our backend

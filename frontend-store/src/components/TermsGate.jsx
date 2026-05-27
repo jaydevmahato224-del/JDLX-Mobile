@@ -48,9 +48,14 @@ function TermsGate() {
         setRequiredVersion(version)
         setTermsContent(settingsJson?.data?.terms_and_conditions_content || '')
 
+        let freshAcceptedVersion = Number(user?.terms_accepted_version || 0)
+
         if (profileRes.ok && profileJson) {
           setUser(profileJson, token)
+          freshAcceptedVersion = Number(profileJson.terms_accepted_version || 0)
         }
+        
+        setOpen(freshAcceptedVersion < version)
       } catch (e) {
         // ignore; do not block app due to transient errors
       } finally {
@@ -60,12 +65,6 @@ function TermsGate() {
 
     run()
   }, [user?.id, token, setUser])
-
-  useEffect(() => {
-    if (checking) return
-    if (!user) return
-    setOpen(needsAccept)
-  }, [checking, needsAccept, user])
 
   const accept = async () => {
     if (!token) return

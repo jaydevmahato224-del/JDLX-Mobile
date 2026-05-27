@@ -18,7 +18,7 @@ import FulfillmentQueue from './components/FulfillmentQueue'
 import TerminalStatus from './components/TerminalStatus'
 import InventoryAlerts from './components/InventoryAlerts'
 import ScoreCards from './components/ScoreCards'
-import PageLoader from '../../components/PageLoader'
+import LoadingScreen from '../../components/LoadingScreen'
 
 const EMPTY_DASHBOARD = {
     cards: {
@@ -141,7 +141,7 @@ const WarehouseDashboard = () => {
         }
     }
 
-    if (loading) return <PageLoader />
+    if (loading) return <LoadingScreen />
 
     return (
         <div className="warehouse-page-content py-4 lg:py-8">

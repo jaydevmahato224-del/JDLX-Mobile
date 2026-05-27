@@ -24,9 +24,13 @@ function Checkout() {
         name: user?.name || '',
         email: user?.email || '',
         phone: '',
-        address: '',
+        address: '', // Stores final selected address string
+        flatNo: '',
+        area: '',
         landmark: '',
-        pincode: ''
+        pincode: '',
+        city: '',
+        state: ''
     });
 
     const [coords, setCoords] = useState({ latitude: 28.6139, longitude: 77.2090 });
@@ -40,15 +44,18 @@ function Checkout() {
     const [pincode, setPincode] = useState('');
     const [serviceability, setServiceability] = useState(null);
     const [checkingPincode, setCheckingPincode] = useState(false);
+    const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
+    const [pincodeMessage, setPincodeMessage] = useState('');
     const deliveryMode = useStore(state => state.deliveryMode);
     const nearestStoreId = useStore(state => state.nearestStoreId);
     const isShiprocket = !nearestStoreId;
+    const codEnabledShiprocket = availability?.cod_enabled_shiprocket === true;
 
     useEffect(() => {
-        if (isShiprocket && paymentMethod === 'COD') {
+        if (isShiprocket && paymentMethod === 'COD' && !codEnabledShiprocket) {
             setPaymentMethod('PREPAID');
         }
-    }, [isShiprocket, paymentMethod]);
+    }, [isShiprocket, paymentMethod, codEnabledShiprocket]);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
     // Derived values
@@ -106,7 +113,13 @@ function Checkout() {
                     const defaultAddr = addresses.find(a => a.is_default);
                     if (defaultAddr) {
                         setSelectedAddressId(defaultAddr.id);
-                        setFormData(prev => ({ ...prev, address: defaultAddr.address_text }));
+                        const pinMatch = defaultAddr.address_text.match(/\b\d{6}\b/);
+                        const extractedPin = pinMatch ? pinMatch[0] : '';
+                        setFormData(prev => ({ 
+                            ...prev, 
+                            address: defaultAddr.address_text,
+                            pincode: extractedPin
+                        }));
                         setCoords({ latitude: defaultAddr.latitude, longitude: defaultAddr.longitude });
                     }
                 }
@@ -120,8 +133,10 @@ function Checkout() {
         fetch(`${API_BASE_URL}/warehouse/availability`)
             .then(r => r.json())
             .then(data => {
-                if (data.success) {
-                    setAvailability(data.data);
+                // Handle both flat response (from blueprint) and wrapped response (from success_response)
+                const avail = data.data || data;
+                if (avail && (avail.success !== false)) {
+                    setAvailability(avail);
                 }
             })
             .catch(e => console.error('Failed to load availability:', e));
@@ -134,7 +149,7 @@ function Checkout() {
             setServiceability({
                 status: 'serviceable',
                 edd: new Date(Date.now() + (deliveryMode === 'quick' ? 30 * 60000 : 3 * 24 * 60 * 60 * 1000)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-                courier: deliveryMode === 'quick' ? 'JDLX Hyperlocal' : 'Shiprocket Express'
+                courier: deliveryMode === 'quick' ? 'JDLX' : 'Shiprocket Express'
             });
             setCheckingPincode(false);
         }, 800);
@@ -186,11 +201,10 @@ function Checkout() {
     const codAlertText = availability?.cod_alert_text || 'Save more with prepaid orders! FREE delivery on orders above ₹499.';
 
     // Delivery Charge Calculation
-    const deliveryCharge = isShiprocket 
-        ? 99 
-        : (isFreeDeliveryEnabled && subtotal >= freeThreshold)
-            ? 0
-            : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
+    // Free delivery applies to ALL delivery types (quick + shiprocket)
+    const deliveryCharge = (isFreeDeliveryEnabled && subtotal >= freeThreshold)
+        ? 0
+        : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
 
     const discountAmount = appliedOffer ? appliedOffer.discount_amount : 0;
     const finalTotal = Math.max(0, subtotal - discountAmount) + platformFee + deliveryCharge + fittingTotal;
@@ -202,8 +216,71 @@ function Checkout() {
     const progressPercent = Math.min((subtotal / freeThreshold) * 100, 100);
     const amountToFree = freeThreshold - subtotal;
 
+    const fetchCityStateFromPincode = async (pin, updateStateFn) => {
+        setPincodeStatus('checking');
+        setPincodeMessage('Checking pincode validity and serviceability...');
+        try {
+            const res = await fetch(`${API_BASE_URL}/pincode/check/${pin}`);
+            if (res.ok) {
+                const checkData = await res.json();
+                const details = checkData.data || checkData;
+                
+                if (details.invalid) {
+                    setPincodeStatus('invalid');
+                    setPincodeMessage('❌ Invalid Pincode! Please enter a valid Indian pincode.');
+                    toast.error("Invalid Pincode. Please enter a valid 6-digit Indian postal code.");
+                    return;
+                }
+                
+                if (details.city && details.state) {
+                    updateStateFn(prev => ({
+                        ...prev,
+                        city: details.city,
+                        state: details.state
+                    }));
+                }
+                
+                if (details.serviceable) {
+                    setPincodeStatus('serviceable');
+                    if (!details.cod_allowed) {
+                        setPincodeMessage('⚠️ Only PREPAID delivery available for this location.');
+                        setPaymentMethod('PREPAID'); // Auto force Prepaid
+                        toast.success(`Pincode serviceable! Only Prepaid payments accepted here.`);
+                    } else {
+                        setPincodeMessage('✓ Serviceable by Shiprocket Express! COD & Prepaid available.');
+                        if (details.city && details.state) {
+                            toast.success(`Location detected: ${details.city}, ${details.state}`);
+                        } else {
+                            toast.success("Pincode verified successfully.");
+                        }
+                    }
+                } else {
+                    setPincodeStatus('unserviceable');
+                    setPincodeMessage('⚠️ Courier service is not available for this location.');
+                    toast.error("Shiprocket does not deliver to this pincode. Please enter a different one.");
+                }
+            } else {
+                setPincodeStatus('invalid');
+                setPincodeMessage('❌ Pincode check failed. Please check manually.');
+            }
+        } catch (err) {
+            console.warn("Failed to auto-fetch pincode details:", err);
+            setPincodeStatus('invalid');
+            setPincodeMessage('❌ Connection error checking pincode.');
+        }
+    };
+
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        if (name === 'pincode') {
+            const digits = value.replace(/\D/g, '').slice(0, 6);
+            setFormData(prev => ({ ...prev, pincode: digits }));
+            if (digits.length === 6) {
+                fetchCityStateFromPincode(digits, setFormData);
+            }
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handlePayment = async (orderId) => {
@@ -220,8 +297,20 @@ function Checkout() {
                 },
                 body: JSON.stringify({ order_id: orderId })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Payment initiation failed');
+
+            let data;
+            try {
+                data = await res.json();
+            } catch (jsonErr) {
+                throw new Error('Server returned an invalid response. Please try again.');
+            }
+
+            if (!res.ok) throw new Error(data?.message || data?.error || 'Payment initiation failed');
+
+            // Check if Razorpay SDK is loaded
+            if (!window.Razorpay) {
+                throw new Error('Payment gateway is loading. Please wait a moment and try again.');
+            }
 
             // Step 2: Open Razorpay checkout
             const options = {
@@ -238,51 +327,58 @@ function Checkout() {
                 },
                 theme: { color: '#6366f1' },
                 handler: async (response) => {
-                    // Step 3: Verify payment
-                    const verifyRes = await fetch(`${API_BASE_URL}/payment/verify`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                            razorpay_order_id: response.razorpay_order_id,
-                            razorpay_payment_id: response.razorpay_payment_id,
-                            razorpay_signature: response.razorpay_signature
-                        })
-                    });
-                    
-                    if (verifyRes.ok) {
-                        // GA4 Purchase Tracking
-                        trackPurchase(orderId, finalTotal, cart);
-                        trackEvent('purchase', 'order', String(orderId), finalTotal);
+                    try {
+                        // Step 3: Verify payment
+                        const verifyRes = await fetch(`${API_BASE_URL}/payment/verify`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature
+                            })
+                        });
+                        
+                        if (verifyRes.ok) {
+                            // GA4 Purchase Tracking
+                            trackPurchase(orderId, finalTotal, cart);
+                            trackEvent('purchase', 'order', String(orderId), finalTotal);
 
-                        // Record offer usage if applied
-                        if (appliedOffer) {
-                            try {
-                                await fetch(`${API_BASE_URL}/offers/record-usage`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${token}`
-                                    },
-                                    body: JSON.stringify({
-                                        offer_id: appliedOffer.offer_id,
-                                        order_id: orderId,
-                                        discount_applied: discountAmount
-                                    })
-                                });
-                            } catch (e) {
-                                console.error('Failed to record offer usage', e);
+                            // Record offer usage if applied
+                            if (appliedOffer) {
+                                try {
+                                    await fetch(`${API_BASE_URL}/offers/record-usage`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: JSON.stringify({
+                                            offer_id: appliedOffer.offer_id,
+                                            order_id: orderId,
+                                            discount_applied: discountAmount
+                                        })
+                                    });
+                                } catch (e) {
+                                    console.error('Failed to record offer usage', e);
+                                }
                             }
-                        }
 
-                        toast.success('Payment successful!');
-                        clearCart();
-                        navigate(`/order-success/${orderId}`);
-                    } else {
-                        const verifyData = await verifyRes.json();
-                        toast.error(verifyData.message || 'Payment verification failed');
+                            toast.success('Payment successful!');
+                            clearCart();
+                            navigate(`/order-success/${orderId}`);
+                        } else {
+                            let verifyData;
+                            try { verifyData = await verifyRes.json(); } catch { verifyData = {}; }
+                            toast.error(verifyData?.message || 'Payment verification failed');
+                            setIsProcessing(false);
+                        }
+                    } catch (verifyErr) {
+                        console.error('Payment verification error:', verifyErr);
+                        toast.error('Payment verification encountered an error. Please check your orders.');
                         setIsProcessing(false);
                     }
                 },
@@ -296,13 +392,14 @@ function Checkout() {
 
             const rzp = new window.Razorpay(options);
             rzp.on('payment.failed', (response) => {
-                toast.error(`Payment failed: ${response.error.description}`);
+                toast.error(`Payment failed: ${response.error?.description || 'Unknown error'}`);
                 setIsProcessing(false);
             });
             rzp.open();
 
         } catch (err) {
-            toast.error(err.message || 'Something went wrong');
+            console.error('Payment error:', err);
+            toast.error(err.message || 'Something went wrong with payment');
             setIsProcessing(false);
         }
     };
@@ -326,10 +423,43 @@ function Checkout() {
             return;
         }
 
+        if (!selectedAddressId) {
+            if (!formData.flatNo.trim()) {
+                toast.error("Please enter Flat/House No. or Building name");
+                return;
+            }
+            if (!formData.area.trim()) {
+                toast.error("Please enter Street, Sector, or Colony");
+                return;
+            }
+            if (!formData.city.trim()) {
+                toast.error("Please enter your City");
+                return;
+            }
+            if (!formData.state.trim()) {
+                toast.error("Please enter your State");
+                return;
+            }
+            if (!formData.pincode || formData.pincode.length !== 6 || !/^\d{6}$/.test(formData.pincode)) {
+                toast.error("Please enter a valid 6-digit Pincode");
+                return;
+            }
+            if (pincodeStatus === 'unserviceable') {
+                toast.error("Courier service is not available for this location.");
+                return;
+            }
+            if (pincodeStatus === 'invalid') {
+                toast.error("Invalid Pincode. Please enter a valid Indian pincode.");
+                return;
+            }
+        }
+
         const token = useStore.getState().token;
         setIsProcessing(true);
 
         try {
+            const manualAddressText = `${formData.flatNo}, ${formData.area}${formData.landmark ? `, Near ${formData.landmark}` : ''}, ${formData.city}, ${formData.state} - ${formData.pincode}`;
+            
             const orderPayload = {
                 items: cart.map(item => ({ 
                     id: item.id, 
@@ -338,7 +468,7 @@ function Checkout() {
                     device_model: item.device_model || null,
                     fitting_charge: item.fitting ? (item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40) : 0
                 })),
-                address: `${formData.address}${formData.landmark ? `, ${formData.landmark}` : ''}${formData.pincode ? `, ${formData.pincode}` : ''}`,
+                address: selectedAddressId ? formData.address : manualAddressText,
                 pincode: formData.pincode,
                 address_id: selectedAddressId,
                 phone: formData.phone,
@@ -373,7 +503,7 @@ function Checkout() {
 
         } catch (error) {
             console.error('Checkout Error:', error);
-            toast.error(error.message);
+            toast.error(error?.message || 'Order placement failed. Please try again.');
             setIsProcessing(false);
         }
     };
@@ -463,7 +593,13 @@ function Checkout() {
                                         key={addr.id}
                                         onClick={() => {
                                             setSelectedAddressId(addr.id);
-                                            setFormData(prev => ({ ...prev, address: addr.address_text }));
+                                            const pinMatch = addr.address_text.match(/\b\d{6}\b/);
+                                            const extractedPin = pinMatch ? pinMatch[0] : '';
+                                            setFormData(prev => ({ 
+                                                ...prev, 
+                                                address: addr.address_text,
+                                                pincode: extractedPin
+                                            }));
                                             setCoords({ latitude: addr.latitude, longitude: addr.longitude });
                                         }}
                                         className={`p-4 rounded-[20px] border-2 transition-all cursor-pointer flex items-center justify-between gap-4 ${selectedAddressId === addr.id ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/5' : 'border-slate-100 bg-slate-50/50 hover:bg-white'}`}
@@ -503,17 +639,97 @@ function Checkout() {
                             </div>
 
                             {!selectedAddressId && (
-                                <div className="space-y-2 animate-in slide-in-from-top-2">
+                                <div className="space-y-4 animate-in slide-in-from-top-2 border-t border-slate-100 pt-4">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Manual Address Entry</label>
-                                    <textarea
-                                        name="address"
-                                        value={formData.address}
-                                        onChange={handleChange}
-                                        required
-                                        rows="2"
-                                        className="bg-white border-2 border-slate-100 rounded-[18px] px-5 py-4 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[15px] font-black tracking-tight transition-all"
-                                        placeholder="Flat NO, Building, Street, Landmark"
-                                    />
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Flat / House No. *</label>
+                                            <input
+                                                type="text"
+                                                name="flatNo"
+                                                value={formData.flatNo}
+                                                onChange={handleChange}
+                                                required
+                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                placeholder="e.g. 202, 2nd Floor"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Street / Colony *</label>
+                                            <input
+                                                type="text"
+                                                name="area"
+                                                value={formData.area}
+                                                onChange={handleChange}
+                                                required
+                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                placeholder="e.g. Rohini Sec 15"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Landmark</label>
+                                            <input
+                                                type="text"
+                                                name="landmark"
+                                                value={formData.landmark}
+                                                onChange={handleChange}
+                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                placeholder="e.g. Near Metro Station"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Pincode *</label>
+                                            <input
+                                                type="tel"
+                                                name="pincode"
+                                                value={formData.pincode}
+                                                onChange={handleChange}
+                                                required
+                                                maxLength="6"
+                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                placeholder="6-digit Pincode"
+                                            />
+                                            {pincodeMessage && (
+                                                <p className={`text-[10px] font-bold px-1 mt-1 transition-all duration-300 ${
+                                                    pincodeStatus === 'serviceable' ? 'text-emerald-600' :
+                                                    pincodeStatus === 'checking' ? 'text-blue-500' : 'text-red-500 animate-pulse'
+                                                }`}>
+                                                    {pincodeMessage}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">City *</label>
+                                            <input
+                                                type="text"
+                                                name="city"
+                                                value={formData.city}
+                                                onChange={handleChange}
+                                                required
+                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                placeholder="City"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">State *</label>
+                                            <input
+                                                type="text"
+                                                name="state"
+                                                value={formData.state}
+                                                onChange={handleChange}
+                                                required
+                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                placeholder="State"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -551,7 +767,7 @@ function Checkout() {
                             </div>
 
                             {/* COD Card */}
-                            {codEnabled && !isShiprocket && (
+                            {codEnabled && (!isShiprocket || codEnabledShiprocket) && (
                                 <div 
                                     onClick={() => !isCodDisabledByAmount && setPaymentMethod('COD')}
                                     className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer group ${isCodDisabledByAmount ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${paymentMethod === 'COD' ? 'border-amber-500 bg-amber-500/[0.03] shadow-lg ring-4 ring-amber-500/5' : 'border-slate-100 bg-white hover:border-amber-500/30'}`}
@@ -609,7 +825,7 @@ function Checkout() {
                                     <div className="space-y-2">
                                         <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">COD Orders include:</p>
                                         <ul className="space-y-1.5">
-                                            {['₹99 delivery fee', '₹49 advance payment'].map((item, i) => (
+                                            {[`₹${codFee} delivery fee`, `₹${codAdvance} advance payment`].map((item, i) => (
                                                 <li key={i} className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
                                                     <Info size={12} className="text-amber-500" /> {item}
                                                 </li>
@@ -619,7 +835,7 @@ function Checkout() {
                                 </div>
                                 <div className="pt-2 border-t border-amber-200/50">
                                     <p className="text-[11px] font-black text-amber-800 text-center">
-                                        ₹49 advance payment is required to confirm Cash on Delivery orders.
+                                        ₹{codAdvance} advance payment is required to confirm Cash on Delivery orders.
                                     </p>
                                 </div>
                             </div>
@@ -747,7 +963,7 @@ function Checkout() {
                             </div>
 
                             {/* COD Breakdown / Shiprocket Info */}
-                            {paymentMethod === 'COD' && !isShiprocket ? (
+                            {paymentMethod === 'COD' ? (
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in zoom-in">
                                     <div className="flex justify-between text-[13px] font-black text-slate-900">
                                         <span className="flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Pay Now (Advance)</span>
@@ -757,6 +973,11 @@ function Checkout() {
                                         <span>Remaining Amount (at Delivery)</span>
                                         <span>₹{remainingCodAmount.toLocaleString()}</span>
                                     </div>
+                                    {isShiprocket && (
+                                        <div className="text-[10px] text-blue-600 font-bold border-t border-slate-100 pt-2 flex items-center gap-1">
+                                            <Truck size={12} /> Standard courier shipping (3-5 business days)
+                                        </div>
+                                    )}
                                 </div>
                             ) : isShiprocket ? (
                                 <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 space-y-2 animate-in fade-in zoom-in">
@@ -787,7 +1008,7 @@ function Checkout() {
                                     ) : (
                                         <>
                                             <span className="text-xl">
-                                                {isShiprocket ? 'Pay Now' : (paymentMethod === 'COD' ? 'Authorize Advance' : 'Authorize Payment')}
+                                                {paymentMethod === 'COD' ? 'Authorize Advance' : (isShiprocket ? 'Pay Now' : 'Authorize Payment')}
                                             </span>
                                             <ArrowRight size={24} className="opacity-50" />
                                         </>
@@ -816,7 +1037,13 @@ function Checkout() {
                 <AddressPicker
                     onClose={() => setShowPicker(false)}
                     onSelect={(addr) => {
-                        setFormData(prev => ({ ...prev, address: addr.address }));
+                        const pinMatch = addr.address.match(/\b\d{6}\b/);
+                        const extractedPin = pinMatch ? pinMatch[0] : '';
+                        setFormData(prev => ({ 
+                            ...prev, 
+                            address: addr.address,
+                            pincode: extractedPin 
+                        }));
                         setCoords({ latitude: addr.latitude, longitude: addr.longitude });
                         const token = localStorage.getItem('token');
                         fetch(`${API_BASE_URL}/address/user`, {

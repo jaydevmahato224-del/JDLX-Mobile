@@ -1,13 +1,88 @@
 import toast from "react-hot-toast"
-import { useState, useEffect } from 'react'
-import { MapPin, Navigation, X, Check, Search, Save } from 'lucide-react'
+import { useState } from 'react'
+import { MapPin, Navigation, X, Save, Info } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 
 function AddressPicker({ onSelect, onClose }) {
     const [location, setLocation] = useState({ lat: 28.6139, lng: 77.2090 }); // Default Delhi
-    const [addressText, setAddressText] = useState('');
+    const [formData, setFormData] = useState({
+        flatNo: '',
+        area: '',
+        landmark: '',
+        city: '',
+        state: '',
+        pincode: ''
+    });
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
+    const [pincodeMessage, setPincodeMessage] = useState('');
+
+    const fetchCityStateFromPincode = async (pin, updateStateFn) => {
+        setPincodeStatus('checking');
+        setPincodeMessage('Checking pincode validity and serviceability...');
+        try {
+            const res = await fetch(`${API_BASE_URL}/pincode/check/${pin}`);
+            if (res.ok) {
+                const checkData = await res.json();
+                const details = checkData.data || checkData;
+                
+                if (details.invalid) {
+                    setPincodeStatus('invalid');
+                    setPincodeMessage('❌ Invalid Pincode! Please enter a valid Indian pincode.');
+                    toast.error("Invalid Pincode. Please enter a valid 6-digit Indian postal code.");
+                    return;
+                }
+                
+                if (details.city && details.state) {
+                    updateStateFn(prev => ({
+                        ...prev,
+                        city: details.city,
+                        state: details.state
+                    }));
+                }
+                
+                if (details.serviceable) {
+                    setPincodeStatus('serviceable');
+                    if (!details.cod_allowed) {
+                        setPincodeMessage('⚠️ Only PREPAID delivery available for this location.');
+                        toast.success(`Pincode serviceable! Only prepaid delivery is supported here.`);
+                    } else {
+                        setPincodeMessage('✓ Serviceable by Shiprocket Express! COD & Prepaid available.');
+                        if (details.city && details.state) {
+                            toast.success(`Location detected: ${details.city}, ${details.state}`);
+                        } else {
+                            toast.success("Pincode verified successfully.");
+                        }
+                    }
+                } else {
+                    setPincodeStatus('unserviceable');
+                    setPincodeMessage('⚠️ Courier service is not available for this location.');
+                    toast.error("Shiprocket does not deliver to this pincode. Please enter a different one.");
+                }
+            } else {
+                setPincodeStatus('invalid');
+                setPincodeMessage('❌ Pincode check failed. Please check manually.');
+            }
+        } catch (err) {
+            console.warn("Failed to auto-fetch pincode details:", err);
+            setPincodeStatus('invalid');
+            setPincodeMessage('❌ Connection error checking pincode.');
+        }
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        if (name === 'pincode') {
+            const digits = value.replace(/\D/g, '').slice(0, 6);
+            setFormData(prev => ({ ...prev, pincode: digits }));
+            if (digits.length === 6) {
+                fetchCityStateFromPincode(digits, setFormData);
+            }
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
 
     const detectLocation = () => {
         setLoading(true);
@@ -15,13 +90,17 @@ function AddressPicker({ onSelect, onClose }) {
             navigator.geolocation.getCurrentPosition((position) => {
                 const { latitude, longitude } = position.coords;
                 setLocation({ lat: latitude, lng: longitude });
-                // In a real app, we would reverse geocode here.
-                // For now, we simulate a premium "Detected Address"
-                setAddressText(`Detected Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+                setFormData(prev => ({
+                    ...prev,
+                    city: prev.city || 'Delhi',
+                    state: prev.state || 'Delhi'
+                }));
                 setLoading(false);
+                toast.success("Location coordinates loaded!");
             }, (error) => {
                 console.error("GPS Error:", error);
                 setLoading(false);
+                toast.error("GPS access denied. You can still type details manually.");
             });
         } else {
             toast.error("Geolocation is not supported by this browser.");
@@ -30,7 +109,36 @@ function AddressPicker({ onSelect, onClose }) {
     };
 
     const handleSave = async () => {
-        if (!addressText) return;
+        if (!formData.flatNo.trim()) {
+            toast.error("Please enter House/Flat/Office number");
+            return;
+        }
+        if (!formData.area.trim()) {
+            toast.error("Please enter Street, Sector, or Colony");
+            return;
+        }
+        if (!formData.city.trim()) {
+            toast.error("Please enter your City");
+            return;
+        }
+        if (!formData.state.trim()) {
+            toast.error("Please enter your State");
+            return;
+        }
+        if (!formData.pincode || formData.pincode.length !== 6 || !/^\d{6}$/.test(formData.pincode)) {
+            toast.error("Please enter a valid 6-digit Pincode");
+            return;
+        }
+        if (pincodeStatus === 'unserviceable') {
+            toast.error("Courier service is not available for this location.");
+            return;
+        }
+        if (pincodeStatus === 'invalid') {
+            toast.error("Invalid Pincode. Please enter a valid Indian pincode.");
+            return;
+        }
+
+        const fullAddress = `${formData.flatNo}, ${formData.area}${formData.landmark ? `, Near ${formData.landmark}` : ''}, ${formData.city}, ${formData.state} - ${formData.pincode}`;
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
@@ -43,17 +151,19 @@ function AddressPicker({ onSelect, onClose }) {
                 body: JSON.stringify({
                     latitude: location.lat,
                     longitude: location.lng,
-                    address_text: addressText,
+                    address_text: fullAddress,
                     is_default: 1
                 })
             });
             if (res.ok) {
-                const data = await res.json();
-                onSelect({ address: addressText, latitude: location.lat, longitude: location.lng });
+                onSelect({ address: fullAddress, latitude: location.lat, longitude: location.lng });
                 onClose();
+            } else {
+                toast.error("Failed to save address");
             }
         } catch (error) {
             console.error("Failed to save address:", error);
+            toast.error("Failed to save address");
         } finally {
             setSaving(false);
         }
@@ -71,7 +181,7 @@ function AddressPicker({ onSelect, onClose }) {
                 </div>
 
                 {/* Simulated Map View */}
-                <div className="relative h-64 bg-gray-100 flex items-center justify-center overflow-hidden">
+                <div className="relative h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
                     {/* Visual Grid Mockup */}
                     <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
 
@@ -88,6 +198,7 @@ function AddressPicker({ onSelect, onClose }) {
                     </p>
 
                     <button
+                        type="button"
                         onClick={detectLocation}
                         className="absolute bottom-4 right-4 p-3 bg-white text-primary rounded-full shadow-xl hover:scale-105 transition-transform border border-gray-100 active:scale-95"
                     >
@@ -95,36 +206,114 @@ function AddressPicker({ onSelect, onClose }) {
                     </button>
                 </div>
 
-                {/* Form Section */}
-                <div className="p-6 space-y-4">
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Delivery Address</label>
-                        <div className="relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                {/* Scrollable Form Section */}
+                <div className="p-6 space-y-4 max-h-[50vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Flat / House No. *</label>
                             <input
                                 type="text"
-                                value={addressText}
-                                onChange={(e) => setAddressText(e.target.value)}
-                                placeholder="House No, Floor, Landmark..."
-                                className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-50 rounded-2xl text-sm font-medium focus:border-primary/30 focus:bg-white focus:outline-none transition-all"
+                                name="flatNo"
+                                value={formData.flatNo}
+                                onChange={handleChange}
+                                placeholder="e.g. 202, 2nd Floor"
+                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Street / Colony *</label>
+                            <input
+                                type="text"
+                                name="area"
+                                value={formData.area}
+                                onChange={handleChange}
+                                placeholder="e.g. Sector 15, Rohini"
+                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Landmark</label>
+                            <input
+                                type="text"
+                                name="landmark"
+                                value={formData.landmark}
+                                onChange={handleChange}
+                                placeholder="e.g. Near Metro Station"
+                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Pincode *</label>
+                            <input
+                                type="tel"
+                                name="pincode"
+                                value={formData.pincode}
+                                onChange={handleChange}
+                                placeholder="6-digit Pincode"
+                                maxLength="6"
+                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                required
+                            />
+                            {pincodeMessage && (
+                                <p className={`text-[9px] font-bold px-1 mt-1 transition-all duration-300 ${
+                                    pincodeStatus === 'serviceable' ? 'text-emerald-600' :
+                                    pincodeStatus === 'checking' ? 'text-blue-500' : 'text-red-500 animate-pulse'
+                                }`}>
+                                    {pincodeMessage}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">City *</label>
+                            <input
+                                type="text"
+                                name="city"
+                                value={formData.city}
+                                onChange={handleChange}
+                                placeholder="City"
+                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">State *</label>
+                            <input
+                                type="text"
+                                name="state"
+                                value={formData.state}
+                                onChange={handleChange}
+                                placeholder="State"
+                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                required
                             />
                         </div>
                     </div>
 
                     <div className="pt-2">
                         <button
+                            type="button"
                             onClick={handleSave}
-                            disabled={!addressText || saving}
-                            className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:scale-100"
+                            disabled={saving}
+                            className="w-full py-4 bg-primary text-slate-950 font-black rounded-2xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:scale-100 text-sm uppercase tracking-widest"
                         >
                             {saving ? (
-                                <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+                                <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></span>
                             ) : (
-                                <><Save size={20} /> Save & Continue</>
+                                <><Save size={18} /> Save & Continue</>
                             )}
                         </button>
                     </div>
-                    <p className="text-[10px] text-center text-gray-400 font-medium pb-2">Your location data is encrypted and used only for delivery optimization.</p>
+                    <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-wider pb-2 flex items-center justify-center gap-1">
+                        <Info size={10} /> Fields marked with * are mandatory
+                    </p>
                 </div>
             </div>
         </div>

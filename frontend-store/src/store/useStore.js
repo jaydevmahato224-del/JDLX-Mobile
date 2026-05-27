@@ -81,20 +81,71 @@ export const useStore = create((set, get) => ({
 
             if (res.ok && json.success) {
                 const serverCart = Array.isArray(json.data) ? json.data : [];
-                // Standardize server cart items to match local structure
-                const normalizedCart = serverCart.map(item => ({
-                    ...item,
-                    id: item.product_id, // Map product_id back to id for UI
-                    qty: Number(item.qty || item.quantity || 1)
-                }));
+                // Standardize and deduplicate server cart items to match local structure
+                const serverCartMapped = [];
+                for (const item of serverCart) {
+                    const stock = Number(item.stock ?? 0);
+                    const currentQty = Number(item.qty || item.quantity || 1);
+                    const safeQty = isNaN(currentQty) ? 1 : currentQty;
+                    
+                    const existingMapped = serverCartMapped.find(m => 
+                        String(m.product_id) === String(item.product_id) && 
+                        String(m.variant_id || '') === String(item.variant_id || '')
+                    );
+                    
+                    if (existingMapped) {
+                        existingMapped.qty = Math.min(existingMapped.qty + safeQty, Math.max(1, stock));
+                    } else {
+                        serverCartMapped.push({
+                            ...item,
+                            id: item.product_id, // Map product_id back to id for UI
+                            stock: stock,
+                            qty: Math.min(safeQty, Math.max(1, stock)),
+                            removedFromInventory: false
+                        });
+                    }
+                }
+
+                // Smart Merge: Preserve local storage cart items so they aren't lost
+                const localCart = safeParse('cart') || [];
+                const mergedCart = [...serverCartMapped];
+                const itemsToSync = [];
+
+                for (const localItem of localCart) {
+                    const existsOnServer = mergedCart.find(item => 
+                        String(item.id) === String(localItem.id) && 
+                        String(item.variant_id || '') === String(localItem.variant_id || '')
+                    );
+
+                    if (!existsOnServer) {
+                        mergedCart.push(localItem);
+                        itemsToSync.push({ item: localItem, action: 'add' });
+                    } else {
+                        // Merge attributes
+                        existsOnServer.device_model = localItem.device_model || existsOnServer.device_model;
+                        existsOnServer.fitting = localItem.fitting || existsOnServer.fitting;
+                        if (localItem.qty !== existsOnServer.qty) {
+                            existsOnServer.qty = Math.max(localItem.qty, existsOnServer.qty);
+                            itemsToSync.push({ item: existsOnServer, action: 'update' });
+                        }
+                    }
+                }
                 
-                // PROBLEM 2 FIX: Sync with inventory BEFORE setting isCartLoaded to true
-                // This prevents the "Sold out" flash because the UI won't render until stock is confirmed
-                set({ cart: normalizedCart });
-                localStorage.setItem('cart', JSON.stringify(normalizedCart));
+                set({ cart: mergedCart });
+                localStorage.setItem('cart', JSON.stringify(mergedCart));
                 
-                await get().syncCartWithInventory();
+                // Instantly mark loaded so UI renders without latency
                 set({ isCartLoaded: true });
+
+                // Sync unsynced items to the server in the background
+                if (itemsToSync.length > 0) {
+                    for (const { item, action } of itemsToSync) {
+                        await syncCartWithServer(item.id, item.qty, action);
+                    }
+                }
+                
+                // Refresh detailed stocks in background
+                get().syncCartWithInventory();
             } else {
                 set({ isCartLoaded: true });
             }

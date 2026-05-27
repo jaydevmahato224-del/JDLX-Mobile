@@ -6,7 +6,7 @@ from flask import jsonify, request
 
 
 ALLOWED_ROLES = {"user", "admin", "super_admin"}
-SECRET_KEY = os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+SECRET_KEY = os.environ.get("JWT_SECRET", "")
 
 
 def normalize_role(role):

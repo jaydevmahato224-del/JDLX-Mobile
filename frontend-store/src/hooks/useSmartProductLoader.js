@@ -187,6 +187,10 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
       setErrorMessage('')
       setIsEmpty(false)
 
+      // 10s Timeout logic
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       try {
         const url = buildProductsUrl(categoryId, page, searchQuery, storeId)
         const params = { page: String(page), limit: String(pageSize) }
@@ -196,17 +200,27 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
 
         let response;
         try {
-          response = await fetch(url);
+          response = await fetch(url, { signal: controller.signal });
         } catch (fetchErr) {
-          // Typically TypeError if network is down or CORS failed
+          // Typically TypeError if network is down or CORS failed or AbortError on timeout
           if (!mountedRef.current) return;
-          console.error('useSmartProductLoader: network error', fetchErr);
-          setHasError(true);
-          setErrorMessage('Network error. Please check your internet connection.');
-          setError('NetworkError'); // Use a specific string for legacy/animation logic if needed
+
+          if (fetchErr.name === 'AbortError') {
+            setHasError(true);
+            setErrorMessage('Unable to load products. Please refresh.');
+            setError('TimeoutError');
+          } else {
+            console.error('useSmartProductLoader: network error', fetchErr);
+            setHasError(true);
+            setErrorMessage('Network error. Please check your internet connection.');
+            setError('NetworkError'); // Use a specific string for legacy/animation logic if needed
+          }
+
           if (replace) setProducts([]);
           setHasMore(false);
           return;
+        } finally {
+          clearTimeout(timeoutId);
         }
 
         if (!response.ok) {

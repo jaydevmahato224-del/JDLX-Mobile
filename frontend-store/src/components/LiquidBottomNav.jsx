@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, ShoppingBag, User } from 'lucide-react';
+import { Home, Search, ShoppingBag, User, Gift } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 const LiquidBottomNav = ({ cartItemCount, user }) => {
@@ -20,6 +20,7 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
     { id: 'home', to: '/', icon: Home, label: 'Home' },
     { id: 'search', to: '/search', icon: Search, label: 'Explore' },
     { id: 'cart', to: '/cart', icon: ShoppingBag, label: 'Cart', badge: cartItemCount },
+    { id: 'refer', to: '/refer', icon: Gift, label: 'Refer' },
     { id: 'profile', to: user ? '/profile' : '/login', icon: User, label: user ? 'Account' : 'Login' },
   ], [cartItemCount, user]);
 

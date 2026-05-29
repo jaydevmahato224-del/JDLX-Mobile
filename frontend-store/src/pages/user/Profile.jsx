@@ -106,6 +106,8 @@ function Profile() {
     const profileImageUrl = imageFailed ? '' : resolveMediaUrl(user.profile_image);
 
     const navigationItems = [
+        { icon: Gift, label: "Refer & Earn 🎉", path: "/refer", description: "Invite friends, earn ₹50", color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+        { icon: Wallet, label: "My Wallet", path: "/wallet", description: "View balance & transactions", color: 'text-amber-500', bg: 'bg-amber-500/10' },
         { icon: Settings, label: 'Settings', path: '/profile/settings', color: 'text-slate-500', bg: 'bg-slate-500/10' },
         { icon: ShoppingBag, label: 'My Orders', path: '/profile/orders', color: 'text-purple-500', bg: 'bg-purple-500/10' },
         { icon: MapPin, label: 'Addresses', path: '/profile/addresses', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },

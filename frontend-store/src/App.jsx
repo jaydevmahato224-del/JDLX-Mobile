@@ -29,6 +29,7 @@ if (import.meta.env.DEV) {
 // Only show global error overlay after multiple consecutive backend failures.
 // This prevents Render cold-start timeouts or transient glitches from blocking the entire UI.
 let _consecutiveBackendFailures = 0;
+let _consecutiveBackendSuccesses = 0;
 const FAILURE_THRESHOLD = 3; // Number of consecutive failures before showing error overlay
 
 const _originalFetch = window.fetch;
@@ -42,7 +43,7 @@ window.fetch = async (...args) => {
   }
 
   // Only show loader for significant API calls
-  const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs') || requestUrl.includes('/api/report-issue');
+  const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs') || requestUrl.includes('/api/report-issue') || requestUrl.includes('/health');
   if (!isBackgroundRequest) startLoading();
 
   // Helper to identify if request is to our backend
@@ -66,13 +67,16 @@ window.fetch = async (...args) => {
     // Detection Logic for Server Errors - ONLY for our backend
     if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackgroundRequest) {
       _consecutiveBackendFailures++;
+      _consecutiveBackendSuccesses = 0;
       if (_consecutiveBackendFailures >= FAILURE_THRESHOLD) {
         setGlobalError('server');
       }
     } else if (isBackendUrl && response.ok) {
-      // Successful response — reset failure counter and auto-clear any existing error
+      // Successful response — reset failure counter
       _consecutiveBackendFailures = 0;
-      if (globalError) {
+      _consecutiveBackendSuccesses++;
+      // Only auto-clear global error after consistent recovery (prevents flicker loop)
+      if (globalError && _consecutiveBackendSuccesses >= FAILURE_THRESHOLD) {
         clearGlobalError();
       }
     }
@@ -84,6 +88,7 @@ window.fetch = async (...args) => {
     // ONLY trigger global error screens for our backend API failures
     if (isBackendUrl && !isBackgroundRequest) {
       _consecutiveBackendFailures++;
+      _consecutiveBackendSuccesses = 0;
       if (_consecutiveBackendFailures >= FAILURE_THRESHOLD) {
         if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
           setGlobalError('network');

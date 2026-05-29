@@ -156,7 +156,7 @@ def apply_code_from_profile():
         
         if success:
             return jsonify({
-                'success': true, 
+                'success': True, 
                 'message': 'Code applied! ₹30 will be credited after your first order of ₹199+'
             })
         else:
@@ -187,7 +187,7 @@ def apply_wallet_to_order():
 
 @referral_wallet_bp.route('/api/admin/referrals', methods=['GET'])
 @token_required
-@require_admin
+@require_admin()
 def admin_referrals():
     conn = get_db()
     cursor = conn.cursor()
@@ -209,7 +209,7 @@ def admin_referrals():
 
 @referral_wallet_bp.route('/api/admin/wallet-stats', methods=['GET'])
 @token_required
-@require_admin
+@require_admin()
 def admin_wallet_stats():
     conn = get_db()
     cursor = conn.cursor()

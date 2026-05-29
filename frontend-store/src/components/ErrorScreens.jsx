@@ -278,35 +278,74 @@ export const ClientErrorScreen = () => {
 // ─── Global Error Overlay ──────────────────────────────────────────────────
 export const GlobalErrorOverlay = () => {
     const { globalError, setGlobalError, clearGlobalError } = useStore();
+    const [isRecovering, setIsRecovering] = useState(false);
 
     useEffect(() => {
-        const handleOnline = () => {
-            if (globalError === 'network') {
-                // Connection restored animation or just reload
-                toast.success('Connection restored!');
-                setTimeout(() => {
-                    clearGlobalError();
-                    window.location.reload();
-                }, 2000);
+        // Track if this effect instance is still active (prevents stale closures)
+        let isMounted = true;
+        let recoveryTimeout = null;
+
+        // Health-check: actually ping the backend before declaring recovery
+        const verifyBackendConnection = async () => {
+            if (isRecovering) return; // Prevent parallel recovery attempts
+            setIsRecovering(true);
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 8000);
+                const res = await fetch(`${API_BASE_URL}/health`, {
+                    signal: controller.signal,
+                    cache: 'no-store',
+                });
+                clearTimeout(timeout);
+                if (res.ok && isMounted) {
+                    toast.success('Connection restored!');
+                    recoveryTimeout = setTimeout(() => {
+                        if (isMounted) {
+                            clearGlobalError();
+                            window.location.reload();
+                        }
+                    }, 1500);
+                } else if (isMounted) {
+                    setIsRecovering(false);
+                }
+            } catch {
+                // Backend still not reachable — stay on error screen
+                if (isMounted) setIsRecovering(false);
             }
         };
 
+        const handleOnline = () => {
+            if (globalError === 'network') {
+                // Browser says we're online — verify backend is actually reachable
+                verifyBackendConnection();
+            }
+        };
+
+        const handleOffline = () => {
+            if (isMounted) setGlobalError('network');
+        };
+
+        // Periodic recovery check — only when error is active and browser reports online
+        // Use a longer interval (30s) to avoid hammering the backend during cold starts
         const checkConnection = setInterval(() => {
             if (!navigator.onLine && !globalError) {
                 setGlobalError('network');
-            } else if (navigator.onLine && globalError === 'network') {
-                handleOnline();
+            } else if (navigator.onLine && globalError === 'network' && !isRecovering) {
+                verifyBackendConnection();
             }
-        }, 10000);
+        }, 30000);
 
         window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', () => setGlobalError('network'));
+        window.addEventListener('offline', handleOffline);
 
         return () => {
+            isMounted = false;
             clearInterval(checkConnection);
+            if (recoveryTimeout) clearTimeout(recoveryTimeout);
             window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
         };
-    }, [globalError, setGlobalError, clearGlobalError]);
+    }, [globalError, setGlobalError, clearGlobalError, isRecovering]);
 
     if (!globalError) return null;
 

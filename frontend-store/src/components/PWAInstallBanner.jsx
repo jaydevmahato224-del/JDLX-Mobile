@@ -63,7 +63,8 @@ const PWAInstallBanner = () => {
   if (!shouldShowBanner || !isVisible) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-8 duration-700">
+    <>
+    <div className="fixed bottom-28 left-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-8 duration-700">
       <div className="mx-auto max-w-lg overflow-hidden rounded-[32px] border-4 border-white bg-white p-1 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] ring-1 ring-slate-200/50">
         <div className="flex items-center gap-4 p-4 bg-gradient-to-br from-white to-slate-50/50">
           {/* App Icon Glow */}
@@ -106,8 +107,9 @@ const PWAInstallBanner = () => {
         {/* Subtle bottom accent line */}
         <div className="h-1 w-full bg-gradient-to-r from-transparent via-primary-500/30 to-transparent" />
       </div>
+    </div>
 
-      {/* Premium PWA Guide Modal inside Banner */}
+      {/* Premium PWA Guide Modal - rendered outside the banner for proper z-index and positioning */}
       {showPwaGuide && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
           <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-[#16161a] to-[#0a0a0c] p-6 text-white shadow-2xl animate-in zoom-in-95 duration-300">
@@ -156,9 +158,9 @@ const PWAInstallBanner = () => {
               </div>
             </div>
 
-            {/* Note about HTTPS/development */}
+            {/* Note about HTTPS */}
             <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/10 text-amber-400 text-[10px] font-bold leading-normal">
-              ⚠️ Note: Secure connection (HTTPS or localhost) is strictly required by browser policies for PWA installation. If you are testing via local IP address, please access using localhost or standard domain.
+              ⚠️ Note: Secure connection (HTTPS) is strictly required by browser policies for PWA installation. Please access using your standard domain (jdlxmobile.in) for the best experience.
             </div>
 
             <button
@@ -170,7 +172,7 @@ const PWAInstallBanner = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

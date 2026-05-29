@@ -328,7 +328,7 @@ function Profile() {
 
                         {/* Note about HTTPS/development */}
                         <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/10 text-amber-400 text-[10px] font-bold leading-normal">
-                            ⚠️ Note: Secure connection (HTTPS or localhost) is strictly required by browser policies for PWA installation. If you are testing via local IP address, please access using localhost or standard domain.
+                            ⚠️ Note: Secure connection (HTTPS) is strictly required by browser policies for PWA installation. Please access using your standard domain (jdlxmobile.in) for the best experience.
                         </div>
 
                         <button

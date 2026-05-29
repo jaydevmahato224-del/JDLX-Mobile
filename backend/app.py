@@ -66,6 +66,7 @@ from analytics_routes import analytics_bp
 from app_review_routes import app_review_bp, check_and_trigger_review
 from payment_routes import payment_bp
 from shiprocket_routes import shiprocket_bp
+from referral_wallet_routes import referral_wallet_bp
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location
@@ -220,12 +221,13 @@ def shiprocket_webhook():
     if new_jdlx_status:
         try:
             # Update order based on shiprocket_order_id
-            cursor.execute("SELECT id, user_id FROM orders WHERE shiprocket_order_id = ?", (sr_order_id,))
+            cursor.execute("SELECT id, user_id, total_amount FROM orders WHERE shiprocket_order_id = ?", (sr_order_id,))
             order = cursor.fetchone()
             
             if order:
                 order_id = order['id']
                 user_id = order['user_id']
+                order_amount = order['total_amount']
                 
                 # Update status and timestamp
                 cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_jdlx_status, order_id))
@@ -238,6 +240,13 @@ def shiprocket_webhook():
                     check_and_trigger_review(cursor, user_id)
                     # Log activity
                     log_admin_action(0, "order_delivered_via_shiprocket", "order", order_id)
+
+                    # Referral reward check (additive)
+                    try:
+                        from utils.referral import process_referral_reward
+                        process_referral_reward(order_id, user_id, order_amount)
+                    except Exception:
+                        pass  # never break order flow
 
                 conn.commit()
                 return success_response({"status": "updated", "order_id": order_id})
@@ -264,6 +273,7 @@ app.register_blueprint(analytics_bp)
 app.register_blueprint(app_review_bp)
 app.register_blueprint(payment_bp)
 app.register_blueprint(shiprocket_bp)
+app.register_blueprint(referral_wallet_bp)
 
 
 # ==============================================================================
@@ -800,6 +810,15 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         if user and email:
             from threading import Thread
             Thread(target=send_welcome_email, args=(email, name or 'User')).start()
+
+        # Referral code apply (additive)
+        try:
+            ref_code = request.args.get('ref') or (request.json.get('referral_code') if request.is_json else None)
+            if ref_code:
+                from utils.referral import apply_referral_code
+                apply_referral_code(user['id'], ref_code)
+        except Exception:
+            pass  # never break signup flow
 
     maybe_bootstrap_super_admin(cursor, user['id'], user['email'])
     conn.commit()
@@ -3267,12 +3286,22 @@ def admin_update_order_status(order_id):
             cursor.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_status, order_id))
 
         # Notify user about status update
-        cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT user_id, total_amount FROM orders WHERE id = ?", (order_id,))
         user_row = cursor.fetchone()
         if user_row:
-            notification_service.send_order_notification(user_row['user_id'], order_id, new_status)
+            user_id = user_row['user_id']
+            order_amount = user_row['total_amount']
+            notification_service.send_order_notification(user_id, order_id, new_status)
             # Check for app review eligibility
-            check_and_trigger_review(cursor, user_row['user_id'])
+            check_and_trigger_review(cursor, user_id)
+
+            if new_status == 'DELIVERED':
+                # Referral reward check (additive)
+                try:
+                    from utils.referral import process_referral_reward
+                    process_referral_reward(order_id, user_id, order_amount)
+                except Exception:
+                    pass  # never break order flow
 
         if new_status == 'DELIVERED':
             # Free the delivery partner
@@ -4551,6 +4580,24 @@ def update_order_status(order_id):
             else:
                 cursor.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_status, order_id))
             
+        # Notify user about status update
+        cursor.execute("SELECT user_id, total_amount FROM orders WHERE id = ?", (order_id,))
+        user_row = cursor.fetchone()
+        if user_row:
+            user_id = user_row['user_id']
+            order_amount = user_row['total_amount']
+            notification_service.send_order_notification(user_id, order_id, new_status)
+            # Check for app review eligibility
+            check_and_trigger_review(cursor, user_id)
+
+            if new_status == 'DELIVERED':
+                # Referral reward check (additive)
+                try:
+                    from utils.referral import process_referral_reward
+                    process_referral_reward(order_id, user_id, order_amount)
+                except Exception:
+                    pass  # never break order flow
+
         conn.commit()
         conn.close()
         log_admin_action(request.user.get('user_id'), "order_modified", "order", order_id)
@@ -6265,6 +6312,16 @@ def update_refund_status(request_id):
         elif new_status == 'REJECTED':
             cursor.execute("UPDATE orders SET status = 'DELIVERED' WHERE id = ?", (rr['order_id'],))
             notification_service.notify_user_internal(rr['user_id'], "Refund Rejected", f"Your refund request for order #{rr['order_id']} has been rejected.", "SYSTEM")
+            
+            # Referral reward check (additive)
+            try:
+                cursor.execute("SELECT total_amount FROM orders WHERE id = ?", (rr['order_id'],))
+                order_row = cursor.fetchone()
+                order_amount = order_row['total_amount'] if order_row else 0
+                from utils.referral import process_referral_reward
+                process_referral_reward(rr['order_id'], rr['user_id'], order_amount)
+            except Exception:
+                pass  # never break order flow
 
         conn.commit()
         conn.close()

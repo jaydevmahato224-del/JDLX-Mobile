@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
-import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle } from 'lucide-react'
+import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 import { usePWAInstall } from '../../hooks/usePWAInstall'
 import toast from 'react-hot-toast'
@@ -19,12 +19,31 @@ function Profile() {
     const [imageFailed, setImageFailed] = useState(false);
     const [showPwaGuide, setShowPwaGuide] = useState(false);
     const { isInstallable, isInstalled, handleInstallClick } = usePWAInstall();
+    const [referralInfo, setReferralInfo] = useState({ is_referred: false, attempts: 0 });
+    const [inputCode, setInputCode] = useState('');
+    const [isApplying, setIsApplying] = useState(false);
+    const [referralError, setReferralError] = useState('');
+    const [referralSuccess, setReferralSuccess] = useState(localStorage.getItem('jdlx_ref_applied') === 'true');
 
     useEffect(() => {
         if (!user) {
             navigate('/login');
             return;
         }
+
+        const fetchReferralInfo = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/referral/my-code`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setReferralInfo({ is_referred: data.is_referred, attempts: data.attempts });
+                }
+            } catch (err) {
+                console.error('Failed to fetch referral info:', err);
+            }
+        };
 
         const fetchOrders = async () => {
             try {
@@ -45,8 +64,43 @@ function Profile() {
             }
         };
 
+        fetchReferralInfo();
         fetchOrders();
     }, [user, navigate, token]);
+
+    const handleApplyReferral = async (e) => {
+        e.preventDefault();
+        if (!inputCode.trim() || isApplying) return;
+
+        setIsApplying(true);
+        setReferralError('');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/referral/apply-from-profile`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code: inputCode.trim().toUpperCase() })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                setReferralSuccess(true);
+                localStorage.setItem('jdlx_ref_applied', 'true');
+                toast.success('Referral code applied successfully!');
+            } else {
+                setReferralError(data.message || 'Failed to apply code');
+                // Increment local attempts to potentially block UI immediately
+                setReferralInfo(prev => ({ ...prev, attempts: prev.attempts + 1 }));
+            }
+        } catch (err) {
+            setReferralError('Connection error. Please try again.');
+        } finally {
+            setIsApplying(false);
+        }
+    };
 
     if (!user) return null;
     const profileImageUrl = imageFailed ? '' : resolveMediaUrl(user.profile_image);
@@ -261,6 +315,56 @@ function Profile() {
                     </div>
                 )}
             </div>
+
+            {/* Referral Code Section */}
+            {!referralInfo.is_referred && orders.length === 0 && (
+                <div className="glass-card p-6 border-2 border-indigo-100/30 bg-indigo-50/10">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center">
+                            <Gift size={20} />
+                        </div>
+                        <div>
+                            <h3 className="font-black text-slate-800 tracking-tight">Have a Referral Code?</h3>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Get ₹30 off your first order of ₹199+</p>
+                        </div>
+                    </div>
+
+                    {referralSuccess ? (
+                        <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl border border-emerald-100 flex items-center gap-3 animate-in zoom-in-95 duration-500">
+                            <CheckCircle2 size={18} />
+                            <p className="text-xs font-black">Referral code applied! ₹30 credited after first order</p>
+                        </div>
+                    ) : referralInfo.attempts >= 3 ? (
+                        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl border border-rose-100 flex items-center gap-3 animate-in fade-in duration-500">
+                            <AlertCircle size={18} />
+                            <p className="text-xs font-black">Referral entry disabled — too many attempts</p>
+                        </div>
+                    ) : (
+                        <form onSubmit={handleApplyReferral} className="space-y-3">
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    maxLength={8}
+                                    value={inputCode}
+                                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                                    placeholder="e.g. JDAX7K2P" 
+                                    className="flex-1 bg-white border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-all uppercase tracking-widest"
+                                />
+                                <button 
+                                    type="submit"
+                                    disabled={isApplying || !inputCode.trim()}
+                                    className="px-6 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    {isApplying ? '...' : 'Apply'}
+                                </button>
+                            </div>
+                            {referralError && (
+                                <p className="text-[11px] font-bold text-red-500 px-1 animate-in slide-in-from-top-1">❌ {referralError}</p>
+                            )}
+                        </form>
+                    )}
+                </div>
+            )}
 
             {/* Logout Section */}
             <div className="pt-6 pb-10">

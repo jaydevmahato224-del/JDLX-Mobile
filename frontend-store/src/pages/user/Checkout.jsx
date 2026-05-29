@@ -10,6 +10,7 @@ import { API_BASE_URL } from '../../config'
 import { trackBeginCheckout, trackPurchase } from '../../utils/analytics'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 import AddressPicker from '../../components/AddressPicker'
+import WalletCheckout from '../../components/WalletCheckout'
 import { toast } from 'react-hot-toast'
 
 function Checkout() {
@@ -74,6 +75,7 @@ function Checkout() {
     const removeOffer = useStore(state => state.removeOffer);
     const [couponCode, setCouponCode] = useState('');
     const [couponLoading, setCouponLoading] = useState(false);
+    const [walletAmount, setWalletAmount] = useState(0);
 
     useEffect(() => {
         if (cart && cart.length > 0) {
@@ -207,7 +209,7 @@ function Checkout() {
         : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
 
     const discountAmount = appliedOffer ? appliedOffer.discount_amount : 0;
-    const finalTotal = Math.max(0, subtotal - discountAmount) + platformFee + deliveryCharge + fittingTotal;
+    const finalTotal = Math.max(0, (subtotal - discountAmount) + platformFee + deliveryCharge + fittingTotal - walletAmount);
     const payNowAmount = paymentMethod === 'COD' ? codAdvance : finalTotal;
     const remainingCodAmount = paymentMethod === 'COD' ? (finalTotal - codAdvance) : 0;
     const isCodDisabledByAmount = subtotal < minOrderCod;
@@ -482,7 +484,8 @@ function Checkout() {
                 customer_name: formData.name,
                 payment_type: paymentMethod,
                 offer_id: appliedOffer ? appliedOffer.offer_id : null,
-                discount_applied: discountAmount
+                discount_applied: discountAmount,
+                wallet_amount: walletAmount
             };
 
             const orderRes = await fetch(`${API_BASE_URL}/checkout`, {
@@ -920,6 +923,14 @@ function Checkout() {
                             )}
                         </div>
 
+                        {/* Wallet Section */}
+                        <div className="pt-4 border-t border-slate-100">
+                            <WalletCheckout 
+                                totalAmount={subtotal - discountAmount + platformFee + deliveryCharge + fittingTotal} 
+                                onApply={(amt) => setWalletAmount(amt)} 
+                            />
+                        </div>
+
                         {/* Detailed Bill */}
                         <div className="space-y-4 pt-4 border-t border-slate-100">
                             <div className="flex justify-between text-sm font-bold text-slate-500">
@@ -954,6 +965,13 @@ function Checkout() {
                                 <span>Platform Fee</span>
                                 <span>₹{platformFee}</span>
                             </div>
+
+                            {walletAmount > 0 && (
+                                <div className="flex justify-between text-sm font-black text-[#D48A12] bg-orange-50 px-2.5 py-2 rounded-xl border border-orange-100 animate-in fade-in slide-in-from-right-4">
+                                    <span className="flex items-center gap-1.5"><Wallet size={14} /> Wallet Deduction</span>
+                                    <span>-₹{walletAmount.toFixed(0)}</span>
+                                </div>
+                            )}
 
                             {/* Final Total */}
                             <div className="flex justify-between items-center pt-4 border-t-2 border-dashed border-slate-100">

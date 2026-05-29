@@ -134,6 +134,15 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         cursor.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
         user = cursor.fetchone()
 
+        # Referral code apply (additive)
+        try:
+            ref_code = request.args.get('ref') or (request.json.get('referral_code') if request.is_json else None)
+            if ref_code:
+                from utils.referral import apply_referral_code
+                apply_referral_code(user['id'], ref_code)
+        except Exception:
+            pass  # never break signup flow
+
     maybe_bootstrap_super_admin(cursor, user['id'], user['email'])
     conn.commit()
     cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))

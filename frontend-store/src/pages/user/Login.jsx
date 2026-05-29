@@ -10,12 +10,24 @@ function Login() {
         .replace(/\/api\/?$/, '');
     const oauthLoginUrl = `${backendOrigin}/login/google`;
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const refCode = params.get('ref');
+        if (refCode) {
+            localStorage.setItem('jdlx_ref_code', refCode);
+        }
+    }, []);
+
     const handleSuccess = async (credentialResponse) => {
         try {
+            const refCode = localStorage.getItem('jdlx_ref_code');
             const res = await fetch(`${API_BASE_URL}/auth/google`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: credentialResponse.credential })
+                body: JSON.stringify({ 
+                    token: credentialResponse.credential,
+                    referral_code: refCode
+                })
             });
 
             if (!res.ok) throw new Error("Auth failed");

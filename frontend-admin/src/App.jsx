@@ -75,6 +75,7 @@ window.fetch = async (...args) => {
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const AdminSystemHealth = lazy(() => import('./pages/admin/AdminSystemHealth'))
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'))
+const ReferralDashboard = lazy(() => import('./pages/admin/ReferralDashboard'))
 const AdminInventory = lazy(() => import('./pages/admin/AdminInventory'))
 const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'))
 const AdminDarkStores = lazy(() => import('./pages/admin/AdminDarkStores'))
@@ -227,6 +228,11 @@ function App() {
             <Route path="orders" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'delivery_admin']}>
                 <AdminOrders />
+              </AdminRoute>
+            } />
+            <Route path="referrals" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+                <ReferralDashboard />
               </AdminRoute>
             } />
             <Route path="complaints" element={

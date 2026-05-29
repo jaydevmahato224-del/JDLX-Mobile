@@ -133,6 +133,8 @@ const Checkout = lazy(() => import('./pages/user/Checkout'))
 const OrderTracking = lazy(() => import('./pages/user/OrderTracking'))
 const Profile = lazy(() => import('./pages/user/Profile'))
 const ProfileSettings = lazy(() => import('./pages/user/ProfileSettings'))
+const ReferAndEarn = lazy(() => import('./pages/ReferAndEarn'))
+const WalletPage = lazy(() => import('./pages/WalletPage'))
 const MyOrders = lazy(() => import('./pages/user/MyOrders'))
 const Wishlist = lazy(() => import('./pages/user/Wishlist'))
 const Addresses = lazy(() => import('./pages/user/Addresses'))
@@ -355,6 +357,8 @@ function App() {
                       <Route path="/search" element={<SearchPage />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/cart" element={<Cart />} />
+                      <Route path="/refer" element={<ProtectedRoute><ReferAndEarn /></ProtectedRoute>} />
+                      <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
                       <Route path="/product/:id" element={<ProductRedirector />} />
                       <Route path="/p/:token" element={<ProductDetails />} />
                       <Route path="/p/:slugToken" element={<ProductDetails />} />

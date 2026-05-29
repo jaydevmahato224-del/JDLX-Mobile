@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, RefreshCw, Heart as HeartIcon, Zap, Clock } from 'lucide-react'
+import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, RefreshCw, Heart as HeartIcon, Zap, Clock, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { API_BASE_URL } from '../config'
 import NotificationBell from './NotificationBell'
@@ -21,9 +21,29 @@ function Layout({ children }) {
   const theme = useStore((state) => state.theme)
   const deliveryMode = useStore((state) => state.deliveryMode)
   const isCheckingLocation = useStore((state) => state.isCheckingLocation)
+  const token = useStore((state) => state.token)
 
   const [tickerText, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
   const [loadingSettings, setLoadingSettings] = useState(true)
+  const [walletBalance, setWalletBalance] = useState(0)
+
+  useEffect(() => {
+    const fetchWallet = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/wallet/balance`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setWalletBalance(data.balance)
+        }
+      } catch (err) {
+        console.error('Failed to load wallet balance:', err)
+      }
+    }
+    fetchWallet()
+  }, [token])
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -127,6 +147,17 @@ function Layout({ children }) {
                   </span>
                 )}
               </Link>
+
+              {walletBalance > 0 && (
+                <Link
+                  to="/wallet"
+                  className="flex items-center gap-1.5 bg-[#F5A623]/10 text-[#D48A12] px-2.5 py-1.5 rounded-xl border border-[#F5A623]/20 shadow-sm"
+                  aria-label="Wallet"
+                >
+                  <Wallet size={16} />
+                  <span className="text-xs font-black">₹{walletBalance.toFixed(0)}</span>
+                </Link>
+              )}
 
               <NotificationBell />
 

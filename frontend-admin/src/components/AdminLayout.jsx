@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2 } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
@@ -25,6 +25,7 @@ function AdminLayout({ children }) {
         { path: '/admin/complaints', icon: MessageSquare, label: 'Complaints', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/shipments', icon: Truck, label: 'Shipments', allowedRoles: ['super_admin', 'admin', 'delivery_admin'], extraStyle: 'text-indigo-400 font-bold' },
         { path: '/admin/notifications', icon: Bell, label: 'Notifications', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
+        { path: '/admin/app-reviews', icon: Star, label: 'App Reviews', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-amber-400 font-bold' },
         { path: '/admin/reviews', icon: MessageSquare, label: 'Customer Reviews', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-emerald-500 font-bold' },
         { path: '/admin/settings', icon: Settings, label: 'System Settings', allowedRoles: ['super_admin', 'admin'] },
         { path: '/admin/intelligence', icon: Brain, label: 'Intelligence', allowedRoles: ['super_admin', 'admin', 'manager', 'inventory_admin'], extraStyle: 'text-purple-400 font-black tracking-wide' },

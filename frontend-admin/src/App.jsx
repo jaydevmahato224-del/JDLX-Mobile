@@ -98,6 +98,7 @@ const AdminServerControl = lazy(() => import('./pages/admin/AdminServerControl')
 const AdminBanners = lazy(() => import('./pages/admin/AdminBanners'))
 const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'))
 const AdminReviews = lazy(() => import('./pages/admin/AdminReviews'))
+const AppReviewsDashboard = lazy(() => import('./pages/admin/AppReviewsDashboard'))
 const AdminDeviceModels = lazy(() => import('./pages/admin/AdminDeviceModels'))
 const AdminDatabase = lazy(() => import('./pages/admin/AdminDatabase'))
 const Analytics = lazy(() => import('./pages/admin/Analytics'))
@@ -246,6 +247,11 @@ function App() {
             <Route path="reviews" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
                 <AdminReviews />
+              </AdminRoute>
+            } />
+            <Route path="app-reviews" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+                <AppReviewsDashboard />
               </AdminRoute>
             } />
             <Route path="analytics" element={

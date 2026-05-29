@@ -11,6 +11,8 @@ import PushNotificationManager from './components/PushNotificationManager'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
 import UnderConstructionOverlay from './components/UnderConstructionOverlay'
 import PWAInstalledCelebration from './components/PWAInstalledCelebration'
+import AppReviewPrompt from './components/AppReviewPrompt'
+import { useAppReview } from './hooks/useAppReview'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
@@ -251,6 +253,8 @@ function App() {
   const fetchProducts = useStore((state) => state.fetchProducts)
   const fetchBanners = useStore((state) => state.fetchBanners)
   
+  const { showPrompt, promptReason, dismissPrompt } = useAppReview()
+  
   const [showSplash, setShowSplash] = useState(() => {
     // Show splash only if:
     // 1. App is running in standalone (PWA) mode
@@ -331,6 +335,7 @@ function App() {
       <UnderConstructionOverlay />
       <GlobalErrorOverlay />
       <PWAInstalledCelebration />
+      <AppReviewPrompt show={showPrompt} reason={promptReason} onDismiss={dismissPrompt} />
       <PushNotificationManager />
       <TopLoader />
       <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />

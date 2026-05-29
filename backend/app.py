@@ -63,6 +63,7 @@ from bug_routes import bug_bp
 from issue_routes import issue_bp
 from offer_routes import offer_bp
 from analytics_routes import analytics_bp
+from app_review_routes import app_review_bp, check_and_trigger_review
 from payment_routes import payment_bp
 from shiprocket_routes import shiprocket_bp
 from services.system_monitor import get_system_stats
@@ -233,6 +234,8 @@ def shiprocket_webhook():
                 notification_service.send_order_notification(user_id, order_id, new_jdlx_status)
                 
                 if new_jdlx_status == 'DELIVERED':
+                    # Check if user should be prompted for review
+                    check_and_trigger_review(cursor, user_id)
                     # Log activity
                     log_admin_action(0, "order_delivered_via_shiprocket", "order", order_id)
 
@@ -258,6 +261,7 @@ app.register_blueprint(bug_bp)
 app.register_blueprint(issue_bp)
 app.register_blueprint(offer_bp)
 app.register_blueprint(analytics_bp)
+app.register_blueprint(app_review_bp)
 app.register_blueprint(payment_bp)
 app.register_blueprint(shiprocket_bp)
 
@@ -3073,7 +3077,11 @@ def checkout():
         cursor.execute("SELECT name, email FROM users WHERE id = ?", (user_id,))
         user_info = cursor.fetchone()
 
+        # Check for app review eligibility
+        check_and_trigger_review(cursor, user_id)
+
         # Trigger Gmail Notification
+        conn.commit()
         conn.close()
         
         if delivery_type == 'shiprocket':
@@ -3263,6 +3271,8 @@ def admin_update_order_status(order_id):
         user_row = cursor.fetchone()
         if user_row:
             notification_service.send_order_notification(user_row['user_id'], order_id, new_status)
+            # Check for app review eligibility
+            check_and_trigger_review(cursor, user_row['user_id'])
 
         if new_status == 'DELIVERED':
             # Free the delivery partner

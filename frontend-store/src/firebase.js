@@ -14,7 +14,8 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
+const isConfigured = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_");
+const messaging = (typeof window !== 'undefined' && isConfigured) ? getMessaging(app) : null;
 
 /**
  * Converts a base64 string to a Uint8Array.

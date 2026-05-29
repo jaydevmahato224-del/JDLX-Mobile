@@ -13,17 +13,38 @@ def send_order_email(to_email, order_details):
     msg = MIMEMultipart()
     msg['From'] = GMAIL_USER
     msg['To'] = to_email
-    msg['Subject'] = f"JDLX Mobile: Order #{order_details['order_id']} Placed!"
+    
+    # Check if payment is prepaid or COD
+    pm_type = order_details.get('payment_type', 'PREPAID')
+    subject_status = "Confirmed" if pm_type == 'PREPAID' else "Confirmed (COD)"
+    msg['Subject'] = f"JDLX Mobile: Order #{order_details['order_id']} {subject_status}!"
+
+    # Format items
+    items_list = "".join([f"<li>{item['name']} x {item['qty']} - ₹{item['price'] * item['qty']}</li>" for item in order_details['items']])
+
+    # Build pricing breakdown
+    breakdown = f"""
+    <p><b>Price Breakdown:</b></p>
+    <ul>
+        <li>Items Subtotal: ₹{order_details.get('subtotal', 0)}</li>
+        <li>Platform Fee: ₹{order_details.get('platform_fee', 0)}</li>
+        <li>Delivery Charge: ₹{order_details.get('delivery_fee', 0)}</li>
+        <li>Fitting Charge: ₹{order_details.get('fitting_charge', 0)}</li>
+        {f"<li>Discount Applied: -₹{order_details.get('discount_applied')}</li>" if order_details.get('discount_applied', 0) > 0 else ""}
+        <li><b>Final Total: ₹{order_details['total_amount']}</b></li>
+    </ul>
+    """
 
     body = f"""
     <h2>Thank you for your order, {order_details['customer_name']}!</h2>
-    <p>Your order for <b>₹{order_details['total_amount']}</b> has been placed successfully.</p>
+    <p>Your order for <b>₹{order_details['total_amount']}</b> has been confirmed successfully.</p>
     <h3>Order Summary:</h3>
     <ul>
-        {"".join([f"<li>{item['name']} x {item['qty']} - ₹{item['price'] * item['qty']}</li>" for item in order_details['items']])}
+        {items_list}
     </ul>
+    {breakdown}
     <p><b>Delivery Address:</b> {order_details['address']}</p>
-    <p><b>Estimated Delivery:</b> 30-120 minutes</p>
+    <p><b>Estimated Delivery:</b> {order_details.get('estimated_delivery', '3-5 business days')}</p>
     <br/>
     <p>Track your order on our app!</p>
     """

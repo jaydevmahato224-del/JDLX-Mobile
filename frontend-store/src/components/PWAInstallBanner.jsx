@@ -11,6 +11,7 @@ import { API_BASE_URL } from '../config';
 const PWAInstallBanner = () => {
   const { isInstallable, isInstalled, handleInstallClick } = usePWAInstall();
   const [isVisible, setIsVisible] = useState(false);
+  const [showPwaGuide, setShowPwaGuide] = useState(false);
   const [isDismissed, setIsDismissed] = useState(() => localStorage.getItem('pwa_banner_dismissed') === 'true');
   const [config, setConfig] = useState({
     enabled: true,
@@ -26,34 +27,7 @@ const PWAInstallBanner = () => {
     if (isInstallable) {
       await handleInstallClick();
     } else {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      if (isIOS) {
-        toast('Tap the "Share" icon in Safari and select "Add to Home Screen" to install JDLX.', {
-          duration: 7000,
-          icon: '📲',
-          style: {
-            borderRadius: '16px',
-            background: '#0a0a0c',
-            color: '#fff',
-            border: '1px solid rgba(255,255,255,0.1)',
-            fontWeight: 'bold',
-            fontSize: '13px'
-          }
-        });
-      } else {
-        toast('To install, tap the three dots in your browser and select "Install App" or "Add to Home Screen".', {
-          duration: 7000,
-          icon: 'ℹ️',
-          style: {
-            borderRadius: '16px',
-            background: '#0a0a0c',
-            color: '#fff',
-            border: '1px solid rgba(255,255,255,0.1)',
-            fontWeight: 'bold',
-            fontSize: '13px'
-          }
-        });
-      }
+      setShowPwaGuide(true);
     }
   };
 
@@ -132,6 +106,70 @@ const PWAInstallBanner = () => {
         {/* Subtle bottom accent line */}
         <div className="h-1 w-full bg-gradient-to-r from-transparent via-primary-500/30 to-transparent" />
       </div>
+
+      {/* Premium PWA Guide Modal inside Banner */}
+      {showPwaGuide && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-[#16161a] to-[#0a0a0c] p-6 text-white shadow-2xl animate-in zoom-in-95 duration-300">
+            {/* Close button */}
+            <button 
+              onClick={() => setShowPwaGuide(false)}
+              className="absolute top-5 right-5 p-2 rounded-full bg-white/5 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col items-center text-center mt-4">
+              <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/10 border border-primary/20 animate-bounce">
+                <Download className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black mt-4 tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
+              <p className="text-[13px] text-slate-400 mt-2 font-medium leading-relaxed">
+                Install the digital concierge app on your device screen for full performance, instant checkout, and order tracking.
+              </p>
+            </div>
+
+            {/* Instructions */}
+            <div className="mt-6 space-y-4">
+              {/* Android/Chrome */}
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                <h4 className="text-[12px] font-black uppercase tracking-wider text-primary flex items-center gap-2">
+                  <Smartphone className="w-4 h-4" /> Android & Windows (Chrome/Edge)
+                </h4>
+                <ol className="list-decimal pl-4 mt-2 text-[12px] font-bold text-slate-300 space-y-1">
+                  <li>Tap the <strong>three dots (⋮)</strong> in Chrome/Edge top-right.</li>
+                  <li>Select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+                  <li>Confirm the prompt. JDLX is now installed!</li>
+                </ol>
+              </div>
+
+              {/* iOS/Safari */}
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                <h4 className="text-[12px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                  📲 iPhone & iPad (Safari Only)
+                </h4>
+                <ol className="list-decimal pl-4 mt-2 text-[12px] font-bold text-slate-300 space-y-1">
+                  <li>Tap the <strong>Share</strong> button (box with up arrow) in Safari.</li>
+                  <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
+                  <li>Tap <strong>"Add"</strong> in the top right. JDLX is ready!</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Note about HTTPS/development */}
+            <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/10 text-amber-400 text-[10px] font-bold leading-normal">
+              ⚠️ Note: Secure connection (HTTPS or localhost) is strictly required by browser policies for PWA installation. If you are testing via local IP address, please access using localhost or standard domain.
+            </div>
+
+            <button
+              onClick={() => setShowPwaGuide(false)}
+              className="mt-6 w-full py-3.5 bg-slate-100 text-slate-900 rounded-2xl hover:bg-white active:scale-95 transition-all font-black text-xs tracking-wider uppercase"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -384,7 +384,12 @@ const AdminUsers = () => {
                                                         <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">{user.name.charAt(0)}</div>
                                                     )}
                                                     <div>
-                                                        <div className="font-semibold">{user.name}</div>
+                                                        <div className="font-semibold flex items-center gap-2">
+                                                            {user.name}
+                                                            {user.cod_restricted === 1 && (
+                                                                <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-tight">COD Restricted</span>
+                                                            )}
+                                                        </div>
                                                         <div className="text-xs text-gray-500">{user.email}</div>
                                                     </div>
                                                 </div>

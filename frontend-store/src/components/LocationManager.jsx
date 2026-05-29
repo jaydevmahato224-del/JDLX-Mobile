@@ -55,6 +55,16 @@ const LocationManager = () => {
         sessionStorage.setItem('location_prompt_shown', 'true');
     }
 
+    // Safety watchdog timer: force reset isCheckingLocation if it hangs for any reason (e.g. slow network or unresolved browser dialog)
+    const watchdogTimer = setTimeout(() => {
+      console.warn("⚡ JDLX Geolocation Safety Watchdog triggered: forcing clear checking state.");
+      setStatus('idle');
+      setIsCheckingLocation(false);
+      if (!userLocation) {
+        setDeliveryMode('scheduled');
+      }
+    }, 12000); // 12 seconds is perfect (2 seconds after the geolocation internal 10s timeout)
+
     const performVerification = async (lat, lng) => {
       try {
         const settingsRes = await fetch(`${API_BASE_URL}/warehouse/availability?_t=${Date.now()}`);
@@ -114,6 +124,7 @@ const LocationManager = () => {
       } catch (error) {
         console.error("Error fetching stores:", error);
       } finally {
+        clearTimeout(watchdogTimer);
         setStatus('idle');
         setIsCheckingLocation(false);
       }
@@ -125,6 +136,7 @@ const LocationManager = () => {
     }
 
     if (!navigator.geolocation) {
+      clearTimeout(watchdogTimer);
       setErrorMessage("Geolocation is not supported by your browser.");
       setStatus('error');
       setIsCheckingLocation(false);
@@ -138,6 +150,7 @@ const LocationManager = () => {
         await performVerification(latitude, longitude);
       },
       (error) => {
+        clearTimeout(watchdogTimer);
         let msg = "We couldn't verify your location.";
         if (error.code === 1) msg = "Location access denied. Please enable it in browser settings.";
         else if (error.code === 2) msg = "Position unavailable. Check your device GPS.";

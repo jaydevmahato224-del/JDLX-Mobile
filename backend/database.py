@@ -73,8 +73,9 @@ def get_db():
         conn = LibsqlConnectionWrapper(raw_conn)
         conn.row_factory = LibsqlRow
     else:
-        conn = sqlite3.connect(DATABASE_PATH)
+        conn = sqlite3.connect(DATABASE_PATH, timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 10000")  # 10s retry on lock
     return conn
 
 def init_db():
@@ -271,7 +272,8 @@ def init_db():
         ('delivered_at', 'TIMESTAMP'), 
         ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"), 
         ('delivery_partner_id', 'INTEGER'), 
-        ('store_id', 'INTEGER')
+        ('store_id', 'INTEGER'),
+        ('cancellation_reason', 'TEXT')
     ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(order_id) REFERENCES orders(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
@@ -768,6 +770,7 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('ticker_text', 'Free delivery on orders above ₹499')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('construction_mode', 'false')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('construction_mode_message', 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!')")
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_cod_protection', 'true')")
 
     conn.commit()
     conn.close()

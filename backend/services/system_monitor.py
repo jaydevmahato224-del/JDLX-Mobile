@@ -23,9 +23,15 @@ def get_system_stats():
                 WHERE stock <= low_stock_threshold
             ) AS low_stock_products,
             (
-                SELECT COALESCE(SUM(total_amount), 0)
+                SELECT COALESCE(SUM(
+                    CASE 
+                        WHEN payment_type = 'PREPAID' THEN total_amount
+                        ELSE cod_advance_paid
+                    END
+                ), 0)
                 FROM orders
                 WHERE DATE(created_at) = DATE('now')
+                AND order_status NOT IN ('PLACED', 'CANCELLED', 'REJECTED')
             ) AS daily_revenue
         '''
     )

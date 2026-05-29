@@ -18,7 +18,7 @@ const PromoBanner = memo(function PromoBanner({ title, subtitle, cta, image, bad
             className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-[2000ms]" 
             decoding="async"
             loading={priority ? "eager" : "lazy"}
-            fetchpriority={priority ? "high" : "auto"}
+            fetchPriority={priority ? "high" : "auto"}
           />
           <div className="absolute inset-0" style={{ background: `linear-gradient(to right, rgba(0,0,0,${overlay_opacity + 0.2}), rgba(0,0,0,${overlay_opacity / 2}))` }} />
         </div>

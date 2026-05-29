@@ -38,7 +38,7 @@ def create_payment_order():
     try:
         # Fetch order
         order = conn.execute(
-            "SELECT id, total_amount, user_id FROM orders WHERE id = ?",
+            "SELECT id, total_amount, user_id, payment_type FROM orders WHERE id = ?",
             (order_id,)
         ).fetchone()
 
@@ -76,11 +76,12 @@ def create_payment_order():
         razorpay_order = client.order.create(data=razorpay_order_data)
 
         # Save to payments table
+        payment_method = order['payment_type'] or 'PREPAID'
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO payments (order_id, user_id, razorpay_order_id, amount, status)
-               VALUES (?, ?, ?, ?, 'created')""",
-            (order_id, user_id, razorpay_order['id'], amount_paise)
+            """INSERT INTO payments (order_id, user_id, razorpay_order_id, amount, payment_method, status)
+               VALUES (?, ?, ?, ?, ?, 'created')""",
+            (order_id, user_id, razorpay_order['id'], amount_paise, payment_method)
         )
         conn.commit()
 
@@ -142,10 +143,14 @@ def verify_payment():
         ).fetchone()
         
         if payment:
-            cursor.execute(
-                "UPDATE orders SET order_status = 'confirmed' WHERE id = ?",
-                (payment['order_id'],)
-            )
+            try:
+                from app import confirm_order_and_decrement_stock_logic, trigger_order_email
+                # Safe, transactional order confirmation & stock decrement
+                was_confirmed = confirm_order_and_decrement_stock_logic(cursor, payment['order_id'])
+                if was_confirmed:
+                    trigger_order_email(payment['order_id'])
+            except Exception as conf_err:
+                print(f"Error during order confirmation/email: {conf_err}")
         
         conn.commit()
         return success_response({"success": True}, "Payment successful")
@@ -194,10 +199,14 @@ def payment_webhook():
                 (razorpay_order_id,)
             ).fetchone()
             if payment:
-                cursor.execute(
-                    "UPDATE orders SET order_status = 'confirmed' WHERE id = ?",
-                    (payment['order_id'],)
-                )
+                try:
+                    from app import confirm_order_and_decrement_stock_logic, trigger_order_email
+                    # Safe, transactional order confirmation & stock decrement via webhook
+                    was_confirmed = confirm_order_and_decrement_stock_logic(cursor, payment['order_id'])
+                    if was_confirmed:
+                        trigger_order_email(payment['order_id'])
+                except Exception as conf_err:
+                    print(f"Error during order confirmation/email via webhook: {conf_err}")
         elif event_type == 'payment.failed':
             cursor.execute(
                 "UPDATE payments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE razorpay_order_id = ?",

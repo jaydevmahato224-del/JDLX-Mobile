@@ -67,7 +67,7 @@ function Layout({ children }) {
                       src="/logo192.png" 
                       alt="JDLX Logo" 
                       className="h-8 w-8 object-contain transition-all group-hover:scale-110" 
-                      fetchpriority="high"
+                      fetchPriority="high"
                     />
                   </Link>
                   

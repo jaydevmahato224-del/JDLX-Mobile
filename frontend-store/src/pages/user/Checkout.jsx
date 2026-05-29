@@ -313,13 +313,14 @@ function Checkout() {
             }
 
             // Step 2: Open Razorpay checkout
+            const paymentData = data.data || {};
             const options = {
-                key: data.key_id,
-                amount: data.amount,
-                currency: data.currency,
+                key: paymentData.key_id,
+                amount: paymentData.amount,
+                currency: paymentData.currency,
                 name: 'JDLX Mobile',
                 description: `Order #${orderId}`,
-                order_id: data.razorpay_order_id,
+                order_id: paymentData.razorpay_order_id,
                 prefill: {
                     name: user?.name || '',
                     email: user?.email || '',

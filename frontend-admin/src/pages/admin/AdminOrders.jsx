@@ -335,7 +335,48 @@ function AdminOrders() {
                                                 <span className="text-xs text-gray-500">{order.phone}</span>
                                             </div>
                                         </td>
-                                        <td className="p-4 font-bold text-gray-800 whitespace-nowrap">₹{order.total_amount} <span className="text-xs font-normal text-gray-500">({order.items_count} items)</span></td>
+                                        <td className="p-4 whitespace-nowrap">
+                                            <div className="flex flex-col gap-1">
+                                                <div className="font-bold text-gray-800">
+                                                    ₹{order.total_amount}
+                                                    <span className="text-[10px] font-normal text-gray-500 ml-1">({order.items_count} items)</span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tight ${
+                                                            order.payment_type === 'COD' 
+                                                                ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                        }`}>
+                                                            {order.payment_type || 'PREPAID'}
+                                                        </span>
+                                                        
+                                                        {['PLACED', 'PENDING', 'CANCELLED', 'REJECTED'].includes(order.status?.toUpperCase()) ? (
+                                                            <span className="text-[10px] font-medium text-gray-400 italic">
+                                                                {order.status?.toUpperCase() === 'PLACED' ? 'Awaiting Payment' : 'Unrealized'}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">
+                                                                ✓ Confirmed
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {!['PLACED', 'PENDING', 'CANCELLED', 'REJECTED'].includes(order.status?.toUpperCase()) && (
+                                                        order.payment_type === 'COD' ? (
+                                                            <div className="flex gap-1.5 text-[9px] font-bold mt-0.5">
+                                                                <span className="text-emerald-700 bg-emerald-50 px-1 rounded">Paid: ₹{order.cod_advance_paid || 49}</span>
+                                                                <span className="text-rose-700 bg-rose-50 px-1 rounded">Due: ₹{order.cod_remaining_amount}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded w-fit mt-0.5">
+                                                                Received: ₹{order.total_amount}
+                                                            </div>
+                                                        )
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td className="p-4">
                                             <div className="flex flex-col gap-1">
                                                 {order.dark_store_id ? <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded flex items-center gap-1 w-max"><Package className="w-3 h-3" /> Store #{order.dark_store_id}</span> : <span className="text-xs text-gray-400">-</span>}

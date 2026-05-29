@@ -10,6 +10,7 @@ import AnalyticsTracker from './components/AnalyticsTracker'
 import PushNotificationManager from './components/PushNotificationManager'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
 import UnderConstructionOverlay from './components/UnderConstructionOverlay'
+import PWAInstalledCelebration from './components/PWAInstalledCelebration'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
@@ -329,6 +330,7 @@ function App() {
     <ErrorBoundary>
       <UnderConstructionOverlay />
       <GlobalErrorOverlay />
+      <PWAInstalledCelebration />
       <PushNotificationManager />
       <TopLoader />
       <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />

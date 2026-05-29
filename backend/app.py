@@ -2647,6 +2647,159 @@ def get_product_stock(product_id):
     except Exception as e:
         return error_response(str(e), 500)
 
+def trigger_order_email(order_id):
+    from notifier import send_order_email
+    
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        # Fetch order details
+        order = cursor.execute("""
+            SELECT id, user_id, customer_name, delivery_address, total_amount, 
+                   platform_fee, delivery_fee, fitting_charge, payment_type, 
+                   estimated_delivery 
+            FROM orders WHERE id = ?
+        """, (order_id,)).fetchone()
+        
+        if not order:
+            return False
+            
+        # Fetch user email
+        user = cursor.execute("SELECT email FROM users WHERE id = ?", (order['user_id'],)).fetchone()
+        if not user or not user['email']:
+            return False
+            
+        # Fetch order items
+        db_items = cursor.execute("""
+            SELECT product_name, quantity, price FROM order_items WHERE order_id = ?
+        """, (order_id,)).fetchall()
+        
+        items = []
+        subtotal = 0
+        for item in db_items:
+            items.append({
+                "name": item['product_name'] or "Unknown Product",
+                "qty": item['quantity'],
+                "price": item['price']
+            })
+            subtotal += float(item['price']) * int(item['quantity'])
+            
+        # Fetch discount applied from offer_usage if any
+        discount = cursor.execute("SELECT discount_applied FROM offer_usage WHERE order_id = ?", (order_id,)).fetchone()
+        discount_applied = discount['discount_applied'] if discount else 0
+        
+        order_details = {
+            "order_id": order_id,
+            "customer_name": order['customer_name'],
+            "subtotal": subtotal,
+            "platform_fee": order['platform_fee'],
+            "delivery_fee": order['delivery_fee'],
+            "fitting_charge": order['fitting_charge'],
+            "discount_applied": discount_applied,
+            "total_amount": order['total_amount'],
+            "items": items,
+            "address": order['delivery_address'],
+            "estimated_delivery": order['estimated_delivery'],
+            "payment_type": order['payment_type']
+        }
+        
+        send_order_email(user['email'], order_details)
+        return True
+    except Exception as e:
+        logger.error(f"Error in trigger_order_email: {e}")
+        return False
+    finally:
+        conn.close()
+
+def confirm_order_and_decrement_stock_logic(cursor, order_id):
+    """
+    Confirms an order and decrements the inventory stock safely.
+    Ensures this is only done once per order to prevent double-decrement bugs.
+    """
+    # 1. Fetch current order status and dark_store_id
+    cursor.execute("SELECT order_status, dark_store_id FROM orders WHERE id = ?", (order_id,))
+    order = cursor.fetchone()
+    if not order:
+        print(f"[ORDER CONFIRMATION ERROR] Order #{order_id} not found.")
+        return False
+
+    current_status = order['order_status'].upper()
+    
+    # 2. Only proceed if status is 'PLACED' to guarantee idempotency
+    if current_status != 'PLACED':
+        print(f"[ORDER CONFIRMATION WARNING] Order #{order_id} is already in '{current_status}' status. Skipping stock decrement.")
+        return False
+
+    store_id = order['dark_store_id']
+
+    # 3. Fetch order items
+    cursor.execute("SELECT product_id, quantity, variant_id FROM order_items WHERE order_id = ?", (order_id,))
+    items = cursor.fetchall()
+
+    # 4. Decrement warehouse stock and sync global/variant inventories
+    for item in items:
+        product_id = item['product_id']
+        qty = item['quantity']
+        v_id = item['variant_id']
+
+        if v_id:
+            # Decrement variant specific warehouse inventory
+            cursor.execute("""
+                UPDATE warehouse_inventory
+                SET stock_quantity = MAX(0, stock_quantity - ?),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
+            """, (qty, store_id, product_id, v_id))
+
+            # Sync variant stock
+            cursor.execute("""
+                UPDATE product_variants SET stock = (
+                    SELECT COALESCE(SUM(stock_quantity), 0)
+                    FROM warehouse_inventory WHERE variant_id = ?
+                ) WHERE id = ?
+            """, (v_id, v_id))
+        else:
+            # Decrement generic product warehouse inventory
+            cursor.execute("""
+                UPDATE warehouse_inventory
+                SET stock_quantity = MAX(0, stock_quantity - ?),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE warehouse_id = ? AND product_id = ? AND variant_id IS NULL
+            """, (qty, store_id, product_id))
+
+        # Sync global products.stock
+        cursor.execute("""
+            UPDATE products SET stock = (
+                SELECT COALESCE(SUM(stock_quantity), 0)
+                FROM warehouse_inventory WHERE product_id = ?
+            ) WHERE id = ?
+        """, (product_id, product_id))
+
+        # Trigger Low Stock Notifications if stock drops to or below threshold
+        cursor.execute("SELECT name, stock, low_stock_threshold FROM products WHERE id = ?", (product_id,))
+        prod_data = cursor.fetchone()
+        if prod_data and 0 < prod_data['stock'] <= (prod_data['low_stock_threshold'] or 5):
+            try:
+                trigger_low_stock_notifications_svc(
+                    product_id, 
+                    prod_data['stock'], 
+                    prod_data['name'],
+                    get_db,
+                    notification_service.notify_user_internal
+                )
+            except Exception as notify_err:
+                print(f"[LOW STOCK WARNING] Failed to trigger notification: {notify_err}")
+
+    # 5. Update order status to 'CONFIRMED' and confirmed_at timestamp
+    cursor.execute(
+        "UPDATE orders SET order_status = 'CONFIRMED', confirmed_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (order_id,)
+    )
+
+    print(f"[ORDER CONFIRMATION SUCCESS] Order #{order_id} has been confirmed and stock has been decremented.")
+    return True
+
+
 @app.route('/api/checkout', methods=['POST'])
 @token_required
 @limiter.limit("5 per minute")
@@ -2775,7 +2928,7 @@ def checkout():
                 is_prepaid_only_order = True
 
         # Get dynamic fees from settings
-        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled', 'cod_enabled_shiprocket', 'free_delivery_enabled')")
+        cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled', 'cod_enabled_shiprocket', 'free_delivery_enabled', 'auto_cod_protection')")
         settings_rows = cursor.fetchall()
         settings = {row['key']: row['value'] for row in settings_rows}
         
@@ -2787,6 +2940,7 @@ def checkout():
         cod_advance = float(settings.get('cod_advance_amount', 49))
         cod_enabled = settings.get('cod_enabled', 'true').lower() == 'true'
         cod_enabled_shiprocket = settings.get('cod_enabled_shiprocket', 'false').lower() == 'true'
+        auto_cod_protection = settings.get('auto_cod_protection', 'true').lower() == 'true'
 
         payment_type = data.get('payment_type', 'PREPAID').upper()
         if payment_type == 'COD':
@@ -2816,16 +2970,17 @@ def checkout():
                 return error_response("Cash on Delivery is restricted for your account due to policy violations.", 400)
 
             # 4. Fake COD Protection (Block repeated rejected orders)
-            # Check orders from last 30 days
-            cursor.execute('''
-                SELECT COUNT(*) as rejected_count FROM orders 
-                WHERE user_id = ? AND payment_type = 'COD' 
-                AND order_status IN ('CANCELLED', 'REJECTED')
-                AND created_at > datetime('now', '-30 days')
-            ''', (user_id,))
-            rejected_row = cursor.fetchone()
-            if rejected_row and rejected_row['rejected_count'] >= 2:
-                return error_response("COD is temporarily disabled for you due to multiple recent order cancellations.", 400)
+            # Check orders from last 30 days if enabled by admin
+            if auto_cod_protection:
+                cursor.execute('''
+                    SELECT COUNT(*) as rejected_count FROM orders 
+                    WHERE user_id = ? AND payment_type = 'COD' 
+                    AND order_status IN ('CANCELLED', 'REJECTED')
+                    AND created_at > datetime('now', '-30 days')
+                ''', (user_id,))
+                rejected_row = cursor.fetchone()
+                if rejected_row and rejected_row['rejected_count'] >= 2:
+                    return error_response("COD is temporarily disabled for you due to multiple recent order cancellations.", 400)
 
         # Calculate Delivery Charge
         actual_delivery_fee = 0
@@ -2884,57 +3039,15 @@ def checkout():
         # 4. Insert Order Items and Update both store and global stock (Requirement 2: HARD RESERVATION)
         for item in items:
             v_id = item.get('variant_id')
+            product_name = product_meta.get(item['id'], {}).get('name', 'Unknown Product')
+            item_subtotal = float(item['price']) * int(item['qty'])
             cursor.execute(
-                "INSERT INTO order_items (order_id, product_id, variant_id, quantity, price, device_model, fitting_charge) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (order_id, item['id'], v_id, item['qty'], item['price'], item.get('device_model'), item.get('fitting_charge', 0))
+                "INSERT INTO order_items (order_id, product_id, product_name, variant_id, quantity, price, subtotal, device_model, fitting_charge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (order_id, item['id'], product_name, v_id, item['qty'], item['price'], item_subtotal, item.get('device_model'), item.get('fitting_charge', 0))
             )
 
-            # Requirement 2: Reduce stock_quantity immediately on order confirmation.
-            # This counts as "ORDER CONFIRMED". Triggers sync available_stock and products.stock.
-            if v_id:
-                cursor.execute("""
-                    UPDATE warehouse_inventory
-                    SET stock_quantity = MAX(0, stock_quantity - ?),
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
-                """, (item['qty'], store_id, item['id'], v_id))
-
-                # Sync variant stock
-                cursor.execute("""
-                    UPDATE product_variants SET stock = (
-                        SELECT COALESCE(SUM(stock_quantity), 0)
-                        FROM warehouse_inventory WHERE variant_id = ?
-                    ) WHERE id = ?
-                """, (v_id, v_id))
-            else:
-                cursor.execute("""
-                    UPDATE warehouse_inventory
-                    SET stock_quantity = MAX(0, stock_quantity - ?),
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE warehouse_id = ? AND product_id = ? AND variant_id IS NULL
-                """, (item['qty'], store_id, item['id']))
-
-            # Sync global products.stock
-            cursor.execute("""
-                UPDATE products SET stock = (
-                    SELECT COALESCE(SUM(stock_quantity), 0)
-                    FROM warehouse_inventory WHERE product_id = ?
-                ) WHERE id = ?
-            """, (item['id'], item['id']))
-
-            # Trigger Low Stock Notifications if stock drops to <= 5 (matching UI default)
-
-            cursor.execute("SELECT name, stock, low_stock_threshold FROM products WHERE id = ?", (item['id'],))
-            prod_data = cursor.fetchone()
-            if prod_data and 0 < prod_data['stock'] <= (prod_data['low_stock_threshold'] or 5):
-                # We do this in the background or after commit to not block checkout
-                trigger_low_stock_notifications_svc(
-                    item['id'], 
-                    prod_data['stock'], 
-                    prod_data['name'],
-                    get_db,
-                    notification_service.notify_user_internal
-                )
+            # Note: Inventory stock is NOT decremented here during placement anymore.
+            # Stock will be decremented and synced only when payment is verified and order is confirmed.
 
         conn.commit()
 
@@ -2961,26 +3074,7 @@ def checkout():
         user_info = cursor.fetchone()
 
         # Trigger Gmail Notification
-        enriched_items = []
-        for item in items:
-            cursor.execute("SELECT name FROM products WHERE id = ?", (item['id'],))
-            p = cursor.fetchone()
-            enriched_items.append({
-                "name": p['name'] if p else "Unknown Product",
-                "qty": item['qty'],
-                "price": item['price']
-            })
-        
         conn.close()
-
-        order_details = {
-            "order_id": order_id,
-            "customer_name": user_info['name'],
-            "total_amount": total_amount,
-            "items": enriched_items,
-            "address": address
-        }
-        send_order_email(user_info['email'], order_details)
         
         if delivery_type == 'shiprocket':
             return jsonify({
@@ -3983,7 +4077,18 @@ def admin_stats():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as total_orders, SUM(total_amount) as total_revenue FROM orders")
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_orders, 
+                SUM(
+                    CASE 
+                        WHEN order_status IN ('PLACED', 'CANCELLED', 'REJECTED') THEN 0
+                        WHEN payment_type = 'PREPAID' THEN total_amount
+                        ELSE cod_advance_paid
+                    END
+                ) as total_revenue 
+            FROM orders
+        """)
         stats = cursor.fetchone()
         cursor.execute("SELECT COUNT(*) as total_users FROM users")
         user_count = cursor.fetchone()
@@ -4116,6 +4221,115 @@ def get_admin_orders():
         orders = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(orders)
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/cancelled-analytics', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def get_cancelled_analytics():
+    """Retrieves detailed stats, timelines, reasons and user information for cancelled and rejected orders."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 1. Main detailed list of cancelled/rejected orders (Only confirmed orders that were later cancelled/rejected)
+        cursor.execute("""
+            SELECT o.id, o.order_number, o.user_id, o.total_amount, o.order_status, 
+                   COALESCE(o.cancelled_at, o.updated_at) as cancelled_at, 
+                   COALESCE(o.cancellation_reason, 'No reason specified') as cancellation_reason,
+                   COALESCE(u.name, o.customer_name, 'Guest Customer') as customer_name,
+                   COALESCE(u.email, 'N/A') as customer_email
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            WHERE o.order_status IN ('CANCELLED', 'REJECTED')
+              AND o.confirmed_at IS NOT NULL
+            ORDER BY cancelled_at DESC
+        """)
+        orders_list = [dict(row) for row in cursor.fetchall()]
+
+        # 2. Monthly cancellations trend
+        cursor.execute("""
+            SELECT strftime('%Y-%m', COALESCE(o.cancelled_at, o.updated_at)) as period,
+                   COUNT(*) as count,
+                   ROUND(SUM(o.total_amount), 2) as total_amount
+            FROM orders o
+            WHERE o.order_status IN ('CANCELLED', 'REJECTED')
+              AND o.confirmed_at IS NOT NULL
+            GROUP BY period
+            ORDER BY period ASC
+        """)
+        monthly_trends = [dict(row) for row in cursor.fetchall()]
+
+        # 3. Weekly cancellations trend
+        cursor.execute("""
+            SELECT strftime('%Y-W%W', COALESCE(o.cancelled_at, o.updated_at)) as period,
+                   COUNT(*) as count,
+                   ROUND(SUM(o.total_amount), 2) as total_amount
+            FROM orders o
+            WHERE o.order_status IN ('CANCELLED', 'REJECTED')
+              AND o.confirmed_at IS NOT NULL
+            GROUP BY period
+            ORDER BY period ASC
+        """)
+        weekly_trends = [dict(row) for row in cursor.fetchall()]
+
+        # 4. Yearly cancellations trend
+        cursor.execute("""
+            SELECT strftime('%Y', COALESCE(o.cancelled_at, o.updated_at)) as period,
+                   COUNT(*) as count,
+                   ROUND(SUM(o.total_amount), 2) as total_amount
+            FROM orders o
+            WHERE o.order_status IN ('CANCELLED', 'REJECTED')
+              AND o.confirmed_at IS NOT NULL
+            GROUP BY period
+            ORDER BY period ASC
+        """)
+        yearly_trends = [dict(row) for row in cursor.fetchall()]
+
+        # 5. Cancellation Reason Distribution
+        cursor.execute("""
+            SELECT COALESCE(o.cancellation_reason, 'No reason specified') as reason,
+                   COUNT(*) as count
+            FROM orders o
+            WHERE o.order_status IN ('CANCELLED', 'REJECTED')
+              AND o.confirmed_at IS NOT NULL
+            GROUP BY reason
+            ORDER BY count DESC
+        """)
+        reasons_dist = [dict(row) for row in cursor.fetchall()]
+
+        # 6. Overall stats (Cancelled vs Rejected)
+        cursor.execute("""
+            SELECT 
+                SUM(CASE WHEN order_status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled_count,
+                SUM(CASE WHEN order_status = 'REJECTED' THEN 1 ELSE 0 END) as rejected_count,
+                ROUND(SUM(total_amount), 2) as lost_revenue
+            FROM orders
+            WHERE order_status IN ('CANCELLED', 'REJECTED')
+              AND confirmed_at IS NOT NULL
+        """)
+        summary_stats_row = cursor.fetchone()
+        summary_stats = dict(summary_stats_row) if summary_stats_row else {}
+
+        conn.close()
+
+        return jsonify({
+            "orders": orders_list,
+            "trends": {
+                "monthly": monthly_trends,
+                "weekly": weekly_trends,
+                "yearly": yearly_trends
+            },
+            "reasons": reasons_dist,
+            "summary": {
+                "cancelled_count": summary_stats.get('cancelled_count') or 0,
+                "rejected_count": summary_stats.get('rejected_count') or 0,
+                "lost_revenue": summary_stats.get('lost_revenue') or 0.0
+            }
+        })
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -4304,14 +4518,28 @@ def update_order_status(order_id):
         handle_stock_on_status_change(cursor, order_id, old_status, new_status)
 
         timestamp_col = None
-        if new_status == 'PACKED': timestamp_col = "packed_at"
+        if new_status == 'CONFIRMED': timestamp_col = "confirmed_at"
+        elif new_status == 'PACKED': timestamp_col = "packed_at"
         elif new_status == 'SHIPPED': timestamp_col = "shipped_at"
         elif new_status == 'DELIVERED': timestamp_col = "delivered_at"
+        elif new_status == 'CANCELLED': timestamp_col = "cancelled_at"
         
+        reason = data.get('reason')
+        if not reason and new_status == 'CANCELLED':
+            reason = 'Cancelled by Admin'
+        elif not reason and new_status == 'REJECTED':
+            reason = 'Rejected by Admin'
+
         if timestamp_col:
-            cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_status, order_id))
+            if new_status == 'CANCELLED':
+                cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP, cancellation_reason = ? WHERE id = ?", (new_status, reason, order_id))
+            else:
+                cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_status, order_id))
         else:
-            cursor.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_status, order_id))
+            if new_status == 'REJECTED':
+                cursor.execute("UPDATE orders SET order_status = ?, cancellation_reason = ?, cancelled_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, reason, order_id))
+            else:
+                cursor.execute("UPDATE orders SET order_status = ? WHERE id = ?", (new_status, order_id))
             
         conn.commit()
         conn.close()
@@ -5918,7 +6146,9 @@ def cancel_order(order_id):
             conn.close()
             return error_response(f"Cannot cancel order in {order['status']} status", 400)
 
-        cursor.execute("UPDATE orders SET order_status = 'CANCELLED' WHERE id = ?", (order_id,))
+        data = request.json or {}
+        reason = data.get('reason', 'Cancelled by User')
+        cursor.execute("UPDATE orders SET order_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, cancellation_reason = ? WHERE id = ?", (reason, order_id))
         notification_service.send_order_notification(user_id, order_id, 'CANCELLED')
         conn.commit()
         conn.close()

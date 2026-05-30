@@ -452,21 +452,29 @@ app.config.update(
     SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true",
 )
 # Store / Default OAuth Credentials (Port 5173)
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "473832938691-ihanpc4bfrfq57uvvblp76nlc7lgr1ak.apps.googleusercontent.com")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "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")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:5000/google/callback")
+
+if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    logger.error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set in the environment.")
+
 FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
 
 # Admin Panel OAuth Credentials (Port 5174)
-ADMIN_GOOGLE_CLIENT_ID = os.environ.get("ADMIN_GOOGLE_CLIENT_ID", "473832938691-oa46nvu19l6clb7fucu2u562clitbuah.apps.googleusercontent.com")
-ADMIN_GOOGLE_CLIENT_SECRET = os.environ.get("ADMIN_GOOGLE_CLIENT_SECRET", "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")
+ADMIN_GOOGLE_CLIENT_ID = os.environ.get("ADMIN_GOOGLE_CLIENT_ID")
+ADMIN_GOOGLE_CLIENT_SECRET = os.environ.get("ADMIN_GOOGLE_CLIENT_SECRET")
 ADMIN_GOOGLE_REDIRECT_URI = os.environ.get("ADMIN_GOOGLE_REDIRECT_URI", "http://localhost:5000/admin/auth/google/callback")
+
+if not ADMIN_GOOGLE_CLIENT_ID or not ADMIN_GOOGLE_CLIENT_SECRET:
+    logger.error("ADMIN_GOOGLE_CLIENT_ID or ADMIN_GOOGLE_CLIENT_SECRET is not set in the environment.")
+
 ADMIN_FRONTEND_URL = os.environ.get("ADMIN_FRONTEND_URL", "http://localhost:5174").rstrip("/")
 WAREHOUSE_FRONTEND_URL = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
 
 # Partner Portal OAuth Credentials (Warehouse / Delivery)
-PARTNER_GOOGLE_CLIENT_ID = os.environ.get("PARTNER_GOOGLE_CLIENT_ID", GOOGLE_CLIENT_ID)
-PARTNER_GOOGLE_CLIENT_SECRET = os.environ.get("PARTNER_GOOGLE_CLIENT_SECRET", GOOGLE_CLIENT_SECRET)
+PARTNER_GOOGLE_CLIENT_ID = os.environ.get("PARTNER_GOOGLE_CLIENT_ID") or GOOGLE_CLIENT_ID
+PARTNER_GOOGLE_CLIENT_SECRET = os.environ.get("PARTNER_GOOGLE_CLIENT_SECRET") or GOOGLE_CLIENT_SECRET
 PARTNER_GOOGLE_REDIRECT_URI = os.environ.get("PARTNER_GOOGLE_REDIRECT_URI", "http://localhost:5000/partner/auth/google/callback")
 
 DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "jdlx.db")
@@ -3074,8 +3082,9 @@ def checkout():
 
         conn.commit()
 
-        # 5. Sync with Shiprocket for Standard Delivery
-        if delivery_type != 'quick':
+        # 5. Sync with Shiprocket for Standard Delivery (COD ONLY)
+        # Prepaid orders will sync in verify_payment after successful payment
+        if delivery_type != 'quick' and payment_type == 'COD':
             try:
                 order_payload = {
                     "order_number": order_number,
@@ -4187,10 +4196,9 @@ def get_admin_system_logs():
         cursor.execute("SELECT * FROM security_alerts ORDER BY created_at DESC LIMIT 20")
         suspicious = [dict(row) for row in cursor.fetchall()]
         
-        cursor.execute("SELECT * FROM blocked_ips WHERE blocked_until > ?", (time.time(),))
-        blocked = [dict(row) for row in cursor.fetchall()]
+        blocked = get_blocked_ips()
         
-        cursor.execute("SELECT * FROM login_attempts WHERE success = 0 ORDER BY timestamp DESC LIMIT 20")
+        cursor.execute("SELECT * FROM login_attempts WHERE status = 'failed' ORDER BY timestamp DESC LIMIT 20")
         failed_logins = [dict(row) for row in cursor.fetchall()]
         
         conn.close()
@@ -5839,6 +5847,34 @@ def verify_payment():
             cursor.execute('UPDATE payments SET payment_status = "SUCCESS", transaction_id = ? WHERE order_id = ?', (razorpay_payment_id, order_id))
             if user_id:
                 notification_service.send_order_notification(user_id, order_id, 'PLACED')
+            
+            # Shiprocket Sync for Prepaid Orders (Post-Payment)
+            if payment_type == 'PREPAID':
+                try:
+                    cursor.execute("""
+                        SELECT order_number, customer_name, phone, delivery_address, 
+                               total_amount, delivery_type, shiprocket_order_id 
+                        FROM orders WHERE id = ?
+                    """, (order_id,))
+                    order_info = cursor.fetchone()
+                    if order_info and order_info['delivery_type'] != 'quick' and not order_info['shiprocket_order_id']:
+                        cursor.execute("SELECT product_name as name, quantity as qty, price FROM order_items WHERE order_id = ?", (order_id,))
+                        items = [dict(row) for row in cursor.fetchall()]
+                        order_payload = {
+                            "order_number": order_info['order_number'],
+                            "customer_name": order_info['customer_name'],
+                            "customer_phone": order_info['phone'],
+                            "delivery_address": order_info['delivery_address'],
+                            "total_amount": order_info['total_amount'],
+                            "items": items,
+                            "payment_status": "paid"
+                        }
+                        sr_res = sync_to_shiprocket(order_payload, cursor)
+                        if sr_res and 'order_id' in sr_res:
+                            cursor.execute("UPDATE orders SET shiprocket_order_id = ? WHERE id = ?", (sr_res['order_id'], order_id))
+                except Exception as sr_err:
+                    logger.error(f"Post-Payment Shiprocket Sync Failed for order {order_id}: {sr_err}")
+
             conn.commit()
             conn.close()
             return success_response(None, "Payment verified and order placed", 200)

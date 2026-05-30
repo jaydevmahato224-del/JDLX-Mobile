@@ -449,6 +449,19 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    cursor.execute('''CREATE TABLE IF NOT EXISTS app_reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL UNIQUE,
+        rating INTEGER,
+        review_text TEXT,
+        source TEXT DEFAULT 'in_app',
+        prompt_shown_at TIMESTAMP,
+        submitted_at TIMESTAMP,
+        went_to_google INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS store_inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         store_id INTEGER NOT NULL,
@@ -497,6 +510,28 @@ def init_db():
     # --- Wallet & Loyalty ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS wallet (user_id INTEGER PRIMARY KEY, balance REAL DEFAULT 0, FOREIGN KEY(user_id) REFERENCES users(id))''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS wallet_transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, type TEXT NOT NULL, reference TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id))''')
+    ensure_columns('wallet_transactions', [('reason', 'TEXT'), ('reference_id', 'TEXT')])
+
+    # --- Referral System ---
+    ensure_columns('users', [('referral_code', 'TEXT')])
+    cursor.execute('''CREATE TABLE IF NOT EXISTS referrals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrer_id INTEGER NOT NULL,
+        referred_id INTEGER NOT NULL,
+        referral_code TEXT,
+        status TEXT DEFAULT 'pending',
+        qualifying_order_id INTEGER,
+        reward_given_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(referrer_id) REFERENCES users(id),
+        FOREIGN KEY(referred_id) REFERENCES users(id)
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS referral_attempts (
+        user_id INTEGER UNIQUE,
+        attempts INTEGER DEFAULT 0,
+        blocked_at TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
 
     # --- Admin & Support ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE, role TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id))''')

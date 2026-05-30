@@ -1,13 +1,12 @@
 import sqlite3
 import os
-import firebase_admin
-from firebase_admin import credentials, messaging
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE_PATH = os.path.join(BASE_DIR, 'jdlx.db')
 
 # Initialize Firebase Admin
 try:
+    import firebase_admin
+    from firebase_admin import credentials, messaging
     # Look for service account in environment or local file
     service_account_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON") or os.path.join(BASE_DIR, 'firebase-service-account.json')
     if os.path.exists(service_account_path):
@@ -17,6 +16,9 @@ try:
     else:
         print("[FIREBASE WARNING] Service account file not found. Push notifications will be simulated.")
         FIREBASE_ENABLED = False
+except ImportError:
+    print("[FIREBASE WARNING] firebase_admin module not installed. Push notifications will be simulated.")
+    FIREBASE_ENABLED = False
 except Exception as e:
     print(f"[FIREBASE ERROR] Failed to initialize: {e}")
     FIREBASE_ENABLED = False

@@ -589,7 +589,7 @@ def warehouse_auth_google_request():
 
     google_client_id = os.environ.get(
         "GOOGLE_CLIENT_ID",
-        "473832938691-0et3o47opidpim0k0ufau8tq1qtn4sc9.apps.googleusercontent.com",
+        "473832938691-oa46nvu19l6clb7fucu2u562clitbuah.apps.googleusercontent.com",
     )
     
     try:

@@ -12,8 +12,8 @@ import { useStore } from './store/useStore'
 initFrameRateDetection();
 initPerformanceManager();
 
-// Using a placeholder client ID for now. User must configure this later.
-const GOOGLE_CLIENT_ID = "473832938691-0et3o47opidpim0k0ufau8tq1qtn4sc9.apps.googleusercontent.com"
+// Google Client ID for storefront (loaded from environment or using the correct default for port 5173)
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "473832938691-0et3o47opidpim0k0ufau8tq1qtn4sc9.apps.googleusercontent.com"
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

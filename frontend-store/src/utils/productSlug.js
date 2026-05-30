@@ -18,7 +18,9 @@ export const generateProductSlug = (product) => {
   const token = product.share_token;
   
   if (!token) {
-    console.error("[SECURITY ASSERTION] Missing share_token for product ID:", product.id);
+    if (import.meta.env.DEV && !window.location.hostname.includes('localhost')) {
+      console.warn("[SECURITY ASSERTION] Missing share_token for product ID:", product.id);
+    }
     // Use ID as fallback token if share_token is missing (backend handles this as last resort)
     return `${nameSlug}-${product.id || 'unknown'}`;
   }

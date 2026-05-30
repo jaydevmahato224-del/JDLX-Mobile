@@ -2,7 +2,8 @@ import jwt
 import datetime
 import requests
 
-SECRET_KEY = "jdlx_secret_keys_123"
+import os
+SECRET_KEY = os.environ.get("SECRET_KEY", "jdlx_secret_keys_123")
 payload = {
     "warehouse_id": 1,
     "email": "test@example.com",

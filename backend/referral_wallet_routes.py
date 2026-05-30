@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, jsonify, request, g, current_app
 from functools import wraps
 import jwt
 
@@ -15,14 +15,16 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        if 'Authorization' in request.headers:
-            token = request.headers['Authorization'].split(" ")[1]
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split(" ", 1)[1]
         
         if not token:
             return jsonify({'message': 'Token is missing!'}), 401
             
         try:
-            data = jwt.decode(token, os.environ.get("JWT_SECRET", "jdlx_secret_keys_123"), algorithms=["HS256"])
+            secret = current_app.config.get('JWT_SECRET') or current_app.secret_key or os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+            data = jwt.decode(token, secret, algorithms=["HS256"])
             g.user_id = data['user_id']
             # Optional: Check if user exists in DB
         except Exception:

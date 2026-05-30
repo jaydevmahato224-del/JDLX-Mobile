@@ -28,9 +28,12 @@ if (import.meta.env.DEV) {
 // ─── Consecutive Failure Tracker ───────────────────────────────────────────────
 // Only show global error overlay after multiple consecutive backend failures.
 // This prevents Render cold-start timeouts or transient glitches from blocking the entire UI.
-let _consecutiveBackendFailures = 0;
-let _consecutiveBackendSuccesses = 0;
-const FAILURE_THRESHOLD = 3; // Number of consecutive failures before showing error overlay
+// IMPORTANT: Parallel requests from the same "batch" (within 2s) count as ONE failure event,
+// not individual failures. This prevents 5 simultaneous API calls from instantly triggering the overlay.
+let _failureBatchCount = 0;
+let _lastFailureTimestamp = 0;
+const FAILURE_BATCH_WINDOW_MS = 2000; // Failures within 2s = same batch
+const FAILURE_THRESHOLD = 3; // Number of failure BATCHES before showing error overlay
 
 const _originalFetch = window.fetch;
 window.fetch = async (...args) => {
@@ -66,17 +69,21 @@ window.fetch = async (...args) => {
 
     // Detection Logic for Server Errors - ONLY for our backend
     if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackgroundRequest) {
-      _consecutiveBackendFailures++;
-      _consecutiveBackendSuccesses = 0;
-      if (_consecutiveBackendFailures >= FAILURE_THRESHOLD) {
+      const now = Date.now();
+      // Only increment batch count if this failure is from a NEW batch (>2s since last failure)
+      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
+        _failureBatchCount++;
+      }
+      _lastFailureTimestamp = now;
+      if (_failureBatchCount >= FAILURE_THRESHOLD) {
         setGlobalError('server');
       }
     } else if (isBackendUrl && response.ok) {
-      // Successful response — reset failure counter
-      _consecutiveBackendFailures = 0;
-      _consecutiveBackendSuccesses++;
-      // Only auto-clear global error after consistent recovery (prevents flicker loop)
-      if (globalError && _consecutiveBackendSuccesses >= FAILURE_THRESHOLD) {
+      // Successful response — reset failure counter immediately
+      _failureBatchCount = 0;
+      _lastFailureTimestamp = 0;
+      // Auto-clear global error on ANY successful backend response
+      if (globalError) {
         clearGlobalError();
       }
     }
@@ -87,9 +94,12 @@ window.fetch = async (...args) => {
 
     // ONLY trigger global error screens for our backend API failures
     if (isBackendUrl && !isBackgroundRequest) {
-      _consecutiveBackendFailures++;
-      _consecutiveBackendSuccesses = 0;
-      if (_consecutiveBackendFailures >= FAILURE_THRESHOLD) {
+      const now = Date.now();
+      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
+        _failureBatchCount++;
+      }
+      _lastFailureTimestamp = now;
+      if (_failureBatchCount >= FAILURE_THRESHOLD) {
         if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
           setGlobalError('network');
         } else {

@@ -408,57 +408,68 @@ function Checkout() {
     };
 
     const handlePlaceOrder = async (e) => {
+        if (isProcessing) return;
+        setIsProcessing(true);
         e.preventDefault();
 
         if (!user) {
             toast.error("Please login via Google before placing an order!");
+            setIsProcessing(false);
             navigate('/login');
             return;
         }
 
         if (hasOutOfStockItems) {
             toast.error("One or more cart items are out of stock. Remove them before checkout.");
+            setIsProcessing(false);
             return;
         }
 
         if (!formData.phone || formData.phone.length !== 10) {
             toast.error("Please enter a valid 10-digit phone number");
+            setIsProcessing(false);
             return;
         }
 
         if (!selectedAddressId) {
             if (!formData.flatNo.trim()) {
                 toast.error("Please enter Flat/House No. or Building name");
+                setIsProcessing(false);
                 return;
             }
             if (!formData.area.trim()) {
                 toast.error("Please enter Street, Sector, or Colony");
+                setIsProcessing(false);
                 return;
             }
             if (!formData.city.trim()) {
                 toast.error("Please enter your City");
+                setIsProcessing(false);
                 return;
             }
             if (!formData.state.trim()) {
                 toast.error("Please enter your State");
+                setIsProcessing(false);
                 return;
             }
             if (!formData.pincode || formData.pincode.length !== 6 || !/^\d{6}$/.test(formData.pincode)) {
                 toast.error("Please enter a valid 6-digit Pincode");
+                setIsProcessing(false);
                 return;
             }
             if (pincodeStatus === 'unserviceable') {
                 toast.error("Courier service is not available for this location.");
+                setIsProcessing(false);
                 return;
             }
             if (pincodeStatus === 'invalid') {
                 toast.error("Invalid Pincode. Please enter a valid Indian pincode.");
+                setIsProcessing(false);
                 return;
             }
         }
 
         const token = useStore.getState().token;
-        setIsProcessing(true);
 
         try {
             const manualAddressText = `${formData.flatNo}, ${formData.area}${formData.landmark ? `, Near ${formData.landmark}` : ''}, ${formData.city}, ${formData.state} - ${formData.pincode}`;

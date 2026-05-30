@@ -3,6 +3,8 @@ import { create } from 'zustand'
 import { API_BASE_URL } from '../config'
 import { getDeviceModelValue } from '../utils/stickerCustomization'
 
+let processingSync = false;
+
 const syncCartWithServer = async (productId, quantity, action = 'add') => {
     const token = localStorage.getItem('token');
     let sessionId = localStorage.getItem('sessionId');
@@ -24,6 +26,8 @@ const syncCartWithServer = async (productId, quantity, action = 'add') => {
     } catch (e) {
         console.error('Failed to sync cart:', e);
         return false;
+    } finally {
+        processingSync = false;
     }
 }
 
@@ -236,53 +240,59 @@ export const useStore = create((set, get) => ({
         set({ warehouseRequestUser: null, warehouseRequestToken: null });
     },
     addToCart: async (product) => {
-        const state = get();
-        const deviceModel = getDeviceModelValue(product?.device_model);
-        const existing = state.cart.find(item => String(item.id) === String(product.id));
-        const availableStock = getAvailableStock(product)
-        
-        if (availableStock <= 0) {
-            toast.error("Item out of stock");
-            return;
-        }
-
-        if (existing && existing.qty >= availableStock) {
-            toast.error("Maximum available stock reached");
-            return;
-        }
-
-        const currentQty = Number(existing?.qty || 0);
-        const safeQty = isNaN(currentQty) ? 0 : currentQty;
-        const newQty = existing ? safeQty + 1 : 1;
-        
-        // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
-        set((state) => {
-            let newCart;
-            if (existing) {
-                newCart = state.cart.map(item =>
-                    String(item.id) === String(product.id) ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
-                );
-            } else {
-                newCart = [
-                    ...state.cart,
-                    {
-                        ...product,
-                        device_model: deviceModel || null,
-                        fitting: product.fitting ?? false,
-                        stock: availableStock,
-                        reserved_stock: Number(product?.reserved_stock ?? 0),
-                        qty: 1,
-                    },
-                ];
+        if (processingSync) return;
+        processingSync = true;
+        try {
+            const state = get();
+            const deviceModel = getDeviceModelValue(product?.device_model);
+            const existing = state.cart.find(item => String(item.id) === String(product.id));
+            const availableStock = getAvailableStock(product)
+            
+            if (availableStock <= 0) {
+                toast.error("Item out of stock");
+                return;
             }
-            localStorage.setItem('cart', JSON.stringify(newCart));
-            return { cart: newCart };
-        });
 
-        // Sync with server in background
-        const success = await syncCartWithServer(product.id, 1, 'add');
-        if (!success) {
-            console.error('Failed to sync add-to-cart with server');
+            if (existing && existing.qty >= availableStock) {
+                toast.error("Maximum available stock reached");
+                return;
+            }
+
+            const currentQty = Number(existing?.qty || 0);
+            const safeQty = isNaN(currentQty) ? 0 : currentQty;
+            const newQty = existing ? safeQty + 1 : 1;
+            
+            // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
+            set((state) => {
+                let newCart;
+                if (existing) {
+                    newCart = state.cart.map(item =>
+                        String(item.id) === String(product.id) ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
+                    );
+                } else {
+                    newCart = [
+                        ...state.cart,
+                        {
+                            ...product,
+                            device_model: deviceModel || null,
+                            fitting: product.fitting ?? false,
+                            stock: availableStock,
+                            reserved_stock: Number(product?.reserved_stock ?? 0),
+                            qty: 1,
+                        },
+                    ];
+                }
+                localStorage.setItem('cart', JSON.stringify(newCart));
+                return { cart: newCart };
+            });
+
+            // Sync with server in background
+            const success = await syncCartWithServer(product.id, 1, 'add');
+            if (!success) {
+                console.error('Failed to sync add-to-cart with server');
+            }
+        } finally {
+            processingSync = false;
         }
     },
     removeFromCart: async (productId) => {
@@ -300,31 +310,38 @@ export const useStore = create((set, get) => ({
         }
     },
     updateQuantity: async (productId, qty) => {
-        let requestedQty = Number(qty);
-        if (isNaN(requestedQty)) requestedQty = 1;
-        
-        let finalQty = requestedQty;
-        const state = get();
-        const item = state.cart.find(i => String(i.id) === String(productId));
-        if (!item) return;
+        if (processingSync) return;
+        processingSync = true;
 
-        const maxQty = getAvailableStock(item);
-        finalQty = Math.max(1, Math.min(requestedQty, maxQty));
+        try {
+            let requestedQty = Number(qty);
+            if (isNaN(requestedQty)) requestedQty = 1;
+            
+            let finalQty = requestedQty;
+            const state = get();
+            const item = state.cart.find(i => String(i.id) === String(productId));
+            if (!item) return;
 
-        // Update local state IMMEDIATELY for responsiveness
-        set((state) => {
-            const newCart = state.cart.map(item => {
-                if (String(item.id) !== String(productId)) return item;
-                return { ...item, qty: finalQty };
+            const maxQty = getAvailableStock(item);
+            finalQty = Math.max(1, Math.min(requestedQty, maxQty));
+
+            // Update local state IMMEDIATELY for responsiveness
+            set((state) => {
+                const newCart = state.cart.map(item => {
+                    if (String(item.id) !== String(productId)) return item;
+                    return { ...item, qty: finalQty };
+                });
+                localStorage.setItem('cart', JSON.stringify(newCart));
+                return { cart: newCart };
             });
-            localStorage.setItem('cart', JSON.stringify(newCart));
-            return { cart: newCart };
-        });
 
-        // PERSISTENCE FIX: Sync with server
-        const success = await syncCartWithServer(productId, finalQty, 'update');
-        if (!success) {
-            console.error('Failed to persist quantity to server');
+            // PERSISTENCE FIX: Sync with server
+            const success = await syncCartWithServer(productId, finalQty, 'update');
+            if (!success) {
+                console.error('Failed to persist quantity to server');
+            }
+        } finally {
+            processingSync = false;
         }
     },
     updateDeviceModel: (productId, deviceModel) => set((state) => {

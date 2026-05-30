@@ -32,6 +32,7 @@ import productCache from '../utils/productCache'
 const DEFAULT_PAGE_SIZE = 20
 const PREFETCH_OFFSET = 2
 const MIN_SKELETON_MS = 250 // minimum time to show initial skeleton (anti-flicker)
+const PRODUCTS_FETCH_TIMEOUT_MS = 30000
 
 const scheduleIdleTask = (callback, timeout = 1500) => {
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
@@ -187,9 +188,9 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
       setErrorMessage('')
       setIsEmpty(false)
 
-      // 10s Timeout logic
+      // Keep enough headroom for a cold local backend or remote DB wake-up.
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), PRODUCTS_FETCH_TIMEOUT_MS);
 
       try {
         const url = buildProductsUrl(categoryId, page, searchQuery, storeId)

@@ -97,11 +97,16 @@ def get_wallet_transactions(user_id, limit=20):
     conn = get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute('''
-            SELECT amount, type, reason, reference_id, created_at 
-            FROM wallet_transactions 
-            WHERE user_id = ? 
-            ORDER BY created_at DESC 
+        cursor.execute("PRAGMA table_info(wallet_transactions)")
+        columns = {row['name'] if hasattr(row, 'keys') else row[1] for row in cursor.fetchall()}
+        reason_expr = "COALESCE(reason, reference)" if 'reason' in columns and 'reference' in columns else ("reason" if 'reason' in columns else "reference")
+        reference_expr = "COALESCE(reference_id, reference)" if 'reference_id' in columns and 'reference' in columns else ("reference_id" if 'reference_id' in columns else "reference")
+
+        cursor.execute(f'''
+            SELECT amount, type, {reason_expr} AS reason, {reference_expr} AS reference_id, created_at
+            FROM wallet_transactions
+            WHERE user_id = ?
+            ORDER BY created_at DESC
             LIMIT ?
         ''', (user_id, limit))
         rows = cursor.fetchall()

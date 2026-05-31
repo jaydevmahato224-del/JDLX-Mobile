@@ -2841,7 +2841,10 @@ def checkout():
     address = data.get('address')
     address_id = data.get('address_id')
     phone = data.get('phone')
-    total_amount = float(data.get('total_amount', 0))
+    try:
+        total_amount = float(data.get('total_amount') or 0)
+    except (ValueError, TypeError):
+        total_amount = 0.0
 
     user_lat = data.get('latitude', 28.6139)  # Default to Delhi
     user_lng = data.get('longitude', 77.2090)
@@ -2883,6 +2886,7 @@ def checkout():
 
         for item in items:
             item['id'] = int(item.get('id'))
+            item['qty'] = int(item.get('qty') or item.get('quantity', 1))
             product = product_meta.get(item['id'])
             if not product:
                 return error_response(f"Product {item.get('id')} not found", 404)

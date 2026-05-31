@@ -2841,7 +2841,7 @@ def checkout():
     address = data.get('address')
     address_id = data.get('address_id')
     phone = data.get('phone')
-    total_amount = data.get('total_amount')
+    total_amount = float(data.get('total_amount', 0))
 
     user_lat = data.get('latitude', 28.6139)  # Default to Delhi
     user_lng = data.get('longitude', 77.2090)

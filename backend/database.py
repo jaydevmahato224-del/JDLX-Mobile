@@ -255,29 +255,59 @@ def init_db():
         cursor.execute("UPDATE products SET stock = CASE WHEN (stock IS NULL OR stock = 0) AND stock_quantity > 0 THEN stock_quantity ELSE stock END")
 
     # --- Commerce & Fulfillment ---
-    cursor.execute('''CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, total_amount REAL NOT NULL, order_status TEXT DEFAULT 'PLACED', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id))''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        user_id INTEGER NOT NULL, 
+        total_amount REAL NOT NULL, 
+        order_status TEXT DEFAULT 'PLACED', 
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
     ensure_columns('orders', [
-        ('delivery_address', 'TEXT'), 
-        ('phone', 'TEXT'), 
-        ('platform_fee', 'REAL DEFAULT 0'), 
-        ('delivery_fee', 'REAL DEFAULT 0'), 
-        ('shiprocket_order_id', 'TEXT'), 
-        ('payment_type', "TEXT DEFAULT 'PREPAID'"), 
-        ('cod_advance_paid', 'REAL DEFAULT 0'), 
-        ('cod_remaining_amount', 'REAL DEFAULT 0'), 
-        ('free_delivery_applied', 'INTEGER DEFAULT 0'), 
-        ('fitting_charge', 'REAL DEFAULT 0'), 
-        ('packed_at', 'TIMESTAMP'), 
-        ('shipped_at', 'TIMESTAMP'), 
-        ('delivered_at', 'TIMESTAMP'), 
-        ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"), 
-        ('delivery_partner_id', 'INTEGER'), 
+        ('order_number', 'TEXT'),
+        ('customer_name', 'TEXT'),
+        ('customer_phone', 'TEXT'),
+        ('delivery_address', 'TEXT'),
+        ('phone', 'TEXT'),
+        ('platform_fee', 'REAL DEFAULT 0'),
+        ('delivery_fee', 'REAL DEFAULT 0'),
+        ('shiprocket_order_id', 'TEXT'),
+        ('payment_type', "TEXT DEFAULT 'PREPAID'"),
+        ('payment_status', "TEXT DEFAULT 'pending'"),
+        ('cod_advance_paid', 'REAL DEFAULT 0'),
+        ('cod_remaining_amount', 'REAL DEFAULT 0'),
+        ('free_delivery_applied', 'INTEGER DEFAULT 0'),
+        ('fitting_charge', 'REAL DEFAULT 0'),
+        ('packed_at', 'TIMESTAMP'),
+        ('shipped_at', 'TIMESTAMP'),
+        ('delivered_at', 'TIMESTAMP'),
+        ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"),
+        ('delivery_latitude', 'REAL'),
+        ('delivery_longitude', 'REAL'),
+        ('delivery_type', "TEXT DEFAULT 'quick'"),
+        ('delivery_partner_id', 'INTEGER'),
         ('store_id', 'INTEGER'),
+        ('dark_store_id', 'INTEGER'),
         ('cancellation_reason', 'TEXT')
     ])
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(order_id) REFERENCES orders(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
-    ensure_columns('order_items', [('device_model', 'TEXT'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
+    cursor.execute('''CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        order_id INTEGER NOT NULL, 
+        product_id INTEGER NOT NULL, 
+        quantity INTEGER NOT NULL, 
+        price REAL NOT NULL, 
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+        FOREIGN KEY(order_id) REFERENCES orders(id), 
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    ensure_columns('order_items', [
+        ('product_name', 'TEXT'),
+        ('variant_id', 'INTEGER REFERENCES product_variants(id)'),
+        ('subtotal', 'REAL'),
+        ('device_model', 'TEXT'),
+        ('fitting_charge', 'REAL DEFAULT 0')
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS cart (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
     ensure_columns('cart', [('updated_at', 'TIMESTAMP'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])

@@ -914,19 +914,30 @@ function Checkout() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex gap-2">
+                                <div className="flex flex-nowrap w-full overflow-hidden" style={{ gap: '8px' }}>
                                     <input 
                                         type="text" 
                                         value={couponCode}
                                         onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                                         placeholder="Enter Coupon Code" 
-                                        className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-primary uppercase transition-colors"
+                                        className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-primary uppercase transition-colors"
+                                        style={{ flex: '1 1 0%', minWidth: 0, width: 0 }}
                                     />
                                     <button 
                                         type="button"
                                         onClick={handleApplyCoupon}
                                         disabled={couponLoading || !couponCode.trim()}
-                                        className="px-6 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                                        style={{ 
+                                            flex: '0 0 auto', 
+                                            whiteSpace: 'nowrap', 
+                                            padding: '0 16px', 
+                                            height: '48px', 
+                                            borderRadius: '12px', 
+                                            background: '#1B2341', 
+                                            color: 'white', 
+                                            fontSize: '14px' 
+                                        }}
                                     >
                                         {couponLoading ? '...' : 'Apply'}
                                     </button>

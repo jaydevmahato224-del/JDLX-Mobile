@@ -63,16 +63,22 @@ def migrate():
     print("\n1. Renaming orders -> orders_old_turso_backup...")
     try:
         cursor.execute("ALTER TABLE orders RENAME TO orders_old_turso_backup")
+        conn.commit() # Ensure rename is persisted
     except Exception as e:
         print(f"   Error renaming: {e}")
         # Try dropping existing backup first
         try:
             cursor.execute("DROP TABLE IF EXISTS orders_old_turso_backup")
             cursor.execute("ALTER TABLE orders RENAME TO orders_old_turso_backup")
+            conn.commit()
         except Exception as e2:
             print(f"   Fatal error: {e2}")
             conn.close()
             return False
+
+    # Re-open connection or sync if needed for Turso
+    if hasattr(conn, 'sync'):
+        conn.sync()
 
     # Step 4: Create new table WITHOUT CHECK constraints
     print("2. Creating new orders table without CHECK constraints...")
@@ -116,11 +122,18 @@ def migrate():
         shipped_at TIMESTAMP,
         cancellation_reason TEXT
     )''')
+    conn.commit()
 
     # Step 5: Copy existing data if any
     if existing_count > 0:
         print(f"3. Copying {existing_count} rows from backup...")
         try:
+            # Verify backup table exists before querying
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='orders_old_turso_backup'")
+            if not cursor.fetchone():
+                print("❌ Backup table orders_old_turso_backup not found after rename!")
+                return False
+
             # Get columns from the old backup table
             cursor.execute("PRAGMA table_info(orders_old_turso_backup)")
             old_columns = [row[1] if isinstance(row, tuple) else row['name'] for row in cursor.fetchall()]

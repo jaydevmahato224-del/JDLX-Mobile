@@ -549,7 +549,7 @@ function Checkout() {
     }
 
     return (
-        <div className="container-standard py-6 space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div className="container-standard py-6 pb-24 lg:pb-6 space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
             <h1 className="text-3xl font-black tracking-tighter text-[var(--color-on-surface)] px-2" style={{ fontFamily: 'Manrope, sans-serif' }}>Secure Checkout</h1>
 
             {!user && (
@@ -1023,7 +1023,7 @@ function Checkout() {
                                 </div>
                             ) : null}
 
-                            <div className="pt-2">
+                            <div className="fixed bottom-0 left-0 w-full bg-white p-4 shadow-[0_-8px_30px_rgb(0,0,0,0.12)] z-[100] lg:relative lg:p-0 lg:shadow-none lg:z-auto lg:mt-2">
                                 <button
                                     type="submit"
                                     disabled={!user || isProcessing}

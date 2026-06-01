@@ -411,6 +411,10 @@ def init_db():
       FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
     ensure_columns('payments', [
+        ('user_id', 'INTEGER'),
+        ('amount', 'INTEGER'),
+        ('currency', "TEXT DEFAULT 'INR'"),
+        ('payment_method', 'TEXT'),
         ('razorpay_order_id', 'TEXT'),
         ('razorpay_payment_id', 'TEXT'),
         ('razorpay_signature', 'TEXT'),

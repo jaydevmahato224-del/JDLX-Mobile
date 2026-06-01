@@ -37,7 +37,7 @@ from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # --- Local Module Imports ---
-from database import init_db, get_db as _database_get_db
+from database import init_db, get_db as _database_get_db, USE_TURSO
 from notifier import (
     send_order_email, 
     send_user_status_update_email, 
@@ -6697,6 +6697,7 @@ def health_check():
         return jsonify({
             "status": "healthy",
             "database": "connected",
+            "db_type": "turso" if USE_TURSO else "local_sqlite",
             "timestamp": datetime.datetime.now().isoformat(),
             "version": "1.0.0"
         }), 200
@@ -6705,6 +6706,7 @@ def health_check():
         return jsonify({
             "status": "unhealthy",
             "database": "error",
+            "db_type": "turso" if USE_TURSO else "local_sqlite",
         }), 500
 
 

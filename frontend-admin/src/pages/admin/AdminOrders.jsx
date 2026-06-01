@@ -93,7 +93,8 @@ function AdminOrders() {
         fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
             .then(data => {
-                setOrders(Array.isArray(data) ? data : []);
+                const list = Array.isArray(data) ? data : [];
+                setOrders(list.map(o => ({ ...o, status: o.status || o.order_status || 'PLACED' })));
                 setLoading(false);
             })
             .catch(err => {
@@ -107,7 +108,7 @@ function AdminOrders() {
         if (!token) return;
         fetch(`${API_BASE_URL}/admin/delivery-partners`, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
-            .then(data => setDeliveryPartners(data))
+            .then(data => setDeliveryPartners(Array.isArray(data) ? data : []))
             .catch(console.error);
     };
 

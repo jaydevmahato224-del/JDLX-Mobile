@@ -4305,7 +4305,7 @@ def get_admin_orders():
         cursor.execute("""
             SELECT o.*, u.name as customer_name, u.email as customer_email,
                    COALESCE(ds.store_code, w.partner_id) as store_code,
-                   COALESCE(ds.name, w.owner_name, w.partner_id, "Default Store") as store_name,
+                   COALESCE(ds.name, w.owner_name, w.partner_id, 'Default Store') as store_name,
                    s.status as shipment_status
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
@@ -4468,7 +4468,7 @@ def admin_get_order_details(order_id):
         cursor.execute("""
             SELECT o.*, u.name as customer_name, u.email as customer_email,
                    COALESCE(ds.store_code, w.partner_id) as store_code,
-                   COALESCE(ds.name, w.owner_name, w.partner_id, "Default Store") as store_name,
+                   COALESCE(ds.name, w.owner_name, w.partner_id, 'Default Store') as store_name,
                    dp.name as partner_name, dp.phone as partner_phone,
                    s.shiprocket_order_id, s.shiprocket_shipment_id, s.awb_code, 
                    s.courier_name, s.status as shipment_status, s.tracking_url

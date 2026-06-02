@@ -3148,7 +3148,7 @@ def admin_get_warehouse_stats(app_id):
             "active_orders": active_orders,
             "assigned_riders": assigned_riders
         }
-        return success_response(data, "Warehouse analytics retrieved")
+        return jsonify(data), 200
     except Exception as e:
         return error_response(str(e), 500)
     finally:

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Package, Clock, Printer, Calendar, MapPin, Map, AlertCircle, RotateCcw, Loader2, ExternalLink } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Package, Clock, Printer, Calendar, MapPin, Map, AlertCircle, RotateCcw, Loader2, ExternalLink, Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
@@ -17,7 +17,12 @@ function AdminOrders() {
     const [shipmentCreating, setShipmentCreating] = useState(false);
     const [courierAssigning, setCourierAssigning] = useState(false);
     const [weight, setWeight] = useState(0.5);
+    const [newOrderIds, setNewOrderIds] = useState(new Set());
+    const [lastSyncTime, setLastSyncTime] = useState(null);
     const navigate = useNavigate();
+
+    // Ref for smart polling diff
+    const ordersRef = useRef([]);
 
     const handleCreateShipment = async (orderId) => {
         if (!window.confirm("Create Shiprocket shipment for this order?")) return;
@@ -68,15 +73,15 @@ function AdminOrders() {
         }
     };
 
-    const fetchOrders = () => {
-        setLoading(true);
+    const fetchOrders = (silent = false) => {
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
         if (!token) return;
 
+        // Only show skeleton on first load, not on silent background polls
+        if (!silent) setLoading(true);
+
         let url = `${API_BASE_URL}/admin/orders?status=${statusFilter}&payment_status=${paymentFilter}`;
         if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
-
-        // Date logic
         if (dateRange !== 'all') {
             const today = new Date();
             let start = new Date();
@@ -94,12 +99,50 @@ function AdminOrders() {
             .then(res => res.json())
             .then(data => {
                 const list = Array.isArray(data) ? data : [];
-                setOrders(list.map(o => ({ ...o, status: o.status || o.order_status || 'PLACED' })));
+                const normalized = list.map(o => ({ ...o, status: o.status || o.order_status || 'PLACED' }));
+
+                // Smart diff: detect new orders for notification
+                if (silent && ordersRef.current.length > 0) {
+                    const prevIds = new Set(ordersRef.current.map(o => o.id));
+                    const brandNew = normalized.filter(o => !prevIds.has(o.id));
+                    if (brandNew.length > 0) {
+                        setNewOrderIds(new Set(brandNew.map(o => o.id)));
+                        setTimeout(() => setNewOrderIds(new Set()), 8000);
+                        if (brandNew.length === 1) {
+                            toast(`🔔 New order: ${brandNew[0].order_number}`, { icon: '📦', duration: 5000 });
+                        } else {
+                            toast(`🔔 ${brandNew.length} new orders received!`, { icon: '📦', duration: 5000 });
+                        }
+                    }
+
+                    // Skip re-render if nothing changed
+                    if (normalized.length === ordersRef.current.length) {
+                        let same = true;
+                        for (const o of normalized) {
+                            const prev = ordersRef.current.find(p => p.id === o.id);
+                            if (!prev || prev.order_status !== o.order_status || prev.status !== o.status ||
+                                prev.delivery_partner_id !== o.delivery_partner_id ||
+                                prev.shipment_status !== o.shipment_status ||
+                                prev.payment_status !== o.payment_status) {
+                                same = false;
+                                break;
+                            }
+                        }
+                        if (same) {
+                            setLastSyncTime(new Date());
+                            return; // Nothing changed, skip setState
+                        }
+                    }
+                }
+
+                ordersRef.current = normalized;
+                setOrders(normalized);
+                setLastSyncTime(new Date());
                 setLoading(false);
             })
             .catch(err => {
                 console.error(err);
-                setLoading(false);
+                if (!silent) setLoading(false);
             });
     };
 
@@ -112,11 +155,12 @@ function AdminOrders() {
             .catch(console.error);
     };
 
-    // Use polling and initial fetch
+    // Initial fetch + smart background polling
     useEffect(() => {
-        fetchOrders();
+        ordersRef.current = [];
+        fetchOrders(false); // Full load with skeleton
         fetchPartners();
-        const interval = setInterval(fetchOrders, 10000); // Live poll every 10s
+        const interval = setInterval(() => fetchOrders(true), 10000); // Silent background poll
         return () => clearInterval(interval);
     }, [statusFilter, paymentFilter, searchTerm, dateRange]);
 
@@ -222,6 +266,12 @@ function AdminOrders() {
                     <ArrowLeft className="w-5 h-5 text-gray-800" />
                 </button>
                 <h1 className="text-2xl font-bold text-gray-800">Orders Management</h1>
+                {lastSyncTime && !loading && (
+                    <div className="flex items-center gap-1.5 ml-auto text-xs text-gray-400 font-medium">
+                        <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                        Live · {lastSyncTime.toLocaleTimeString()}
+                    </div>
+                )}
             </div>
 
             {/* Analytics Summary */}
@@ -323,7 +373,7 @@ function AdminOrders() {
                                 </tr>
                             ) : (
                                 orders.map(order => (
-                                    <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                    <tr key={order.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-all duration-500 ${newOrderIds.has(order.id) ? 'bg-emerald-50 ring-1 ring-emerald-200 ring-inset animate-pulse' : ''}`}>
                                         <td className="p-4">
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-gray-800 whitespace-nowrap">{order.order_number}</span>

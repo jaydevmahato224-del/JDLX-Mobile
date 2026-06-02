@@ -55,6 +55,9 @@ window.fetch = async (...args) => {
 
     return response;
   } catch (error) {
+    // AbortError is intentional (e.g., cancelled polling requests) — never trigger error screens
+    if (error.name === 'AbortError') throw error;
+
     console.error("Fetch Error:", error);
 
     // ONLY trigger global error screens for our backend API failures

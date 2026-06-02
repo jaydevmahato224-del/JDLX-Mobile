@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, PackageSearch } from 'lucide-react'
+import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, PackageSearch, ChevronDown, Check } from 'lucide-react'
 
 function OrderReportPage() {
     const token = useStore.getState().token;
@@ -25,6 +25,8 @@ function OrderReportPage() {
     const [photo, setPhoto] = useState(null);
     const [preview, setPreview] = useState(null);
     const [isReadOnly, setIsReadOnly] = useState(false);
+    const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
+    const [reportTypeDropdownOpen, setReportTypeDropdownOpen] = useState(false);
 
     useEffect(() => {
         if (!user) {
@@ -159,40 +161,114 @@ function OrderReportPage() {
 
             <form onSubmit={handleSubmit} className="glass-card p-6 md:p-8 space-y-6">
                 {/* Order Selection */}
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Your Order</label>
-                    <select
-                        value={form.order_id}
-                        onChange={e => setForm({ ...form, order_id: e.target.value })}
-                        className={`w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    <button
+                        type="button"
                         disabled={loadingOrders || isReadOnly}
+                        onClick={() => {
+                            setOrderDropdownOpen(!orderDropdownOpen);
+                            setReportTypeDropdownOpen(false);
+                        }}
+                        className={`w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                        <option value="">Choose order...</option>
-                        {orders.map(order => (
-                            <option key={order.id} value={order.id}>
-                                Order #{order.id} — {order.product_names?.substring(0, 25)}... ({new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})
-                            </option>
-                        ))}
-                    </select>
+                        <span className={form.order_id ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                            {form.order_id 
+                                ? (() => {
+                                    const selected = orders.find(o => String(o.id) === String(form.order_id));
+                                    return selected 
+                                        ? `Order #${selected.id} — ${selected.product_names?.substring(0, 25)}...`
+                                        : "Choose order..."
+                                  })()
+                                : "Choose order..."
+                            }
+                        </span>
+                        {!isReadOnly && <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${orderDropdownOpen ? 'rotate-180' : ''}`} />}
+                    </button>
                     {loadingOrders && <p className="text-[10px] text-primary animate-pulse ml-1">Checking your recent orders...</p>}
+
+                    {orderDropdownOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setOrderDropdownOpen(false)} />
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                {orders.map(order => (
+                                    <button
+                                        key={order.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setForm({ ...form, order_id: order.id });
+                                            setOrderDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                            String(form.order_id) === String(order.id)
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span className="truncate max-w-[90%]">
+                                            Order #{order.id} — {order.product_names?.substring(0, 25)}... ({new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})
+                                        </span>
+                                        {String(form.order_id) === String(order.id) && (
+                                            <Check size={14} className="text-white shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Report Type */}
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Problem Type</label>
-                    <select
-                        value={form.report_type}
-                        onChange={e => setForm({ ...form, report_type: e.target.value })}
-                        className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setReportTypeDropdownOpen(!reportTypeDropdownOpen);
+                            setOrderDropdownOpen(false);
+                        }}
+                        className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     >
-                        <option value="">What happened?</option>
-                        <option value="Item not delivered">Item not delivered</option>
-                        <option value="Wrong item received">Wrong item received</option>
-                        <option value="Missing item in package">Missing item in package</option>
-                        <option value="Damaged in transit">Damaged in transit</option>
-                        <option value="Duplicate charge">Duplicate charge</option>
-                        <option value="Other">Other</option>
-                    </select>
+                        <span className={form.report_type ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                            {form.report_type || "What happened?"}
+                        </span>
+                        <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${reportTypeDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {reportTypeDropdownOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setReportTypeDropdownOpen(false)} />
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                {[
+                                    "Item not delivered",
+                                    "Wrong item received",
+                                    "Missing item in package",
+                                    "Damaged in transit",
+                                    "Duplicate charge",
+                                    "Other"
+                                ].map(typeVal => (
+                                    <button
+                                        key={typeVal}
+                                        type="button"
+                                        onClick={() => {
+                                            setForm({ ...form, report_type: typeVal });
+                                            setReportTypeDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                            form.report_type === typeVal
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span>{typeVal}</span>
+                                        {form.report_type === typeVal && (
+                                            <Check size={14} className="text-white shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Description */}

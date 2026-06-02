@@ -40,15 +40,23 @@ function MyOrders() {
                         >
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Order #{order.id}</div>
+                                    <div className="text-xs font-black text-primary uppercase tracking-wider mb-1">
+                                        #{order.order_number || `ORD-${order.id}`}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 font-medium mb-2">
+                                        Placed: {new Date(order.created_at).toLocaleString('en-IN', {
+                                            dateStyle: 'medium',
+                                            timeStyle: 'short'
+                                        })}
+                                    </div>
                                     <div className="text-sm font-bold text-gray-800">₹{order.total_amount}</div>
                                 </div>
                                 <div className="flex gap-2 items-center">
                                     {order.delivery_type && (
                                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${
-                                            order.delivery_type === 'quick' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'
+                                            'bg-blue-100 text-blue-700 border border-blue-200'
                                         }`}>
-                                            {order.delivery_type}
+                                            {order.delivery_type === 'quick' ? 'scheduled' : order.delivery_type}
                                         </span>
                                     )}
                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { ChevronDown, Check } from 'lucide-react'
 
 function ProfileSettings() {
     const navigate = useNavigate();
@@ -15,6 +16,7 @@ function ProfileSettings() {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [imageFailed, setImageFailed] = useState(false);
+    const [genderDropdownOpen, setGenderDropdownOpen] = useState(false);
 
     useEffect(() => {
         if (!user) { navigate('/login'); }
@@ -122,16 +124,50 @@ function ProfileSettings() {
                     onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
                     className="input"
                 />
-                <select
-                    value={form.gender || ''}
-                    onChange={e => setForm(prev => ({ ...prev, gender: e.target.value }))}
-                    className="input"
-                >
-                    <option value="">Select Gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                </select>
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() => setGenderDropdownOpen(!genderDropdownOpen)}
+                        className="w-full h-12 rounded-xl bg-white border border-gray-200 px-4 text-sm font-semibold text-slate-800 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-slate-50/50"
+                    >
+                        <span className={form.gender ? 'text-slate-800' : 'text-slate-400'}>
+                            {form.gender ? form.gender.charAt(0).toUpperCase() + form.gender.slice(1) : "Select Gender"}
+                        </span>
+                        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${genderDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {genderDropdownOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setGenderDropdownOpen(false)} />
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                {[
+                                    { value: 'male', label: 'Male' },
+                                    { value: 'female', label: 'Female' },
+                                    { value: 'other', label: 'Other' }
+                                ].map(genderObj => (
+                                    <button
+                                        key={genderObj.value}
+                                        type="button"
+                                        onClick={() => {
+                                            setForm(prev => ({ ...prev, gender: genderObj.value }));
+                                            setGenderDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 text-xs font-bold rounded-lg transition-all flex items-center justify-between ${
+                                            form.gender === genderObj.value
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span>{genderObj.label}</span>
+                                        {form.gender === genderObj.value && (
+                                            <Check size={14} className="text-white shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
                 <input
                     type="date"
                     value={form.date_of_birth || ''}

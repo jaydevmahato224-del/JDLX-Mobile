@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, RefreshCw, Heart as HeartIcon, Zap, Clock, Wallet } from 'lucide-react'
+import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, Heart as HeartIcon, Clock, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { API_BASE_URL } from '../config'
 import NotificationBell from './NotificationBell'
@@ -19,8 +19,6 @@ function Layout({ children }) {
   const wishlistCount = useStore((state) => state.wishlist.length)
   const user = useStore((state) => state.user)
   const theme = useStore((state) => state.theme)
-  const deliveryMode = useStore((state) => state.deliveryMode)
-  const isCheckingLocation = useStore((state) => state.isCheckingLocation)
   const token = useStore((state) => state.token)
 
   const [tickerText, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
@@ -92,22 +90,10 @@ function Layout({ children }) {
                   </Link>
                   
                   {/* Delivery Mode Badge */}
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-500 shadow-sm ${
-                    isCheckingLocation
-                    ? 'bg-amber-50 border-amber-200 text-amber-600 animate-pulse'
-                    : deliveryMode === 'quick' 
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                    : 'bg-[var(--color-surface-low)] border-[var(--color-surface-high)] text-[var(--color-on-surface-variant)]'
-                  }`}>
-                    {isCheckingLocation ? (
-                      <RefreshCw size={10} className="animate-spin" />
-                    ) : deliveryMode === 'quick' ? (
-                      <Zap size={10} fill="currentColor" />
-                    ) : (
-                      <Clock size={10} />
-                    )}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-500 shadow-sm bg-[var(--color-surface-low)] border-[var(--color-surface-high)] text-[var(--color-on-surface-variant)]">
+                    <Clock size={10} />
                     <span className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
-                      {isCheckingLocation ? 'Checking...' : deliveryMode === 'quick' ? 'Quick' : 'Sched.'}
+                      Standard
                     </span>
                   </div>
                 </div>
@@ -123,11 +109,11 @@ function Layout({ children }) {
                   className="h-8 w-8 md:h-10 md:w-10 object-contain transition-transform duration-500 group-hover:scale-110" 
                 />
                 <div className="flex flex-col items-start leading-none">
-                  <div className="text-lg md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap text-[var(--color-on-surface)]">
-                    JDLX MOBILE
+                  <div className="text-lg md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap">
+                    <span className="text-[var(--color-on-surface)]">JDLX</span> <span className="text-primary">MOBILE</span>
                   </div>
                   <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">
-                    {deliveryMode === 'quick' ? 'Quick Commerce' : 'Premium Mobile Store'}
+                    Premium Mobile Store
                   </div>
                 </div>
               </Link>

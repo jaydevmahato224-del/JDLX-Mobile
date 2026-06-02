@@ -394,11 +394,11 @@ export const useStore = create((set, get) => ({
     setIsSearching: (val) => set({ isSearching: val }),
     
     // Delivery & Location Logic
-    deliveryMode: localStorage.getItem('deliveryMode') || 'scheduled', // 'quick' or 'scheduled'
+    deliveryMode: 'scheduled',
     userLocation: safeParse('userLocation'), // { lat, lng, address }
-    setDeliveryMode: (mode) => {
-        localStorage.setItem('deliveryMode', mode);
-        set({ deliveryMode: mode });
+    setDeliveryMode: () => {
+        localStorage.setItem('deliveryMode', 'scheduled');
+        set({ deliveryMode: 'scheduled' });
     },
     setUserLocation: (location) => {
         if (location) {
@@ -409,7 +409,7 @@ export const useStore = create((set, get) => ({
         set({ userLocation: location });
     },
     nearestStoreId: null,
-    setNearestStoreId: (id) => set({ nearestStoreId: id }),
+    setNearestStoreId: () => set({ nearestStoreId: null }),
     isCheckingLocation: false,
     setIsCheckingLocation: (val) => set({ isCheckingLocation: val }),
     banners: [],

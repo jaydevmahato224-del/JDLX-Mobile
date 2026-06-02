@@ -76,8 +76,6 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const toggleWishlist = useStore((state) => state.toggleWishlist)
   const updateQuantity = useStore((state) => state.updateQuantity)
   const removeFromCart = useStore((state) => state.removeFromCart)
-  const nearestStoreId = useStore((state) => state.nearestStoreId)
-  const deliveryMode = useStore((state) => state.deliveryMode)
   const [isSyncing, setIsSyncing] = useState(false)
 
   const quantity = cartItem ? Number(cartItem.qty || 0) : 0;
@@ -104,8 +102,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      const storeId = deliveryMode === 'quick' ? nearestStoreId : null;
-      const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock${storeId ? `?store_id=${storeId}` : ''}`);
+      const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock`);
       const json = await res.json();
       const stockData = json.data || {};
       
@@ -141,8 +138,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      const storeId = deliveryMode === 'quick' ? nearestStoreId : null;
-      const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock${storeId ? `?store_id=${storeId}` : ''}`);
+      const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock`);
       const json = await res.json();
       const stockData = json.data || {};
 
@@ -373,8 +369,6 @@ export default function Home() {
   }, [token, fetchWishlist]);
 
   const storeBlocked = useStore((state) => state.storeBlocked)
-  const deliveryMode = useStore((state) => state.deliveryMode)
-  const nearestStoreId = useStore((state) => state.nearestStoreId)
 
   const {
     products,
@@ -597,9 +591,8 @@ export default function Home() {
 
 
   useEffect(() => {
-    const effectiveStoreId = deliveryMode === 'quick' ? nearestStoreId : null
-    loadInitialProducts(selectedCategory, debouncedQuery, effectiveStoreId)
-  }, [selectedCategory, debouncedQuery, loadInitialProducts, deliveryMode, nearestStoreId])
+    loadInitialProducts(selectedCategory, debouncedQuery, null)
+  }, [selectedCategory, debouncedQuery, loadInitialProducts])
 
   useEffect(() => {
     const observer = new IntersectionObserver(

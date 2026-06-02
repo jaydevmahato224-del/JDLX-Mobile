@@ -13,7 +13,9 @@ import {
     Undo2, 
     Calendar,
     ArrowLeft,
-    Coins
+    Coins,
+    ChevronDown,
+    Check
 } from 'lucide-react'
 
 function RefundRequestPage() {
@@ -39,6 +41,9 @@ function RefundRequestPage() {
     const [photo, setPhoto] = useState(null);
     const [preview, setPreview] = useState(null);
     const [isReadOnly, setIsReadOnly] = useState(false);
+    const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
+    const [requestTypeDropdownOpen, setRequestTypeDropdownOpen] = useState(false);
+    const [reasonDropdownOpen, setReasonDropdownOpen] = useState(false);
 
     useEffect(() => {
         if (!user) {
@@ -236,22 +241,64 @@ function RefundRequestPage() {
             {(!isReadOnly || (eligibility && eligibility.eligible)) && (
                 <form onSubmit={handleSubmit} className="glass-card p-6 md:p-8 space-y-8">
                     {/* Order Selection */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Order</label>
-                        <select
-                            value={form.order_id}
-                            onChange={handleOrderChange}
-                            className={`w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        <button
+                            type="button"
                             disabled={loadingOrders || isReadOnly}
+                            onClick={() => {
+                                setOrderDropdownOpen(!orderDropdownOpen);
+                                setRequestTypeDropdownOpen(false);
+                                setReasonDropdownOpen(false);
+                            }}
+                            className={`w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
-                            <option value="">Choose order...</option>
-                            {orders.map(order => (
-                                <option key={order.id} value={order.id}>
-                                    Order #{order.id} — {order.product_names?.substring(0, 25)}... ({new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})
-                                </option>
-                            ))}
-                        </select>
+                            <span className={form.order_id ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                                {form.order_id 
+                                    ? (() => {
+                                        const selected = orders.find(o => String(o.id) === String(form.order_id));
+                                        return selected 
+                                            ? `Order #${selected.id} — ${selected.product_names?.substring(0, 25)}...`
+                                            : "Choose order..."
+                                      })()
+                                    : "Choose order..."
+                                }
+                            </span>
+                            {!isReadOnly && <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${orderDropdownOpen ? 'rotate-180' : ''}`} />}
+                        </button>
                         {loadingEligibility && <p className="text-[10px] text-primary animate-pulse ml-1">Verifying eligibility...</p>}
+
+                        {orderDropdownOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setOrderDropdownOpen(false)} />
+                                <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                    {orders.map(order => (
+                                        <button
+                                            key={order.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setForm({ ...form, order_id: order.id });
+                                                setOrderDropdownOpen(false);
+                                                setEligibility(null);
+                                                checkEligibility(order.id);
+                                            }}
+                                            className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                                String(form.order_id) === String(order.id)
+                                                ? 'bg-primary text-white'
+                                                : 'text-slate-700 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span className="truncate max-w-[90%]">
+                                                Order #{order.id} — {order.product_names?.substring(0, 25)}... ({new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})
+                                            </span>
+                                            {String(form.order_id) === String(order.id) && (
+                                                <Check size={14} className="text-white shrink-0" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                         
                         {eligibility && eligibility.eligible && (
                             <div className="mt-3 grid grid-cols-2 gap-4">
@@ -276,36 +323,108 @@ function RefundRequestPage() {
                     {/* Form Layout Split */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Request Type */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Request Type</label>
-                            <select
-                                value={form.request_type}
-                                onChange={e => setForm({ ...form, request_type: e.target.value })}
-                                className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setRequestTypeDropdownOpen(!requestTypeDropdownOpen);
+                                    setOrderDropdownOpen(false);
+                                    setReasonDropdownOpen(false);
+                                }}
+                                className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                             >
-                                <option value="">What do you want?</option>
-                                <option value="Refund only">Refund only</option>
-                                <option value="Return and Refund">Return and Refund</option>
-                                <option value="Exchange">Exchange</option>
-                            </select>
+                                <span className={form.request_type ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                                    {form.request_type || "What do you want?"}
+                                </span>
+                                <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${requestTypeDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {requestTypeDropdownOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setRequestTypeDropdownOpen(false)} />
+                                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                        {[
+                                            "Refund only",
+                                            "Return and Refund",
+                                            "Exchange"
+                                        ].map(typeVal => (
+                                            <button
+                                                key={typeVal}
+                                                type="button"
+                                                onClick={() => {
+                                                    setForm({ ...form, request_type: typeVal });
+                                                    setRequestTypeDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                                    form.request_type === typeVal
+                                                    ? 'bg-primary text-white'
+                                                    : 'text-slate-700 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <span>{typeVal}</span>
+                                                {form.request_type === typeVal && (
+                                                    <Check size={14} className="text-white shrink-0" />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Reason */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Reason for Return</label>
-                            <select
-                                value={form.reason}
-                                onChange={e => setForm({ ...form, reason: e.target.value })}
-                                className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setReasonDropdownOpen(!reasonDropdownOpen);
+                                    setOrderDropdownOpen(false);
+                                    setRequestTypeDropdownOpen(false);
+                                }}
+                                className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                             >
-                                <option value="">Reason for returning?</option>
-                                <option value="Item damaged on arrival">Item damaged on arrival</option>
-                                <option value="Wrong item delivered">Wrong item delivered</option>
-                                <option value="Item not as described">Item not as described</option>
-                                <option value="Changed my mind">Changed my mind</option>
-                                <option value="Item stopped working">Item stopped working</option>
-                                <option value="Other">Other</option>
-                            </select>
+                                <span className={form.reason ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                                    {form.reason || "Reason for returning?"}
+                                </span>
+                                <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${reasonDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {reasonDropdownOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setReasonDropdownOpen(false)} />
+                                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                        {[
+                                            "Item damaged on arrival",
+                                            "Wrong item delivered",
+                                            "Item not as described",
+                                            "Changed my mind",
+                                            "Item stopped working",
+                                            "Other"
+                                        ].map(reasonVal => (
+                                            <button
+                                                key={reasonVal}
+                                                type="button"
+                                                onClick={() => {
+                                                    setForm({ ...form, reason: reasonVal });
+                                                    setReasonDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                                    form.reason === reasonVal
+                                                    ? 'bg-primary text-white'
+                                                    : 'text-slate-700 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <span>{reasonVal}</span>
+                                                {form.reason === reasonVal && (
+                                                    <Check size={14} className="text-white shrink-0" />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
 

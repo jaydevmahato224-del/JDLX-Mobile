@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 
 function OrderTracking() {
@@ -16,7 +16,11 @@ function OrderTracking() {
     const [actionLoading, setActionLoading] = useState(false);
     const [refundReason, setRefundReason] = useState('');
     const [showRefundForm, setShowRefundForm] = useState(false);
+    const [showCancelForm, setShowCancelForm] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [customReason, setCustomReason] = useState('');
     const [message, setMessage] = useState({ type: '', text: '' });
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     // Haversine formula for client-side distance calculation
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -139,24 +143,37 @@ function OrderTracking() {
         fetchShipmentTracking();
     }, [order, orderId]);
 
-    const handleCancel = async () => {
-        if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    const handleCancelSubmit = async (e) => {
+        if (e) e.preventDefault();
+        let finalReason = cancelReason;
+        if (cancelReason === 'Other') {
+            finalReason = customReason.trim();
+        }
+        if (!finalReason) {
+            alert("Please select or enter a cancellation reason!");
+            return;
+        }
         setActionLoading(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem("token");
             const res = await fetch(`${API_BASE_URL}/order/${orderId}/cancel`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}` 
+                },
+                body: JSON.stringify({ reason: finalReason })
             });
             const data = await res.json();
             if (res.ok) {
-                setMessage({ type: 'success', text: "Order cancelled successfully." });
-                setOrder(prev => ({ ...prev, status: 'CANCELLED' }));
+                setMessage({ type: "success", text: "Order cancelled successfully." });
+                setOrder(prev => ({ ...prev, status: "CANCELLED" }));
+                setShowCancelForm(false);
             } else {
-                setMessage({ type: 'error', text: data.error || "Failed to cancel order." });
+                setMessage({ type: "error", text: data.error || "Failed to cancel order." });
             }
         } catch (err) {
-            setMessage({ type: 'error', text: "An error occurred." });
+            setMessage({ type: "error", text: "An error occurred." });
         } finally {
             setActionLoading(false);
         }
@@ -192,6 +209,7 @@ function OrderTracking() {
 
     const stages = [
         { id: 'PLACED', label: 'Order Placed', icon: Clock, time: order?.created_at },
+        { id: 'CONFIRMED', label: 'Confirmed', icon: CheckCircle, time: order?.confirmed_at },
         { id: 'PACKED', label: 'Packed', icon: Package, time: order?.packed_at },
         { id: 'SHIPPED', label: 'Shipped', icon: Truck, time: order?.shipped_at },
         { id: 'DELIVERED', label: 'Delivered', icon: CheckCircle, time: order?.delivered_at }
@@ -217,7 +235,7 @@ function OrderTracking() {
                 <Link to="/" className="p-2 hover:bg-white/40 rounded-full transition-colors">
                     <ArrowLeft className="w-5 h-5 text-gray-600" />
                 </Link>
-                <h1 className="text-2xl font-bold text-gray-800">Track Order #{orderId}</h1>
+                <h1 className="text-2xl font-bold text-gray-800">Track Order #{order?.order_number || orderId}</h1>
             </div>
 
             <div className="glass-card p-6 flex flex-col gap-6 relative overflow-hidden">
@@ -433,7 +451,7 @@ function OrderTracking() {
             )}
 
             {/* Order Actions Section */}
-            {(['PLACED', 'PACKING', 'PENDING_PAYMENT', 'DELIVERED'].includes(order?.status)) && (
+            {(['PLACED', 'PACKING', 'PACKED', 'PENDING_PAYMENT', 'PENDING', 'DELIVERED'].includes(order?.status)) && (
                 <div className="glass-card p-5 flex flex-col gap-4 border-t-4 border-t-red-400">
                     <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
                         <AlertCircle className="w-5 h-5 text-red-500" /> Need Help?
@@ -445,14 +463,97 @@ function OrderTracking() {
                         </div>
                     )}
 
-                    {['PLACED', 'PACKING', 'PENDING_PAYMENT'].includes(order?.status) && (
-                        <button
-                            onClick={handleCancel}
-                            disabled={actionLoading}
-                            className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-100 transition-colors border border-red-200"
-                        >
-                            <XCircle size={18} /> {actionLoading ? 'Processing...' : 'Cancel Order'}
-                        </button>
+                    {['PLACED', 'PACKING', 'PACKED', 'PENDING_PAYMENT', 'PENDING'].includes(order?.status) && (
+                        <div className="w-full flex flex-col gap-4">
+                            {!showCancelForm ? (
+                                <button
+                                    onClick={() => setShowCancelForm(true)}
+                                    className="w-full py-3 bg-red-50/50 text-red-500 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-50 hover:text-red-600 transition-all border border-red-200/60 shadow-sm"
+                                >
+                                    <XCircle size={18} /> Want to Cancel?
+                                </button>
+                            ) : (
+                                <form onSubmit={handleCancelSubmit} className="flex flex-col gap-4 p-4 bg-red-50/20 border border-red-100/50 rounded-2xl animate-in slide-in-from-top-3 duration-300">
+                                    <div className="flex flex-col gap-1.5 relative">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-1">Reason for Cancellation</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                            className="w-full h-12 rounded-xl bg-white border border-red-100 px-4 text-xs font-bold text-slate-800 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all hover:bg-slate-50/50"
+                                        >
+                                            <span className={cancelReason ? 'text-slate-800' : 'text-slate-400'}>
+                                                {cancelReason || "Select cancellation reason..."}
+                                            </span>
+                                            <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {isDropdownOpen && (
+                                            <div className="mt-1.5 p-1 bg-white/60 backdrop-blur-md border border-red-100/40 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-inner">
+                                                {[
+                                                    "Order placed by mistake",
+                                                    "Delivery time is too long",
+                                                    "Found a better price elsewhere",
+                                                    "Changed my mind / No longer need it",
+                                                    "Incorrect shipping address selected",
+                                                    "Incorrect item/size/model selected",
+                                                    "Other"
+                                                ].map((reason) => (
+                                                    <button
+                                                        key={reason}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setCancelReason(reason);
+                                                            setIsDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                                            cancelReason === reason
+                                                            ? 'bg-red-500 text-white'
+                                                            : 'text-slate-700 hover:bg-red-50 hover:text-red-500'
+                                                        }`}
+                                                    >
+                                                        <span>{reason}</span>
+                                                        {cancelReason === reason && (
+                                                            <Check size={14} className="text-white shrink-0" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {cancelReason === 'Other' && (
+                                        <div className="flex flex-col gap-1.5 animate-in fade-in duration-300">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-1">Please specify reason</label>
+                                            <textarea
+                                                value={customReason}
+                                                onChange={(e) => setCustomReason(e.target.value)}
+                                                required
+                                                placeholder="Please tell us why you are cancelling..."
+                                                rows="3"
+                                                className="w-full p-4 rounded-xl bg-white border border-red-100 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all resize-none"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-3 mt-2">
+                                        <button
+                                            type="submit"
+                                            disabled={actionLoading}
+                                            className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5"
+                                        >
+                                            {actionLoading ? 'Cancelling...' : 'Confirm Cancel'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowCancelForm(false); setCancelReason(''); setCustomReason(''); }}
+                                            className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+                                        >
+                                            Keep Order
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
                     )}
 
                     {order?.status === 'DELIVERED' && !showRefundForm && (
@@ -464,12 +565,14 @@ function OrderTracking() {
                         </button>
                     )}
 
-                    <Link
-                        to={`/profile/complaint?order_id=${orderId}`}
-                        className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors border border-indigo-200"
-                    >
-                        <MessageSquare size={18} /> Report an issue with this order
-                    </Link>
+                    {order?.status === "DELIVERED" && (
+                        <Link
+                            to={`/profile/complaint?order_id=${orderId}`}
+                            className="w-full py-3 bg-indigo-50 text-indigo-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors border border-indigo-200"
+                        >
+                            <MessageSquare size={18} /> Report an issue with this order
+                        </Link>
+                    )}
 
                     {['DELIVERED', 'COMPLETED'].includes(order?.status?.toUpperCase()) && (
                         <Link

@@ -6,7 +6,7 @@ const ReferralDashboard = () => {
   const [referrals, setReferrals] = useState([]);
   const [stats, setStats] = useState({ total_liability: 0, active_wallets: 0, total_credits: 0, total_debits: 0 });
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
 
   useEffect(() => {
     const fetchData = async () => {

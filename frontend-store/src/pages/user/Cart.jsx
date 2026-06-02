@@ -40,7 +40,6 @@ function Cart() {
     const removeFromCart = useStore(state => state.removeFromCart);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
     const toggleFittingService = useStore(state => state.toggleFittingService);
-    const deliveryMode = useStore(state => state.deliveryMode);
     const token = useStore(state => state.token);
     const isCartLoaded = useStore(state => state.isCartLoaded);
     const fetchCart = useStore(state => state.fetchCart);
@@ -147,7 +146,7 @@ function Cart() {
                 {/* Trust Signal */}
                 <div className="mt-12 text-[10px] font-black text-[var(--color-on-surface-variant)]/40 uppercase tracking-[0.3em] flex items-center gap-3">
                     <div className="h-px w-8 bg-current opacity-20" />
-                    JDLX Premium {deliveryMode === 'quick' ? '' : 'Essentials'}
+                    JDLX Premium Essentials
                     <div className="h-px w-8 bg-current opacity-20" />
                 </div>
             </div>
@@ -237,7 +236,7 @@ function Cart() {
                                             </div>
                                         )}
 
-                                        {item.category_id === 7 && deliveryMode === 'quick' && (
+                                        {false && item.category_id === 7 && (
                                             <div className="mt-4 p-4 rounded-[24px] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] flex items-center justify-between group/fitting transition-all hover:bg-[var(--color-surface-white)] hover:shadow-md">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${item.fitting ? 'bg-primary text-[var(--color-on-primary)] scale-110 shadow-lg shadow-primary/20' : 'bg-[var(--color-surface-white)] text-[var(--color-on-surface-variant)]'}`}>

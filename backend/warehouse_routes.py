@@ -821,7 +821,7 @@ def warehouse_availability():
         ops_status = (wh["operations_status"] or "closed").lower().strip()
         is_open = ops_status == "open"
         weather = (wh["weather_status"] or "clear").lower().strip()
-        quick_mode = bool(wh["quick_mode_enabled"])
+        quick_mode = False
         radius = wh["service_radius_km"] or 4.0
 
         # Build human-readable message
@@ -829,10 +829,8 @@ def warehouse_availability():
             msg = "Store is currently closed. Please check back later."
         elif weather == "bad_weather":
             msg = "Deliveries may be delayed due to bad weather."
-        elif quick_mode:
-            msg = "⚡ Hyperlocal Quick Delivery Active (10-15 mins)"
         else:
-            msg = "Delivering in 20-30 mins"
+            msg = "Standard delivery is available"
 
         # Count active products (global for now, or per-warehouse if needed)
         product_count = conn.execute("SELECT COUNT(*) FROM products WHERE stock > 0").fetchone()[0]
@@ -843,7 +841,7 @@ def warehouse_availability():
             "operations_status": ops_status,
             "weather_status": weather,
             "quick_mode_enabled": quick_mode,
-            "quick_delivery_max_distance": radius,
+            "quick_delivery_max_distance": 0,
             "service_radius_km": radius,
             "active_products": product_count,
             "message": msg,
@@ -1213,6 +1211,7 @@ def warehouse_dashboard():
         recent_rows = conn.execute(
             """SELECT woa.id, woa.order_id, woa.assignment_status, woa.created_at,
                       o.total_amount, o.delivery_address, o.delivery_type,
+                      o.order_status, o.cancellation_reason,
                       GROUP_CONCAT(p.name, ', ') as product_names,
                       SUM(oi.quantity) as total_quantity
                FROM warehouse_order_assignments woa
@@ -1272,6 +1271,8 @@ def warehouse_dashboard():
                     "delivery_address": r["delivery_address"],
                     "product_names": r["product_names"] or "Unknown products",
                     "total_quantity": r["total_quantity"] or 0,
+                    "order_status": r["order_status"],
+                    "cancellation_reason": r["cancellation_reason"],
                 }
                 for r in recent_rows
             ],
@@ -1576,8 +1577,9 @@ def get_warehouse_orders():
     conn = get_db()
     try:
         query = """
-            SELECT woa.id, woa.order_id, woa.assignment_status, woa.created_at,
+            SELECT woa.id, woa.order_id, o.order_number, woa.assignment_status, woa.created_at,
                    o.total_amount, o.delivery_address, o.customer_phone as phone, o.delivery_type,
+                   o.order_status, o.cancellation_reason,
                    GROUP_CONCAT(
                        p.name || ' (x' || oi.quantity || ')' ||
                        CASE
@@ -2408,12 +2410,24 @@ def warehouse_delete_inventory(item_id):
     wh_id = request.warehouse_payload["warehouse_id"]
     conn = get_db()
     try:
+        item = conn.execute(
+            "SELECT product_id FROM warehouse_inventory WHERE id = ? AND warehouse_id = ?",
+            (item_id, wh_id),
+        ).fetchone()
         cursor = conn.execute(
             "DELETE FROM warehouse_inventory WHERE id = ? AND warehouse_id = ?",
             (item_id, wh_id),
         )
         if cursor.rowcount == 0:
             return error_response("Inventory item not found", 404)
+        if item and item["product_id"]:
+            conn.execute(
+                """UPDATE products SET stock = (
+                    SELECT COALESCE(SUM(stock_quantity), 0)
+                    FROM warehouse_inventory WHERE product_id = ?
+                ) WHERE id = ?""",
+                (item["product_id"], item["product_id"])
+            )
         conn.commit()
         return success_response(None, "SKU removed from inventory", 200)
     finally:

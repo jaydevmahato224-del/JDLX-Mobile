@@ -68,8 +68,14 @@ const Footer = () => {
         {/* Brand Section */}
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20 font-black italic">J</div>
-            <span className="text-2xl font-black tracking-tighter">JDLX <span className="text-primary">Mobile</span></span>
+            <img 
+              src="/logo192.png" 
+              alt="JDLX Logo" 
+              className="h-10 w-10 object-contain shadow-lg shadow-primary/10 rounded-xl"
+            />
+            <span className="text-2xl font-black tracking-tighter">
+              <span className="text-[var(--color-on-surface)]">JDLX</span> <span className="text-primary">Mobile</span>
+            </span>
           </div>
           <p className="text-sm text-slate-500 leading-relaxed font-medium">
             {settings.footer_brand_story}

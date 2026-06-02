@@ -21,10 +21,10 @@ DATABASE_PATH = os.path.join(BASE_DIR, "jdlx.db")
 DELIVERY_UPLOAD_DIR = os.path.join("static", "uploads", "delivery_docs")
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
+from database import get_db as _db_get_db
+
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return _db_get_db()
 
 def _secret():
     return os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")

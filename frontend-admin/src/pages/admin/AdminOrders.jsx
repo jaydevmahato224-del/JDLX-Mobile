@@ -380,7 +380,7 @@ function AdminOrders() {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex flex-col gap-1">
-                                                {order.dark_store_id ? <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded flex items-center gap-1 w-max"><Package className="w-3 h-3" /> Store #{order.dark_store_id}</span> : <span className="text-xs text-gray-400">-</span>}
+                                                {order.store_name ? <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded flex items-center gap-1 w-max" title={`Store Code: ${order.store_code || 'N/A'}`}><Package className="w-3 h-3" /> {order.store_name} (#{order.dark_store_id})</span> : <span className="text-xs text-gray-400">-</span>}
                                                 {order.delivery_partner_id ? <span className="text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded flex items-center gap-1 w-max"><UserPlus className="w-3 h-3" /> Rider #{order.delivery_partner_id}</span> : <span className="text-xs text-gray-400">-</span>}
                                                 {order.estimated_delivery && <span className="text-xs text-orange-600 font-medium">ETA: {order.estimated_delivery}</span>}
                                             </div>
@@ -480,11 +480,17 @@ function AdminOrders() {
                                 <Package className="w-6 h-6" />
                                 <div>
                                     <p className="font-bold uppercase">{selectedOrder.order_status.replace(/_/g, ' ')}</p>
-                                    <p className="text-sm opacity-90">
-                                        {selectedOrder.delivery_partner_id
-                                            ? `Assigned to Partner #${selectedOrder.delivery_partner_id}`
-                                            : 'Waiting for assignment'}
-                                    </p>
+                                    {selectedOrder.order_status?.toUpperCase() === 'CANCELLED' && selectedOrder.cancellation_reason ? (
+                                        <p className="text-sm opacity-90">
+                                            Reason: <span className="font-semibold">{selectedOrder.cancellation_reason}</span>
+                                        </p>
+                                    ) : (
+                                        <p className="text-sm opacity-90">
+                                            {selectedOrder.delivery_partner_id
+                                                ? `Assigned to Partner #${selectedOrder.delivery_partner_id}`
+                                                : 'Waiting for assignment'}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -595,7 +601,7 @@ function AdminOrders() {
 
                                         <div className="flex flex-col items-center gap-2 bg-white p-3 rounded-lg shadow-sm border border-blue-100 z-10 w-28">
                                             <Package className="w-6 h-6 text-indigo-600" />
-                                            <span className="font-bold text-center leading-tight">Dark Store<br />#{selectedOrder.dark_store_id}</span>
+                                            <span className="font-bold text-center leading-tight">{selectedOrder.store_name || 'Dark Store'}<br />#{selectedOrder.dark_store_id}</span>
                                         </div>
 
                                         <div className="flex flex-col items-center gap-2 bg-white p-3 rounded-lg shadow-sm border border-blue-100 z-10 w-28">

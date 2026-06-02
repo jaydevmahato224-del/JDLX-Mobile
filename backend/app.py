@@ -614,6 +614,7 @@ def admin_request_otp():
     if not user:
         return error_response("Admin account not found", 404)
 
+    user = dict(user)
     role = normalize_role(user.get('role'))
     admin_roles = ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']
     if role not in admin_roles:
@@ -687,6 +688,10 @@ def admin_verify_otp():
     user = cursor.fetchone()
     conn.close()
 
+    if not user:
+        return error_response("User not found", 404)
+
+    user = dict(user)
     user_data = {
         "id": user.get('id'),
         "name": user.get('name'),
@@ -2747,7 +2752,8 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     Confirms an order and decrements the inventory stock safely.
     Ensures this is only done once per order to prevent double-decrement bugs.
     """
-    # 1. Fetch current order status and dark_store_id
+    # 1. Fetch current order status. Customer checkout currently uses global catalog stock;
+    # warehouse-specific quick delivery is disabled for now.
     cursor.execute("SELECT order_status, dark_store_id FROM orders WHERE id = ?", (order_id,))
     order = cursor.fetchone()
     if not order:
@@ -2767,44 +2773,63 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     cursor.execute("SELECT product_id, quantity, variant_id FROM order_items WHERE order_id = ?", (order_id,))
     items = cursor.fetchall()
 
-    # 4. Decrement warehouse stock and sync global/variant inventories
+    # 4. Decrement global product/variant stock atomically.
     for item in items:
         product_id = item['product_id']
         qty = item['quantity']
         v_id = item['variant_id']
 
         if v_id:
-            # Decrement variant specific warehouse inventory
-            cursor.execute("""
-                UPDATE warehouse_inventory
-                SET stock_quantity = MAX(0, stock_quantity - ?),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
-            """, (qty, store_id, product_id, v_id))
+            cursor.execute(
+                """UPDATE product_variants
+                   SET stock = stock - ?
+                   WHERE id = ? AND product_id = ? AND stock >= ?""",
+                (qty, v_id, product_id, qty)
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
+                    (order_id,)
+                )
+                raise ValueError(f"Insufficient variant stock for product {product_id}")
 
-            # Sync variant stock
             cursor.execute("""
-                UPDATE product_variants SET stock = (
-                    SELECT COALESCE(SUM(stock_quantity), 0)
-                    FROM warehouse_inventory WHERE variant_id = ?
-                ) WHERE id = ?
-            """, (v_id, v_id))
+                UPDATE products
+                SET stock = CASE WHEN stock >= ? THEN stock - ? ELSE 0 END
+                WHERE id = ?
+            """, (qty, qty, product_id))
         else:
-            # Decrement generic product warehouse inventory
-            cursor.execute("""
-                UPDATE warehouse_inventory
-                SET stock_quantity = MAX(0, stock_quantity - ?),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE warehouse_id = ? AND product_id = ? AND variant_id IS NULL
-            """, (qty, store_id, product_id))
+            cursor.execute(
+                """UPDATE products
+                   SET stock = stock - ?
+                   WHERE id = ? AND stock >= ?""",
+                (qty, product_id, qty)
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
+                    (order_id,)
+                )
+                raise ValueError(f"Insufficient stock for product {product_id}")
 
-        # Sync global products.stock
-        cursor.execute("""
-            UPDATE products SET stock = (
-                SELECT COALESCE(SUM(stock_quantity), 0)
-                FROM warehouse_inventory WHERE product_id = ?
-            ) WHERE id = ?
-        """, (product_id, product_id))
+        # Decrement warehouse partner inventory stock if store_id is set (Multi-Vendor stock sync)
+        if store_id:
+            if v_id:
+                cursor.execute(
+                    """UPDATE warehouse_inventory
+                       SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
+                           available_stock = CASE WHEN available_stock >= ? THEN available_stock - ? ELSE 0 END
+                       WHERE (warehouse_id = ? OR warehouse_partner_id = ?) AND product_id = ? AND variant_id = ?""",
+                    (qty, qty, qty, qty, store_id, store_id, product_id, v_id)
+                )
+            else:
+                cursor.execute(
+                    """UPDATE warehouse_inventory
+                       SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
+                           available_stock = CASE WHEN available_stock >= ? THEN available_stock - ? ELSE 0 END
+                       WHERE (warehouse_id = ? OR warehouse_partner_id = ?) AND product_id = ?""",
+                    (qty, qty, qty, qty, store_id, store_id, product_id)
+                )
 
         # Trigger Low Stock Notifications if stock drops to or below threshold
         cursor.execute("SELECT name, stock, low_stock_threshold FROM products WHERE id = ?", (product_id,))
@@ -2827,6 +2852,16 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
         (order_id,)
     )
 
+    # 6. Create warehouse order assignment only when an explicit warehouse/store is attached.
+    if store_id:
+        cursor.execute("SELECT id FROM warehouse_order_assignments WHERE order_id = ?", (order_id,))
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT INTO warehouse_order_assignments (order_id, warehouse_id, assignment_status) VALUES (?, ?, 'assigned')",
+                (order_id, store_id)
+            )
+            print(f"[ORDER CONFIRMATION] Created warehouse assignment for Order #{order_id} to Warehouse #{store_id}")
+
     print(f"[ORDER CONFIRMATION SUCCESS] Order #{order_id} has been confirmed and stock has been decremented.")
     return True
 
@@ -2848,7 +2883,9 @@ def checkout():
 
     user_lat = data.get('latitude', 28.6139)  # Default to Delhi
     user_lng = data.get('longitude', 77.2090)
-    delivery_type = data.get('delivery_type', 'quick') # New delivery type
+    # Quick/warehouse-specific delivery is disabled for now. Customer checkout uses
+    # global catalog stock and standard fulfillment only.
+    delivery_type = 'scheduled'
 
 
     try:
@@ -2876,7 +2913,7 @@ def checkout():
 
         placeholders = ",".join(["?"] * len(product_ids))
         cursor.execute(f"""
-            SELECT p.id, p.name, p.category, c.name as category_name,
+            SELECT p.id, p.name, p.category, p.stock, p.prepaid_only, c.name as category_name,
                    COALESCE(c.device_customization_enabled, 0) as device_customization_enabled
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
@@ -2895,71 +2932,105 @@ def checkout():
             if is_sticker_category(product) and not item['device_model']:
                 return error_response(f"Select Your Device Model is required for {product['name']}", 400)
 
-        # 1. Select Best Warehouse (Hyperlocal Selection Logic)
-        if delivery_type == 'quick':
-            # Use warehouses table (source of truth for partners) and check operations_status
-            cursor.execute("""
-                SELECT w.id, w.warehouse_name as name, ds.latitude, ds.longitude 
-                FROM warehouses w
-                JOIN dark_stores ds ON w.warehouse_name = ds.name
-                WHERE w.account_status = 'active' AND w.operations_status = 'open'
-                AND ds.active = 1 AND ds.quick_mode_enabled = 1
-            """)
-        else:
-            cursor.execute("""
-                SELECT w.id, w.warehouse_name as name, ds.latitude, ds.longitude 
-                FROM warehouses w
-                JOIN dark_stores ds ON w.warehouse_name = ds.name
-                WHERE w.account_status = 'active' AND w.operations_status = 'open'
-            """)
-        stores = [dict(row) for row in cursor.fetchall()]
-        
-        if not stores:
-            return error_response("No delivery stores available", 503)
-            
-        best_store, error_msg = select_best_warehouse(user_lat, user_lng, stores, items, cursor)
-        
         delivery_message = None
-        if error_msg:
-            # FALLBACK TO SHIPROCKET
-            delivery_type = 'shiprocket'
-            delivery_message = "Local delivery unavailable. Order will be shipped via courier."
-            # In shiprocket mode, we pick the first available store or central hub for Shiprocket sync
-            best_store = stores[0] # Pick first as fallback for metadata
-            est_time = "3-5 business days"
-        else:
-            est_time = f"{best_store['estimated_time']} mins"
-            
-        store_id = best_store['id']
-
-        # 2. Check store-specific inventory (REAL-TIME PHYSICAL STOCK CHECK)
+        est_time = "3-5 business days"
+        store_id = None
+        # Select warehouse from warehouse_inventory for the ordered product/variant (Multi-Vendor matching logic)
         for item in items:
+            p_id = item["id"]
+            v_id = item.get("variant_id")
+            
+            if v_id:
+                cursor.execute("""
+                    SELECT COALESCE(wi.warehouse_id, wi.warehouse_partner_id) as wh_id
+                    FROM warehouse_inventory wi
+                    JOIN warehouses w ON w.id = COALESCE(wi.warehouse_id, wi.warehouse_partner_id)
+                    WHERE wi.product_id = ? AND wi.variant_id = ? AND (wi.stock_quantity > 0 OR wi.available_stock > 0)
+                      AND w.operations_status = "open" AND w.account_status = "active"
+                    LIMIT 1
+                """, (p_id, v_id))
+                row = cursor.fetchone()
+                if row:
+                    store_id = row["wh_id"]
+                    break
+            
+            # Fallback to checking product without variant
             cursor.execute("""
-                SELECT 
-                    wi.stock_quantity,
-                    wi.reserved_stock as hard_reserved,
-                    p.name
+                SELECT COALESCE(wi.warehouse_id, wi.warehouse_partner_id) as wh_id
                 FROM warehouse_inventory wi
-                JOIN products p ON p.id = wi.product_id
-                WHERE wi.warehouse_id = ? AND wi.product_id = ?
-            """, (store_id, item['id']))
-            inventory = cursor.fetchone()
-            
-            if not inventory:
-                return error_response(f"Product {item['id']} not available in selected warehouse", 404)
-            
-            physical_available = inventory['stock_quantity']
-            
-            if physical_available < item['qty']:
+                JOIN warehouses w ON w.id = COALESCE(wi.warehouse_id, wi.warehouse_partner_id)
+                WHERE wi.product_id = ? AND (wi.stock_quantity > 0 OR wi.available_stock > 0)
+                  AND w.operations_status = "open" AND w.account_status = "active"
+                LIMIT 1
+            """, (p_id,))
+            row = cursor.fetchone()
+            if row:
+                store_id = row["wh_id"]
+                break
+
+        # Fallback to checking any warehouse holding this product regardless of operations status
+        if not store_id:
+            for item in items:
+                p_id = item["id"]
+                v_id = item.get("variant_id")
+                if v_id:
+                    cursor.execute("""
+                        SELECT COALESCE(wi.warehouse_id, wi.warehouse_partner_id) as wh_id
+                        FROM warehouse_inventory wi
+                        WHERE wi.product_id = ? AND wi.variant_id = ?
+                        LIMIT 1
+                    """, (p_id, v_id))
+                    row = cursor.fetchone()
+                    if row:
+                        store_id = row["wh_id"]
+                        break
+                cursor.execute("""
+                    SELECT COALESCE(wi.warehouse_id, wi.warehouse_partner_id) as wh_id
+                    FROM warehouse_inventory wi
+                    WHERE wi.product_id = ?
+                    LIMIT 1
+                """, (p_id,))
+                row = cursor.fetchone()
+                if row:
+                    store_id = row["wh_id"]
+                    break
+
+        # Hard fallback to the first active/any warehouse in the database to prevent order errors
+        if not store_id:
+            cursor.execute("SELECT id FROM warehouses WHERE operations_status = 'open' AND account_status = 'active' LIMIT 1")
+            row = cursor.fetchone()
+            if row:
+                store_id = row["id"]
+            else:
+                cursor.execute("SELECT id FROM warehouses LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    store_id = row["id"]
+
+        # 2. Check global product/variant inventory.
+        for item in items:
+            product = product_meta.get(item['id'])
+            if item.get('variant_id'):
+                cursor.execute(
+                    "SELECT stock, name FROM product_variants WHERE id = ? AND product_id = ?",
+                    (item.get('variant_id'), item['id'])
+                )
+                stock_row = cursor.fetchone()
+                if not stock_row:
+                    return error_response(f"Variant for product {item['id']} not found", 404)
+                available_stock = int(stock_row['stock'] or 0)
+                stock_name = stock_row['name'] or product['name']
+            else:
+                available_stock = int(product.get('stock') or 0)
+                stock_name = product['name']
+
+            if available_stock < item['qty']:
                 return error_response(
-                    f"Insufficient physical stock for {inventory['name']}. Available: {max(0, physical_available)}", 
+                    f"Insufficient stock for {stock_name}. Available: {max(0, available_stock)}",
                     400
                 )
-            
-            # Check if any product is prepaid-only
-            cursor.execute("SELECT prepaid_only FROM products WHERE id = ?", (item['id'],))
-            product_data = cursor.fetchone()
-            if product_data and product_data['prepaid_only']:
+
+            if product and product.get('prepaid_only'):
                 is_prepaid_only_order = True
 
         # Get dynamic fees from settings
@@ -2979,12 +3050,8 @@ def checkout():
 
         payment_type = data.get('payment_type', 'PREPAID').upper()
         if payment_type == 'COD':
-            if delivery_type == 'shiprocket':
-                if not cod_enabled_shiprocket:
-                    return error_response("Cash on Delivery is currently disabled for standard shipping courier", 400)
-            else:
-                if not cod_enabled:
-                    return error_response("Cash on Delivery is currently disabled", 400)
+            if not cod_enabled:
+                return error_response("Cash on Delivery is currently disabled", 400)
             
             # 1. Check for prepaid-only products
             if locals().get('is_prepaid_only_order', False):
@@ -3033,8 +3100,13 @@ def checkout():
         else: # COD
             actual_delivery_fee = cod_fee
 
-        fitting_charge = float(data.get('fitting_charge', 0))
-        final_total = total_amount + platform_fee + actual_delivery_fee + fitting_charge
+        fitting_charge = float(data.get('fitting_charge', 0) or 0)
+        discount_applied = max(0, float(data.get('discount_applied', 0) or 0))
+        wallet_amount = max(0, float(data.get('wallet_amount', 0) or 0))
+        taxable_subtotal = max(0, total_amount - discount_applied)
+        pre_wallet_total = taxable_subtotal + platform_fee + actual_delivery_fee + fitting_charge
+        wallet_amount = min(wallet_amount, pre_wallet_total)
+        final_total = max(0, pre_wallet_total - wallet_amount)
         
         # Calculate Pay Now and COD amounts
         pay_now_amount = final_total
@@ -3043,14 +3115,14 @@ def checkout():
         
         if payment_type == 'COD':
             cod_advance_paid = cod_advance
-            pay_now_amount = cod_advance_paid
-            cod_remaining_amount = final_total - cod_advance_paid
+            pay_now_amount = min(cod_advance_paid, final_total)
+            cod_advance_paid = pay_now_amount
+            cod_remaining_amount = max(0, final_total - cod_advance_paid)
 
         # 3. Insert Order with correct column names and delivery_type
         order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
         
-        # Fix estimated_delivery string formatting
-        estimated_delivery_str = f"{est_time} mins" if delivery_type == 'quick' else est_time
+        estimated_delivery_str = est_time
         
         cursor.execute('''
             INSERT INTO orders (
@@ -3063,7 +3135,7 @@ def checkout():
             VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
-            phone, address, final_total, store_id, estimated_delivery_str, 
+            phone, address, final_total, store_id, estimated_delivery_str,
             user_lat, user_lng, delivery_type, platform_fee, actual_delivery_fee, fitting_charge,
             payment_type, cod_advance_paid, cod_remaining_amount, free_delivery_applied
         ))
@@ -3086,9 +3158,9 @@ def checkout():
 
         conn.commit()
 
-        # 5. Sync with Shiprocket for Standard Delivery (COD ONLY)
-        # Prepaid orders will sync in verify_payment after successful payment
-        if delivery_type != 'quick' and payment_type == 'COD':
+        # 5. Sync with Shiprocket for COD orders.
+        # Prepaid orders will sync in verify_payment after successful payment.
+        if payment_type == 'COD':
             try:
                 order_payload = {
                     "order_number": order_number,
@@ -3116,23 +3188,16 @@ def checkout():
         conn.commit()
         conn.close()
         
-        if delivery_type == 'shiprocket':
-            return jsonify({
-                "order_id": order_id,
-                "delivery_type": "shiprocket",
-                "message": "Local delivery unavailable. Order will be shipped via courier.",
-                "estimated_days": "3-5 business days",
-                "delivery_charge": actual_delivery_fee
-            }), 201
-
         return jsonify({
             "message": delivery_message or "Order placed successfully", 
             "order_id": order_id,
             "estimated_delivery_time": est_time,
-            "assigned_store": best_store['name'],
+            "assigned_store": None,
             "delivery_type": delivery_type,
             "summary": {
                 "subtotal": total_amount,
+                "discount": discount_applied,
+                "wallet_amount": wallet_amount,
                 "delivery_charge": actual_delivery_fee,
                 "free_delivery_status": "Applied" if free_delivery_applied else "Not Applicable",
                 "pay_now_amount": pay_now_amount,
@@ -3229,45 +3294,23 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
     if new_status == 'DELIVERED' and old_status != 'DELIVERED':
         pass
 
-    # Transitions to CANCELLED/REFUNDED/REJECTED: Add stock_quantity back.
-    elif new_status in ['CANCELLED', 'REFUNDED', 'REJECTED'] and old_status not in ['CANCELLED', 'REFUNDED', 'REJECTED', 'DELIVERED']:
+    # Transitions to CANCELLED/REFUNDED/REJECTED after confirmation: add global stock back.
+    elif (
+        new_status in ['CANCELLED', 'REFUNDED', 'REJECTED']
+        and old_status in ['CONFIRMED', 'PACKING', 'PACKED', 'SHIPPED', 'OUT_FOR_DELIVERY']
+    ):
         cursor.execute("SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
         items = cursor.fetchall()
-        cursor.execute("SELECT dark_store_id as store_id FROM orders WHERE id = ?", (order_id,))
-        order = cursor.fetchone()
-        if order and order['store_id']:
-            for item in items:
-                v_id = item['variant_id']
-                if v_id:
-                    cursor.execute("""
-                        UPDATE warehouse_inventory
-                        SET stock_quantity = stock_quantity + ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
-                    """, (item['quantity'], order['store_id'], item['product_id'], v_id))
-
-                    # Sync variant stock
-                    cursor.execute("""
-                        UPDATE product_variants SET stock = (
-                            SELECT COALESCE(SUM(stock_quantity), 0)
-                            FROM warehouse_inventory WHERE variant_id = ?
-                        ) WHERE id = ?
-                    """, (v_id, v_id))
-                else:
-                    cursor.execute("""
-                        UPDATE warehouse_inventory
-                        SET stock_quantity = stock_quantity + ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE warehouse_id = ? AND product_id = ? AND variant_id IS NULL
-                    """, (item['quantity'], order['store_id'], item['product_id']))
-
-                # Sync global products.stock
-                cursor.execute("""
-                    UPDATE products SET stock = (
-                        SELECT COALESCE(SUM(stock_quantity), 0)
-                        FROM warehouse_inventory WHERE product_id = ?
-                    ) WHERE id = ?
-                """, (item['product_id'], item['product_id']))
+        for item in items:
+            if item['variant_id']:
+                cursor.execute(
+                    "UPDATE product_variants SET stock = stock + ? WHERE id = ? AND product_id = ?",
+                    (item['quantity'], item['variant_id'], item['product_id'])
+                )
+            cursor.execute(
+                "UPDATE products SET stock = stock + ? WHERE id = ?",
+                (item['quantity'], item['product_id'])
+            )
 @app.route('/api/admin/order/<int:order_id>/status', methods=['PATCH'])
 @token_required
 @require_admin()
@@ -4261,11 +4304,13 @@ def get_admin_orders():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT o.*, u.name as customer_name, u.email as customer_email,
-                   ds.store_code, ds.name as store_name,
+                   COALESCE(ds.store_code, w.partner_id) as store_code,
+                   COALESCE(ds.name, w.owner_name, w.partner_id, "Default Store") as store_name,
                    s.status as shipment_status
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
-            LEFT JOIN dark_stores ds ON o.store_id = ds.id
+            LEFT JOIN dark_stores ds ON COALESCE(o.store_id, o.dark_store_id) = ds.id
+            LEFT JOIN warehouses w ON COALESCE(o.store_id, o.dark_store_id) = w.id
             LEFT JOIN shipments s ON o.id = s.order_id
             ORDER BY o.created_at DESC
         """)
@@ -4422,13 +4467,15 @@ def admin_get_order_details(order_id):
         # Get order details
         cursor.execute("""
             SELECT o.*, u.name as customer_name, u.email as customer_email,
-                   ds.store_code, ds.name as store_name,
+                   COALESCE(ds.store_code, w.partner_id) as store_code,
+                   COALESCE(ds.name, w.owner_name, w.partner_id, "Default Store") as store_name,
                    dp.name as partner_name, dp.phone as partner_phone,
                    s.shiprocket_order_id, s.shiprocket_shipment_id, s.awb_code, 
                    s.courier_name, s.status as shipment_status, s.tracking_url
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
-            LEFT JOIN dark_stores ds ON o.store_id = ds.id
+            LEFT JOIN dark_stores ds ON COALESCE(o.store_id, o.dark_store_id) = ds.id
+            LEFT JOIN warehouses w ON COALESCE(o.store_id, o.dark_store_id) = w.id
             LEFT JOIN delivery_partners dp ON o.delivery_partner_id = dp.id
             LEFT JOIN shipments s ON o.id = s.order_id
             WHERE o.id = ?
@@ -5391,30 +5438,28 @@ def admin_get_inventory():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        # Fetch inventory across all warehouses with store codes
+        # Quick delivery is disabled for now; admin inventory reflects global catalog stock.
         cursor.execute("""
             SELECT 
                 p.id, 
                 p.name as product_name, 
                 p.price, 
                 p.category,
-                wi.sku as sku,
-                wi.stock_quantity as stock, 
-                (wi.reserved_stock + COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0)) as reserved_stock,
+                CAST(p.id AS TEXT) as sku,
+                p.stock as stock, 
+                COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as reserved_stock,
                 COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND user_id IS NOT NULL), 0) as user_reserved,
                 COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND session_id IS NOT NULL AND user_id IS NULL), 0) as guest_reserved,
-                wi.low_stock_threshold,
-                wi.status,
-                w.warehouse_name as store_name,
-                w.partner_id as store_code,
+                p.low_stock_threshold,
+                p.status,
+                'Global Catalog' as store_name,
+                'GLOBAL' as store_code,
                 ROUND(COALESCE((SELECT AVG(rating) FROM product_reviews WHERE product_id = p.id), 0), 1) as average_rating,
                 p.return_policy,
                 c.return_policy as category_return_policy
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN warehouse_inventory wi ON p.id = wi.product_id
-            LEFT JOIN warehouses w ON wi.warehouse_id = w.id
-            ORDER BY w.warehouse_name ASC, p.name ASC
+            ORDER BY p.name ASC
         """)
         inventory = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -5435,10 +5480,10 @@ def admin_get_inventory_stats():
         cursor.execute("SELECT COUNT(*) as total FROM products")
         total = cursor.fetchone()['total']
         
-        cursor.execute("SELECT COUNT(*) as low_stock FROM warehouse_inventory WHERE stock_quantity <= low_stock_threshold AND stock_quantity > 0")
+        cursor.execute("SELECT COUNT(*) as low_stock FROM products WHERE stock <= low_stock_threshold AND stock > 0")
         low_stock = cursor.fetchone()['low_stock']
         
-        cursor.execute("SELECT COUNT(*) as out_of_stock FROM warehouse_inventory WHERE stock_quantity <= 0")
+        cursor.execute("SELECT COUNT(*) as out_of_stock FROM products WHERE stock <= 0")
         out_of_stock = cursor.fetchone()['out_of_stock']
         
         conn.close()
@@ -5821,6 +5866,11 @@ def verify_payment():
     try:
         conn = get_db()
         cursor = conn.cursor()
+        if not order_id and data.get('razorpay_order_id'):
+            cursor.execute("SELECT order_id FROM payments WHERE transaction_id = ?", (data.get('razorpay_order_id'),))
+            pay_row = cursor.fetchone()
+            if pay_row:
+                order_id = pay_row['order_id']
         cursor.execute("SELECT user_id, payment_type, cod_advance_paid FROM orders WHERE id = ?", (order_id,))
         user_row = cursor.fetchone()
         user_id = user_row['user_id'] if user_row else None
@@ -5832,12 +5882,18 @@ def verify_payment():
              # Trying to use COD on a PREPAID order - not allowed
              return error_response("Payment method mismatch", 400)
         
+
+
         if data.get('payment_method') == 'COD' and payment_type == 'COD' and user_row['cod_advance_paid'] <= 0:
             # Pure COD with no advance (if we ever support it)
             cursor.execute("UPDATE orders SET order_status = 'PLACED', payment_status = 'pending' WHERE id = ?", (order_id,))
             cursor.execute("UPDATE payments SET payment_status = 'SUCCESS' WHERE order_id = ?", (order_id,))
             if user_id:
                 notification_service.send_order_notification(user_id, order_id, 'PLACED')
+            try:
+                confirm_order_and_decrement_stock_logic(cursor, order_id)
+            except Exception as conf_err:
+                logger.error(f"Error during COD order confirmation/decrement: {conf_err}")
             conn.commit()
             conn.close()
             return success_response(None, "COD order confirmed", 200)
@@ -5852,6 +5908,11 @@ def verify_payment():
             if user_id:
                 notification_service.send_order_notification(user_id, order_id, 'PLACED')
             
+            try:
+                confirm_order_and_decrement_stock_logic(cursor, order_id)
+            except Exception as conf_err:
+                logger.error(f"Error during order confirmation/decrement: {conf_err}")
+
             # Shiprocket Sync for Prepaid Orders (Post-Payment)
             if payment_type == 'PREPAID':
                 try:
@@ -6246,6 +6307,7 @@ def cancel_order(order_id):
         data = request.json or {}
         reason = data.get('reason', 'Cancelled by User')
         cursor.execute("UPDATE orders SET order_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, cancellation_reason = ? WHERE id = ?", (reason, order_id))
+        cursor.execute("UPDATE warehouse_order_assignments SET assignment_status = 'CANCELLED' WHERE order_id = ?", (order_id,))
         notification_service.send_order_notification(user_id, order_id, 'CANCELLED')
         conn.commit()
         conn.close()
@@ -6656,7 +6718,7 @@ def warehouse_availability():
             "message": "Delivering in 10–20 mins",
             "store_name": store["name"],
             "store_id": store["id"],
-            "quick_mode_enabled": bool(store.get("quick_mode_enabled", 0)),
+            "quick_mode_enabled": False,
             "platform_fee": float(settings.get('platform_fee', 7)),
             "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
             "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
@@ -6672,8 +6734,8 @@ def warehouse_availability():
             "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true',
             "scheduled_delivery_time": settings.get('scheduled_delivery_time', 'Tomorrow'),
             "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.'),
-            "quick_delivery_max_distance": float(settings.get('quick_delivery_max_distance', 5)),
-            "quick_delivery_note": settings.get('quick_delivery_note', 'Hyperlocal dispatch from the active dark store.')
+            "quick_delivery_max_distance": 0,
+            "quick_delivery_note": "Quick delivery is temporarily unavailable."
         }, "Availability checked")
     except Exception as e:
         return success_response({

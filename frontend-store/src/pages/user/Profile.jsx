@@ -291,10 +291,13 @@ function Profile() {
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-[13px] font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                            Order #{order.id.toString().slice(-6)}
+                                            #{order.order_number || `ORD-${order.id}`}
                                         </span>
                                         <span className="text-[10px] font-bold text-[var(--color-on-surface-variant)] opacity-60">
-                                            ₹{order.total_amount} · {new Date(order.created_at).toLocaleDateString()}
+                                            ₹{order.total_amount} · {new Date(order.created_at).toLocaleString('en-IN', {
+                                                dateStyle: 'medium',
+                                                timeStyle: 'short'
+                                            })}
                                         </span>
                                     </div>
                                 </div>

@@ -14,12 +14,12 @@ function OrderSuccess() {
     const fetchOrder = async () => {
       const token = localStorage.getItem('token')
       try {
-        const res = await fetch(`${API_BASE_URL}/track/${orderId}`, {
+        const res = await fetch(`${API_BASE_URL}/order/${orderId}/status`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await res.json()
         if (res.ok) {
-          setOrder(data.order)
+          setOrder(data)
         }
       } catch (err) {
         console.error('Failed to fetch order details', err)
@@ -45,7 +45,7 @@ function OrderSuccess() {
           Order Confirmed!
         </h1>
         <p className="text-[var(--color-on-surface-variant)] font-medium max-w-md mx-auto leading-relaxed">
-          Thank you for your purchase. Your order <span className="text-primary font-black">#{orderId}</span> has been placed successfully and is being processed.
+          Thank you for your purchase. Your order <span className="text-primary font-black">#{order?.order_number || orderId}</span> has been placed successfully and is being processed.
         </p>
       </div>
 

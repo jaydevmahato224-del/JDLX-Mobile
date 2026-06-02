@@ -38,7 +38,7 @@ def create_payment_order():
     try:
         # Fetch order
         order = conn.execute(
-            "SELECT id, total_amount, user_id, payment_type FROM orders WHERE id = ?",
+            "SELECT id, total_amount, user_id, payment_type, cod_advance_paid FROM orders WHERE id = ?",
             (order_id,)
         ).fetchone()
 
@@ -58,8 +58,15 @@ def create_payment_order():
         if existing_payment:
             return error_response("Is order ka payment pehle ho chuka hai", 400)
 
+        # COD orders collect only the configured advance online; prepaid orders collect full amount.
+        amount_rupees = float(order['total_amount'] or 0)
+        if (order['payment_type'] or 'PREPAID').upper() == 'COD':
+            amount_rupees = float(order['cod_advance_paid'] or 0)
+        if amount_rupees <= 0:
+            return error_response("Payment amount must be greater than zero", 400)
+
         # Convert amount to paise
-        amount_paise = int(float(order['total_amount']) * 100)
+        amount_paise = int(round(amount_rupees * 100))
 
         # Create Razorpay order
         client = get_razorpay_client()
@@ -143,14 +150,26 @@ def verify_payment():
         ).fetchone()
         
         if payment:
+            from app import confirm_order_and_decrement_stock_logic, trigger_order_email
+            # Safe, transactional order confirmation & stock decrement. Do not swallow
+            # inventory failures, otherwise the user gets a paid-but-unfulfillable order.
             try:
-                from app import confirm_order_and_decrement_stock_logic, trigger_order_email
-                # Safe, transactional order confirmation & stock decrement
                 was_confirmed = confirm_order_and_decrement_stock_logic(cursor, payment['order_id'])
-                if was_confirmed:
-                    trigger_order_email(payment['order_id'])
-            except Exception as conf_err:
-                print(f"Error during order confirmation/email: {conf_err}")
+            except ValueError as inventory_error:
+                cursor.execute(
+                    "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE', payment_status = 'paid' WHERE id = ?",
+                    (payment['order_id'],)
+                )
+                conn.commit()
+                return error_response(str(inventory_error), 409)
+            if was_confirmed:
+                cursor.execute(
+                    """UPDATE orders
+                       SET payment_status = CASE WHEN payment_type = 'COD' THEN 'advance_paid' ELSE 'paid' END
+                       WHERE id = ?""",
+                    (payment['order_id'],)
+                )
+                trigger_order_email(payment['order_id'])
         
         conn.commit()
         return success_response({"success": True}, "Payment successful")

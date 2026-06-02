@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, ChevronDown, Check } from 'lucide-react'
 
 function ComplaintPage() {
     const token = useStore.getState().token;
@@ -22,6 +22,8 @@ function ComplaintPage() {
     });
     const [photo, setPhoto] = useState(null);
     const [preview, setPreview] = useState(null);
+    const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
+    const [issueDropdownOpen, setIssueDropdownOpen] = useState(false);
 
     useEffect(() => {
         if (!user) {
@@ -126,39 +128,113 @@ function ComplaintPage() {
 
             <form onSubmit={handleSubmit} className="glass-card p-6 md:p-8 space-y-6">
                 {/* Order Selection */}
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Order</label>
-                    <select
-                        value={form.order_id}
-                        onChange={e => setForm({ ...form, order_id: e.target.value })}
-                        className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    <button
+                        type="button"
                         disabled={loadingOrders}
+                        onClick={() => {
+                            setOrderDropdownOpen(!orderDropdownOpen);
+                            setIssueDropdownOpen(false);
+                        }}
+                        className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all disabled:opacity-50"
                     >
-                        <option value="">Choose an order...</option>
-                        {orders.map(order => (
-                            <option key={order.id} value={order.id}>
-                                Order #{order.id} - {order.product_names?.substring(0, 30)}... ({new Date(order.created_at).toLocaleDateString()})
-                            </option>
-                        ))}
-                    </select>
+                        <span className={form.order_id ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                            {form.order_id 
+                                ? (() => {
+                                    const selected = orders.find(o => String(o.id) === String(form.order_id));
+                                    return selected 
+                                        ? `Order #${selected.order_number || selected.id} - ${selected.product_names?.substring(0, 30)}...`
+                                        : "Choose an order..."
+                                  })()
+                                : "Choose an order..."
+                            }
+                        </span>
+                        <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${orderDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
                     {loadingOrders && <p className="text-[10px] text-primary animate-pulse ml-1">Loading your orders...</p>}
+
+                    {orderDropdownOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setOrderDropdownOpen(false)} />
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                {orders.map(order => (
+                                    <button
+                                        key={order.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setForm({ ...form, order_id: order.id });
+                                            setOrderDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                            String(form.order_id) === String(order.id)
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span className="truncate max-w-[90%]">
+                                            Order #{order.order_number || order.id} - {order.product_names?.substring(0, 30)}... ({new Date(order.created_at).toLocaleDateString()})
+                                        </span>
+                                        {String(form.order_id) === String(order.id) && (
+                                            <Check size={14} className="text-white shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Issue Type */}
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Issue Type</label>
-                    <select
-                        value={form.issue_type}
-                        onChange={e => setForm({ ...form, issue_type: e.target.value })}
-                        className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIssueDropdownOpen(!issueDropdownOpen);
+                            setOrderDropdownOpen(false);
+                        }}
+                        className="w-full h-12 rounded-2xl bg-[var(--color-surface-low)] px-5 text-sm font-bold text-[var(--color-on-surface)] flex items-center justify-between border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     >
-                        <option value="">What's the problem?</option>
-                        <option value="Damaged product">Damaged product</option>
-                        <option value="Wrong product delivered">Wrong product delivered</option>
-                        <option value="Missing item in order">Missing item in order</option>
-                        <option value="Product not working">Product not working</option>
-                        <option value="Other">Other</option>
-                    </select>
+                        <span className={form.issue_type ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
+                            {form.issue_type || "What's the problem?"}
+                        </span>
+                        <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${issueDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {issueDropdownOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setIssueDropdownOpen(false)} />
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                {[
+                                    "Damaged product",
+                                    "Wrong product delivered",
+                                    "Missing item in order",
+                                    "Product not working",
+                                    "Other"
+                                ].map(issue => (
+                                    <button
+                                        key={issue}
+                                        type="button"
+                                        onClick={() => {
+                                            setForm({ ...form, issue_type: issue });
+                                            setIssueDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                            form.issue_type === issue
+                                            ? 'bg-primary text-white'
+                                            : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span>{issue}</span>
+                                        {form.issue_type === issue && (
+                                            <Check size={14} className="text-white shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Description */}

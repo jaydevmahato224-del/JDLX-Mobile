@@ -95,13 +95,14 @@ const WarehouseOrders = () => {
     })
 
     const getStatusColor = (status) => {
-        switch (status) {
+        switch (status?.toLowerCase()) {
             case 'assigned': return 'bg-amber-500/10 text-amber-500 border-amber-500/20'
             case 'accepted': return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
             case 'packing': return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
             case 'packed': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
             case 'dispatched': return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-            case 'rejected': return 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+            case 'rejected': 
+            case 'cancelled': return 'bg-rose-500/10 text-rose-500 border-rose-500/20'
             default: return 'bg-slate-500/10 text-slate-500 border-slate-500/20'
         }
     }
@@ -152,9 +153,9 @@ const WarehouseOrders = () => {
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { label: 'Pending', count: orders.filter(o => ['assigned', 'accepted', 'packing'].includes(o.assignment_status)).length, icon: Clock, color: 'text-amber-500' },
-                    { label: 'Ready to Ship', count: orders.filter(o => o.assignment_status === 'packed').length, icon: Package, color: 'text-emerald-500' },
-                    { label: 'Dispatched', count: orders.filter(o => o.assignment_status === 'dispatched').length, icon: Truck, color: 'text-blue-500' },
+                    { label: 'Pending', count: orders.filter(o => ['assigned', 'accepted', 'packing'].includes(o.assignment_status) && o.order_status?.toUpperCase() !== 'CANCELLED').length, icon: Clock, color: 'text-amber-500' },
+                    { label: 'Ready to Ship', count: orders.filter(o => o.assignment_status === 'packed' && o.order_status?.toUpperCase() !== 'CANCELLED').length, icon: Package, color: 'text-emerald-500' },
+                    { label: 'Dispatched', count: orders.filter(o => o.assignment_status === 'dispatched' && o.order_status?.toUpperCase() !== 'CANCELLED').length, icon: Truck, color: 'text-blue-500' },
                     { label: 'Total Assigned', count: orders.length, icon: ShoppingBag, color: 'text-slate-400' }
                 ].map((stat, idx) => (
                     <div key={idx} className="warehouse-panel p-6 border-white/5 bg-slate-900/40 backdrop-blur-xl">
@@ -205,7 +206,7 @@ const WarehouseOrders = () => {
                     <div className="h-8 w-px bg-white/10 mx-2 hidden md:block" />
                     
                     <div className="flex items-center gap-2">
-                        {['all', 'assigned', 'accepted', 'packing', 'packed', 'dispatched'].map(status => (
+                        {['all', 'assigned', 'accepted', 'packing', 'packed', 'dispatched', 'cancelled'].map(status => (
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
@@ -260,6 +261,12 @@ const WarehouseOrders = () => {
                                                     {new Date(order.created_at).toLocaleString()}
                                                 </span>
                                             </div>
+                                            {order.order_status?.toUpperCase() === 'CANCELLED' && order.cancellation_reason && (
+                                                <div className="flex items-center gap-2 text-rose-500 mt-1.5 animate-in fade-in duration-300">
+                                                    <AlertCircle size={12} />
+                                                    <span className="text-[10px] font-black uppercase tracking-tighter">Reason: {order.cancellation_reason}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-6">
@@ -289,7 +296,11 @@ const WarehouseOrders = () => {
                                     </td>
                                     <td className="px-6 py-6 text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                            {order.assignment_status === 'assigned' && (
+                                            {(order.assignment_status?.toUpperCase() === 'CANCELLED' || order.order_status?.toUpperCase() === 'CANCELLED') ? (
+                                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[9px] font-black text-rose-400 uppercase tracking-widest">
+                                                    <XCircle size={12} /> Cancelled by User
+                                                </div>
+                                            ) : order.assignment_status === 'assigned' && (
                                                 <>
                                                     <button 
                                                         onClick={() => handleUpdateStatus(order.id, 'accepted')}

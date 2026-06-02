@@ -1,7 +1,7 @@
 import { Box, Check, Package, PackageCheck, Play } from 'lucide-react'
 
 const getStatusStyles = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
         case 'dispatched':
             return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
         case 'packed':
@@ -12,6 +12,8 @@ const getStatusStyles = (status) => {
             return 'border-violet-400/20 bg-violet-400/10 text-violet-300'
         case 'assigned':
             return 'border-white/10 bg-white/[0.04] text-slate-300'
+        case 'cancelled':
+            return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
         default:
             return 'border-white/10 bg-white/[0.04] text-slate-400'
     }
@@ -34,6 +36,14 @@ const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId =
     const renderActions = (order) => {
         const { id, assignment_status: status } = order
         const isUpdating = updatingOrderId === id
+
+        if (status?.toUpperCase() === 'CANCELLED' || order.order_status?.toUpperCase() === 'CANCELLED') {
+            return (
+                <span className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-xs font-black text-rose-300 uppercase tracking-widest">
+                    Cancelled by User
+                </span>
+            )
+        }
 
         if (status === 'assigned') {
             return (
@@ -146,6 +156,11 @@ const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId =
                                                     {order.product_names || order.products}
                                                 </p>
                                             ) : null}
+                                            {(order.assignment_status?.toUpperCase() === 'CANCELLED' || order.order_status?.toUpperCase() === 'CANCELLED') && order.cancellation_reason && (
+                                                <p className="mt-2 text-xs font-black text-rose-400 uppercase tracking-tight flex items-center gap-1.5 animate-in fade-in duration-300">
+                                                    Reason: {order.cancellation_reason}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 

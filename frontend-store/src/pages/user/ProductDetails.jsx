@@ -40,7 +40,7 @@ function getProductImages(product) {
 export default function ProductDetails() {
   const { id, token, slugToken } = useParams();
   const navigate = useNavigate();
-  const { products: storeProducts, fetchProducts, addToCart, cart, wishlist, toggleWishlist, updateQuantity, removeFromCart, deliveryMode, nearestStoreId, user, registerForNotification } = useStore();
+  const { products: storeProducts, fetchProducts, addToCart, cart, wishlist, toggleWishlist, updateQuantity, removeFromCart, user, registerForNotification } = useStore();
   const { trackEvent } = useAnalyticsContext();
   
   const [remoteProducts, setRemoteProducts] = useState([]);
@@ -172,14 +172,12 @@ export default function ProductDetails() {
   }, [cartItem?.device_model]);
 
   const deliveryTimeDisplay = useMemo(() => {
-    if (deliveryMode === 'quick' && nearestStoreId) return product?.delivery_time || '12-20 mins';
     return availability?.scheduled_delivery_time || 'Today / Tomorrow';
-  }, [deliveryMode, nearestStoreId, product, availability]);
+  }, [availability]);
 
   const deliveryNoteDisplay = useMemo(() => {
-    if (deliveryMode === 'quick' && nearestStoreId) return availability?.quick_delivery_note || 'Dispatch from the active dark store.';
     return availability?.scheduled_delivery_note || 'Reliable fulfillment from our central warehouse.';
-  }, [deliveryMode, nearestStoreId, availability]);
+  }, [availability]);
 
   useEffect(() => {
     if (product) {
@@ -196,11 +194,11 @@ export default function ProductDetails() {
   const productImages = useMemo(() => getProductImages(product), [product]);
   
   const highlights = useMemo(() => [
-    `${product?.category || 'Accessory'} essential ready for ${deliveryMode === 'quick' ? 'quick delivery' : 'secure fulfillment'}`,
+    `${product?.category || 'Accessory'} essential ready for secure fulfillment`,
     `Available quantity: ${stock}`,
     `Dispatch window: ${deliveryTimeDisplay}`,
-    deliveryMode === 'quick' ? 'Dark-store packed for instant express delivery' : 'Central warehouse dispatched for reliable fulfillment',
-  ], [product?.category, deliveryMode, stock, deliveryTimeDisplay]);
+    'Central warehouse dispatched for reliable fulfillment',
+  ], [product?.category, stock, deliveryTimeDisplay]);
 
   const handleAddToCart = useCallback((toCart = false) => {
     if (!product) return;
@@ -360,7 +358,7 @@ export default function ProductDetails() {
               <div className="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/20">
                 <div className="flex items-center gap-2 mb-3"><Zap size={16} className="text-amber-400" /><span className="ui-label text-slate-400">Dispatch</span></div>
                 <div className="text-xl font-black tracking-tight">{deliveryTimeDisplay}</div>
-                <p className="mt-1 text-[11px] font-bold text-slate-400">{deliveryMode === 'quick' ? '' : 'Standard'}</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-400">Standard</p>
               </div>
             </div>
 
@@ -400,7 +398,7 @@ export default function ProductDetails() {
             {/* Mobile-only Customization */}
             <div className="md:hidden space-y-6 mt-6">
                {requiresDeviceModel && <div className="p-6 rounded-[2.5rem] bg-slate-50 border border-slate-100" id="device-model-selector"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
-               {product.category_id === 7 && deliveryMode === 'quick' && (
+               {false && product.category_id === 7 && (
                   <div className="p-5 rounded-[2rem] bg-amber-50 border border-amber-100 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3"><div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-sm text-primary"><Truck size={24} /></div><div><p className="text-[13px] font-black text-slate-900 uppercase">Expert Fitting</p><p className="text-[10px] font-bold text-primary uppercase">Doorstep Installation</p></div></div>
                     <div className="flex items-center gap-4"><span className="text-sm font-black text-slate-900">₹{product.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40}</span>

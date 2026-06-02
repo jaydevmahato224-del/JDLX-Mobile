@@ -121,7 +121,7 @@ def get_my_orders_dropdown():
     try:
         # Fetch orders with product names for dropdown
         query = """
-            SELECT o.id, o.created_at, GROUP_CONCAT(p.name, ', ') as product_names
+            SELECT o.id, o.order_number, o.created_at, GROUP_CONCAT(p.name, ', ') as product_names
             FROM orders o
             JOIN order_items oi ON o.id = oi.order_id
             JOIN products p ON oi.product_id = p.id
@@ -135,6 +135,7 @@ def get_my_orders_dropdown():
         for row in rows:
             orders.append({
                 "id": row['id'],
+                "order_number": row['order_number'],
                 "created_at": row['created_at'],
                 "product_names": row['product_names']
             })

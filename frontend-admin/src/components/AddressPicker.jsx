@@ -32,7 +32,7 @@ function AddressPicker({ onSelect, onClose }) {
         if (!addressText) return;
         setSaving(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/address/add`, {
                 method: 'POST',
                 headers: {

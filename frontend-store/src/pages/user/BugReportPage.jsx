@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, Smartphone, Monitor, ShieldCheck, Globe } from 'lucide-react'
+import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, Smartphone, Monitor, ShieldCheck, Globe, ChevronDown, Check } from 'lucide-react'
 
 function BugReportPage() {
     const token = useStore.getState().token;
@@ -30,6 +30,7 @@ function BugReportPage() {
 
     const [screenshot, setScreenshot] = useState(null);
     const [preview, setPreview] = useState(null);
+    const [pageLocationDropdownOpen, setPageLocationDropdownOpen] = useState(false);
 
     useEffect(() => {
         if (!user) {
@@ -155,23 +156,55 @@ function BugReportPage() {
             <form onSubmit={handleSubmit} className="space-y-8 pb-20">
                 <div className="glass-card p-6 md:p-10 space-y-8">
                     {/* Page Location */}
-                    <div className="space-y-3">
+                    <div className="space-y-3 relative">
                         <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Where did the issue occur?</label>
-                        <select
-                            value={form.page_location}
-                            onChange={e => setForm({ ...form, page_location: e.target.value })}
-                            className="w-full h-14 rounded-2xl bg-gray-50 px-6 text-sm font-bold text-gray-900 border-2 border-transparent focus:border-primary/20 focus:bg-white transition-all outline-none"
+                        <button
+                            type="button"
+                            onClick={() => setPageLocationDropdownOpen(!pageLocationDropdownOpen)}
+                            className="w-full h-14 rounded-2xl bg-gray-50 px-6 text-sm font-bold text-gray-900 border-2 border-transparent focus:border-primary/20 focus:bg-white transition-all outline-none flex items-center justify-between"
                         >
-                            <option value="">Select Page...</option>
-                            <option value="Home page">Home page</option>
-                            <option value="Product listing">Product listing</option>
-                            <option value="Product detail page">Product detail page</option>
-                            <option value="Cart">Cart</option>
-                            <option value="Checkout / Payment">Checkout / Payment</option>
-                            <option value="My orders">My orders</option>
-                            <option value="Login / Signup">Login / Signup</option>
-                            <option value="Other">Other</option>
-                        </select>
+                            <span className={form.page_location ? 'text-gray-900' : 'text-gray-400'}>
+                                {form.page_location || "Select Page..."}
+                            </span>
+                            <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${pageLocationDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {pageLocationDropdownOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setPageLocationDropdownOpen(false)} />
+                                <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                    {[
+                                        "Home page",
+                                        "Product listing",
+                                        "Product detail page",
+                                        "Cart",
+                                        "Checkout / Payment",
+                                        "My orders",
+                                        "Login / Signup",
+                                        "Other"
+                                    ].map(loc => (
+                                        <button
+                                            key={loc}
+                                            type="button"
+                                            onClick={() => {
+                                                setForm({ ...form, page_location: loc });
+                                                setPageLocationDropdownOpen(false);
+                                            }}
+                                            className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
+                                                form.page_location === loc
+                                                ? 'bg-primary text-white'
+                                                : 'text-slate-700 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span>{loc}</span>
+                                            {form.page_location === loc && (
+                                                <Check size={14} className="text-white shrink-0" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Severity Selection */}

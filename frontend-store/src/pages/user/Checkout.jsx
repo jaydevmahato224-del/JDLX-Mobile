@@ -47,16 +47,6 @@ function Checkout() {
     const [checkingPincode, setCheckingPincode] = useState(false);
     const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
     const [pincodeMessage, setPincodeMessage] = useState('');
-    const deliveryMode = useStore(state => state.deliveryMode);
-    const nearestStoreId = useStore(state => state.nearestStoreId);
-    const isShiprocket = !nearestStoreId;
-    const codEnabledShiprocket = availability?.cod_enabled_shiprocket === true;
-
-    useEffect(() => {
-        if (isShiprocket && paymentMethod === 'COD' && !codEnabledShiprocket) {
-            setPaymentMethod('PREPAID');
-        }
-    }, [isShiprocket, paymentMethod, codEnabledShiprocket]);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
     // Derived values
@@ -150,8 +140,8 @@ function Checkout() {
         setTimeout(() => {
             setServiceability({
                 status: 'serviceable',
-                edd: new Date(Date.now() + (deliveryMode === 'quick' ? 30 * 60000 : 3 * 24 * 60 * 60 * 1000)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-                courier: deliveryMode === 'quick' ? 'JDLX' : 'Shiprocket Express'
+                edd: new Date(Date.now() + (3 * 24 * 60 * 60 * 1000)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+                courier: 'Shiprocket Express'
             });
             setCheckingPincode(false);
         }, 800);
@@ -202,8 +192,11 @@ function Checkout() {
     const showPriorityBadge = availability?.priority_dispatch_enabled !== false;
     const codAlertText = availability?.cod_alert_text || 'Save more with prepaid orders! FREE delivery on orders above ₹499.';
 
+    const isShiprocket = availability ? !availability.quick_mode_enabled : true;
+    const codEnabledShiprocket = availability ? availability.cod_enabled_shiprocket === true : false;
+
     // Delivery Charge Calculation
-    // Free delivery applies to ALL delivery types (quick + shiprocket)
+    // Free delivery applies to standard fulfillment.
     const deliveryCharge = (isFreeDeliveryEnabled && subtotal >= freeThreshold)
         ? 0
         : (paymentMethod === 'PREPAID' ? prepaidFee : codFee);
@@ -339,6 +332,7 @@ function Checkout() {
                                 'Authorization': `Bearer ${token}`
                             },
                             body: JSON.stringify({
+                                order_id: orderId,
                                 razorpay_order_id: response.razorpay_order_id,
                                 razorpay_payment_id: response.razorpay_payment_id,
                                 razorpay_signature: response.razorpay_signature
@@ -491,7 +485,7 @@ function Checkout() {
                 latitude: coords.latitude,
                 longitude: coords.longitude,
                 email: formData.email,
-                delivery_type: useStore.getState().deliveryMode,
+                delivery_type: 'scheduled',
                 customer_name: formData.name,
                 payment_type: paymentMethod,
                 offer_id: appliedOffer ? appliedOffer.offer_id : null,

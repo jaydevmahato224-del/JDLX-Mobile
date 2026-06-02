@@ -65,12 +65,12 @@ const PWAInstallBanner = () => {
   return (
     <>
     <div className="fixed bottom-28 left-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-8 duration-700">
-      <div className="mx-auto max-w-lg overflow-hidden rounded-[32px] border-4 border-white bg-white p-1 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] ring-1 ring-slate-200/50">
-        <div className="flex items-center gap-4 p-4 bg-gradient-to-br from-white to-slate-50/50">
+      <div className="mx-auto max-w-lg overflow-hidden rounded-[32px] border-4 border-white/70 bg-white/60 backdrop-blur-xl p-1 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] ring-1 ring-slate-200/30">
+        <div className="flex items-center gap-4 p-4 bg-transparent">
           {/* App Icon Glow */}
-          <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 to-violet-700 shadow-lg shadow-primary-500/20">
-            <Smartphone className="text-white" size={28} />
-            <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-amber-950 shadow-sm">
+          <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white/80 border border-white shadow-sm">
+            <img src="/logo192.png" alt="JDLX Mobile" className="w-10 h-10 object-contain rounded-xl" />
+            <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-amber-950 shadow-sm ring-2 ring-white">
               <Zap size={10} fill="currentColor" />
             </div>
           </div>
@@ -122,8 +122,8 @@ const PWAInstallBanner = () => {
             </button>
 
             <div className="flex flex-col items-center text-center mt-4">
-              <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/10 border border-primary/20 animate-bounce">
-                <Download className="w-8 h-8" />
+              <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-lg border border-slate-100/10 animate-bounce p-3">
+                <img src="/logo192.png" alt="JDLX Logo" className="w-full h-full object-contain" />
               </div>
               <h3 className="text-xl font-black mt-4 tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
               <p className="text-[13px] text-slate-400 mt-2 font-medium leading-relaxed">

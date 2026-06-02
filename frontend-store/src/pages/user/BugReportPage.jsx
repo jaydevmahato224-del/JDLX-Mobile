@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, Smartphone, Monitor, ShieldCheck, Globe, ChevronDown, Check } from 'lucide-react'
+import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, Smartphone, Monitor, ShieldCheck, Globe, ChevronDown, Check, Link2 } from 'lucide-react'
 
 function BugReportPage() {
     const token = useStore.getState().token;
@@ -315,7 +315,7 @@ function BugReportPage() {
                         </div>
                         <div className="space-y-1">
                             <div className="flex items-center gap-2 text-slate-500 mb-1">
-                                <Link size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Current URL</span>
+                                <Link2 size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Current URL</span>
                             </div>
                             <p className="font-bold text-xs truncate max-w-[150px]">{deviceInfo.page_url}</p>
                         </div>

@@ -82,6 +82,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
   const [loadingMore, setLoadingMore] = useState(false)  // legacy: true during pagination fetch
   const [initialLoading, setInitialLoading] = useState(true)   // NEW: blank-page skeleton
   const [pageRefreshing, setPageRefreshing] = useState(false)  // NEW: soft refresh overlay
+  const [isWakingUp, setIsWakingUp] = useState(false)      // NEW: server is waking up (cold start indicator)
 
   // ── Error / empty ──────────────────────────────────────────────────────────
   const [error, setError] = useState(null)
@@ -182,83 +183,103 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
         setLoadingMore(true)
       }
 
-      // Clear previous error
+      // Clear previous error and states
       setError(null)
       setHasError(false)
       setErrorMessage('')
       setIsEmpty(false)
+      setIsWakingUp(false)
 
-      // Keep enough headroom for a cold local backend or remote DB wake-up.
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), PRODUCTS_FETCH_TIMEOUT_MS);
+      // Start a 6-second timer to detect cold starts
+      const wakingUpTimerId = setTimeout(() => {
+        if (mountedRef.current) {
+          setIsWakingUp(true)
+        }
+      }, 6000)
+
+      const MAX_RETRIES = 2
+      const RETRY_DELAY_MS = 2500
+      let attempt = 0
+      let success = false
 
       try {
-        const url = buildProductsUrl(categoryId, page, searchQuery, storeId)
-        const params = { page: String(page), limit: String(pageSize) }
-        if (categoryId && categoryId !== 'All') params.category_id = String(categoryId)
-        if (searchQuery) params.q = searchQuery
-        if (storeId) params.store_id = String(storeId)
-
-        let response;
-        try {
-          response = await fetch(url, { signal: controller.signal });
-        } catch (fetchErr) {
-          // Typically TypeError if network is down or CORS failed or AbortError on timeout
-          if (!mountedRef.current) return;
-
-          if (fetchErr.name === 'AbortError') {
-            setHasError(true);
-            setErrorMessage('Unable to load products. Please refresh.');
-            setError('TimeoutError');
-          } else {
-            console.error('useSmartProductLoader: network error', fetchErr);
-            setHasError(true);
-            setErrorMessage('Network error. Please check your internet connection.');
-            setError('NetworkError'); // Use a specific string for legacy/animation logic if needed
+        while (attempt <= MAX_RETRIES && !success) {
+          if (attempt > 0) {
+            console.warn(`useSmartProductLoader: Retrying fetch due to timeout/network error (attempt ${attempt}/${MAX_RETRIES})...`)
+            // Wait before retrying
+            await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+            if (!mountedRef.current) return
           }
 
-          if (replace) setProducts([]);
-          setHasMore(false);
-          return;
-        } finally {
-          clearTimeout(timeoutId);
+          // Each attempt gets its own abort controller and timeout
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), PRODUCTS_FETCH_TIMEOUT_MS)
+
+          try {
+            const url = buildProductsUrl(categoryId, page, searchQuery, storeId)
+            const response = await fetch(url, { signal: controller.signal })
+            clearTimeout(timeoutId)
+
+            if (!response.ok) {
+              throw new Error(`Server error ${response.status}: ${response.statusText}`)
+            }
+            const data = await response.json()
+
+            if (!mountedRef.current) return
+
+            const nextBatch = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+
+            setProducts((prev) => {
+              if (replace) return nextBatch
+              const existingIds = new Set(prev.map((item) => item.id))
+              const deduped = nextBatch.filter((item) => !existingIds.has(item.id))
+              return [...prev, ...deduped]
+            })
+
+            setCurrentPage(page)
+            setHasMore(nextBatch.length === pageSize)
+            setIsEmpty(nextBatch.length === 0)
+
+            // Mark as successfully loaded at least once
+            setHasLoadedOnce(true)
+            success = true
+            return nextBatch
+          } catch (fetchErr) {
+            clearTimeout(timeoutId)
+            if (!mountedRef.current) return
+
+            attempt++
+
+            // If we have remaining retry attempts, print warning and continue loop
+            if (attempt <= MAX_RETRIES) {
+              continue
+            }
+
+            // No retries left, throw error to be handled by the outer catch block
+            throw fetchErr
+          }
         }
-
-        if (!response.ok) {
-          throw new Error(`Server error ${response.status}: ${response.statusText}`)
-        }
-        const data = await response.json()
-
-        if (!mountedRef.current) return;
-
-        const nextBatch = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
-
-        setProducts((prev) => {
-          if (replace) return nextBatch
-          const existingIds = new Set(prev.map((item) => item.id))
-          const deduped = nextBatch.filter((item) => !existingIds.has(item.id))
-          return [...prev, ...deduped]
-        })
-
-        setCurrentPage(page)
-        setHasMore(nextBatch.length === pageSize)
-        setIsEmpty(nextBatch.length === 0)
-
-        // Mark as successfully loaded at least once
-        setHasLoadedOnce(true)
-
-        return nextBatch
       } catch (err) {
         if (!mountedRef.current) return
-        console.error('useSmartProductLoader: fetch error', err)
-        const msg = err?.message || 'Failed to load products. Please try again.'
-        setError(msg)
-        setHasError(true)
-        setErrorMessage(msg)
+        console.error('useSmartProductLoader: fetch error after all attempts', err)
+        
+        if (err.name === 'AbortError') {
+          setHasError(true)
+          setErrorMessage('Unable to load products. Please refresh.')
+          setError('TimeoutError')
+        } else {
+          const msg = err?.message || 'Failed to load products. Please try again.'
+          setError(msg)
+          setHasError(true)
+          setErrorMessage(msg)
+        }
+        
         if (replace) setProducts([])
         setHasMore(false)
       } finally {
+        clearTimeout(wakingUpTimerId)
         if (mountedRef.current) {
+          setIsWakingUp(false)
           if (replace && !hasLoadedOnce) {
             // Anti-flicker: hold skeleton for at least MIN_SKELETON_MS
             clearInitialLoadingAfterDelay(fetchStart)
@@ -388,6 +409,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
     pageRefreshing,     // show soft top refresh indicator
     paginationLoading,  // show bottom load-more spinner
     loading,            // legacy compat
+    isWakingUp,         // NEW: backend server is spinning up
 
     // ── Error / empty ─────────────── Agent 2 consumes these ──
     hasError,

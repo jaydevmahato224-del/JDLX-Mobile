@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
-import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle, CheckCircle2, Shield } from 'lucide-react'
 
 import { usePWAInstall } from '../../hooks/usePWAInstall'
 import toast from 'react-hot-toast'
@@ -118,6 +118,7 @@ function Profile() {
         { icon: Gift, label: 'Coupons', path: '/profile/coupons', color: 'text-pink-500', bg: 'bg-pink-500/10' },
         { icon: Info, label: 'About Us', path: '/profile/about-site', color: 'text-primary-500', bg: 'bg-primary-500/10' },
         { icon: FileText, label: 'Terms', path: '/profile/terms', color: 'text-slate-700', bg: 'bg-slate-700/10' },
+        { icon: Shield, label: 'Privacy', path: '/profile/privacy', color: 'text-emerald-600', bg: 'bg-emerald-600/10' },
         { icon: HelpCircle, label: 'Support', path: '/profile/support', color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
         { icon: MessageSquare, label: 'My complaints', path: '/my-requests', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
         { icon: MessageCircle, label: 'Support tickets', path: '/profile/support', color: 'text-amber-600', bg: 'bg-amber-600/10' },

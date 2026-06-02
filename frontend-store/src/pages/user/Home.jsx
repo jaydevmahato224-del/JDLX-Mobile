@@ -382,6 +382,7 @@ export default function Home() {
     loadInitialProducts,
     loadMoreProducts,
     retryLoad,
+    isWakingUp,
   } = useSmartProductLoader(20)
 
   const [categories, setCategories] = useState([])
@@ -893,6 +894,15 @@ export default function Home() {
           <div className="h-10 w-1.5 bg-primary rounded-full shadow-[0_0_15px_rgba(245,158,11,0.4)]" />
           <h2 className="text-3xl font-black tracking-tight">Elite Catalog</h2>
         </div>
+        
+        {isWakingUp && initialLoading && !hasLoadedOnce && (
+          <div className="flex items-center gap-3 justify-center py-4 bg-amber-50/50 border border-amber-100/60 rounded-[20px] shadow-sm animate-pulse">
+            <Zap size={14} className="text-amber-500 animate-bounce" />
+            <p className="text-[10px] font-black text-amber-700 uppercase tracking-[0.2em]">
+              Waking up cloud server... Hang tight, almost ready! ✨
+            </p>
+          </div>
+        )}
         
         {initialLoading && !hasLoadedOnce ? (
           <ProductLoadingGrid count={8} />

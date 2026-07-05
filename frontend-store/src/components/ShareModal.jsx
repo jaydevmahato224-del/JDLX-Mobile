@@ -1,13 +1,14 @@
 import React, { useMemo } from 'react';
 import { X, MessageCircle, Send, Facebook, Twitter, Link as LinkIcon } from 'lucide-react';
-import { getProductUrl } from '../utils/productSlug';
+import { getProductShareUrl } from '../utils/productSlug';
 
 const ShareModal = ({ isOpen, onClose, product, url }) => {
   const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? window.location.origin 
     : 'https://jdlxmobile.in', []);
 
-  const internalShareUrl = useMemo(() => getProductUrl(product, origin), [product, origin]);
+  // Use short share URL format for social sharing
+  const internalShareUrl = useMemo(() => getProductShareUrl(product, origin), [product, origin]);
 
   const shareUrl = url || internalShareUrl;
     

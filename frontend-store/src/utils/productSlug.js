@@ -41,3 +41,20 @@ export const getProductUrl = (product, origin = '') => {
   const slug = generateProductSlug(product);
   return `${origin}/p/${slug}`;
 };
+
+/**
+ * Generates a short share URL using the product's share token.
+ * Returns /s/token format for shorter, cleaner sharing links.
+ * Perfect for WhatsApp, Telegram, and other social platforms.
+ * 
+ * @param {Object} product - The product object
+ * @param {string} origin - The site origin (optional)
+ * @returns {string} The short share URL
+ */
+export const getProductShareUrl = (product, origin = '') => {
+  if (!product || !product.share_token) {
+    // Fallback to full product URL if share token is missing
+    return getProductUrl(product, origin);
+  }
+  return `${origin}/s/${product.share_token}`;
+};

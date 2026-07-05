@@ -2452,47 +2452,186 @@ def get_recommendations():
         return error_response("Failed to fetch recommendations", 500)
 
 
-@app.route('/api/products/s/<token>', methods=['GET'])
-def get_product_by_token(token):
-    """Retrieves detailed information for a single product by its secure share token or SEO slug."""
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
+def resolve_product_id_from_token(token):
+    """Helper function to resolve product ID from share_token, seo_slug, or other formats."""
+    conn = get_db()
+    cursor = conn.cursor()
 
-        # 1. Try exact share_token lookup
-        cursor.execute("SELECT id FROM products WHERE share_token = ?", (token,))
+    # 1. Try exact share_token lookup
+    cursor.execute("SELECT id FROM products WHERE share_token = ?", (token,))
+    row = cursor.fetchone()
+
+    # 2. Try exact seo_slug lookup
+    if not row:
+        cursor.execute("SELECT id FROM products WHERE seo_slug = ?", (token,))
         row = cursor.fetchone()
 
-        # 2. Try exact seo_slug lookup
-        if not row:
-            cursor.execute("SELECT id FROM products WHERE seo_slug = ?", (token,))
+    # 3. Try parsing slug-token format (e.g. name-slug-TOKEN)
+    if not row and '-' in token:
+        parts = token.split('-')
+        potential_token = parts[-1]
+        
+        # Try matching by share_token
+        cursor.execute("SELECT id FROM products WHERE share_token = ?", (potential_token,))
+        row = cursor.fetchone()
+        
+        # If still not found and potential_token is numeric, try as ID
+        if not row and potential_token.isdigit():
+            cursor.execute("SELECT id FROM products WHERE id = ?", (int(potential_token),))
             row = cursor.fetchone()
 
-        # 3. Try parsing slug-token format (e.g. name-slug-TOKEN)
-        if not row and '-' in token:
-            parts = token.split('-')
-            potential_token = parts[-1]
-            
-            # Try matching by share_token
-            cursor.execute("SELECT id FROM products WHERE share_token = ?", (potential_token,))
-            row = cursor.fetchone()
-            
-            # If still not found and potential_token is numeric, try as ID
-            if not row and potential_token.isdigit():
-                cursor.execute("SELECT id FROM products WHERE id = ?", (int(potential_token),))
-                row = cursor.fetchone()
+    # 4. Try exact ID lookup as last resort (for migration/redirect support)
+    if not row and token.isdigit():
+        cursor.execute("SELECT id FROM products WHERE id = ?", (int(token),))
+        row = cursor.fetchone()
+        
+    conn.close()
+    return row['id'] if row else None
 
-        # 4. Try exact ID lookup as last resort (for migration/redirect support)
-        if not row and token.isdigit():
-            cursor.execute("SELECT id FROM products WHERE id = ?", (int(token),))
-            row = cursor.fetchone()
-            
-        if not row:
-            conn.close()
-            return error_response("Product not found", 404)
 
-        product_id = row['id']
+@app.route('/s/<token>', methods=['GET'])
+def share_product_html(token):
+    """Serves product page with OG meta tags for social media sharing (for crawlers)."""
+    try:
+        product_id = resolve_product_id_from_token(token)
+        if not product_id:
+            return redirect('/', code=302)
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT p.id, p.name, p.price, p.description, p.images, p.share_token, p.seo_slug
+            FROM products p 
+            WHERE p.id = ?
+        """, (product_id,))
+        product = cursor.fetchone()
         conn.close()
+        
+        if not product:
+            return redirect('/', code=302)
+        
+        # Extract first image
+        images_data = product['images'] or ''
+        first_image = ''
+        if images_data:
+            try:
+                if images_data.startswith('['):
+                    images_list = json.loads(images_data)
+                    if images_list and len(images_list) > 0:
+                        first_image = images_list[0]
+                else:
+                    first_image = images_data
+            except:
+                first_image = images_data if images_data else ''
+        
+        # Ensure image URL is absolute and publicly accessible
+        if first_image and not first_image.startswith('http'):
+            first_image = 'https://jdlx-mobile.onrender.com' + ('' if first_image.startswith('/') else '/') + first_image
+        
+        # Use fallback logo if no image
+        if not first_image:
+            first_image = 'https://jdlxmobile.in/logo512.png'
+        
+        product_name = product['name'] or 'Premium Product'
+        product_desc = product['description'] or 'Check out this amazing product from JDLX Mobile'
+        product_price = product['price'] or 0
+        share_token = product['share_token'] or token
+        
+        # Build the full product URL
+        product_url = f"https://jdlxmobile.in/s/{share_token}"
+        
+        # Build the HTML response with OG meta tags
+        html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <title>{product_name} | JDLX MOBILE</title>
+    <meta name="description" content="Buy {product_name} for only ₹{product_price}. {product_desc}">
+    <meta name="keywords" content="JDLX, Mobile Accessories, {product_name}">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="product">
+    <meta property="og:url" content="{product_url}">
+    <meta property="og:title" content="{product_name} | JDLX MOBILE">
+    <meta property="og:description" content="Buy {product_name} for only ₹{product_price}. {product_desc}">
+    <meta property="og:image" content="{first_image}">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:site_name" content="JDLX MOBILE">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{product_url}">
+    <meta property="twitter:title" content="{product_name} | JDLX MOBILE">
+    <meta property="twitter:description" content="Buy {product_name} for only ₹{product_price}. {product_desc}">
+    <meta property="twitter:image" content="{first_image}">
+    
+    <!-- Redirect to React app after 1 second (for user experience) -->
+    <meta http-equiv="refresh" content="1;url=https://jdlxmobile.in/product/{product_id}/{share_token}">
+    <link rel="canonical" href="{product_url}">
+    
+    <style>
+        body {{
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8fafc;
+            text-align: center;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 50px auto;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }}
+        h1 {{ color: #0f172a; margin: 20px 0; }}
+        p {{ color: #64748b; font-size: 16px; }}
+        .price {{ font-size: 28px; color: #f59e0b; font-weight: bold; margin: 20px 0; }}
+        img {{ max-width: 100%; height: auto; margin: 20px 0; border-radius: 12px; }}
+        .spinner {{
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #f59e0b;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>{product_name}</h1>
+        <p className="price">₹{product_price}</p>
+        <p>{product_desc}</p>
+        <p style="margin-top: 30px; color: #999; font-size: 14px;">Redirecting to JDLX Mobile...</p>
+    </div>
+</body>
+</html>
+"""
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        logger.error(f"Error generating share product HTML: {str(e)}")
+        return redirect('/', code=302)
+
+
+@app.route('/api/products/s/<token>', methods=['GET'])
+def get_product_by_token(token):
+    """Retrieves detailed information for a single product by its secure share token or SEO slug (JSON API)."""
+    try:
+        product_id = resolve_product_id_from_token(token)
+        if not product_id:
+            return error_response("Product not found", 404)
+        
         return get_product(product_id)
     except Exception as e:
         logger.error(f"Error fetching product by token: {str(e)}")

@@ -2,11 +2,23 @@ from functools import wraps
 import os
 
 import jwt
-from flask import jsonify, request
+from flask import current_app, jsonify, request
 
 
 ALLOWED_ROLES = {"user", "admin", "super_admin"}
-SECRET_KEY = os.environ.get("JWT_SECRET", "")
+
+
+def get_jwt_secret():
+    """Retrieves the active JWT secret key dynamically from environment or Flask app context."""
+    secret = os.environ.get("JWT_SECRET")
+    if secret:
+        return secret
+    try:
+        if current_app and current_app.secret_key:
+            return current_app.secret_key
+    except Exception:
+        pass
+    return ""
 
 
 def normalize_role(role):
@@ -34,8 +46,9 @@ def _decode_bearer_token():
         return None, ("Token is invalid!", 401)
 
     token = parts[1].strip()
+    secret = get_jwt_secret()
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
     except Exception:
         return None, ("Token is invalid!", 401)
     return payload, None

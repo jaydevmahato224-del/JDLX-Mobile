@@ -178,22 +178,24 @@ def sync_to_shiprocket(order_data, cursor):
 def shiprocket_webhook():
     """Handles status updates from Shiprocket."""
     # 1. Verify token (Authenticity Check)
-    token = request.headers.get('x-api-key') # Shiprocket often uses x-api-key for webhooks
+    token = request.headers.get('x-api-key') or request.headers.get('X-Api-Key') or request.headers.get('Authorization')
+    if token and token.startswith('Bearer '):
+        token = token[7:]
     
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT value FROM system_settings WHERE key = 'shiprocket_token'")
     row = cursor.fetchone()
-    expected_token = row['value'] if row else None
+    expected_token = (row['value'] if row and row['value'] else None) or os.environ.get('SHIPROCKET_WEBHOOK_TOKEN')
     
-    # Optional: If token verification is strictly required by the user, but not configured
-    # we log it but proceed if it's a test or until configured.
-    # However, for production we should be strict.
-    if expected_token and token != expected_token:
-         return error_response("Unauthorized", 401)
+    if expected_token:
+        if not token or token != expected_token:
+            conn.close()
+            return error_response("Unauthorized webhook request", 401)
 
     data = request.json
     if not data:
+        conn.close()
         return error_response("Invalid payload", 400)
 
     # Log the incoming webhook for debugging
@@ -2104,13 +2106,14 @@ def update_server_cart():
 
 
 @app.route('/api/products/<int:product_id>/notify', methods=['POST'])
+@limiter.limit("5 per minute")
 def register_product_notification(product_id):
-    data = request.json
-    email = data.get('email')
+    data = request.json or {}
+    email = (data.get('email') or '').strip().lower()
     user_id = data.get('user_id') # Optional
     
-    if not email:
-        return error_response("Email is required", 400)
+    if not email or '@' not in email or '.' not in email:
+        return error_response("Valid email is required", 400)
         
     conn = get_db()
     cursor = conn.cursor()
@@ -2122,6 +2125,16 @@ def register_product_notification(product_id):
         if not product:
             return error_response("Product not found", 404)
             
+        # Check if already subscribed to prevent spamming duplicate confirmation emails
+        cursor.execute("""
+            SELECT id FROM product_notifications 
+            WHERE email = ? AND product_id = ?
+        """, (email, product_id))
+        existing = cursor.fetchone()
+
+        if existing:
+            return jsonify({"success": True, "message": "Notification alert active!"})
+
         # Register notification
         cursor.execute("""
             INSERT INTO product_notifications (user_id, email, product_id)
@@ -2129,7 +2142,10 @@ def register_product_notification(product_id):
         """, (user_id, email, product_id))
         
         # Send confirmation email
-        send_availability_subscription_confirmation(email, product['name'])
+        try:
+            send_availability_subscription_confirmation(email, product['name'])
+        except Exception as mail_err:
+            logger.error(f"Failed to send restock confirmation email to {email}: {mail_err}")
         
         # Create in-app notification if user is logged in
         if user_id:
@@ -2215,6 +2231,9 @@ def get_brands():
 
 
 @app.route('/api/brands', methods=['POST'])
+@token_required
+@require_admin()
+@require_permission("manage_products")
 def create_brand():
     """Creates a new brand."""
     data = request.json or {}
@@ -3062,7 +3081,13 @@ def checkout():
 
         for item in items:
             item['id'] = int(item.get('id'))
-            item['qty'] = int(item.get('qty') or item.get('quantity', 1))
+            try:
+                qty = int(item.get('qty') or item.get('quantity', 1))
+            except (ValueError, TypeError):
+                qty = 1
+            if qty <= 0:
+                return error_response(f"Quantity for product {item.get('id')} must be at least 1", 400)
+            item['qty'] = qty
             product = product_meta.get(item['id'])
             if not product:
                 return error_response(f"Product {item.get('id')} not found", 404)
@@ -3300,6 +3325,13 @@ def checkout():
         # 5. Sync with Shiprocket for COD orders.
         # Prepaid orders will sync in verify_payment after successful payment.
         if payment_type == 'COD':
+            if pay_now_amount <= 0:
+                try:
+                    confirm_order_and_decrement_stock_logic(cursor, order_id)
+                except Exception as conf_err:
+                    logger.error(f"Failed to confirm stock for COD order #{order_id}: {conf_err}")
+                    conn.rollback()
+                    return error_response(f"Insufficient stock to fulfill order: {str(conf_err)}", 400)
             try:
                 order_payload = {
                     "order_number": order_number,

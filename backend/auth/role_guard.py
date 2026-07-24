@@ -9,10 +9,17 @@ ALLOWED_ROLES = {"user", "admin", "super_admin"}
 
 
 def get_jwt_secret():
-    """Retrieves the active JWT secret key dynamically from environment or Flask app context."""
+    """Retrieves the active JWT secret key dynamically from config, environment, or Flask app context."""
+    try:
+        if current_app and current_app.config.get("JWT_SECRET"):
+            return current_app.config["JWT_SECRET"]
+    except Exception:
+        pass
+
     secret = os.environ.get("JWT_SECRET")
     if secret:
         return secret
+
     try:
         if current_app and current_app.secret_key:
             return current_app.secret_key

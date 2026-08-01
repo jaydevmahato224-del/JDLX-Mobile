@@ -15,3 +15,5 @@ dist/
 .next/
 *.log
 .venv/
+.aider*
+!.aider.md

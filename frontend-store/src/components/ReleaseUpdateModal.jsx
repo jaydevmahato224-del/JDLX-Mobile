@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Sparkles, X } from 'lucide-react'
 import { CUSTOMER_RELEASE_UPDATES } from '../config/releaseUpdates'
-import { useStore } from '../store/useStore'
 
 const STORAGE_KEY = 'jdlx_customer_seen_release_update'
 
 export default function ReleaseUpdateModal() {
   const release = CUSTOMER_RELEASE_UPDATES
-  const theme = useStore((state) => state.theme)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -43,10 +41,8 @@ export default function ReleaseUpdateModal() {
 
   if (!open || releaseItems.length === 0) return null
 
-  const isDark = theme === 'dark'
-
   return (
-    <div className={`${isDark ? 'dark' : ''} fixed inset-0 z-[1000] flex items-end justify-center px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md sm:items-center sm:p-6 ${isDark ? 'bg-black/72' : 'bg-slate-900/35'}`}>
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-900/35 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md dark:bg-black/72 sm:items-center sm:p-6">
       <div className="w-full max-w-md overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 dark:border-white/10 dark:bg-neutral-950 dark:shadow-black/60">
         <div className="max-h-[calc(100dvh-24px)] overflow-y-auto">
         <div className="relative border-b border-slate-200 bg-slate-50 px-5 py-5 dark:border-white/10 dark:bg-neutral-900 sm:px-6">
@@ -64,9 +60,9 @@ export default function ReleaseUpdateModal() {
           <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">
             {release.releasedAt}
           </p>
-          <h2 className="mt-2 text-2xl font-black tracking-normal text-slate-950 dark:text-white">
+          <div className="mt-2 text-2xl font-black tracking-normal text-slate-950 dark:text-white" role="heading" aria-level="2">
             {release.title}
-          </h2>
+          </div>
           <p className="mt-2 pr-8 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200">
             {release.subtitle}
           </p>
@@ -77,7 +73,7 @@ export default function ReleaseUpdateModal() {
             <div key={item.title} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[0.06]">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div>
-                <h3 className="text-sm font-black tracking-normal text-slate-950 dark:text-white">{item.title}</h3>
+                <div className="text-sm font-black tracking-normal text-slate-950 dark:text-white" role="heading" aria-level="3">{item.title}</div>
                 <p className="mt-1 text-xs font-medium leading-5 text-slate-700 dark:text-slate-200">{item.description}</p>
               </div>
             </div>

@@ -9,6 +9,7 @@ import PWAInstallBanner from './PWAInstallBanner'
 import LocationManager from './LocationManager'
 import TermsGate from './TermsGate'
 import Footer from './Footer'
+import ReleaseUpdateModal from './ReleaseUpdateModal'
 
 function Layout({ children }) {
   const location = useLocation()
@@ -169,6 +170,7 @@ function Layout({ children }) {
       <LiquidBottomNav cartItemCount={cartItemCount} user={user} />
 
       <TermsGate />
+      <ReleaseUpdateModal />
       <PWAInstallBanner />
       <LocationManager />
     </div>

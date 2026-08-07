@@ -60,9 +60,9 @@ export default function ReleaseUpdateModal() {
                     <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">
                         {release.releasedAt}
                     </p>
-                    <h2 className="mt-2 text-2xl font-black tracking-normal text-white">
+                    <div className="mt-2 text-2xl font-black tracking-normal text-white" role="heading" aria-level="2">
                         {release.title}
-                    </h2>
+                    </div>
                     <p className="mt-2 pr-8 text-sm font-semibold leading-6 text-slate-200">
                         {release.subtitle}
                     </p>
@@ -73,7 +73,7 @@ export default function ReleaseUpdateModal() {
                         <div key={item.title} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
                             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
                             <div>
-                                <h3 className="text-sm font-black tracking-normal text-white">{item.title}</h3>
+                                <div className="text-sm font-black tracking-normal text-white" role="heading" aria-level="3">{item.title}</div>
                                 <p className="mt-1 text-xs font-medium leading-5 text-slate-200">{item.description}</p>
                             </div>
                         </div>

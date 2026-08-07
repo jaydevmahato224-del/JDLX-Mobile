@@ -12,6 +12,7 @@ import { GlobalErrorOverlay } from './components/ErrorScreens'
 import UnderConstructionOverlay from './components/UnderConstructionOverlay'
 import PWAInstalledCelebration from './components/PWAInstalledCelebration'
 import AppReviewPrompt from './components/AppReviewPrompt'
+import ReleaseUpdateModal from './components/ReleaseUpdateModal'
 import { useAppReview } from './hooks/useAppReview'
 import { useStore } from './store/useStore'
 import { useLoadingStore } from './store/useLoadingStore'
@@ -354,6 +355,7 @@ function App() {
       <GlobalErrorOverlay />
       <PWAInstalledCelebration />
       <AppReviewPrompt show={showPrompt} reason={promptReason} onDismiss={dismissPrompt} />
+      <ReleaseUpdateModal />
       <PushNotificationManager />
       <TopLoader />
       <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />

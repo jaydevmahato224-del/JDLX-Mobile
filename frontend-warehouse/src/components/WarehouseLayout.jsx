@@ -3,6 +3,7 @@ import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, War
 import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL } from '../config'
+import ReleaseUpdateModal from './ReleaseUpdateModal'
 
 export default function WarehouseLayout() {
     const location = useLocation();
@@ -150,6 +151,8 @@ export default function WarehouseLayout() {
 
     return (
         <div className="flex h-screen overflow-hidden bg-[#0f172a]">
+            <ReleaseUpdateModal />
+
             {/* Sidebar Overlay */}
             {isSidebarOpen && (
                 <div 

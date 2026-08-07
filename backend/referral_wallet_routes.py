@@ -1,7 +1,8 @@
-import os
 from flask import Blueprint, jsonify, request, g, current_app
 from functools import wraps
 import jwt
+
+from jwt_config import get_jwt_secret
 
 from database import get_db
 from utils.wallet import get_wallet_balance, get_wallet_transactions, deduct_wallet_balance
@@ -23,7 +24,7 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
             
         try:
-            secret = current_app.config.get('JWT_SECRET') or current_app.secret_key or os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+            secret = current_app.config.get('JWT_SECRET') or get_jwt_secret()
             data = jwt.decode(token, secret, algorithms=["HS256"])
             g.user_id = data['user_id']
             # Optional: Check if user exists in DB
@@ -180,8 +181,33 @@ def apply_wallet_to_order():
     
     if not amount or amount <= 0:
         return jsonify({'message': 'Invalid amount.'}), 400
+    if not order_id or str(order_id).upper() == 'PENDING':
+        return jsonify({'message': 'A valid order_id is required.'}), 400
+
+    # Verify the order exists, belongs to this user and is still applicable.
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'message': 'Order not found.'}), 404
+        if order['user_id'] != user_id:
+            return jsonify({'message': 'This order does not belong to you.'}), 403
+        if order['order_status'] != 'PLACED':
+            return jsonify({'message': 'Wallet balance can only be applied to a PLACED order.'}), 400
+
+        # Prevent applying wallet balance to the same order more than once.
+        cursor.execute(
+            "SELECT COUNT(*) FROM wallet_transactions WHERE type = 'debit' AND user_id = ? AND reference_id = ?",
+            (user_id, str(order_id))
+        )
+        if cursor.fetchone()[0] > 0:
+            return jsonify({'message': 'Wallet balance already applied to this order.'}), 400
+    finally:
+        conn.close()
         
-    success = deduct_wallet_balance(user_id, amount, f"Applied to Order {order_id}", order_id)
+    success = deduct_wallet_balance(user_id, amount, f"Applied to Order {order_id}", str(order_id))
     if success:
         return jsonify({'message': 'Wallet balance applied successfully.'})
     else:
@@ -236,3 +262,5 @@ def admin_wallet_stats():
         'total_credits': total_credits,
         'total_debits': total_debits
     })
+
+

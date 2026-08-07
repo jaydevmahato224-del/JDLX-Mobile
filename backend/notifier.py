@@ -765,3 +765,69 @@ def send_security_logout_email(to_email, user_name):
     except Exception as e:
         print(f"[SECURITY MAIL ERROR] Failed to send logout notification: {e}")
         return False
+
+def send_staff_billing_setup_email(to_email, staff_name, warehouse_name, setup_link, role_name="Billing Agent"):
+    """
+    Sends an invitation email to a newly registered warehouse staff member / agent
+    with a link to generate their password for the first time and access the billing app.
+    """
+    msg = MIMEMultipart()
+    msg['From'] = f"JDLX Warehouse Portal <{GMAIL_USER}>"
+    msg['To'] = to_email
+    msg['Subject'] = f"Billing Access Granted - Setup Your Account for {warehouse_name}"
+
+    body = f"""
+    <div style="font-family: 'Inter', -apple-system, sans-serif; max-width: 600px; margin: 20px auto; color: #1e293b; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.02em;">JDLX MOBILE WAREHOUSE</h1>
+            <p style="color: #38bdf8; font-size: 14px; margin-top: 6px; font-weight: 600;">Staff & Billing Access Invitation</p>
+        </div>
+        
+        <div style="padding: 35px 30px;">
+            <h2 style="font-size: 20px; color: #0f172a; margin-top: 0;">Hello {staff_name},</h2>
+            <p style="font-size: 15px; color: #475569; line-height: 1.6;">
+                You have been assigned the <strong>{role_name}</strong> role by your Warehouse Manager at <strong>{warehouse_name}</strong>.
+            </p>
+            <p style="font-size: 15px; color: #475569; line-height: 1.6;">
+                You can now log in to access the POS Billing System, generate invoices, manage counter sales, and install the Billing App directly on your device.
+            </p>
+            
+            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
+                <p style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: #334155;">
+                    Click the button below to generate your password for the first time:
+                </p>
+                <a href="{setup_link}" style="background: #2563eb; color: #ffffff; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                    Generate Password & Activate Account
+                </a>
+            </div>
+            
+            <p style="font-size: 13px; color: #64748b; margin-top: 25px; line-height: 1.5;">
+                If the button above does not work, copy and paste this link into your browser:<br/>
+                <a href="{setup_link}" style="color: #2563eb; word-break: break-all;">{setup_link}</a>
+            </p>
+        </div>
+        
+        <div style="background: #f1f5f9; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+                &copy; {datetime.datetime.now().year} JDLX Mobile. All rights reserved.
+            </p>
+        </div>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        if GMAIL_USER and GMAIL_PASS:
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(GMAIL_USER, GMAIL_PASS)
+            server.sendmail(GMAIL_USER, to_email, msg.as_string())
+            server.quit()
+            print(f"[STAFF MAIL SUCCESS] Sent billing setup email to {to_email}")
+        else:
+            print(f"[STAFF MAIL SIMULATED] Setup link for {to_email}: {setup_link}")
+        return True
+    except Exception as e:
+        print(f"[STAFF MAIL ERROR] Failed to send email to {to_email}: {e}")
+        return False
+

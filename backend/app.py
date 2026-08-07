@@ -4,6 +4,7 @@
 
 # --- Standard Library Imports ---
 import datetime
+import html
 import hashlib
 import hmac
 import json
@@ -61,7 +62,7 @@ from report_routes import report_bp
 from refund_routes import refund_bp
 from bug_routes import bug_bp
 from issue_routes import issue_bp
-from offer_routes import offer_bp
+from offer_routes import offer_bp, calculate_discount
 from analytics_routes import analytics_bp
 from app_review_routes import app_review_bp, check_and_trigger_review
 from payment_routes import payment_bp
@@ -174,10 +175,17 @@ def sync_to_shiprocket(order_data, cursor):
     
     return sr.create_order(order_data)
 
+# M1 fix: whitelist of valid Shiprocket-driven order status transitions.
+SHIPROCKET_ALLOWED_TRANSITIONS = {
+    'SHIPPED': {'PLACED', 'CONFIRMED', 'PACKED', 'SHIPPED'},
+    'DELIVERED': {'PLACED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'OUT_FOR_DELIVERY'},
+}
+
 @app.route('/api/webhook/shiprocket', methods=['POST'])
 def shiprocket_webhook():
     """Handles status updates from Shiprocket."""
-    # 1. Verify token (Authenticity Check)
+    # 1. Verify token (Authenticity Check) - M1 fix: token is MANDATORY and the
+    #    endpoint fails closed when it is not configured.
     token = request.headers.get('x-api-key') or request.headers.get('X-Api-Key') or request.headers.get('Authorization')
     if token and token.startswith('Bearer '):
         token = token[7:]
@@ -188,10 +196,14 @@ def shiprocket_webhook():
     row = cursor.fetchone()
     expected_token = (row['value'] if row and row['value'] else None) or os.environ.get('SHIPROCKET_WEBHOOK_TOKEN')
     
-    if expected_token:
-        if not token or token != expected_token:
-            conn.close()
-            return error_response("Unauthorized webhook request", 401)
+    if not expected_token:
+        logger.error("Shiprocket webhook token is not configured - rejecting webhook request")
+        conn.close()
+        return error_response("Webhook token not configured", 503)
+    
+    if not token or not hmac.compare_digest(token, expected_token):
+        conn.close()
+        return error_response("Unauthorized webhook request", 401)
 
     data = request.json
     if not data:
@@ -223,13 +235,29 @@ def shiprocket_webhook():
     if new_jdlx_status:
         try:
             # Update order based on shiprocket_order_id
-            cursor.execute("SELECT id, user_id, total_amount FROM orders WHERE shiprocket_order_id = ?", (sr_order_id,))
+            cursor.execute("SELECT id, user_id, total_amount, order_status FROM orders WHERE shiprocket_order_id = ?", (sr_order_id,))
             order = cursor.fetchone()
             
             if order:
                 order_id = order['id']
                 user_id = order['user_id']
                 order_amount = order['total_amount']
+                current_status = order['order_status'] or 'PLACED'
+                
+                # M1 fix: validate status transitions - no backwards jumps and no
+                # updates to terminal (cancelled/refunded/delivered) orders.
+                if current_status == new_jdlx_status:
+                    conn.commit()
+                    return success_response({"status": "already_up_to_date", "order_id": order_id})
+                if current_status in ('CANCELLED', 'REFUNDED'):
+                    logger.warning(f"Rejecting Shiprocket webhook for order #{order_id}: order is {current_status}, cannot move to {new_jdlx_status}")
+                    conn.commit()
+                    return success_response({"status": "ignored", "reason": f"order already {current_status}"})
+                allowed_from = SHIPROCKET_ALLOWED_TRANSITIONS.get(new_jdlx_status, set())
+                if current_status not in allowed_from:
+                    logger.warning(f"Rejecting Shiprocket webhook for order #{order_id}: invalid transition {current_status} -> {new_jdlx_status}")
+                    conn.commit()
+                    return success_response({"status": "ignored", "reason": f"invalid transition {current_status} -> {new_jdlx_status}"})
                 
                 # Update status and timestamp
                 cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_jdlx_status, order_id))
@@ -2551,10 +2579,11 @@ def share_product_html(token):
         if not first_image:
             first_image = 'https://jdlxmobile.in/logo512.png'
         
-        product_name = product['name'] or 'Premium Product'
-        product_desc = product['description'] or 'Check out this amazing product from JDLX Mobile'
-        product_price = product['price'] or 0
-        share_token = product['share_token'] or token
+        product_name = html.escape(product['name'] or 'Premium Product')
+        product_desc = html.escape(product['description'] or 'Check out this amazing product from JDLX Mobile')
+        product_price = html.escape(str(product['price'] or 0))
+        share_token = html.escape(product['share_token'] or token)
+        escaped_image = html.escape(first_image)
         
         # Build the full product URL
         product_url = f"https://jdlxmobile.in/s/{share_token}"
@@ -2577,7 +2606,7 @@ def share_product_html(token):
     <meta property="og:url" content="{product_url}">
     <meta property="og:title" content="{product_name} | JDLX MOBILE">
     <meta property="og:description" content="Buy {product_name} for only ₹{product_price}. {product_desc}">
-    <meta property="og:image" content="{first_image}">
+    <meta property="og:image" content="{escaped_image}">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:site_name" content="JDLX MOBILE">
     
@@ -2586,7 +2615,7 @@ def share_product_html(token):
     <meta property="twitter:url" content="{product_url}">
     <meta property="twitter:title" content="{product_name} | JDLX MOBILE">
     <meta property="twitter:description" content="Buy {product_name} for only ₹{product_price}. {product_desc}">
-    <meta property="twitter:image" content="{first_image}">
+    <meta property="twitter:image" content="{escaped_image}">
     
     <!-- Redirect to React app after 1 second (for user experience) -->
     <meta http-equiv="refresh" content="1;url=https://jdlxmobile.in/product/{product_id}/{share_token}">
@@ -3071,7 +3100,7 @@ def checkout():
 
         placeholders = ",".join(["?"] * len(product_ids))
         cursor.execute(f"""
-            SELECT p.id, p.name, p.category, p.stock, p.prepaid_only, c.name as category_name,
+            SELECT p.id, p.name, p.category, p.stock, p.prepaid_only, p.price, p.sub_category, c.name as category_name,
                    COALESCE(c.device_customization_enabled, 0) as device_customization_enabled
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
@@ -3176,7 +3205,7 @@ def checkout():
             product = product_meta.get(item['id'])
             if item.get('variant_id'):
                 cursor.execute(
-                    "SELECT stock, name FROM product_variants WHERE id = ? AND product_id = ?",
+                    "SELECT stock, name, price FROM product_variants WHERE id = ? AND product_id = ?",
                     (item.get('variant_id'), item['id'])
                 )
                 stock_row = cursor.fetchone()
@@ -3184,9 +3213,11 @@ def checkout():
                     return error_response(f"Variant for product {item['id']} not found", 404)
                 available_stock = int(stock_row['stock'] or 0)
                 stock_name = stock_row['name'] or product['name']
+                item['price'] = float(stock_row['price'] if stock_row['price'] is not None else (product.get('price') or 0))
             else:
                 available_stock = int(product.get('stock') or 0)
                 stock_name = product['name']
+                item['price'] = float(product.get('price') or 0)
 
             if available_stock < item['qty']:
                 return error_response(
@@ -3196,6 +3227,10 @@ def checkout():
 
             if product and product.get('prepaid_only'):
                 is_prepaid_only_order = True
+
+        # C2 fix: recompute order total from DB prices x quantity.
+        # The client-supplied total_amount and item prices are never trusted.
+        total_amount = round(sum(float(item['price']) * item['qty'] for item in items), 2)
 
         # Get dynamic fees from settings
         cursor.execute("SELECT key, value FROM system_settings WHERE key IN ('platform_fee', 'free_delivery_threshold', 'delivery_fee', 'prepaid_delivery_charge', 'cod_delivery_charge', 'cod_advance_amount', 'cod_enabled', 'cod_enabled_shiprocket', 'free_delivery_enabled', 'auto_cod_protection')")
@@ -3264,8 +3299,71 @@ def checkout():
         else: # COD
             actual_delivery_fee = cod_fee
 
-        fitting_charge = float(data.get('fitting_charge', 0) or 0)
-        discount_applied = max(0, float(data.get('discount_applied', 0) or 0))
+        # C2 fix: fitting charge is derived from business rules and DB product data,
+        # not trusted from the client. UV glass fitting = Rs.80, other fitting = Rs.40.
+        fitting_charge = 0.0
+        for item in items:
+            client_fc = 0
+            try:
+                client_fc = float(item.get('fitting_charge') or 0)
+            except (TypeError, ValueError):
+                client_fc = 0
+            if client_fc < 0:
+                return error_response("Invalid fitting charge", 400)
+            if client_fc > 0:
+                sub_cat = (product_meta.get(item['id'], {}).get('sub_category') or '').lower()
+                expected_fc = 80.0 if 'uv glass' in sub_cat else 40.0
+                if abs(client_fc - expected_fc) > 0.01:
+                    return error_response(f"Invalid fitting charge for {product_meta.get(item['id'], {}).get('name', 'item')}", 400)
+                item['fitting_charge'] = expected_fc
+                fitting_charge += expected_fc * item['qty']
+            else:
+                item['fitting_charge'] = 0.0
+
+        # C2 fix: discount_applied is recomputed and verified against the offers table.
+        # A client-supplied discount without a valid, applicable offer is ignored.
+        discount_applied = 0.0
+        raw_offer_id = data.get('offer_id')
+        offer_id = None
+        try:
+            offer_id = int(raw_offer_id) if raw_offer_id else None
+        except (TypeError, ValueError):
+            offer_id = None
+        if offer_id:
+            try:
+                cursor.execute("SELECT * FROM offers WHERE id = ? AND is_active = 1", (offer_id,))
+                offer_row = cursor.fetchone()
+                if offer_row:
+                    offer = dict(offer_row)
+                    offer_ok = True
+                    if offer.get('end_date'):
+                        try:
+                            if datetime.datetime.now() > datetime.datetime.strptime(offer['end_date'], '%Y-%m-%d %H:%M:%S'):
+                                offer_ok = False
+                        except Exception:
+                            pass
+                    if offer.get('start_date') and offer_ok:
+                        try:
+                            if datetime.datetime.now() < datetime.datetime.strptime(offer['start_date'], '%Y-%m-%d %H:%M:%S'):
+                                offer_ok = False
+                        except Exception:
+                            pass
+                    if offer_ok and offer.get('min_order_amount') and total_amount < float(offer['min_order_amount']):
+                        offer_ok = False
+                    if offer_ok and offer.get('usage_limit') and int(offer.get('usage_count') or 0) >= int(offer['usage_limit']):
+                        offer_ok = False
+                    if offer_ok and offer.get('target_type') == 'specific_user':
+                        applicable_ids = json.loads(offer.get('applicable_ids') or '[]')
+                        if str(user_id) not in [str(x) for x in applicable_ids]:
+                            offer_ok = False
+                    if offer_ok and offer.get('per_user_limit'):
+                        cursor.execute("SELECT COUNT(*) FROM offer_usage WHERE offer_id = ? AND user_id = ?", (offer['id'], user_id))
+                        if cursor.fetchone()[0] >= int(offer['per_user_limit']):
+                            offer_ok = False
+                    if offer_ok:
+                        discount_applied = float(calculate_discount(offer, total_amount, product_ids) or 0)
+            except Exception:
+                pass  # offers table missing or malformed data - treat as no discount
         wallet_amount = max(0, float(data.get('wallet_amount', 0) or 0))
         taxable_subtotal = max(0, total_amount - discount_applied)
         pre_wallet_total = taxable_subtotal + platform_fee + actual_delivery_fee + fitting_charge
@@ -3294,9 +3392,10 @@ def checkout():
                 order_status, total_amount, dark_store_id, estimated_delivery, 
                 delivery_latitude, delivery_longitude, payment_status, delivery_type,
                 platform_fee, delivery_fee, fitting_charge, payment_type,
-                cod_advance_paid, cod_remaining_amount, free_delivery_applied
+                cod_advance_paid, cod_remaining_amount, free_delivery_applied,
+                source, agent_id
             )
-            VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, 'ONLINE', NULL)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
             phone, address, final_total, store_id, estimated_delivery_str,
@@ -3319,6 +3418,58 @@ def checkout():
 
             # Note: Inventory stock is NOT decremented here during placement anymore.
             # Stock will be decremented and synced only when payment is verified and order is confirmed.
+
+        # 4b. Deduct wallet balance for the applied wallet amount atomically within this transaction
+        #     (guarded UPDATE so the balance can never go negative / be double-spent).
+        wallet_amount = round(wallet_amount, 2)
+        if wallet_amount > 0:
+            cursor.execute(
+                "UPDATE wallet SET balance = balance - ? WHERE user_id = ? AND balance >= ?",
+                (wallet_amount, user_id, wallet_amount)
+            )
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return error_response("Insufficient wallet balance", 400)
+            cursor.execute(
+                "INSERT INTO wallet_transactions (user_id, amount, type, reason, reference_id) VALUES (?, ?, 'debit', ?, ?)",
+                (user_id, wallet_amount, f"Payment for order {order_number}", str(order_id))
+            )
+
+        # 4b2. H4 fix: record offer usage server-side and atomically inside this
+        #      transaction. A client-side record-usage call can no longer be forged,
+        #      replayed, or used to inflate usage counts / bypass per-user limits.
+        if offer_id is not None and discount_applied > 0:
+            try:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM offer_usage WHERE offer_id = ? AND user_id = ?",
+                    (offer_id, user_id),
+                )
+                if cursor.fetchone()[0] < int(offer.get('per_user_limit') or 1):
+                    cursor.execute(
+                        "INSERT INTO offer_usage (offer_id, user_id, order_id, discount_applied) VALUES (?, ?, ?, ?)",
+                        (offer_id, user_id, order_id, discount_applied),
+                    )
+                    cursor.execute(
+                        "UPDATE offers SET usage_count = usage_count + 1 WHERE id = ? AND (usage_limit IS NULL OR usage_count < usage_limit)",
+                        (offer_id,),
+                    )
+                    if cursor.rowcount == 0:
+                        raise ValueError("Offer usage limit reached")
+            except Exception as usage_err:
+                logger.error(f"Failed to record offer usage for order #{order_id}: {usage_err}")
+                conn.rollback()
+                return error_response("Unable to apply offer, please try again", 400)
+
+        # 4c. PREPAID orders fully covered by the wallet have no payment gateway flow, so confirm them
+        #     immediately. This runs before the commit so a stock failure rolls back both the order
+        #     and the wallet debit together.
+        if payment_type == 'PREPAID' and pay_now_amount <= 0:
+            try:
+                confirm_order_and_decrement_stock_logic(cursor, order_id)
+            except Exception as conf_err:
+                logger.error(f"Failed to confirm stock for wallet-prepaid order #{order_id}: {conf_err}")
+                conn.rollback()
+                return error_response(f"Insufficient stock to fulfill order: {str(conf_err)}", 400)
 
         conn.commit()
 
@@ -3786,37 +3937,31 @@ def user_wishlist():
         return error_response(str(e), 500)
 
 
-@app.route('/api/user/wallet', methods=['GET', 'POST'])
+@app.route('/api/user/wallet', methods=['GET'])
 @token_required
 def user_wallet():
-    """Retrieves wallet balance and transaction history, or records new transactions."""
+    """Returns the wallet balance and transaction history for the user.
+
+    Wallet credits are only created by server-side flows (referral rewards,
+    refunds, admin adjustments) via utils.wallet.add_wallet_credit. This
+    endpoint is read-only; users cannot self-credit their own wallet.
+    """
     user_id = request.user['user_id']
-    data = request.json or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
-        if request.method == 'GET':
-            cursor.execute("SELECT balance FROM wallet WHERE user_id = ?", (user_id,))
-            bal = cursor.fetchone()
-            if not bal:
-                cursor.execute("INSERT INTO wallet(user_id, balance) VALUES(?,?)", (user_id, 0))
-                conn.commit()
-                balance = 0
-            else:
-                balance = bal['balance']
-            cursor.execute("SELECT * FROM wallet_transactions WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
-            txs = [dict(r) for r in cursor.fetchall()]
-            conn.close()
-            return jsonify({"balance": balance, "transactions": txs})
-        else:
-            amount = float(data.get('amount', 0))
-            ttype = data.get('type', 'credit')
-            ref = data.get('reference')
-            cursor.execute("INSERT INTO wallet_transactions (user_id, amount, type, reference) VALUES (?,?,?,?)", (user_id, amount, ttype, ref))
-            cursor.execute("UPDATE wallet SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+        cursor.execute("SELECT balance FROM wallet WHERE user_id = ?", (user_id,))
+        bal = cursor.fetchone()
+        if not bal:
+            cursor.execute("INSERT INTO wallet(user_id, balance) VALUES(?,?)", (user_id, 0))
             conn.commit()
-            conn.close()
-            return success_response(None, "transaction recorded", 201)
+            balance = 0
+        else:
+            balance = bal['balance']
+        cursor.execute("SELECT * FROM wallet_transactions WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+        txs = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return jsonify({"balance": balance, "transactions": txs})
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -6000,12 +6145,17 @@ def create_payment():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT total_amount, payment_type, cod_advance_paid FROM orders WHERE id = ?", (order_id,))
+        cursor.execute("SELECT user_id, total_amount, payment_type, cod_advance_paid FROM orders WHERE id = ?", (order_id,))
         order = cursor.fetchone()
         
         if not order:
             conn.close()
             return error_response("Order not found", 404)
+
+        # M2 fix: ownership check - only the order owner can create a payment for it.
+        if int(order['user_id']) != int(request.user['user_id']):
+            conn.close()
+            return error_response("Unauthorized access to this order", 403)
             
         # Determine amount to pay now
         amount_to_pay = order['total_amount']
@@ -6015,108 +6165,13 @@ def create_payment():
         razorpay_order = payment_service.create_payment_order(amount_to_pay, order_id)
         
         cursor.execute('''
-            INSERT INTO payments (order_id, payment_method, amount, transaction_id, payment_status)
-            VALUES (?, ?, ?, ?, 'PENDING')
-        ''', (order_id, data.get('payment_method', 'RAZORPAY'), amount_to_pay, razorpay_order['id']))
+            INSERT INTO payments (order_id, user_id, payment_method, amount, transaction_id, payment_status)
+            VALUES (?, ?, ?, ?, ?, 'PENDING')
+        ''', (order_id, request.user['user_id'], data.get('payment_method', 'RAZORPAY'), amount_to_pay, razorpay_order['id']))
         
         conn.commit()
         conn.close()
         return jsonify(razorpay_order), 200
-    except Exception as e:
-        return error_response(str(e), 500)
-
-
-@app.route('/api/payment/verify', methods=['POST'])
-@token_required
-def verify_payment():
-    """Verifies a payment transaction and updates the order status."""
-    data = request.json
-    order_id = data.get('order_id')
-    razorpay_payment_id = data.get('razorpay_payment_id')
-    
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        if not order_id and data.get('razorpay_order_id'):
-            cursor.execute("SELECT order_id FROM payments WHERE transaction_id = ?", (data.get('razorpay_order_id'),))
-            pay_row = cursor.fetchone()
-            if pay_row:
-                order_id = pay_row['order_id']
-        cursor.execute("SELECT user_id, payment_type, cod_advance_paid FROM orders WHERE id = ?", (order_id,))
-        user_row = cursor.fetchone()
-        user_id = user_row['user_id'] if user_row else None
-        payment_type = user_row['payment_type'] if user_row else 'PREPAID'
-
-        # If it's a COD order, we expect a Razorpay payment for the advance amount
-        # unless COD advance is 0 (which is not our case here)
-        if data.get('payment_method') == 'COD' and payment_type != 'COD':
-             # Trying to use COD on a PREPAID order - not allowed
-             return error_response("Payment method mismatch", 400)
-        
-
-
-        if data.get('payment_method') == 'COD' and payment_type == 'COD' and user_row['cod_advance_paid'] <= 0:
-            # Pure COD with no advance (if we ever support it)
-            cursor.execute("UPDATE orders SET order_status = 'PLACED', payment_status = 'pending' WHERE id = ?", (order_id,))
-            cursor.execute("UPDATE payments SET payment_status = 'SUCCESS' WHERE order_id = ?", (order_id,))
-            if user_id:
-                notification_service.send_order_notification(user_id, order_id, 'PLACED')
-            try:
-                confirm_order_and_decrement_stock_logic(cursor, order_id)
-            except Exception as conf_err:
-                logger.error(f"Error during COD order confirmation/decrement: {conf_err}")
-            conn.commit()
-            conn.close()
-            return success_response(None, "COD order confirmed", 200)
-
-        # In mock mode, we assume signature is valid if provided
-        is_valid = True 
-        
-        if is_valid:
-            new_payment_status = 'paid' if payment_type == 'PREPAID' else 'advance_paid'
-            cursor.execute("UPDATE orders SET order_status = 'PLACED', payment_status = ? WHERE id = ?", (new_payment_status, order_id))
-            cursor.execute('UPDATE payments SET payment_status = "SUCCESS", transaction_id = ? WHERE order_id = ?', (razorpay_payment_id, order_id))
-            if user_id:
-                notification_service.send_order_notification(user_id, order_id, 'PLACED')
-            
-            try:
-                confirm_order_and_decrement_stock_logic(cursor, order_id)
-            except Exception as conf_err:
-                logger.error(f"Error during order confirmation/decrement: {conf_err}")
-
-            # Shiprocket Sync for Prepaid Orders (Post-Payment)
-            if payment_type == 'PREPAID':
-                try:
-                    cursor.execute("""
-                        SELECT order_number, customer_name, phone, delivery_address, 
-                               total_amount, delivery_type, shiprocket_order_id 
-                        FROM orders WHERE id = ?
-                    """, (order_id,))
-                    order_info = cursor.fetchone()
-                    if order_info and order_info['delivery_type'] != 'quick' and not order_info['shiprocket_order_id']:
-                        cursor.execute("SELECT product_name as name, quantity as qty, price FROM order_items WHERE order_id = ?", (order_id,))
-                        items = [dict(row) for row in cursor.fetchall()]
-                        order_payload = {
-                            "order_number": order_info['order_number'],
-                            "customer_name": order_info['customer_name'],
-                            "customer_phone": order_info['phone'],
-                            "delivery_address": order_info['delivery_address'],
-                            "total_amount": order_info['total_amount'],
-                            "items": items,
-                            "payment_status": "paid"
-                        }
-                        sr_res = sync_to_shiprocket(order_payload, cursor)
-                        if sr_res and 'order_id' in sr_res:
-                            cursor.execute("UPDATE orders SET shiprocket_order_id = ? WHERE id = ?", (sr_res['order_id'], order_id))
-                except Exception as sr_err:
-                    logger.error(f"Post-Payment Shiprocket Sync Failed for order {order_id}: {sr_err}")
-
-            conn.commit()
-            conn.close()
-            return success_response(None, "Payment verified and order placed", 200)
-        else:
-            conn.close()
-            return error_response("Invalid payment signature", 400)
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -6128,6 +6183,15 @@ def get_payment_status(order_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
+        # M2 fix: ownership check - prevent IDOR payment info disclosure.
+        order = cursor.execute("SELECT user_id FROM orders WHERE id = ?", (order_id,)).fetchone()
+        if not order:
+            conn.close()
+            return error_response("Order not found", 404)
+        if int(order['user_id']) != int(request.user['user_id']):
+            conn.close()
+            return error_response("Unauthorized access", 403)
+
         cursor.execute("SELECT * FROM payments WHERE order_id = ?", (order_id,))
         payment = cursor.fetchone()
         conn.close()
@@ -6540,7 +6604,7 @@ def get_admin_refund_requests():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT rr.*, u.name as user_name, o.total_amount, o.order_order_status
+            SELECT rr.*, u.name as user_name, o.total_amount, o.order_status
             FROM refund_requests rr
             JOIN users u ON rr.user_id = u.id
             JOIN orders o ON rr.order_id = o.id
@@ -6568,7 +6632,7 @@ def update_refund_status(request_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT order_id, user_id FROM refund_requests WHERE id = ?", (request_id,))
+        cursor.execute("SELECT order_id, user_id, status FROM refund_requests WHERE id = ?", (request_id,))
         rr = cursor.fetchone()
         
         if not rr:
@@ -6578,12 +6642,28 @@ def update_refund_status(request_id):
         cursor.execute("UPDATE refund_requests SET status = ? WHERE id = ?", (new_status, request_id))
         
         if new_status == 'PROCESSED':
-            cursor.execute("UPDATE orders SET status = 'REFUNDED' WHERE id = ?", (rr['order_id'],))
+            cursor.execute("UPDATE orders SET order_status = 'REFUNDED' WHERE id = ?", (rr['order_id'],))
             notification_service.notify_user_internal(rr['user_id'], "Refund Processed", f"Refund for order #{rr['order_id']} has been processed.", "SYSTEM")
+            
+            # Wallet refund credit (only on transition to PROCESSED)
+            if rr['status'] != 'PROCESSED':
+                cursor.execute("SELECT total_amount FROM orders WHERE id = ?", (rr['order_id'],))
+                order_row = cursor.fetchone()
+                refund_amount = order_row['total_amount'] if order_row else 0
+                if refund_amount > 0:
+                    cursor.execute("SELECT 1 FROM wallet WHERE user_id = ?", (rr['user_id'],))
+                    if cursor.fetchone():
+                        cursor.execute("UPDATE wallet SET balance = balance + ? WHERE user_id = ?", (refund_amount, rr['user_id']))
+                    else:
+                        cursor.execute("INSERT INTO wallet (user_id, balance) VALUES (?, ?)", (rr['user_id'], refund_amount))
+                    cursor.execute('''
+                        INSERT INTO wallet_transactions (user_id, amount, type, reason, reference_id)
+                        VALUES (?, ?, 'credit', ?, ?)
+                    ''', (rr['user_id'], refund_amount, f"Refund for order #{rr['order_id']}", str(rr['order_id'])))
         elif new_status == 'APPROVED':
             notification_service.notify_user_internal(rr['user_id'], "Refund Approved", f"Your refund request for order #{rr['order_id']} has been approved.", "SYSTEM")
         elif new_status == 'REJECTED':
-            cursor.execute("UPDATE orders SET status = 'DELIVERED' WHERE id = ?", (rr['order_id'],))
+            cursor.execute("UPDATE orders SET order_status = 'DELIVERED' WHERE id = ?", (rr['order_id'],))
             notification_service.notify_user_internal(rr['user_id'], "Refund Rejected", f"Your refund request for order #{rr['order_id']} has been rejected.", "SYSTEM")
             
             # Referral reward check (additive)

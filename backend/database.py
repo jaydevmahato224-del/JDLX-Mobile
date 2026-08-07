@@ -1,11 +1,52 @@
 import sqlite3
 import os
+from dotenv import load_dotenv
 
-DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jdlx.db')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
+
+DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, 'jdlx.db')
 VALID_ROLES = ('user', 'admin', 'super_admin')
 
-TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
-TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
+def _clean_env_value(value):
+    if not value:
+        return None
+    value = value.strip().strip('"').strip("'")
+    if value.lower().startswith("bearer "):
+        value = value[7:].strip()
+    return value or None
+
+def _get_first_env(*names):
+    for name in names:
+        value = _clean_env_value(os.environ.get(name))
+        if value:
+            return value
+    return None
+
+def _is_turso_auth_error(error):
+    message = str(error).lower()
+    return (
+        "status=401" in message
+        or "unauthorized" in message
+        or "invalid jwt token" in message
+    )
+
+def _raise_turso_config_error(error):
+    if _is_turso_auth_error(error):
+        raise RuntimeError(
+            "Turso authentication failed. Update the Render environment variable "
+            "TURSO_AUTH_TOKEN with a fresh database token for TURSO_DATABASE_URL. "
+            "Do not include quotes or a 'Bearer ' prefix."
+        ) from error
+    raise error
+
+TURSO_URL = _get_first_env("TURSO_DATABASE_URL", "LIBSQL_URL")
+TURSO_TOKEN = _get_first_env(
+    "TURSO_AUTH_TOKEN",
+    "TURSO_DATABASE_TOKEN",
+    "TURSO_DATABASE_AUTH_TOKEN",
+    "LIBSQL_AUTH_TOKEN",
+)
 
 class LibsqlRow:
     def __init__(self, cursor, tuple_row):
@@ -33,11 +74,17 @@ class LibsqlCursorWrapper:
         return [self.row_factory(self._cursor, row) for row in rows] if self.row_factory else rows
     def execute(self, sql, parameters=()):
         if isinstance(parameters, list): parameters = tuple(parameters)
-        self._cursor.execute(sql, parameters)
+        try:
+            self._cursor.execute(sql, parameters)
+        except Exception as e:
+            _raise_turso_config_error(e)
         return self
     def executemany(self, sql, seq_of_parameters):
         seq_of_parameters = [tuple(p) if isinstance(p, list) else p for p in seq_of_parameters]
-        self._cursor.executemany(sql, seq_of_parameters)
+        try:
+            self._cursor.executemany(sql, seq_of_parameters)
+        except Exception as e:
+            _raise_turso_config_error(e)
         return self
     def __getattr__(self, name): return getattr(self._cursor, name)
     def __iter__(self):
@@ -69,7 +116,10 @@ else:
 
 def get_db():
     if USE_TURSO:
-        raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
+        try:
+            raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
+        except Exception as e:
+            _raise_turso_config_error(e)
         conn = LibsqlConnectionWrapper(raw_conn)
         conn.row_factory = LibsqlRow
     else:

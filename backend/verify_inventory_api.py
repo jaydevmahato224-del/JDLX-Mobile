@@ -5,7 +5,11 @@ import json
 import sqlite3
 import os
 
-SECRET = os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+from jwt_config import get_jwt_secret
+
+SECRET = get_jwt_secret()
 WH_ID = 1
 EMAIL = "jaydevmahato224@gmail.com"
 
@@ -93,3 +97,4 @@ def test_api():
 
 if __name__ == "__main__":
     test_api()
+

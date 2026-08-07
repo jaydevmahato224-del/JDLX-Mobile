@@ -1,9 +1,14 @@
+import os
 import jwt
 import datetime
 import requests
 import json
 
-SECRET_KEY = 'jdlx_secret_keys_123'
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+from jwt_config import get_jwt_secret
+
+SECRET_KEY = get_jwt_secret()
 BASE_URL = 'http://127.0.0.1:5000/api'
 
 def generate_token(user_id, role='super_admin'):
@@ -46,3 +51,4 @@ def verify_analytics():
 
 if __name__ == "__main__":
     verify_analytics()
+

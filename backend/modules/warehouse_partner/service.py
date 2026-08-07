@@ -13,10 +13,11 @@ from urllib.parse import quote
 import jwt
 
 from database import get_db_connection
+from jwt_config import get_jwt_secret
 from .auth import normalize_warehouse_role
 
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+SECRET_KEY = get_jwt_secret()
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
 UPLOAD_DIR = os.path.join("backend", "static", "uploads", "warehouse_partner")

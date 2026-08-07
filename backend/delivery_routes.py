@@ -4,6 +4,7 @@ import datetime
 import re
 import uuid
 import jwt
+from jwt_config import get_jwt_secret
 from flask import Blueprint, request, jsonify
 from utils.response_utils import success_response, error_response
 from functools import wraps
@@ -27,7 +28,7 @@ def get_db():
     return _db_get_db()
 
 def _secret():
-    return os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+    return get_jwt_secret()
 
 def generate_unique_partner_id(cursor):
     import random
@@ -442,3 +443,4 @@ def list_delivery_partners():
         return error_response(str(e), 500)
     finally:
         conn.close()
+

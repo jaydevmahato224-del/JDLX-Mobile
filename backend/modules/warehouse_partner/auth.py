@@ -1,11 +1,12 @@
-import os
 from functools import wraps
 
 import jwt
 from flask import jsonify, request
 
+from jwt_config import get_jwt_secret
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+
+SECRET_KEY = get_jwt_secret()
 WAREHOUSE_ROLES = {
     "owner",
     "warehouse_manager",
@@ -69,3 +70,4 @@ def require_warehouse_roles(allowed_roles=None):
         return wrapped
 
     return decorator
+

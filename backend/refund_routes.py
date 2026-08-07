@@ -55,7 +55,7 @@ def submit_refund_request():
     try:
         # 1. Verify ownership and get order info
         order = conn.execute(
-            "SELECT id, status, total_amount, created_at, status_delivered_at FROM orders WHERE id = ? AND user_id = ?",
+            "SELECT id, order_status as status, total_amount, created_at, status_delivered_at FROM orders WHERE id = ? AND user_id = ?",
             (order_id, user_id)
         ).fetchone()
 
@@ -146,7 +146,7 @@ def get_refund_details(request_id):
     conn = get_db()
     try:
         query = """
-            SELECT r.*, o.total_amount as order_amount, o.created_at as order_date, o.status as order_status
+            SELECT r.*, o.total_amount as order_amount, o.created_at as order_date, o.order_status as order_status
             FROM refund_requests r
             JOIN orders o ON r.order_id = o.id
             WHERE r.id = ? AND r.user_id = ?
@@ -167,7 +167,7 @@ def check_refund_eligibility(order_id):
     conn = get_db()
     try:
         order = conn.execute(
-            "SELECT id, status, total_amount, created_at, status_delivered_at FROM orders WHERE id = ? AND user_id = ?",
+            "SELECT id, order_status as status, total_amount, created_at, status_delivered_at FROM orders WHERE id = ? AND user_id = ?",
             (order_id, user_id)
         ).fetchone()
 

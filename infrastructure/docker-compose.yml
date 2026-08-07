@@ -7,7 +7,7 @@ services:
       dockerfile: infrastructure/docker/backend.Dockerfile
     container_name: jdlx-backend-1
     environment:
-      - JWT_SECRET=${JWT_SECRET:-jdlx_secret_keys_123}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the environment before starting}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - INITIAL_SUPER_ADMIN_EMAIL=${INITIAL_SUPER_ADMIN_EMAIL:-}
     expose:
@@ -30,7 +30,7 @@ services:
       dockerfile: infrastructure/docker/backend.Dockerfile
     container_name: jdlx-backend-2
     environment:
-      - JWT_SECRET=${JWT_SECRET:-jdlx_secret_keys_123}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the environment before starting}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - INITIAL_SUPER_ADMIN_EMAIL=${INITIAL_SUPER_ADMIN_EMAIL:-}
     expose:
@@ -53,7 +53,7 @@ services:
       dockerfile: infrastructure/docker/backend.Dockerfile
     container_name: jdlx-backend-3
     environment:
-      - JWT_SECRET=${JWT_SECRET:-jdlx_secret_keys_123}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the environment before starting}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - INITIAL_SUPER_ADMIN_EMAIL=${INITIAL_SUPER_ADMIN_EMAIL:-}
     expose:

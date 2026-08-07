@@ -1,4 +1,5 @@
 import os
+import hmac
 import json
 import datetime
 import requests
@@ -303,12 +304,39 @@ def list_shipments():
 
 @shiprocket_bp.route('/api/shiprocket/webhook', methods=['POST'])
 def shiprocket_webhook():
-    data = request.get_json()
+    # M1 fix: mandatory webhook token (fail closed). Token is read from the
+    # system_settings DB row (shiprocket_token) OR the env var, mirroring the
+    # main app.py webhook, so the endpoint works with the DB-configured token
+    # while still rejecting requests when no token is configured.
+    token = request.headers.get('x-api-key') or request.headers.get('X-Api-Key') or request.headers.get('Authorization')
+    if token and token.startswith('Bearer '):
+        token = token[7:]
+    expected_token = os.environ.get('SHIPROCKET_WEBHOOK_TOKEN')
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'shiprocket_token'").fetchone()
+        if row and row['value']:
+            expected_token = row['value']
+    except Exception:
+        pass  # settings table unavailable -> fall back to env token
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if not expected_token:
+        return jsonify({"status": "error", "message": "Webhook token not configured"}), 503
+    if not token or not hmac.compare_digest(token, expected_token):
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
+    data = request.get_json() or {}
     awb_code = data.get('awb')
     new_status = data.get('current_status')
     
     if not awb_code or not new_status:
         return jsonify({"status": "error", "message": "Missing awb or status"}), 400
+    # Cap arbitrary status strings before they reach the tracking log.
+    new_status = str(new_status)[:64]
 
     conn = get_db()
     try:
@@ -336,3 +364,4 @@ def shiprocket_webhook():
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         conn.close()
+

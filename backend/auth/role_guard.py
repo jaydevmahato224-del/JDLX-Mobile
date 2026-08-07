@@ -1,31 +1,23 @@
 from functools import wraps
-import os
 
 import jwt
 from flask import current_app, jsonify, request
+
+from jwt_config import get_jwt_secret as _get_env_jwt_secret
 
 
 ALLOWED_ROLES = {"user", "admin", "super_admin"}
 
 
 def get_jwt_secret():
-    """Retrieves the active JWT secret key dynamically from config, environment, or Flask app context."""
+    """Returns the JWT secret: app config first, then the central fail-closed env loader."""
     try:
         if current_app and current_app.config.get("JWT_SECRET"):
             return current_app.config["JWT_SECRET"]
     except Exception:
         pass
 
-    secret = os.environ.get("JWT_SECRET")
-    if secret:
-        return secret
-
-    try:
-        if current_app and current_app.secret_key:
-            return current_app.secret_key
-    except Exception:
-        pass
-    return ""
+    return _get_env_jwt_secret()
 
 
 def normalize_role(role):
@@ -116,3 +108,4 @@ def require_super_admin():
         return wrapped
 
     return decorator
+

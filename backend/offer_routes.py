@@ -85,7 +85,7 @@ def validate_coupon():
     data = request.json
     coupon_code = data.get('coupon_code', '').strip().upper()
     cart_total = float(data.get('cart_total', 0))
-    user_id = data.get('user_id') or request.user.get('user_id')
+    user_id = (request.user or {}).get('user_id')
     product_ids = data.get('product_ids', [])
     
     if not coupon_code:
@@ -165,7 +165,7 @@ def validate_coupon():
 def apply_automatic():
     data = request.json
     cart_total = float(data.get('cart_total', 0))
-    user_id = data.get('user_id') or request.user.get('user_id')
+    user_id = (request.user or {}).get('user_id')
     product_ids = data.get('product_ids', [])
     
     conn = get_db()
@@ -226,28 +226,96 @@ def apply_automatic():
 @offer_bp.route('/api/offers/record-usage', methods=['POST'])
 @token_required
 def record_usage():
-    data = request.json
-    offer_id = data.get('offer_id')
-    order_id = data.get('order_id')
-    discount_applied = data.get('discount_applied', 0)
-    user_id = data.get('user_id') or request.user.get('user_id')
-    
-    if not offer_id or not order_id:
+    data = request.json or {}
+    try:
+        offer_id = int(data.get('offer_id'))
+        order_id = int(data.get('order_id'))
+    except (TypeError, ValueError):
         return error_response("offer_id and order_id are required")
-        
+
+    # H4 fix: never trust a client-supplied user_id - derive it from the token.
+    user_id = (request.user or {}).get('user_id')
+    if not user_id:
+        return error_response("Unauthorized", 401)
+
     conn = get_db()
     cursor = conn.cursor()
-    
-    cursor.execute("""
-        INSERT INTO offer_usage (offer_id, user_id, order_id, discount_applied)
-        VALUES (?, ?, ?, ?)
-    """, (offer_id, user_id, order_id, discount_applied))
-    
-    cursor.execute("UPDATE offers SET usage_count = usage_count + 1 WHERE id = ?", (offer_id,))
-    
-    conn.commit()
+
+    # Verify the order belongs to the authenticated user.
+    cursor.execute("SELECT user_id, total_amount FROM orders WHERE id = ?", (order_id,))
+    order_row = cursor.fetchone()
+    if not order_row:
+        conn.close()
+        return error_response("Order not found", 404)
+    if int(order_row['user_id']) != int(user_id):
+        conn.close()
+        return error_response("Order does not belong to this user", 403)
+
+    # Idempotent: if usage was already recorded for this order (e.g. by checkout
+    # during order placement), do not double-count.
+    cursor.execute("SELECT id FROM offer_usage WHERE order_id = ?", (order_id,))
+    if cursor.fetchone():
+        conn.close()
+        return success_response(None, "Offer usage recorded successfully")
+
+    cursor.execute("SELECT * FROM offers WHERE id = ? AND is_active = 1", (offer_id,))
+    offer_row = cursor.fetchone()
+    if not offer_row:
+        conn.close()
+        return error_response("Offer not found or inactive", 400)
+    offer = dict(offer_row)
+
+    # Re-validate limits server-side.
+    if offer.get('usage_limit') and int(offer.get('usage_count') or 0) >= int(offer['usage_limit']):
+        conn.close()
+        return error_response("Offer usage limit reached", 400)
+    cursor.execute(
+        "SELECT COUNT(*) FROM offer_usage WHERE offer_id = ? AND user_id = ?",
+        (offer_id, user_id),
+    )
+    if cursor.fetchone()[0] >= int(offer.get('per_user_limit') or 1):
+        conn.close()
+        return error_response("Offer already used by this user", 400)
+
+    # H4 fix: recompute the discount server-side from the order items and the
+    # offer; a client-supplied discount amount is never trusted.
+    cursor.execute(
+        "SELECT product_id, quantity, price FROM order_items WHERE order_id = ?",
+        (order_id,),
+    )
+    item_rows = cursor.fetchall()
+    if not item_rows:
+        conn.close()
+        return error_response("Order has no items", 400)
+    product_ids = []
+    cart_total = 0.0
+    for row in item_rows:
+        product_ids.append(row['product_id'])
+        cart_total += float(row['price']) * int(row['quantity'])
+    computed = calculate_discount(offer, cart_total, product_ids) or 0
+    discount_applied = round(min(float(computed), float(order_row['total_amount'] or 0)), 2)
+    if discount_applied <= 0:
+        conn.close()
+        return success_response(None, "No discount to record")
+
+    try:
+        cursor.execute(
+            "INSERT INTO offer_usage (offer_id, user_id, order_id, discount_applied) VALUES (?, ?, ?, ?)",
+            (offer_id, user_id, order_id, discount_applied),
+        )
+        cursor.execute(
+            "UPDATE offers SET usage_count = usage_count + 1 WHERE id = ? AND (usage_limit IS NULL OR usage_count < usage_limit)",
+            (offer_id,),
+        )
+        if cursor.rowcount == 0:
+            raise ValueError("Offer usage limit reached")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        return error_response("Unable to record offer usage", 400)
+
     conn.close()
-    
     return success_response(None, "Offer usage recorded successfully")
 
 # ==============================================================================

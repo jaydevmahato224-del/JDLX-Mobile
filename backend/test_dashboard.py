@@ -3,7 +3,11 @@ import datetime
 import requests
 
 import os
-SECRET_KEY = os.environ.get("SECRET_KEY", "jdlx_secret_keys_123")
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+from jwt_config import get_jwt_secret
+
+SECRET_KEY = get_jwt_secret()
 payload = {
     "warehouse_id": 1,
     "email": "test@example.com",
@@ -19,3 +23,4 @@ try:
     print(f"Response: {r.text}")
 except Exception as e:
     print(f"Error: {str(e)}")
+

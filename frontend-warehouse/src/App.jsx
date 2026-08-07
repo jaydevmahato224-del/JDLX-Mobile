@@ -77,6 +77,8 @@ const ManageRiders = lazy(() => import('./pages/warehouse/ManageRiders'))
 const WarehouseOrders = lazy(() => import('./pages/warehouse/WarehouseOrders'))
 const WarehouseProcurement = lazy(() => import('./pages/warehouse/WarehouseProcurement'))
 const WarehouseOffers = lazy(() => import('./pages/warehouse/WarehouseOffers'))
+const StaffBilling = lazy(() => import('./pages/warehouse/StaffBilling'))
+const StaffSetupPassword = lazy(() => import('./pages/warehouse/StaffSetupPassword'))
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
@@ -168,6 +170,11 @@ function App() {
           {/* Unprotected Routes */}
           <Route path="/" element={<WarehouseLogin />} />
           <Route path="/warehouse/login" element={<WarehouseLogin />} />
+          <Route path="/warehouse/staff/setup" element={
+            <Suspense fallback={<LoadingSpinner />}>
+              <StaffSetupPassword />
+            </Suspense>
+          } />
           <Route path="/warehouse/request" element={<WarehouseRequest />} />
           <Route path="/warehouse/request-delivery" element={
             <Suspense fallback={<LoadingSpinner />}>
@@ -181,6 +188,11 @@ function App() {
             <Route path="/warehouse/dashboard" element={
               <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']}>
                 <WarehouseDashboard />
+              </WarehouseRoute>
+            } />
+            <Route path="/warehouse/billing" element={
+              <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin', 'billing', 'staff']}>
+                <StaffBilling />
               </WarehouseRoute>
             } />
             <Route path="/warehouse/inventory" element={

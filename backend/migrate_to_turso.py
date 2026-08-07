@@ -1,6 +1,10 @@
 import sqlite3
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load credentials from backend/.env (never hardcode secrets in source files)
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 def migrate():
     try:
@@ -9,10 +13,14 @@ def migrate():
         print("Failed to install or import libsql-experimental")
         sys.exit(1)
 
-    url = "libsql://jdlx-db-jaydevmahato224-del.aws-ap-south-1.turso.io"
-    token = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzgxNDE2MTUsImlkIjoiMDE5ZTAxN2MtZTcwMS03NWFlLTk0ZjMtNWZkM2E1Y2JiZjc4IiwicmlkIjoiMjA3ZWZjNWMtMDEyMy00YTE1LWE2M2MtNDllMDBhNGI0MjJmIn0.IwszTj2cBDX6btvKJ4R2fWNTat2FydiIiOQwOmxeiZQ7owXfzm4bvKpRS5SsbIm5mPP7D1BiRgE4s7j_6TBGCg"
-    
-    local_db_path = "/home/jaydev/Desktop/JDLX-Mobile/backend/jdlx.db"
+    url = os.environ.get("TURSO_DATABASE_URL")
+    token = os.environ.get("TURSO_AUTH_TOKEN")
+
+    if not url or not token:
+        print("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN in environment/.env")
+        sys.exit(1)
+
+    local_db_path = os.environ.get("DATABASE_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jdlx.db')
     if not os.path.exists(local_db_path):
         print(f"Local database not found at {local_db_path}")
         sys.exit(1)
@@ -87,3 +95,4 @@ def migrate():
 
 if __name__ == "__main__":
     migrate()
+

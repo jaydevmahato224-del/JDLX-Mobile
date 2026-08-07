@@ -23,6 +23,7 @@ import logging
 import sqlite3
 import subprocess
 import traceback
+from jwt_config import get_jwt_secret
 from functools import wraps
 from threading import Thread
 from urllib.parse import quote
@@ -32,6 +33,7 @@ import jwt
 import pdfplumber
 from flask import Blueprint, jsonify, request, redirect, session, url_for, current_app, abort
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
@@ -45,7 +47,8 @@ from notifier import (
     send_individual_email,
     send_warehouse_action_email,
     send_warehouse_kyc_pending_email,
-    send_product_restock_alert
+    send_product_restock_alert,
+    send_staff_billing_setup_email
 )
 from services.inventory_service import trigger_low_stock_notifications
 from notifications.notification_service import notification_service
@@ -267,8 +270,8 @@ def _sync_legacy_warehouse_kyc_rollout(conn):
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 
 def _get_jwt_secret():
-    """Returns the JWT secret from environment or default."""
-    return os.environ.get("JWT_SECRET", "jdlx_secret_keys_123")
+    """Returns the JWT secret from the central fail-closed loader."""
+    return get_jwt_secret()
 
 
 def issue_warehouse_token(warehouse_id, email, role="owner"):
@@ -342,7 +345,7 @@ def require_warehouse_auth(f):
         token = auth.split(" ", 1)[1]
         try:
             payload = decode_warehouse_token(token)
-            if payload.get("type") != "warehouse":
+            if payload.get("type") not in ("warehouse", "warehouse_staff"):
                 return error_response("Invalid token type", 401)
         except jwt.ExpiredSignatureError:
             return error_response("Warehouse session expired", 401)
@@ -354,6 +357,94 @@ def require_warehouse_auth(f):
         request.warehouse_payload = payload
         return f(*args, **kwargs)
     return decorated
+
+
+def issue_staff_token(staff_id, vendor_id, email, name, role_name, permissions):
+    """Generates a JWT token for a warehouse staff member."""
+    payload = {
+        "staff_id": staff_id,
+        "vendor_id": vendor_id,
+        "email": email,
+        "name": name,
+        "role_name": role_name,
+        "permissions": permissions,
+        "type": "warehouse_staff",
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7),
+    }
+    return jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
+
+
+def require_warehouse_staff_permission(permission):
+    """Decorator to authorize warehouse staff or warehouse owner based on permission."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            auth = request.headers.get("Authorization", "")
+            if not auth.startswith("Bearer "):
+                return error_response("Missing authorization token", 401)
+            
+            token = auth.split(" ", 1)[1]
+            try:
+                payload = decode_warehouse_token(token)
+            except jwt.ExpiredSignatureError:
+                return error_response("Session expired", 401)
+            except Exception:
+                return error_response("Invalid authentication token", 401)
+                
+            token_type = payload.get("type")
+            
+            # Warehouse Owner token (has full permissions)
+            if token_type == "warehouse":
+                request.vendor_id = payload.get("warehouse_id")
+                request.staff_id = None
+                request.warehouse_payload = payload
+                return f(*args, **kwargs)
+                
+            # Warehouse Staff token
+            elif token_type == "warehouse_staff":
+                vendor_id = payload.get("vendor_id")
+                staff_id = payload.get("staff_id")
+                
+                conn = get_db()
+                try:
+                    staff_row = conn.execute(
+                        """
+                        SELECT ws.staff_id, ws.vendor_id, ws.status, r.permissions
+                        FROM warehouse_staff ws
+                        JOIN roles r ON r.role_id = ws.role_id AND r.vendor_id = ws.vendor_id
+                        WHERE ws.staff_id = ? AND ws.vendor_id = ?
+                        """,
+                        (staff_id, vendor_id)
+                    ).fetchone()
+                    
+                    if not staff_row or staff_row["status"] != "active":
+                        return error_response("Staff account is inactive or revoked", 403)
+                        
+                    perms_data = staff_row["permissions"] or "[]"
+                    if isinstance(perms_data, str):
+                        try:
+                            perms = json.loads(perms_data)
+                        except Exception:
+                            perms = []
+                    else:
+                        perms = list(perms_data)
+                        
+                    if permission and permission not in perms:
+                        return error_response("Access Denied: Missing required permission", 403)
+                        
+                    request.vendor_id = vendor_id
+                    request.staff_id = staff_id
+                    request.staff_permissions = perms
+                    request.warehouse_payload = payload
+                finally:
+                    conn.close()
+                    
+                return f(*args, **kwargs)
+            else:
+                return error_response("Unauthorized token type", 403)
+                
+        return decorated
+    return decorator
 
 
 def _check_warehouse_restriction(email):
@@ -3228,3 +3319,527 @@ def admin_get_warehouse_performance(app_id):
         return error_response(str(e), 500)
     finally:
         conn.close()
+
+
+# ── Staff Roles & Permissions API ──────────────────────────────────────────────
+
+@warehouse_bp.route("/api/warehouse/roles", methods=["GET"])
+@require_warehouse_auth
+def get_warehouse_roles():
+    """Returns roles defined for the authenticated warehouse vendor."""
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT role_id, vendor_id, role_name, permissions, created_at
+            FROM roles
+            WHERE vendor_id = ?
+            ORDER BY role_name ASC
+            """,
+            (vendor_id,)
+        ).fetchall()
+        
+        result = []
+        for r in rows:
+            perms_str = r["permissions"] or "[]"
+            try:
+                perms = json.loads(perms_str) if isinstance(perms_str, str) else list(perms_str)
+            except Exception:
+                perms = []
+            result.append({
+                "role_id": r["role_id"],
+                "vendor_id": r["vendor_id"],
+                "role_name": r["role_name"],
+                "permissions": perms,
+                "created_at": r["created_at"]
+            })
+        return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/roles", methods=["POST"])
+@require_warehouse_auth
+def create_warehouse_role():
+    """Creates or updates a staff role with permissions for a vendor."""
+    data = request.get_json(silent=True) or {}
+    role_name = data.get("role_name", "").strip()
+    permissions = data.get("permissions", [])
+    
+    if not role_name:
+        return error_response("Role name is required", 400)
+        
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    perms_json = json.dumps(permissions if isinstance(permissions, list) else [])
+    
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        existing = cur.execute(
+            "SELECT role_id FROM roles WHERE vendor_id = ? AND LOWER(role_name) = LOWER(?)",
+            (vendor_id, role_name)
+        ).fetchone()
+        
+        if existing:
+            cur.execute(
+                "UPDATE roles SET permissions = ?, updated_at = CURRENT_TIMESTAMP WHERE role_id = ?",
+                (perms_json, existing["role_id"])
+            )
+            role_id = existing["role_id"]
+        else:
+            cur.execute(
+                "INSERT INTO roles (vendor_id, role_name, permissions) VALUES (?, ?, ?)",
+                (vendor_id, role_name, perms_json)
+            )
+            role_id = cur.lastrowid
+            
+        conn.commit()
+        return jsonify({
+            "message": "Role saved successfully",
+            "role_id": role_id,
+            "role_name": role_name,
+            "permissions": permissions
+        }), 201
+    finally:
+        conn.close()
+
+
+# ── Warehouse Staff / Agent Management ───────────────────────────────────────
+
+@warehouse_bp.route("/api/warehouse/staff", methods=["GET"])
+@require_warehouse_auth
+def get_warehouse_staff():
+    """Returns staff members created under the authenticated vendor."""
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT ws.staff_id, ws.vendor_id, ws.role_id, ws.name, ws.login_email, ws.username, 
+                   ws.status, ws.created_at, r.role_name, r.permissions
+            FROM warehouse_staff ws
+            LEFT JOIN roles r ON r.role_id = ws.role_id
+            WHERE ws.vendor_id = ?
+            ORDER BY ws.staff_id DESC
+            """,
+            (vendor_id,)
+        ).fetchall()
+        
+        result = []
+        for r in rows:
+            perms_str = r["permissions"] or "[]"
+            try:
+                perms = json.loads(perms_str) if isinstance(perms_str, str) else list(perms_str)
+            except Exception:
+                perms = []
+            result.append({
+                "staff_id": r["staff_id"],
+                "vendor_id": r["vendor_id"],
+                "role_id": r["role_id"],
+                "name": r["name"],
+                "login_email": r["login_email"],
+                "username": r["username"],
+                "status": r["status"],
+                "created_at": r["created_at"],
+                "role_name": r["role_name"] or "Staff",
+                "permissions": perms
+            })
+        return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/staff", methods=["POST"])
+@require_warehouse_auth
+def create_warehouse_staff():
+    """
+    Creates a staff member / agent for a warehouse.
+    Sends an invitation email automatically with a setup link so the user can
+    generate their password for the first time and log in to the billing app.
+    """
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "").strip()
+    login_email = data.get("login_email", "").strip().lower()
+    role_id = data.get("role_id")
+    
+    if not name or not login_email or not role_id:
+        return error_response("Name, login email, and role_id are required", 400)
+        
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        
+        # Verify role belongs to this vendor
+        role_row = cur.execute(
+            "SELECT role_id, role_name, permissions FROM roles WHERE role_id = ? AND vendor_id = ?",
+            (role_id, vendor_id)
+        ).fetchone()
+        if not role_row:
+            return error_response("Invalid role for this warehouse", 400)
+            
+        # Verify email uniqueness for staff
+        existing = cur.execute(
+            "SELECT staff_id FROM warehouse_staff WHERE vendor_id = ? AND login_email = ?",
+            (vendor_id, login_email)
+        ).fetchone()
+        if existing:
+            return error_response("Staff member with this email already exists", 400)
+            
+        # Fetch warehouse details for email
+        wh = cur.execute("SELECT warehouse_name FROM warehouses WHERE id = ?", (vendor_id,)).fetchone()
+        warehouse_name = wh["warehouse_name"] if wh else "JDLX Warehouse"
+        
+        # Generate single-use setup token for password generation
+        setup_token = uuid.uuid4().hex
+        expires_at = (datetime.datetime.utcnow() + datetime.timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        
+        cur.execute(
+            """
+            INSERT INTO warehouse_staff (vendor_id, role_id, name, login_email, setup_token, setup_token_expires, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'active')
+            """,
+            (vendor_id, role_id, name, login_email, setup_token, expires_at)
+        )
+        staff_id = cur.lastrowid
+        conn.commit()
+        
+        # Build front-end setup link
+        frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
+        setup_link = f"{frontend_url}/warehouse/staff/setup?token={setup_token}"
+        
+        perms_str = role_row["permissions"] or "[]"
+        try:
+            perms = json.loads(perms_str) if isinstance(perms_str, str) else list(perms_str)
+        except Exception:
+            perms = []
+            
+        role_name = role_row["role_name"] or "Billing Agent"
+        
+        # Trigger email notification automatically in background thread
+        Thread(
+            target=send_staff_billing_setup_email,
+            args=(login_email, name, warehouse_name, setup_link, role_name),
+            daemon=True
+        ).start()
+        
+        return jsonify({
+            "message": f"Staff member '{name}' created successfully. Setup link sent to {login_email}.",
+            "staff_id": staff_id,
+            "login_email": login_email,
+            "setup_link": setup_link
+        }), 201
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/staff/setup-password", methods=["POST"])
+def setup_staff_password():
+    """
+    First-time password generation for a staff member using their email setup token.
+    """
+    data = request.get_json(silent=True) or {}
+    token = data.get("token", "").strip()
+    password = data.get("password", "").strip()
+    
+    if not token or not password:
+        return error_response("Token and password are required", 400)
+        
+    if len(password) < 6:
+        return error_response("Password must be at least 6 characters long", 400)
+        
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        staff = cur.execute(
+            """
+            SELECT ws.staff_id, ws.name, ws.login_email, ws.vendor_id, ws.setup_token_expires,
+                   r.role_name, r.permissions
+            FROM warehouse_staff ws
+            LEFT JOIN roles r ON r.role_id = ws.role_id
+            WHERE ws.setup_token = ?
+            """,
+            (token,)
+        ).fetchone()
+        
+        if not staff:
+            return error_response("Invalid or expired setup token", 400)
+            
+        password_hash = generate_password_hash(password)
+        cur.execute(
+            """
+            UPDATE warehouse_staff
+            SET password_hash = ?, setup_token = NULL, setup_token_expires = NULL, status = 'active', updated_at = CURRENT_TIMESTAMP
+            WHERE staff_id = ?
+            """,
+            (password_hash, staff["staff_id"])
+        )
+        conn.commit()
+        
+        perms_str = staff["permissions"] or "[]"
+        try:
+            perms = json.loads(perms_str) if isinstance(perms_str, str) else list(perms_str)
+        except Exception:
+            perms = []
+            
+        jwt_token = issue_staff_token(
+            staff_id=staff["staff_id"],
+            vendor_id=staff["vendor_id"],
+            email=staff["login_email"],
+            name=staff["name"],
+            role_name=staff["role_name"] or "Billing Agent",
+            permissions=perms
+        )
+        
+        return jsonify({
+            "message": "Password generated successfully! Logging you in...",
+            "token": jwt_token,
+            "user": {
+                "staff_id": staff["staff_id"],
+                "vendor_id": staff["vendor_id"],
+                "name": staff["name"],
+                "email": staff["login_email"],
+                "role_name": staff["role_name"] or "Billing Agent",
+                "permissions": perms
+            }
+        }), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/staff/login", methods=["POST"])
+def staff_login():
+    """
+    Staff / Agent login endpoint using login_email & password.
+    """
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "").strip()
+    
+    if not email or not password:
+        return error_response("Email and password are required", 400)
+        
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        staff = cur.execute(
+            """
+            SELECT ws.staff_id, ws.vendor_id, ws.name, ws.login_email, ws.password_hash, ws.status,
+                   r.role_name, r.permissions
+            FROM warehouse_staff ws
+            JOIN roles r ON r.role_id = ws.role_id AND r.vendor_id = ws.vendor_id
+            WHERE LOWER(ws.login_email) = ?
+            """,
+            (email,)
+        ).fetchone()
+        
+        if not staff:
+            return error_response("Invalid email or password", 401)
+            
+        if staff["status"] != "active":
+            return error_response("Account is inactive or suspended", 403)
+            
+        if not staff["password_hash"] or not check_password_hash(staff["password_hash"], password):
+            return error_response("Invalid email or password", 401)
+            
+        perms_str = staff["permissions"] or "[]"
+        try:
+            perms = json.loads(perms_str) if isinstance(perms_str, str) else list(perms_str)
+        except Exception:
+            perms = []
+            
+        jwt_token = issue_staff_token(
+            staff_id=staff["staff_id"],
+            vendor_id=staff["vendor_id"],
+            email=staff["login_email"],
+            name=staff["name"],
+            role_name=staff["role_name"],
+            permissions=perms
+        )
+        
+        return jsonify({
+            "token": jwt_token,
+            "user": {
+                "staff_id": staff["staff_id"],
+                "vendor_id": staff["vendor_id"],
+                "name": staff["name"],
+                "email": staff["login_email"],
+                "role_name": staff["role_name"],
+                "permissions": perms
+            }
+        }), 200
+    finally:
+        conn.close()
+
+
+# ── POS Billing API Endpoints ──────────────────────────────────────────────────
+
+@warehouse_bp.route("/api/warehouse/billing/products", methods=["GET"])
+@require_warehouse_staff_permission("billing")
+def get_billing_products():
+    """
+    Returns inventory items available for billing for the authenticated vendor only.
+    Guarded by billing permission.
+    """
+    vendor_id = request.vendor_id
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT p.id, p.name, p.price, p.image_url, p.category, 
+                   COALESCE(wi.available_stock, wi.stock_quantity, p.stock) AS stock
+            FROM products p
+            JOIN warehouse_inventory wi ON wi.product_id = p.id AND wi.warehouse_id = ?
+            WHERE wi.stock_quantity > 0 OR wi.available_stock > 0
+            ORDER BY p.name ASC
+            """,
+            (vendor_id,)
+        ).fetchall()
+        
+        result = []
+        for r in rows:
+            result.append({
+                "id": r["id"],
+                "name": r["name"],
+                "price": r["price"],
+                "image_url": r["image_url"] if "image_url" in r.keys() else None,
+                "category": r["category"] if "category" in r.keys() else "General",
+                "stock": r["stock"]
+            })
+        return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/generate", methods=["POST"])
+@require_warehouse_staff_permission("billing")
+def generate_billing_order():
+    """
+    Generates an offline billing receipt/order for counter sales.
+    Guarded by billing permission.
+    Atomically updates stock to prevent overselling.
+    """
+    data = request.get_json(silent=True) or {}
+    items = data.get("items", [])
+    customer_name = data.get("customer_name", "Counter Customer").strip()
+    customer_phone = data.get("customer_phone", "").strip()
+    payment_mode = data.get("payment_mode", "CASH").upper()
+    discount_amount = float(data.get("discount_amount", 0))
+    
+    if not items or not isinstance(items, list):
+        return error_response("Items list is required for billing", 400)
+        
+    vendor_id = request.vendor_id
+    agent_id = request.staff_id
+    
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        
+        subtotal = 0.0
+        validated_items = []
+        
+        # 1. Validate stock & calculate subtotal
+        for item in items:
+            product_id = item.get("product_id") or item.get("id")
+            qty = int(item.get("quantity") or item.get("qty") or 1)
+            
+            if not product_id or qty <= 0:
+                conn.rollback()
+                return error_response("Invalid product or quantity", 400)
+                
+            p_row = cur.execute("SELECT id, name, price, stock FROM products WHERE id = ?", (product_id,)).fetchone()
+            if not p_row:
+                conn.rollback()
+                return error_response(f"Product #{product_id} not found", 404)
+                
+            wi_row = cur.execute(
+                "SELECT stock_quantity, available_stock FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
+                (vendor_id, product_id)
+            ).fetchone()
+            
+            avail_stock = wi_row["available_stock"] if wi_row else p_row["stock"]
+            if avail_stock < qty:
+                conn.rollback()
+                return error_response(f"Insufficient stock for '{p_row['name']}'. Available: {avail_stock}, Requested: {qty}", 400)
+                
+            item_price = float(p_row["price"])
+            item_total = item_price * qty
+            subtotal += item_total
+            validated_items.append({
+                "product_id": product_id,
+                "name": p_row["name"],
+                "qty": qty,
+                "price": item_price,
+                "subtotal": item_total
+            })
+            
+        tax_amount = round(subtotal * 0.18, 2) # 18% GST standard
+        total_amount = max(0.0, round(subtotal + tax_amount - discount_amount, 2))
+        order_number = f"BILL-{int(time.time())}-{random.randint(1000, 9999)}"
+        
+        # 2. Insert offline order
+        cur.execute(
+            """
+            INSERT INTO orders (
+                order_number, vendor_id, source, agent_id, customer_name, customer_phone,
+                total_amount, order_status, payment_status, payment_type
+            )
+            VALUES (?, ?, 'OFFLINE', ?, ?, ?, ?, 'CONFIRMED', 'completed', ?)
+            """,
+            (order_number, vendor_id, agent_id, customer_name, customer_phone, total_amount, payment_mode)
+        )
+        order_id = cur.lastrowid
+        
+        # 3. Insert order items & decrement inventory stock atomically
+        for item in validated_items:
+            cur.execute(
+                """
+                INSERT INTO order_items (order_id, product_id, product_name, quantity, price, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (order_id, item["product_id"], item["name"], item["qty"], item["price"], item["subtotal"])
+            )
+            
+            # Decrement global product stock
+            cur.execute(
+                "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
+                (item["qty"], item["product_id"], item["qty"])
+            )
+            
+            # Decrement warehouse specific inventory stock
+            cur.execute(
+                """
+                UPDATE warehouse_inventory
+                SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
+                    available_stock = CASE WHEN available_stock >= ? THEN available_stock - ? ELSE 0 END
+                WHERE warehouse_id = ? AND product_id = ?
+                """,
+                (item["qty"], item["qty"], item["qty"], item["qty"], vendor_id, item["product_id"])
+            )
+            
+        conn.commit()
+        
+        return jsonify({
+            "message": "Bill generated successfully!",
+            "order_id": order_id,
+            "order_number": order_number,
+            "customer_name": customer_name,
+            "customer_phone": customer_phone,
+            "payment_mode": payment_mode,
+            "subtotal": round(subtotal, 2),
+            "tax_amount": tax_amount,
+            "discount_amount": discount_amount,
+            "total_amount": total_amount,
+            "items": validated_items,
+            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }), 201
+    except Exception as exc:
+        conn.rollback()
+        return error_response(f"Failed to generate bill: {str(exc)}", 500)
+    finally:
+        conn.close()
+

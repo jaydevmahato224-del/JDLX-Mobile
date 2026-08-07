@@ -82,6 +82,8 @@ def migrate():
         add_column_if_missing(cursor, "warehouse_staff", "login_email", "TEXT")
         add_column_if_missing(cursor, "warehouse_staff", "username", "TEXT")
         add_column_if_missing(cursor, "warehouse_staff", "password_hash", "TEXT")
+        add_column_if_missing(cursor, "warehouse_staff", "setup_token", "TEXT")
+        add_column_if_missing(cursor, "warehouse_staff", "setup_token_expires", "TIMESTAMP")
 
         staff_pk = get_warehouse_staff_pk(cursor)
         print("Adding order source and agent columns if missing...")

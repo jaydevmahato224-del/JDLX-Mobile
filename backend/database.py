@@ -902,6 +902,9 @@ def init_db():
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('construction_mode', 'false')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('construction_mode_message', 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_cod_protection', 'true')")
+    # Session duration (hours) for regular store users before auto-logout.
+    # Default 8760h = 365 days -> users stay logged in. Admin can change this.
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('user_session_duration_hours', '8760')")
 
     conn.commit()
     conn.close()

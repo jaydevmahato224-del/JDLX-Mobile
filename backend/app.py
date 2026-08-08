@@ -874,6 +874,19 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         upsert_admin_record(cursor, user['id'], user_role)
     else:
         remove_admin_record(cursor, user['id'])
+
+    # Read admin-controlled session duration for regular users (from system_settings).
+    # Default: 8760 hours = 365 days, so store users stay logged in without auto-logout.
+    user_session_hours = 8760
+    try:
+        cursor.execute("SELECT value FROM system_settings WHERE key = 'user_session_duration_hours'")
+        row = cursor.fetchone()
+        if row and row['value']:
+            parsed = float(row['value'])
+            if parsed and parsed > 0:
+                user_session_hours = parsed
+    except Exception:
+        pass  # never break login flow on settings read failure
     conn.commit()
     conn.close()
 
@@ -888,9 +901,10 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         )
         run_admin_anomaly_check(user_dict['id'], "admin_login")
 
-    # Admin sessions expire in 8 hours; regular users get 24 hours
+    # Admin sessions expire in 8 hours (security, unchanged); regular users get the
+    # admin-controlled duration from system_settings (default 8760h = 365 days).
     is_admin = user_role in ('admin', 'super_admin')
-    token_expiry = datetime.timedelta(hours=8) if is_admin else datetime.timedelta(hours=24)
+    token_expiry = datetime.timedelta(hours=8) if is_admin else datetime.timedelta(hours=user_session_hours)
     now_utc = datetime.datetime.utcnow()
     payload = {
         'user_id': user_dict['id'],

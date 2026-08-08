@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send } from 'lucide-react'
+import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send, Clock } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
@@ -58,7 +58,10 @@ export default function AdminSettings() {
 
     // Under Construction Settings
     construction_mode: 'false',
-    construction_mode_message: 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!'
+    construction_mode_message: 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!',
+
+    // User Session / Auto-Logout Settings
+    user_session_duration_hours: '8760'
   })
 
   // Helper Toggle Component
@@ -213,6 +216,7 @@ export default function AdminSettings() {
   const tabs = [
     { id: 'delivery', label: 'Delivery & Logistics', icon: Truck, description: 'COD, pincodes, Shiprocket' },
     { id: 'app', label: 'App Experience', icon: Smartphone, description: 'PWA, Ticker, Under Construction' },
+    { id: 'sessions', label: 'Sessions & Login', icon: Clock, description: 'Auto-logout, session duration' },
     { id: 'content', label: 'Legal & Policies', icon: FileText, description: 'Terms & conditions, About us content' },
     { id: 'brand', label: 'Brand & Footer', icon: Globe, description: 'Support, social handles, story' },
   ]
@@ -247,7 +251,7 @@ export default function AdminSettings() {
       </div>
 
       {/* Categories / Tabs Grid Selector */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         {tabs.map((t) => {
           const Icon = t.icon
           const isActive = activeTab === t.id
@@ -951,6 +955,91 @@ export default function AdminSettings() {
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-600 outline-none focus:bg-white focus:border-primary transition-all resize-none"
                 />
                 <p className="text-[10px] text-slate-400 font-medium italic">Appears below the logo in the footer. Keep it under 200 characters for best results.</p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB: SESSIONS & LOGIN */}
+        {activeTab === 'sessions' && (
+          <section className="ui-card-standard p-6 md:p-10 animate-in fade-in duration-300">
+            <div className="mb-10">
+              <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                <Clock className="w-7 h-7 text-primary" />
+                Sessions & Login
+              </h2>
+              <p className="text-slate-500 font-medium mt-1">
+                Control how long store customers stay logged in before they are automatically signed out.
+              </p>
+            </div>
+
+            <div className="space-y-8">
+              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                <h3 className="font-bold text-slate-800">User Session Duration (Auto-Logout)</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Store users stay logged in for this many hours after login. Set a high value (e.g. 8760 = 1 year)
+                  to keep users logged in without any auto-logout. This only applies to regular store customers —
+                  admin sessions are always limited to 8 hours for security.
+                </p>
+
+                <div className="mt-6 space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Session Duration (hours)</label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="number"
+                      min="1"
+                      value={settings.user_session_duration_hours || ''}
+                      placeholder="8760"
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        const num = parseFloat(raw)
+                        if (raw === '' || (!isNaN(num) && num >= 1)) {
+                          handleChange('user_session_duration_hours', raw)
+                        }
+                      }}
+                      className="w-40 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleChange('user_session_duration_hours', '24')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary transition-all"
+                    >1 Day</button>
+                    <button
+                      type="button"
+                      onClick={() => handleChange('user_session_duration_hours', '168')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary transition-all"
+                    >7 Days</button>
+                    <button
+                      type="button"
+                      onClick={() => handleChange('user_session_duration_hours', '720')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary transition-all"
+                    >30 Days</button>
+                    <button
+                      type="button"
+                      onClick={() => handleChange('user_session_duration_hours', '8760')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-amber-400/60 bg-amber-50 text-amber-700 hover:border-amber-500 transition-all"
+                    >365 Days (No logout)</button>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600">
+                  {(() => {
+                    const hrs = parseFloat(settings.user_session_duration_hours)
+                    if (isNaN(hrs) || hrs <= 0) return 'Enter a session duration above (min 1 hour).'
+                    if (hrs >= 8760) return '✅ Users stay logged in for 1 year+ — no practical auto-logout.'
+                    const days = (hrs / 24).toFixed(1)
+                    return `👤 Users stay logged in for ${hrs} hours (≈ ${days} days) after login.`
+                  })()}
+                </div>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-amber-50/60 border border-amber-200/60">
+                <h3 className="font-bold text-slate-800">How it works</h3>
+                <ul className="mt-3 space-y-2 text-sm text-slate-600 font-medium">
+                  <li>• Duration applies to <b>new logins</b> — users already logged in keep their current session until it naturally expires.</li>
+                  <li>• Admin panel & warehouse staff sessions keep their existing security limits (8h / 7 days) — unchanged.</li>
+                  <li>• Users are only logged out when they press "Logout" or when the session duration is reached.</li>
+                </ul>
               </div>
             </div>
           </section>

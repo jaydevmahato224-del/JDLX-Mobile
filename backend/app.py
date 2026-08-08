@@ -5439,6 +5439,13 @@ def admin_add_product():
     category = data.get('category')
     delivery_time = data.get('delivery_time', '30-120 mins')
     images = data.get('images')
+    offline_price = data.get('offline_price')
+    try:
+        offline_price = float(offline_price) if offline_price not in (None, '') else None
+        if offline_price is not None and offline_price <= 0:
+            offline_price = None
+    except (TypeError, ValueError):
+        offline_price = None
 
     if not name or price is None:
         return error_response("Missing required fields", 400)
@@ -5454,8 +5461,8 @@ def admin_add_product():
         seo_slug = generate_seo_slug(name)
         
         cursor.execute(
-            "INSERT INTO products (name, price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug)
+            "INSERT INTO products (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, price, offline_price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug)
         )
         product_id = cursor.lastrowid
         conn.commit()
@@ -5503,7 +5510,7 @@ def admin_update_product(product_id):
         updates = []
         params = []
         
-        for key in ['name', 'price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
+        for key in ['name', 'price', 'offline_price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
             if key in data:
                 updates.append(f"{key}=?")
                 params.append(data[key])

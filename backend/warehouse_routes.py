@@ -2036,6 +2036,7 @@ def warehouse_get_inventory():
                       COALESCE(NULLIF(wi.selling_price, 0), p.price, 0) as selling_price,
                       wi.mrp, wi.discount_pct, wi.discount_amt, wi.gst_pct,
                       p.price as global_price,
+                      p.offline_price as offline_price,
                       wi.status,
                       p.id as product_id, c.name as category, p.category_id, p.sub_category, p.images,
                       p.description, p.delivery_time, p.units_per_pack, p.material_type,
@@ -2122,7 +2123,19 @@ def warehouse_add_inventory():
             ) WHERE id = ?""",
             (product_id, product_id)
         )
-        
+
+        # Persist offline (POS) sale price when registering an existing
+        # catalog product to this warehouse (mirrors the PATCH meta path).
+        off_price = data.get('offline_price')
+        if off_price not in (None, ''):
+            try:
+                off_val = float(off_price)
+                if off_val <= 0:
+                    off_val = None
+            except (TypeError, ValueError):
+                off_val = None
+            conn.execute("UPDATE products SET offline_price = ? WHERE id = ?", (off_val, product_id))
+
         conn.commit()
         return success_response(None, "SKU added to inventory and synced with catalog", 201)
     finally:
@@ -2140,6 +2153,15 @@ def warehouse_create_product():
     
     name = data.get('name')
     price = data.get('price')
+    # Optional separate price used by counter/offline (POS) billing.
+    # When empty/None the POS falls back to the regular online price.
+    offline_price = data.get('offline_price')
+    try:
+        offline_price = float(offline_price) if offline_price not in (None, '') else None
+        if offline_price is not None and offline_price <= 0:
+            offline_price = None
+    except (TypeError, ValueError):
+        offline_price = None
     category = data.get('category')
     category_id = data.get('category_id')
     images = data.get('images')
@@ -2186,16 +2208,16 @@ def warehouse_create_product():
         cursor.execute(
             """
             INSERT INTO products (
-                name, description, sub_category, price, category, category_id, images, 
+                name, description, sub_category, price, offline_price, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
                 weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                 is_featured, has_variants, is_parent, recommendation_priority, recommendation_weight,
                 lifecycle_state, share_token
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                name, description, data.get('sub_category'), price or 0, category, category_id, images, 
+                name, description, data.get('sub_category'), price or 0, offline_price, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, data.get('brand'), data.get('units_per_pack'), 
                 data.get('material_type'), data.get('weight'), data.get('dimensions'),
                 data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
@@ -2382,7 +2404,7 @@ def warehouse_create_product():
                 ) WHERE id = ?""",
                 (product_id, product_id)
             )
-            
+
             conn.commit()
             return success_response({"product_id": product_id, "sku": final_sku}, "Product created, added to inventory, and synced with catalog", 201)
 
@@ -2420,7 +2442,8 @@ def warehouse_patch_inventory(item_id):
             "name", "images", "description", "brand", "units_per_pack", "material_type", 
             "category_id", "sub_category", "weight", "dimensions", "is_fragile", 
             "is_temp_sensitive", "is_perishable", "expiry_date", "is_featured",
-            "recommendation_priority", "recommendation_weight", "lifecycle_state"
+            "recommendation_priority", "recommendation_weight", "lifecycle_state",
+            "offline_price"
         ]
         meta_updates = []
         meta_values = []
@@ -2429,6 +2452,13 @@ def warehouse_patch_inventory(item_id):
                 val = data[field]
                 if field == "images" and isinstance(val, list):
                     val = json.dumps(val)
+                if field == "offline_price":
+                    try:
+                        val = float(val) if val not in (None, '') else None
+                        if val is not None and val <= 0:
+                            val = None
+                    except (TypeError, ValueError):
+                        val = None
                 meta_updates.append(f"{field} = ?")
                 meta_values.append(val)
         
@@ -3934,7 +3964,7 @@ def get_billing_products():
         # `images` (there is no `image_url` column), so pull the first image.
         rows = conn.execute(
             """
-            SELECT p.id, p.name, p.price, p.images, p.category, 
+            SELECT p.id, p.name, p.price, p.offline_price, p.images, p.category, 
                    COALESCE(wi.available_stock, wi.stock_quantity, p.stock) AS stock
             FROM products p
             JOIN warehouse_inventory wi ON wi.product_id = p.id AND wi.warehouse_id = ?
@@ -3946,10 +3976,20 @@ def get_billing_products():
         
         result = []
         for r in rows:
+            regular_price = float(r["price"] or 0)
+            offline_price = r["offline_price"]
+            # Counter/offline sales use the dedicated offline price when set;
+            # otherwise they fall back to the regular online price.
+            try:
+                effective_price = float(offline_price) if offline_price else regular_price
+            except (TypeError, ValueError):
+                effective_price = regular_price
             result.append({
                 "id": r["id"],
                 "name": r["name"],
-                "price": r["price"],
+                "price": effective_price,
+                "offline_price": offline_price,
+                "regular_price": regular_price,
                 "image_url": _first_product_image(r["images"]),
                 "category": r["category"] if "category" in r.keys() else "General",
                 "stock": r["stock"]
@@ -4001,7 +4041,7 @@ def generate_billing_order():
                 conn.rollback()
                 return error_response("Invalid product or quantity", 400)
                 
-            p_row = cur.execute("SELECT id, name, price, stock FROM products WHERE id = ?", (product_id,)).fetchone()
+            p_row = cur.execute("SELECT id, name, price, offline_price, stock FROM products WHERE id = ?", (product_id,)).fetchone()
             if not p_row:
                 conn.rollback()
                 return error_response(f"Product #{product_id} not found", 404)
@@ -4025,7 +4065,12 @@ def generate_billing_order():
                 conn.rollback()
                 return error_response(f"Insufficient stock for '{p_row['name']}'. Available: {avail_stock}, Requested: {qty}", 400)
                 
-            item_price = float(p_row["price"])
+            # Counter/offline sales use the dedicated offline price when set;
+            # otherwise fall back to the regular online price.
+            try:
+                item_price = float(p_row["offline_price"]) if p_row["offline_price"] else float(p_row["price"])
+            except (TypeError, ValueError):
+                item_price = float(p_row["price"])
             item_total = item_price * qty
             subtotal += item_total
             validated_items.append({

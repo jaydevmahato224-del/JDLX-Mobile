@@ -370,7 +370,15 @@ export default function StaffBilling() {
                       </div>
 
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-900">
-                        <span className="text-sm font-bold text-emerald-400">₹{product.price}</span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-emerald-400">₹{product.price}</span>
+                          {product.regular_price && Number(product.price) !== Number(product.regular_price) && (
+                            <span className="text-[10px] text-slate-500 line-through">₹{product.regular_price}</span>
+                          )}
+                          {product.offline_price && (
+                            <span className="mt-0.5 self-start px-1.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/30 text-[8px] font-black uppercase tracking-widest text-violet-300">Offline</span>
+                          )}
+                        </div>
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
                           isOutOfStock ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-300'
                         }`}>

@@ -183,6 +183,7 @@ def init_db():
         ('delivery_time', "TEXT DEFAULT '12-25 mins'"), 
         ('status', "TEXT DEFAULT 'available'"), 
         ('images', 'TEXT'), 
+        ('offline_price', 'REAL'), 
         ('has_variants', 'BOOLEAN DEFAULT 0'), 
         ('is_parent', 'BOOLEAN DEFAULT 0'), 
         ('recommendation_priority', 'INTEGER DEFAULT 0'), 

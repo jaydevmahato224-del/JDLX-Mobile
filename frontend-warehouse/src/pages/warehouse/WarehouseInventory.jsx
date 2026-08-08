@@ -42,13 +42,14 @@ import {
     Eye,
     ShoppingCart,
     CreditCard,
-    Heart
+    Heart,
+    Store
 } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 
 const INITIAL_PRODUCT_STATE = {
-    product_id: '', name: '', description: '', price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '', is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
+    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '', is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
 const WarehouseInventory = () => {
@@ -83,8 +84,7 @@ const WarehouseInventory = () => {
     const [searchQuery, setSearchQuery] = useState('')
     const [filterStatus, setFilterStatus] = useState('all') // all, low, out
     const [lifecycleFilter, setLifecycleFilter] = useState('all') // all, draft, testing, live, archived, discontinued, coming_soon
-    const [updatingId, setUpdatingId] = useState(null)
-    const [error, setError] = useState('')
+    const [_error, setError] = useState('')
     const [notification, setNotification] = useState(null)
 
     // Stock IN/OUT Modal State
@@ -355,28 +355,6 @@ const WarehouseInventory = () => {
         return () => clearTimeout(timer)
     }, [productSearch, selectedCategoryId])
 
-    const handleUpdateStock = async (id, newQuantity) => {
-        if (!warehouseToken) return
-        setUpdatingId(id)
-        try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/inventory/${id}`, {
-                method: 'PATCH',
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ stock_quantity: newQuantity })
-            })
-            if (!response.ok) throw new Error('Failed to update stock')
-            showNotification('Stock updated successfully')
-            await fetchInventory()
-        } catch (err) {
-            showNotification(err.message, 'error')
-        } finally {
-            setUpdatingId(null)
-        }
-    }
-
     const openStockAdjust = (item, mode) => {
         setStockAdjustModal({ item, mode })
         setAdjustQty(1)
@@ -443,7 +421,7 @@ const WarehouseInventory = () => {
                 try {
                     const parsed = JSON.parse(item.images);
                     parsedImages = Array.isArray(parsed) ? parsed : [item.images];
-                } catch (e) {
+                } catch {
                     parsedImages = [item.images];
                 }
             }
@@ -461,6 +439,7 @@ const WarehouseInventory = () => {
             unit: item.unit || 'pcs',
             cost_price: item.cost_price || 0,
             price: item.selling_price || item.global_price || 0,
+            offline_price: item.offline_price || '',
             mrp: item.mrp || 0,
             discount_pct: item.discount_pct || 0,
             discount_amt: item.discount_amt || 0,
@@ -716,6 +695,9 @@ const WarehouseInventory = () => {
                 cost_price: parseFloat(newProductData.cost_price) || 0,
                 selling_price: parseFloat(newProductData.price) || 0,
                 price: parseFloat(newProductData.price) || 0,
+                offline_price: newProductData.offline_price === '' || newProductData.offline_price == null
+                    ? null
+                    : parseFloat(newProductData.offline_price),
                 mrp: parseFloat(newProductData.mrp) || 0,
                 discount_pct: parseFloat(newProductData.discount_pct) || 0,
                 discount_amt: parseFloat(newProductData.discount_amt) || 0,
@@ -1690,6 +1672,79 @@ const WarehouseInventory = () => {
                                                         </select>
                                                     </div>
                                                 )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SECTION 4.5: OFFLINE SALE (POS) PRICING */}
+                                <div className="warehouse-panel p-8 space-y-6 border-t-2 border-white/5 bg-slate-900/40 backdrop-blur-xl group relative overflow-hidden">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 rounded-2xl bg-violet-400/10 text-violet-400">
+                                            <Store size={22} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Offline Sale (POS)</h3>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Counter billing ke liye alag price — stock online store jaisa hi rahega</p>
+                                        </div>
+                                        <span className="ml-auto px-2.5 py-1 rounded-full bg-violet-400/10 border border-violet-400/30 text-[9px] font-black text-violet-300 uppercase tracking-widest">Counter / Store</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Offline Sale Price (₹)</label>
+                                            <div className="relative">
+                                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-violet-400 font-bold text-xs">₹</div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    placeholder="Online price use karein"
+                                                    value={newProductData.offline_price}
+                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, offline_price: e.target.value }))}
+                                                    className="w-full bg-slate-950/50 border border-violet-400/20 rounded-xl py-3 pl-10 pr-4 text-xs text-white font-bold focus:outline-none focus:border-violet-400/50 transition-all outline-none"
+                                                />
+                                            </div>
+                                            <p className="text-[9px] font-semibold text-slate-600 ml-1 leading-relaxed">Counter/POS billing pe yehi price use hogi. Khali chhodo toh online price auto use hogi.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Online Store Price</label>
+                                            <div className="relative">
+                                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600 font-bold text-xs">₹</div>
+                                                <input
+                                                    type="number"
+                                                    readOnly
+                                                    value={newProductData.price || ''}
+                                                    className="w-full bg-slate-950/30 border border-white/5 rounded-xl py-3 pl-10 pr-4 text-xs text-white/80 font-bold cursor-not-allowed outline-none"
+                                                />
+                                            </div>
+                                            <p className="text-[9px] font-semibold text-slate-600 ml-1">Yeh online store pe dikhegi — offline se alag ho sakti hai.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Offline vs Online</label>
+                                            <div className="rounded-xl border border-white/5 bg-slate-950/30 p-4 min-h-[46px] flex items-center gap-2">
+                                                {(() => {
+                                                    const off = parseFloat(newProductData.offline_price);
+                                                    const on = parseFloat(newProductData.price) || 0;
+                                                    if (off > 0 && on > 0) {
+                                                        const diff = off - on;
+                                                        const pct = on > 0 ? ((diff / on) * 100).toFixed(1) : '0';
+                                                        return (
+                                                            <div className="flex items-center gap-2 text-[11px] font-black">
+                                                                {diff < 0 ? <TrendingDown className="text-emerald-400" size={14} /> : <TrendingUp className="text-rose-400" size={14} />}
+                                                                <span className={diff < 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                                                    {diff < 0 ? `${Math.abs(diff).toFixed(2)} cheaper (${Math.abs(pct)}%)` : `${diff.toFixed(2)} higher (${pct}%)`}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (on > 0) {
+                                                        return <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Online price use hogi</span>;
+                                                    }
+                                                    return <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Pehle price daalein</span>;
+                                                })()}
                                             </div>
                                         </div>
                                     </div>
@@ -2948,7 +3003,7 @@ const WarehouseInventory = () => {
                                                                     try {
                                                                         const parsed = JSON.parse(item.images);
                                                                         displayImage = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : item.images;
-                                                                    } catch (e) {
+                                                                    } catch {
                                                                         displayImage = item.images;
                                                                     }
                                                                 }
@@ -3564,6 +3619,7 @@ const WarehouseInventory = () => {
                                         color: 'text-slate-300'
                                     },
                                     { label: 'Selling Price', value: (selectedItem.selling_price !== undefined && selectedItem.selling_price !== null) ? `₹${selectedItem.selling_price}` : '—', color: 'text-amber-400' },
+                                    { label: 'Offline Price (POS)', value: selectedItem.offline_price ? `₹${selectedItem.offline_price}` : 'Online price', color: 'text-violet-400' },
                                     { label: 'Cost Price', value: (selectedItem.cost_price !== undefined && selectedItem.cost_price !== null) ? `₹${selectedItem.cost_price}` : '—', color: 'text-slate-300' },
                                     { label: 'Low Stock Alert', value: selectedItem.low_stock_threshold, color: 'text-slate-300' },
                                     { label: 'SKU', value: selectedItem.sku, color: 'text-amber-400' },

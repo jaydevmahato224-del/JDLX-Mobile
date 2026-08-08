@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, FileText, ShieldCheck, Package, Truck, BarChart, Bike } from 'lucide-react'
+import { Building2, FileText, ShieldCheck, Package, Truck, BarChart, Bike, ReceiptText, KeyRound, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { API_BASE_URL, API_ORIGIN } from '../../config'
 import { useStore } from '../../store/useStore'
 
@@ -15,6 +16,12 @@ function WarehouseLogin() {
 
     const [loading, setLoading] = useState(false)
     const [deliveryLoading, setDeliveryLoading] = useState(false)
+
+    // Billing agent (staff) login
+    const [staffEmail, setStaffEmail] = useState('')
+    const [staffPassword, setStaffPassword] = useState('')
+    const [staffLoading, setStaffLoading] = useState(false)
+    const [staffError, setStaffError] = useState('')
 
     // Handle redirect-based oauth token in URL (legacy support)
     useEffect(() => {
@@ -46,6 +53,46 @@ function WarehouseLogin() {
         if (flowType === 'delivery_login') setDeliveryLoading(true)
         
         window.location.href = `${API_ORIGIN}/partner/login/google?flow=${flowType}`
+    }
+
+    const handleStaffLogin = async (e) => {
+        e.preventDefault()
+        setStaffError('')
+        if (!staffEmail || !staffPassword) {
+            setStaffError('Please enter your email and password.')
+            return
+        }
+        setStaffLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/warehouse/staff/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: staffEmail, password: staffPassword })
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                throw new Error(data.error || data.message || 'Login failed')
+            }
+            // Store staff token in the same keys StaffSetupPassword uses, and
+            // also sync into the shared store so WarehouseRoute grants access.
+            if (data.token) {
+                localStorage.setItem('warehouse_token', data.token)
+                localStorage.setItem('staff_token', data.token)
+                localStorage.setItem('warehouse_user', JSON.stringify(data.user))
+                localStorage.setItem('warehouseUser', JSON.stringify(data.user))
+                localStorage.setItem('warehouseToken', data.token)
+            }
+            if (data.user) {
+                useStore.getState().setWarehouseUser(data.user, data.token)
+            }
+            toast.success(`Welcome back, ${data.user?.name || 'Agent'}!`)
+            navigate('/warehouse/billing', { replace: true })
+        } catch (err) {
+            console.error('Staff login error:', err)
+            setStaffError(err.message || 'Login failed')
+        } finally {
+            setStaffLoading(false)
+        }
     }
 
     return (
@@ -180,6 +227,71 @@ function WarehouseLogin() {
                                 </svg>
                                 {deliveryLoading ? 'Signing in...' : 'Delivery Login'}
                             </button>
+                        </div>
+
+                        {/* Billing Agent (Staff) Login Option */}
+                        <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                                <ReceiptText size={18} style={{ color: '#a78bfa' }} />
+                                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Billing Agent Access</h3>
+                                <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd', borderRadius: '100px', padding: '4px 10px' }}>
+                                    Email + Password
+                                </span>
+                            </div>
+                            <form onSubmit={handleStaffLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <input
+                                    type="email"
+                                    placeholder="Agent email"
+                                    value={staffEmail}
+                                    onChange={(e) => setStaffEmail(e.target.value)}
+                                    style={{
+                                        padding: '12px 16px', background: 'rgba(255,255,255,0.04)',
+                                        border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px',
+                                        color: '#f1f5f9', fontSize: '14px', outline: 'none',
+                                        fontFamily: "'Inter', sans-serif",
+                                    }}
+                                    disabled={staffLoading}
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Password"
+                                    value={staffPassword}
+                                    onChange={(e) => setStaffPassword(e.target.value)}
+                                    style={{
+                                        padding: '12px 16px', background: 'rgba(255,255,255,0.04)',
+                                        border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px',
+                                        color: '#f1f5f9', fontSize: '14px', outline: 'none',
+                                        fontFamily: "'Inter', sans-serif",
+                                    }}
+                                    disabled={staffLoading}
+                                />
+                                {staffError && (
+                                    <p style={{ fontSize: '12px', color: '#fca5a5', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '10px 12px', margin: 0, lineHeight: '1.5' }}>
+                                        {staffError}
+                                    </p>
+                                )}
+                                <button
+                                    type="submit"
+                                    disabled={staffLoading}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                        padding: '14px 24px', background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                                        color: '#fff', borderRadius: '12px', border: 'none', width: '100%',
+                                        fontWeight: 700, fontSize: '14px', cursor: staffLoading ? 'not-allowed' : 'pointer',
+                                        boxShadow: '0 4px 16px rgba(139,92,246,0.2)', opacity: staffLoading ? 0.7 : 1,
+                                        fontFamily: "'Inter', sans-serif",
+                                    }}
+                                >
+                                    {staffLoading ? (
+                                        <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Signing in...</>
+                                    ) : (
+                                        <><KeyRound size={16} /> Billing Agent Login</>
+                                    )}
+                                </button>
+                            </form>
+                            <p style={{ fontSize: '11px', color: '#64748b', margin: '12px 0 0', lineHeight: '1.5' }}>
+                                Billing agents get access to the Counter Billing (POS) only. Ask your warehouse manager for your login credentials.
+                            </p>
                         </div>
 
                         <Link to="/warehouse/request" style={{

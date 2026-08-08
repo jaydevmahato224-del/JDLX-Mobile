@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ShoppingBag, Search, Plus, Minus, Trash2, CreditCard, 
   DollarSign, QrCode, Printer, Download, CheckCircle, AlertCircle, 
   Smartphone, ShieldAlert, Sparkles, RefreshCw, X, ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL, resolveMediaUrl } from '../../config';
 
 export default function StaffBilling() {
   const [products, setProducts] = useState([]);
@@ -29,11 +28,14 @@ export default function StaffBilling() {
 
   // PWA Install Prompt state
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [isInstallable, setIsInstallable] = useState(false);
+  const [, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
 
   // Auth token check
-  const getToken = () => localStorage.getItem('warehouse_token') || localStorage.getItem('staff_token');
+  const getToken = () =>
+    localStorage.getItem('warehouseToken') ||
+    localStorage.getItem('warehouse_token') ||
+    localStorage.getItem('staff_token');
 
   useEffect(() => {
     fetchBillingProducts();
@@ -64,14 +66,14 @@ export default function StaffBilling() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [fetchBillingProducts]);
 
-  const fetchBillingProducts = async () => {
+  const fetchBillingProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/api/warehouse/billing/products`, {
+      const res = await fetch(`${API_BASE_URL}/warehouse/billing/products`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -96,7 +98,7 @@ export default function StaffBilling() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleInstallApp = async () => {
     if (!deferredPrompt) {
@@ -190,7 +192,7 @@ export default function StaffBilling() {
         }))
       };
 
-      const res = await fetch(`${API_BASE_URL}/api/warehouse/billing/generate`, {
+      const res = await fetch(`${API_BASE_URL}/warehouse/billing/generate`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -358,7 +360,7 @@ export default function StaffBilling() {
                       <div>
                         <div className="w-full h-24 bg-slate-900 rounded-lg mb-2 flex items-center justify-center overflow-hidden border border-slate-800/80">
                           {product.image_url ? (
-                            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                            <img src={resolveMediaUrl(product.image_url)} alt={product.name} className="w-full h-full object-cover" />
                           ) : (
                             <ShoppingBag className="w-8 h-8 text-slate-700" />
                           )}

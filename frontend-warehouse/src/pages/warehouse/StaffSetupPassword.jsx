@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { KeyRound, ShieldCheck, ArrowRight, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../../config';
+import { useStore } from '../../store/useStore';
 
 export default function StaffSetupPassword() {
   const [searchParams] = useSearchParams();
@@ -37,7 +37,7 @@ export default function StaffSetupPassword() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/warehouse/staff/setup-password`, {
+      const res = await fetch(`${API_BASE_URL}/warehouse/staff/setup-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password })
@@ -48,12 +48,16 @@ export default function StaffSetupPassword() {
         throw new Error(data.error || data.message || 'Failed to setup password');
       }
 
-      // Store JWT & user info upon successful setup
+      // Store JWT & user info upon successful setup — sync the shared store so
+      // the route guard (WarehouseRoute) recognizes the fresh staff session.
       if (data.token) {
         localStorage.setItem('warehouse_token', data.token);
         localStorage.setItem('staff_token', data.token);
+        localStorage.setItem('warehouseToken', data.token);
         if (data.user) {
           localStorage.setItem('warehouse_user', JSON.stringify(data.user));
+          localStorage.setItem('warehouseUser', JSON.stringify(data.user));
+          useStore.getState().setWarehouseUser(data.user, data.token);
         }
       }
 

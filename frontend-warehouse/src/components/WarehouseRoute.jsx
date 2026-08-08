@@ -8,7 +8,15 @@ const DEFAULT_ROLES = ['owner', 'warehouse_partner', 'delivery_partner', 'admin'
 function WarehouseRoute({ children, allowedRoles = DEFAULT_ROLES }) {
   const token = useStore((state) => state.warehouseToken)
   const user = useStore((state) => state.warehouseUser)
-  const role = (user?.role || 'user').toLowerCase()
+
+  // Staff users carry role_name (e.g. "Billing Agent") instead of role;
+  // normalize it so the billing/staff routes grant access.
+  const rawRole = (user?.role || user?.role_name || 'user').toLowerCase()
+  const role = rawRole.includes('billing')
+    ? 'billing'
+    : rawRole.includes('staff')
+    ? 'staff'
+    : rawRole
 
   if (!token) {
     return <Navigate to="/warehouse/login" replace />

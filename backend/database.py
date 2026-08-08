@@ -5,6 +5,11 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
+# Local-testing escape hatch: set FORCE_LOCAL_DB=1 in the environment to run
+# against the local SQLite file even when Turso credentials are present in .env.
+# This only controls which DB connection is used — no business logic is changed.
+FORCE_LOCAL_DB = os.environ.get("FORCE_LOCAL_DB", "").strip().lower() in ("1", "true", "yes")
+
 DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, 'jdlx.db')
 VALID_ROLES = ('user', 'admin', 'super_admin')
 
@@ -105,7 +110,7 @@ class LibsqlConnectionWrapper:
     def sync(self):
         if hasattr(self._conn, 'sync'): self._conn.sync()
 
-if TURSO_URL and TURSO_TOKEN:
+if not FORCE_LOCAL_DB and TURSO_URL and TURSO_TOKEN:
     try:
         import libsql_experimental as libsql
         USE_TURSO = True
@@ -318,6 +323,7 @@ def init_db():
     ensure_columns('orders', [
         ('source', "TEXT DEFAULT 'ONLINE'"),
         ('agent_id', 'INTEGER'),
+        ('vendor_id', 'INTEGER'),
         ('order_number', 'TEXT'),
         ('customer_name', 'TEXT'),
         ('customer_phone', 'TEXT'),
@@ -372,6 +378,92 @@ def init_db():
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY AUTOINCREMENT, warehouse_name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     ensure_columns('warehouses', [('partner_id', 'TEXT'), ('application_id', 'INTEGER'), ('owner_name', 'TEXT'), ('phone', 'TEXT'), ('address', 'TEXT'), ('pincode', 'TEXT'), ('warehouse_capacity', 'INTEGER'), ('warehouse_type', "TEXT DEFAULT 'micro_fulfillment'"), ('warehouse_role', "TEXT DEFAULT 'owner'"), ('operations_status', "TEXT DEFAULT 'open'"), ('weather_status', "TEXT DEFAULT 'clear'"), ('account_status', "TEXT DEFAULT 'active'"), ('profile_kyc_status', "TEXT DEFAULT 'verified'"), ('kyc_notice_sent', 'INTEGER DEFAULT 0'), ('kyc_notice_sent_at', 'TIMESTAMP'), ('service_radius_km', 'REAL DEFAULT 4'), ('quick_mode_enabled', 'INTEGER DEFAULT 0')])
+
+    # --- Vendor Staff Roles & Billing Agents ---
+    cursor.execute('''CREATE TABLE IF NOT EXISTS roles (
+        role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vendor_id INTEGER NOT NULL,
+        role_name TEXT NOT NULL,
+        permissions TEXT NOT NULL DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(vendor_id) REFERENCES warehouses(id),
+        UNIQUE(vendor_id, role_name)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_roles_vendor ON roles(vendor_id)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_staff (
+        staff_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vendor_id INTEGER NOT NULL,
+        role_id INTEGER,
+        name TEXT NOT NULL,
+        login_email TEXT,
+        username TEXT,
+        password_hash TEXT,
+        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+        setup_token TEXT,
+        setup_token_expires TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(vendor_id) REFERENCES warehouses(id),
+        FOREIGN KEY(role_id) REFERENCES roles(role_id),
+        UNIQUE(vendor_id, login_email),
+        UNIQUE(vendor_id, username)
+    )''')
+    # Legacy partner-module table may exist with a different PK name (id instead of staff_id).
+    # Detect and, if needed, rebuild it to the billing schema so the staff routes work.
+    try:
+        cursor.execute("PRAGMA table_info(warehouse_staff)")
+        wh_staff_cols = [r[1] for r in cursor.fetchall()]
+        if "staff_id" not in wh_staff_cols:
+            cursor.execute("ALTER TABLE warehouse_staff RENAME TO warehouse_staff_legacy")
+            cursor.execute('''CREATE TABLE warehouse_staff (
+                staff_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vendor_id INTEGER NOT NULL,
+                role_id INTEGER,
+                name TEXT NOT NULL,
+                login_email TEXT,
+                username TEXT,
+                password_hash TEXT,
+                status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+                setup_token TEXT,
+                setup_token_expires TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            legacy_cols = [r[1] for r in cursor.execute("PRAGMA table_info(warehouse_staff_legacy)").fetchall()]
+            legacy_cols_lower = {c.lower(): c for c in legacy_cols}
+            src_id = legacy_cols_lower.get("id") or legacy_cols_lower.get("staff_id")
+            src_name = legacy_cols_lower.get("name")
+            src_email = legacy_cols_lower.get("email") or legacy_cols_lower.get("login_email")
+            src_status = legacy_cols_lower.get("status")
+            src_vendor = legacy_cols_lower.get("vendor_id") or legacy_cols_lower.get("warehouse_partner_id")
+            src_created = legacy_cols_lower.get("created_at")
+            src_updated = legacy_cols_lower.get("updated_at")
+            if src_id and src_name:
+                status_expr = src_status if src_status else "'active'"
+                created_expr = src_created if src_created else "CURRENT_TIMESTAMP"
+                updated_expr = src_updated if src_updated else "CURRENT_TIMESTAMP"
+                insert_sql = (
+                    "INSERT INTO warehouse_staff (staff_id, vendor_id, name, login_email, status, created_at, updated_at) "
+                    "SELECT " + ", ".join([
+                        str(src_id),
+                        str(src_vendor) if src_vendor else "NULL",
+                        str(src_name),
+                        str(src_email) if src_email else "NULL",
+                        status_expr,
+                        created_expr,
+                        updated_expr,
+                    ]) +
+                    " FROM warehouse_staff_legacy"
+                )
+                cursor.execute(insert_sql)
+            cursor.execute("DROP TABLE warehouse_staff_legacy")
+    except Exception as e:
+        print(f"Ignored warehouse_staff schema rebuild error: {e}")
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_warehouse_staff_vendor ON warehouse_staff(vendor_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_warehouse_staff_role ON warehouse_staff(role_id)")
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

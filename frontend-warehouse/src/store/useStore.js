@@ -1,21 +1,24 @@
 import { create } from 'zustand'
 
 const safeParse = (key) => {
-    try {
-        const item = localStorage.getItem(key);
-        return (item && item !== 'undefined') ? JSON.parse(item) : null;
-    } catch (e) {
-        return null;
-    }
-};
+        try {
+            const item = localStorage.getItem(key);
+            return (item && item !== 'undefined') ? JSON.parse(item) : null;
+        } catch {
+            return null;
+        }
+    };
 
 export const useStore = create((set) => ({
     user: safeParse('user'),
     token: localStorage.getItem('token') || null,
     adminUser: safeParse('adminUser'),
     adminToken: localStorage.getItem('adminToken') || null,
-    warehouseUser: safeParse('warehouseUser'),
-    warehouseToken: localStorage.getItem('warehouseToken') || null,
+    // Staff/billing-agent sessions are stored under staff_token / warehouse_token
+    // (snake_case) by the setup & login flows; fall back to those so the store
+    // recognizes staff logins just like partner logins.
+    warehouseUser: safeParse('warehouseUser') || safeParse('warehouse_user'),
+    warehouseToken: localStorage.getItem('warehouseToken') || localStorage.getItem('warehouse_token') || localStorage.getItem('staff_token') || null,
     warehouseRequestUser: safeParse('warehouseRequestUser'),
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
     cart: [],
@@ -60,8 +63,13 @@ export const useStore = create((set) => ({
         set({ warehouseUser, warehouseToken });
     },
     warehouseLogout: () => {
+        // Clear both the partner (camelCase) and staff (snake_case) session
+        // keys so a billing-agent logout doesn't leave a stale token behind.
         localStorage.removeItem('warehouseUser');
         localStorage.removeItem('warehouseToken');
+        localStorage.removeItem('warehouse_user');
+        localStorage.removeItem('warehouse_token');
+        localStorage.removeItem('staff_token');
         set({ warehouseUser: null, warehouseToken: null });
     },
     setWarehouseRequestUser: (warehouseRequestUser, warehouseRequestToken) => {

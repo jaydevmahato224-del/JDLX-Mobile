@@ -18,6 +18,7 @@ import json
 import uuid
 import re
 import random
+import time
 import datetime
 import logging
 import sqlite3
@@ -74,6 +75,20 @@ warehouse_bp = Blueprint("warehouse", __name__)
 def get_db():
     """Returns a database connection (Turso in production, local sqlite3 in dev)."""
     return _db_get_db()
+
+
+def _get_current_warehouse_id():
+    """Resolves the warehouse id for the current token.
+
+    Warehouse owner tokens carry ``warehouse_id``; staff/billing-agent tokens
+    carry ``vendor_id``. Both mean "the warehouse this user belongs to", so
+    normalize to a single value so session / notification / dashboard reads
+    work for staff sessions too.
+    """
+    payload = request.warehouse_payload
+    if payload.get("type") == "warehouse_staff":
+        return payload.get("vendor_id")
+    return payload.get("warehouse_id")
 
 
 def generate_unique_partner_id(cursor):
@@ -335,7 +350,39 @@ def warehouse_upload_product_image():
 
 
 def require_warehouse_auth(f):
-    """Decorator to require a valid warehouse JWT token."""
+    """
+    Decorator requiring a valid warehouse OWNER (partner) JWT token.
+    Staff / billing-agent tokens are rejected here so they can never reach
+    the partner data endpoints (dashboard, orders, inventory, analytics...).
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return error_response("Missing warehouse token", 401)
+        
+        token = auth.split(" ", 1)[1]
+        try:
+            payload = decode_warehouse_token(token)
+            if payload.get("type") != "warehouse":
+                return error_response("Staff accounts cannot access partner endpoints", 403)
+        except jwt.ExpiredSignatureError:
+            return error_response("Warehouse session expired", 401)
+        except jwt.InvalidTokenError:
+            return error_response("Invalid warehouse token", 401)
+        except Exception:
+            return error_response("Authentication failed", 401)
+            
+        request.warehouse_payload = payload
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_warehouse_session_auth(f):
+    """
+    Decorator for endpoints a staff session legitimately needs (session sync),
+    accepting both owner and staff tokens. Everything else stays owner-only.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.headers.get("Authorization", "")
@@ -445,6 +492,23 @@ def require_warehouse_staff_permission(permission):
                 
         return decorated
     return decorator
+
+
+def require_warehouse_owner(f):
+    """
+    Restricts an endpoint to warehouse owner (partner) tokens only.
+    Staff / billing-agent tokens are never allowed to manage roles, agents
+    or other administrative resources — they only get their `billing` scope.
+    """
+    @wraps(f)
+    @require_warehouse_auth
+    def decorated(*args, **kwargs):
+        if request.warehouse_payload.get("type") != "warehouse":
+            return error_response(
+                "Only warehouse owners can manage billing agents", 403
+            )
+        return f(*args, **kwargs)
+    return decorated
 
 
 def _check_warehouse_restriction(email):
@@ -1100,12 +1164,49 @@ def warehouse_request_status():
 # ── Warehouse Auth-Protected Routes ─────────────────────────────────────────
 
 @warehouse_bp.route("/api/warehouse/session")
-@require_warehouse_auth
+@require_warehouse_session_auth
 def warehouse_session():
-    """Return current warehouse user/profile from DB."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    """Return current warehouse user/profile from DB.
+
+    Warehouse owner tokens return the partner profile; staff / billing-agent
+    tokens return the staff member's own profile (role_name + permissions) so
+    the frontend never mistakes an agent for an owner.
+    """
+    payload = request.warehouse_payload
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
+        # Staff / billing-agent session -> return their own profile
+        if payload.get("type") == "warehouse_staff":
+            staff = conn.execute(
+                """
+                SELECT ws.staff_id, ws.vendor_id, ws.name, ws.login_email, ws.status,
+                       r.role_name, r.permissions
+                FROM warehouse_staff ws
+                LEFT JOIN roles r ON r.role_id = ws.role_id
+                WHERE ws.staff_id = ? AND ws.vendor_id = ?
+                """,
+                (payload.get("staff_id"), wh_id)
+            ).fetchone()
+            if not staff or staff["status"] != "active":
+                return error_response("Staff account is inactive or revoked", 403)
+            perms_str = staff["permissions"] or "[]"
+            try:
+                perms = json.loads(perms_str) if isinstance(perms_str, str) else list(perms_str)
+            except Exception:
+                perms = []
+            user_data = {
+                "staff_id": staff["staff_id"],
+                "vendor_id": staff["vendor_id"],
+                "id": staff["staff_id"],
+                "name": staff["name"],
+                "email": staff["login_email"],
+                "role_name": staff["role_name"] or "Billing Agent",
+                "role": staff["role_name"] or "Billing Agent",
+                "permissions": perms,
+            }
+            return jsonify({"user": user_data, "warehouse": user_data}), 200
+
         try:
             _sync_legacy_warehouse_kyc_rollout(conn)
         except Exception as rollout_error:
@@ -1158,7 +1259,7 @@ def warehouse_session():
 @require_warehouse_auth
 def warehouse_notifications():
     """Return in-app notifications for warehouse partners."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     limit_raw = request.args.get("limit", "50")
     
     try:
@@ -1203,7 +1304,7 @@ def warehouse_notifications():
 @require_warehouse_auth
 def warehouse_mark_notification_read(notification_id):
     """Mark a single warehouse notification as read."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
         _ensure_warehouse_kyc_schema(conn)
@@ -1225,7 +1326,7 @@ def warehouse_mark_notification_read(notification_id):
 @require_warehouse_auth
 def warehouse_mark_all_notifications_read():
     """Mark all notifications as read for current warehouse."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
         _ensure_warehouse_kyc_schema(conn)
@@ -1243,7 +1344,7 @@ def warehouse_mark_all_notifications_read():
 @require_warehouse_auth
 def warehouse_dashboard():
     """Dashboard stats: order cards, performance metrics, recent orders, inventory."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
         # Order stats
@@ -1382,7 +1483,7 @@ def warehouse_dashboard():
 @require_warehouse_auth
 def warehouse_analytics():
     """Warehouse analytics for the partner dashboard charts."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
         status_rows = conn.execute(
@@ -1423,7 +1524,7 @@ def warehouse_analytics():
 @require_warehouse_auth
 def get_warehouse_restock_requests():
     """List all restock requests for this warehouse/store."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     
     conn = get_db()
     try:
@@ -1451,7 +1552,7 @@ def get_warehouse_restock_requests():
 @require_warehouse_auth
 def create_warehouse_restock_request():
     """Submit a new restock request for a product."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     data = request.json
     product_id = data.get("product_id")
     quantity = data.get("requested_quantity")
@@ -1564,7 +1665,7 @@ def update_warehouse_vendor(vendor_id):
 @require_warehouse_auth
 def get_warehouse_purchases():
     """List recent direct purchases for the warehouse."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
         wh = conn.execute("SELECT warehouse_name FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
@@ -1596,7 +1697,7 @@ def get_warehouse_purchases():
 @require_warehouse_auth
 def create_direct_purchase():
     """Create a direct purchase and update inventory."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     data = request.json
     
     vendor_name = data.get("vendor_name")
@@ -1661,7 +1762,7 @@ def create_direct_purchase():
 @require_warehouse_auth
 def get_warehouse_orders():
     """List all orders assigned to this warehouse with optional status filtering."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     status = request.args.get("status")
     limit = request.args.get("limit", 50, type=int)
     
@@ -1967,7 +2068,7 @@ def warehouse_get_inventory():
 @require_warehouse_auth
 def warehouse_add_inventory():
     """Add a product to warehouse inventory."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     data = request.get_json(silent=True) or {}
     product_id = data.get("product_id")
     sku = data.get("sku")
@@ -2035,7 +2136,7 @@ def warehouse_add_inventory():
 def warehouse_create_product():
     """Create a new global product and automatically add it to this warehouse inventory."""
     data = request.json
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     
     name = data.get('name')
     price = data.get('price')
@@ -2295,7 +2396,7 @@ def warehouse_create_product():
 @require_warehouse_auth
 def warehouse_patch_inventory(item_id):
     """Update stock or details of an inventory item."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     data = request.get_json(silent=True) or {}
     
     allowed = {
@@ -2498,7 +2599,7 @@ def warehouse_patch_inventory(item_id):
 @require_warehouse_auth
 def warehouse_delete_inventory(item_id):
     """Remove a SKU from warehouse inventory."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     conn = get_db()
     try:
         item = conn.execute(
@@ -2529,7 +2630,7 @@ def warehouse_delete_inventory(item_id):
 @require_warehouse_auth
 def warehouse_adjust_stock(item_id):
     """Adjust stock IN or OUT with reason and remark. Logs to stock_movements."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     data = request.get_json(silent=True) or {}
 
     movement_type = (data.get("movement_type") or "").upper()
@@ -2651,7 +2752,7 @@ def warehouse_adjust_stock(item_id):
 @require_warehouse_auth
 def warehouse_stock_movements(item_id):
     """Fetch movement history for an inventory item."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     limit = request.args.get("limit", 20, type=int)
     conn = get_db()
     try:
@@ -2670,7 +2771,7 @@ def warehouse_stock_movements(item_id):
 @require_warehouse_auth
 def warehouse_update_order_status(assignment_id):
     """Update a warehouse assignment status from the warehouse dashboard."""
-    wh_id = request.warehouse_payload["warehouse_id"]
+    wh_id = _get_current_warehouse_id()
     data = request.get_json(silent=True) or {}
     new_status = (data.get("status") or "").strip().lower()
 
@@ -3324,7 +3425,7 @@ def admin_get_warehouse_performance(app_id):
 # ── Staff Roles & Permissions API ──────────────────────────────────────────────
 
 @warehouse_bp.route("/api/warehouse/roles", methods=["GET"])
-@require_warehouse_auth
+@require_warehouse_owner
 def get_warehouse_roles():
     """Returns roles defined for the authenticated warehouse vendor."""
     vendor_id = request.warehouse_payload.get("warehouse_id")
@@ -3360,7 +3461,7 @@ def get_warehouse_roles():
 
 
 @warehouse_bp.route("/api/warehouse/roles", methods=["POST"])
-@require_warehouse_auth
+@require_warehouse_owner
 def create_warehouse_role():
     """Creates or updates a staff role with permissions for a vendor."""
     data = request.get_json(silent=True) or {}
@@ -3408,7 +3509,7 @@ def create_warehouse_role():
 # ── Warehouse Staff / Agent Management ───────────────────────────────────────
 
 @warehouse_bp.route("/api/warehouse/staff", methods=["GET"])
-@require_warehouse_auth
+@require_warehouse_owner
 def get_warehouse_staff():
     """Returns staff members created under the authenticated vendor."""
     vendor_id = request.warehouse_payload.get("warehouse_id")
@@ -3417,7 +3518,8 @@ def get_warehouse_staff():
         rows = conn.execute(
             """
             SELECT ws.staff_id, ws.vendor_id, ws.role_id, ws.name, ws.login_email, ws.username, 
-                   ws.status, ws.created_at, r.role_name, r.permissions
+                   ws.status, ws.created_at, r.role_name, r.permissions,
+                   (ws.setup_token IS NOT NULL AND ws.password_hash IS NULL) AS setup_pending
             FROM warehouse_staff ws
             LEFT JOIN roles r ON r.role_id = ws.role_id
             WHERE ws.vendor_id = ?
@@ -3443,7 +3545,8 @@ def get_warehouse_staff():
                 "status": r["status"],
                 "created_at": r["created_at"],
                 "role_name": r["role_name"] or "Staff",
-                "permissions": perms
+                "permissions": perms,
+                "setup_pending": bool(r["setup_pending"])
             })
         return jsonify(result), 200
     finally:
@@ -3451,7 +3554,7 @@ def get_warehouse_staff():
 
 
 @warehouse_bp.route("/api/warehouse/staff", methods=["POST"])
-@require_warehouse_auth
+@require_warehouse_owner
 def create_warehouse_staff():
     """
     Creates a staff member / agent for a warehouse.
@@ -3566,7 +3669,17 @@ def setup_staff_password():
         
         if not staff:
             return error_response("Invalid or expired setup token", 400)
-            
+
+        # Enforce the 7-day setup link expiry
+        expires_raw = staff["setup_token_expires"]
+        if expires_raw:
+            try:
+                expires_dt = datetime.datetime.strptime(str(expires_raw), "%Y-%m-%d %H:%M:%S")
+                if datetime.datetime.utcnow() > expires_dt:
+                    return error_response("This setup link has expired. Ask your manager to resend the invite.", 400)
+            except ValueError:
+                pass
+
         password_hash = generate_password_hash(password)
         cur.execute(
             """
@@ -3674,6 +3787,137 @@ def staff_login():
         conn.close()
 
 
+@warehouse_bp.route("/api/warehouse/staff/<int:staff_id>", methods=["PATCH"])
+@require_warehouse_owner
+def update_warehouse_staff(staff_id):
+    """
+    Toggle a billing agent's status (active / inactive) for the current vendor.
+    Deactivating immediately revokes their POS access (the permission guard
+    re-checks status on every request).
+    """
+    data = request.get_json(silent=True) or {}
+    status = (data.get("status") or "").strip().lower()
+    if status not in ("active", "inactive"):
+        return error_response("status must be 'active' or 'inactive'", 400)
+
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        existing = cur.execute(
+            "SELECT staff_id FROM warehouse_staff WHERE staff_id = ? AND vendor_id = ?",
+            (staff_id, vendor_id)
+        ).fetchone()
+        if not existing:
+            return error_response("Agent not found for this warehouse", 404)
+
+        cur.execute(
+            "UPDATE warehouse_staff SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE staff_id = ?",
+            (status, staff_id)
+        )
+        conn.commit()
+        return jsonify({
+            "message": f"Agent {'reactivated' if status == 'active' else 'deactivated'} successfully",
+            "staff_id": staff_id,
+            "status": status
+        }), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/staff/<int:staff_id>", methods=["DELETE"])
+@require_warehouse_owner
+def delete_warehouse_staff(staff_id):
+    """Delete a billing agent for the current vendor (permanent)."""
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        existing = cur.execute(
+            "SELECT staff_id FROM warehouse_staff WHERE staff_id = ? AND vendor_id = ?",
+            (staff_id, vendor_id)
+        ).fetchone()
+        if not existing:
+            return error_response("Agent not found for this warehouse", 404)
+
+        cur.execute("DELETE FROM warehouse_staff WHERE staff_id = ?", (staff_id,))
+        conn.commit()
+        return jsonify({"message": "Agent deleted successfully", "staff_id": staff_id}), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/staff/<int:staff_id>/resend-invite", methods=["POST"])
+@require_warehouse_owner
+def resend_staff_invite(staff_id):
+    """
+    Regenerates a fresh setup token for a billing agent and emails a new
+    invite link (e.g. when the previous link expired or was lost).
+    """
+    vendor_id = request.warehouse_payload.get("warehouse_id")
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        staff = cur.execute(
+            """
+            SELECT ws.staff_id, ws.vendor_id, ws.name, ws.login_email, ws.status,
+                   r.role_name
+            FROM warehouse_staff ws
+            LEFT JOIN roles r ON r.role_id = ws.role_id
+            WHERE ws.staff_id = ? AND ws.vendor_id = ?
+            """,
+            (staff_id, vendor_id)
+        ).fetchone()
+        if not staff:
+            return error_response("Agent not found for this warehouse", 404)
+
+        setup_token = uuid.uuid4().hex
+        expires_at = (datetime.datetime.utcnow() + datetime.timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        cur.execute(
+            "UPDATE warehouse_staff SET setup_token = ?, setup_token_expires = ?, updated_at = CURRENT_TIMESTAMP WHERE staff_id = ?",
+            (setup_token, expires_at, staff_id)
+        )
+        conn.commit()
+
+        wh = conn.execute("SELECT warehouse_name FROM warehouses WHERE id = ?", (vendor_id,)).fetchone()
+        warehouse_name = wh["warehouse_name"] if wh else "JDLX Warehouse"
+
+        frontend_url = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
+        setup_link = f"{frontend_url}/warehouse/staff/setup?token={setup_token}"
+
+        Thread(
+            target=send_staff_billing_setup_email,
+            args=(staff["login_email"], staff["name"], warehouse_name, setup_link, staff["role_name"] or "Billing Agent"),
+            daemon=True
+        ).start()
+
+        return jsonify({
+            "message": f"Fresh invite sent to {staff['login_email']}",
+            "staff_id": staff_id,
+            "setup_link": setup_link
+        }), 200
+    finally:
+        conn.close()
+
+
+def _first_product_image(images):
+    """Returns the first image URL from a product's images JSON array string."""
+    if not images:
+        return None
+    try:
+        parsed = json.loads(images) if isinstance(images, str) else images
+        if isinstance(parsed, list) and parsed:
+            return str(parsed[0])
+        if isinstance(parsed, str) and parsed.strip():
+            return parsed.strip()
+        return None
+    except Exception:
+        text = str(images).strip()
+        if not text:
+            return None
+        return text.split(",")[0].strip()
+
+
 # ── POS Billing API Endpoints ──────────────────────────────────────────────────
 
 @warehouse_bp.route("/api/warehouse/billing/products", methods=["GET"])
@@ -3686,13 +3930,15 @@ def get_billing_products():
     vendor_id = request.vendor_id
     conn = get_db()
     try:
+        # NOTE: the products table stores images as a JSON array string in
+        # `images` (there is no `image_url` column), so pull the first image.
         rows = conn.execute(
             """
-            SELECT p.id, p.name, p.price, p.image_url, p.category, 
+            SELECT p.id, p.name, p.price, p.images, p.category, 
                    COALESCE(wi.available_stock, wi.stock_quantity, p.stock) AS stock
             FROM products p
             JOIN warehouse_inventory wi ON wi.product_id = p.id AND wi.warehouse_id = ?
-            WHERE wi.stock_quantity > 0 OR wi.available_stock > 0
+            WHERE COALESCE(wi.stock_quantity, 0) > 0 OR COALESCE(wi.available_stock, 0) > 0
             ORDER BY p.name ASC
             """,
             (vendor_id,)
@@ -3704,7 +3950,7 @@ def get_billing_products():
                 "id": r["id"],
                 "name": r["name"],
                 "price": r["price"],
-                "image_url": r["image_url"] if "image_url" in r.keys() else None,
+                "image_url": _first_product_image(r["images"]),
                 "category": r["category"] if "category" in r.keys() else "General",
                 "stock": r["stock"]
             })
@@ -3726,7 +3972,7 @@ def generate_billing_order():
     customer_name = data.get("customer_name", "Counter Customer").strip()
     customer_phone = data.get("customer_phone", "").strip()
     payment_mode = data.get("payment_mode", "CASH").upper()
-    discount_amount = float(data.get("discount_amount", 0))
+    discount_amount = max(0.0, float(data.get("discount_amount", 0)))
     
     if not items or not isinstance(items, list):
         return error_response("Items list is required for billing", 400)
@@ -3745,7 +3991,11 @@ def generate_billing_order():
         # 1. Validate stock & calculate subtotal
         for item in items:
             product_id = item.get("product_id") or item.get("id")
-            qty = int(item.get("quantity") or item.get("qty") or 1)
+            try:
+                qty = int(item.get("quantity") or item.get("qty") or 1)
+            except (TypeError, ValueError):
+                conn.rollback()
+                return error_response("Invalid quantity for product", 400)
             
             if not product_id or qty <= 0:
                 conn.rollback()
@@ -3761,7 +4011,16 @@ def generate_billing_order():
                 (vendor_id, product_id)
             ).fetchone()
             
-            avail_stock = wi_row["available_stock"] if wi_row else p_row["stock"]
+            # available_stock may be NULL for some warehouses (the products
+            # listing mirrors this with COALESCE) — never compare None < qty.
+            if wi_row:
+                avail_stock = wi_row["available_stock"]
+                if avail_stock is None:
+                    avail_stock = wi_row["stock_quantity"]
+                if avail_stock is None:
+                    avail_stock = p_row["stock"]
+            else:
+                avail_stock = p_row["stock"]
             if avail_stock < qty:
                 conn.rollback()
                 return error_response(f"Insufficient stock for '{p_row['name']}'. Available: {avail_stock}, Requested: {qty}", 400)
@@ -3780,17 +4039,33 @@ def generate_billing_order():
         tax_amount = round(subtotal * 0.18, 2) # 18% GST standard
         total_amount = max(0.0, round(subtotal + tax_amount - discount_amount, 2))
         order_number = f"BILL-{int(time.time())}-{random.randint(1000, 9999)}"
-        
-        # 2. Insert offline order
+
+        # Offline counter sales have no app user; orders.user_id is NOT NULL, so
+        # use (or lazily create) a dedicated system counter-sales user.
+        counter_user = cur.execute(
+            "SELECT id FROM users WHERE email = ?",
+            ("counter@jdlx.internal",),
+        ).fetchone()
+        if counter_user:
+            user_id = counter_user["id"]
+        else:
+            cur.execute(
+                "INSERT INTO users (google_id, name, email, role) VALUES (?, ?, ?, ?)",
+                ("counter-sales", "Counter Sales", "counter@jdlx.internal", "user"),
+            )
+            user_id = cur.lastrowid
+
+        # 2. Insert offline order (delivery_address is NOT NULL; counter sales
+        #    are completed at the store, so use a placeholder counter address).
         cur.execute(
             """
             INSERT INTO orders (
-                order_number, vendor_id, source, agent_id, customer_name, customer_phone,
-                total_amount, order_status, payment_status, payment_type
+                order_number, user_id, vendor_id, source, agent_id, customer_name, customer_phone,
+                delivery_address, total_amount, order_status, payment_status, payment_type
             )
-            VALUES (?, ?, 'OFFLINE', ?, ?, ?, ?, 'CONFIRMED', 'completed', ?)
+            VALUES (?, ?, ?, 'OFFLINE', ?, ?, ?, 'Store Counter Sale', ?, 'CONFIRMED', 'completed', ?)
             """,
-            (order_number, vendor_id, agent_id, customer_name, customer_phone, total_amount, payment_mode)
+            (order_number, user_id, vendor_id, agent_id, customer_name, customer_phone, total_amount, payment_mode)
         )
         order_id = cur.lastrowid
         

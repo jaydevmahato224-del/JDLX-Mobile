@@ -79,6 +79,7 @@ const WarehouseProcurement = lazy(() => import('./pages/warehouse/WarehouseProcu
 const WarehouseOffers = lazy(() => import('./pages/warehouse/WarehouseOffers'))
 const StaffBilling = lazy(() => import('./pages/warehouse/StaffBilling'))
 const StaffSetupPassword = lazy(() => import('./pages/warehouse/StaffSetupPassword'))
+const BillingAgents = lazy(() => import('./pages/warehouse/BillingAgents'))
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
@@ -193,6 +194,11 @@ function App() {
             <Route path="/warehouse/billing" element={
               <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin', 'billing', 'staff']}>
                 <StaffBilling />
+              </WarehouseRoute>
+            } />
+            <Route path="/warehouse/billing-agents" element={
+              <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']}>
+                <BillingAgents />
               </WarehouseRoute>
             } />
             <Route path="/warehouse/inventory" element={

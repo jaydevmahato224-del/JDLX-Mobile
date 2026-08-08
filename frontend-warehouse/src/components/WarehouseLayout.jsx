@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent } from 'lucide-react'
+import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL } from '../config'
@@ -12,8 +12,13 @@ export default function WarehouseLayout() {
     const warehouseToken = useStore((state) => state.warehouseToken);
     const setWarehouseUser = useStore((state) => state.setWarehouseUser);
     const logout = useStore((state) => state.warehouseLogout);
+    // Staff / billing-agent users only get POS access — hide the rest of the
+    // partner dashboard navigation for them.
+    const rawRole = (user?.role || user?.role_name || '').toLowerCase();
+    const isStaffUser = rawRole.includes('billing') || rawRole.includes('staff');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isRiderMenuOpen, setIsRiderMenuOpen] = useState(false);
+    const [isBillingMenuOpen, setIsBillingMenuOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -105,10 +110,14 @@ export default function WarehouseLayout() {
     useEffect(() => {
         if (!warehouseToken) return;
         fetchWarehouseSession();
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 45000);
-        return () => clearInterval(interval);
-    }, [warehouseToken, fetchWarehouseSession, fetchNotifications]);
+        // Notifications are owner-only (backend rejects staff tokens); staff
+        // sessions just keep the session profile fresh.
+        if (!isStaffUser) {
+            fetchNotifications();
+            const interval = setInterval(fetchNotifications, 45000);
+            return () => clearInterval(interval);
+        }
+    }, [warehouseToken, fetchWarehouseSession, fetchNotifications, isStaffUser]);
 
     useEffect(() => {
         if (!isNotificationsOpen) return;
@@ -142,7 +151,33 @@ export default function WarehouseLayout() {
                 { path: '/warehouse/rider-requests', icon: FileText, label: 'Rider Requests' },
             ]
         },
+        {
+            path: '/warehouse/billing-agents',
+            label: 'Billing & POS',
+            icon: ReceiptText,
+            isOpen: isBillingMenuOpen,
+            toggle: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsBillingMenuOpen(!isBillingMenuOpen);
+            },
+            children: [
+                { path: '/warehouse/billing-agents', icon: UserPlus, label: 'Billing Agents' },
+                { path: '/warehouse/billing', icon: ShoppingBag, label: 'Counter Billing (POS)' },
+            ]
+        },
     ];
+
+    // Staff / billing agents only see the POS entry; agent management stays
+    // owner-only in the UI too.
+    const visibleNavLinks = isStaffUser
+        ? navLinks
+            .filter((l) => l.label === 'Billing & POS')
+            .map((l) => ({
+                ...l,
+                children: (l.children || []).filter((c) => c.path !== '/warehouse/billing-agents'),
+            }))
+        : navLinks;
 
     const handleLogout = () => {
         logout();
@@ -180,7 +215,7 @@ export default function WarehouseLayout() {
 
                 <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                     <p className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Core Engine</p>
-                    {navLinks.map((link, idx) => {
+                    {visibleNavLinks.map((link, idx) => {
                         const Icon = link.icon;
                         
                         if (link.children) {
@@ -271,7 +306,7 @@ export default function WarehouseLayout() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <div className="relative" ref={notificationsPanelRef}>
+                        {!isStaffUser && <div className="relative" ref={notificationsPanelRef}>
                             <button
                                 onClick={() => setIsNotificationsOpen((prev) => !prev)}
                                 className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition-all hover:border-amber-400/30 hover:text-amber-300"
@@ -333,21 +368,21 @@ export default function WarehouseLayout() {
                                     </div>
                                 </div>
                             ) : null}
-                        </div>
+                        </div>}
 
                         <Link 
                             to="/warehouse/profile"
                             className="flex items-center gap-4 pl-6 border-l border-white/5 group transition-all"
                         >
                             <div className="text-right hidden sm:block group-hover:opacity-80 transition-opacity">
-                                <div className="text-sm font-black text-white leading-tight">{user?.owner_name || 'Partner'}</div>
+                                <div className="text-sm font-black text-white leading-tight">{user?.owner_name || user?.name || 'Partner'}</div>
                                 <div className="flex flex-col items-end gap-0.5 mt-1">
-                                    <div className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest">{user?.partner_id ? `Partner ID: ${user.partner_id}` : 'Partner ID: 0000'}</div>
+                                    <div className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest">{user?.partner_id ? `Partner ID: ${user.partner_id}` : (isStaffUser ? (user?.role_name || 'Billing Agent') : 'Partner ID: 0000')}</div>
                                     <div className="text-[10px] font-bold text-amber-500/60 uppercase tracking-widest">{user?.store_id ? `Hub ID: #${user.store_id}` : (user?.id ? `Hub ID: #${user.id}` : '')}</div>
                                 </div>
                             </div>
                             <div className="w-11 h-11 bg-amber-400/10 border border-amber-400/20 rounded-2xl flex items-center justify-center text-amber-400 font-black shadow-inner group-hover:scale-105 group-hover:bg-amber-400/20 transition-all duration-300">
-                                {user?.owner_name?.charAt(0) || 'W'}
+                                {user?.owner_name?.charAt(0) || user?.name?.charAt(0) || 'W'}
                             </div>
                         </Link>
                     </div>

@@ -371,7 +371,8 @@ def init_db():
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        warehouse_partner_id INTEGER NOT NULL,
+        warehouse_id INTEGER NOT NULL,
+        warehouse_partner_id INTEGER,
         product_id INTEGER NOT NULL,
         product_name TEXT,
         sku TEXT,
@@ -390,15 +391,26 @@ def init_db():
         status TEXT DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(warehouse_partner_id) REFERENCES warehouses(id),
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
         FOREIGN KEY(product_id) REFERENCES products(id)
     )''')
     ensure_columns('warehouse_inventory', [
         ('warehouse_id', 'INTEGER'),
+        ('warehouse_partner_id', 'INTEGER'),
         ('available_stock', 'INTEGER DEFAULT 0'),
         ('variant_id', 'INTEGER REFERENCES product_variants(id)')
     ])
+    # Backfill warehouse_partner_id/warehouse_id so both naming conventions stay in sync.
+    # Older DBs (created before the warehouse_id -> warehouse_partner_id rename) only have
+    # warehouse_id; newer code reads COALESCE(warehouse_id, warehouse_partner_id). Keeping
+    # both columns populated prevents "no such column" errors during checkout.
+    try:
+        cursor.execute("UPDATE warehouse_inventory SET warehouse_partner_id = warehouse_id WHERE warehouse_partner_id IS NULL AND warehouse_id IS NOT NULL")
+        cursor.execute("UPDATE warehouse_inventory SET warehouse_id = warehouse_partner_id WHERE warehouse_id IS NULL AND warehouse_partner_id IS NOT NULL")
+    except Exception as e:
+        print(f"Ignored warehouse_inventory backfill error: {e}")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_wh ON warehouse_inventory(warehouse_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_partner ON warehouse_inventory(warehouse_partner_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_prod ON warehouse_inventory(product_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_variant ON warehouse_inventory(variant_id)")
 

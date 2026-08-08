@@ -3153,7 +3153,7 @@ def checkout():
                     FROM warehouse_inventory wi
                     JOIN warehouses w ON w.id = COALESCE(wi.warehouse_id, wi.warehouse_partner_id)
                     WHERE wi.product_id = ? AND wi.variant_id = ? AND (wi.stock_quantity > 0 OR wi.available_stock > 0)
-                      AND w.operations_status = "open" AND w.account_status = "active"
+                      AND w.operations_status = 'open' AND w.account_status = 'active'
                     LIMIT 1
                 """, (p_id, v_id))
                 row = cursor.fetchone()
@@ -3167,7 +3167,7 @@ def checkout():
                 FROM warehouse_inventory wi
                 JOIN warehouses w ON w.id = COALESCE(wi.warehouse_id, wi.warehouse_partner_id)
                 WHERE wi.product_id = ? AND (wi.stock_quantity > 0 OR wi.available_stock > 0)
-                  AND w.operations_status = "open" AND w.account_status = "active"
+                  AND w.operations_status = 'open' AND w.account_status = 'active'
                 LIMIT 1
             """, (p_id,))
             row = cursor.fetchone()

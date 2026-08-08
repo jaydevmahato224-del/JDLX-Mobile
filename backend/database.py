@@ -310,10 +310,14 @@ def init_db():
         user_id INTEGER NOT NULL, 
         total_amount REAL NOT NULL, 
         order_status TEXT DEFAULT 'PLACED', 
+        source TEXT DEFAULT 'ONLINE',
+        agent_id INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
     ensure_columns('orders', [
+        ('source', "TEXT DEFAULT 'ONLINE'"),
+        ('agent_id', 'INTEGER'),
         ('order_number', 'TEXT'),
         ('customer_name', 'TEXT'),
         ('customer_phone', 'TEXT'),

@@ -336,6 +336,9 @@ def normalize_product_row(row):
     
     product['has_variants'] = bool(product.get('has_variants', 0))
     product['lifecycle_state'] = product.get('lifecycle_state', 'live')
+    # Offline (POS counter-sale) pricing is warehouse-internal and must never
+    # be exposed on the online store.
+    product.pop('offline_price', None)
     return product
 
 

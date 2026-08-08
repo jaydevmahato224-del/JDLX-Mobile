@@ -53,7 +53,7 @@ from notifier import (
 from services.inventory_service import trigger_low_stock_notifications as trigger_low_stock_notifications_svc
 from auth.role_guard import normalize_role, require_admin, require_super_admin
 from auth.permission_guard import require_permission
-from warehouse_routes import warehouse_bp, issue_warehouse_token
+from warehouse_routes import warehouse_bp, issue_warehouse_token, _normalize_offline_price
 from delivery_routes import delivery_bp
 from admin_db import admin_db_bp
 from complaint_routes import complaint_bp
@@ -5442,13 +5442,7 @@ def admin_add_product():
     category = data.get('category')
     delivery_time = data.get('delivery_time', '30-120 mins')
     images = data.get('images')
-    offline_price = data.get('offline_price')
-    try:
-        offline_price = float(offline_price) if offline_price not in (None, '') else None
-        if offline_price is not None and offline_price <= 0:
-            offline_price = None
-    except (TypeError, ValueError):
-        offline_price = None
+    offline_price = _normalize_offline_price(data.get('offline_price'))
 
     if not name or price is None:
         return error_response("Missing required fields", 400)
@@ -5515,8 +5509,11 @@ def admin_update_product(product_id):
         
         for key in ['name', 'price', 'offline_price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
             if key in data:
+                val = data[key]
+                if key == 'offline_price':
+                    val = _normalize_offline_price(val)
                 updates.append(f"{key}=?")
-                params.append(data[key])
+                params.append(val)
                 # Auto-generate fresh slug if name changes
                 if key == 'name' and data['name'] != current['name']:
                     updates.append("seo_slug=?")

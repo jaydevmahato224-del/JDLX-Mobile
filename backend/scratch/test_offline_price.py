@@ -144,6 +144,19 @@ def main():
               neg_item and float(neg_item["price"]) == 50.0 and neg_item["offline_price"] is None,
               f"price={neg_item and neg_item['price']}")
 
+        # 9. Leak guard: online store normalizer must strip offline_price
+        from app import normalize_product_row
+        conn = get_db()
+        raw = conn.execute(
+            "SELECT id, name, price, offline_price, stock, images, category, status FROM products WHERE id = ?",
+            (pid_off,),
+        ).fetchone()
+        conn.close()
+        normalized = normalize_product_row(raw)
+        check("online normalizer strips offline_price (no store leak)",
+              normalized and "offline_price" not in normalized and float(normalized["price"]) == 250.0,
+              f"has_offline={normalized and 'offline_price' in normalized}")
+
     finally:
         # --- Cleanup: delete test orders, restore stock, delete products/inventory ---
         conn = get_db()

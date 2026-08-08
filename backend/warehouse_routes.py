@@ -77,6 +77,21 @@ def get_db():
     return _db_get_db()
 
 
+def _normalize_offline_price(value):
+    """Normalizes an offline (POS) sale price input.
+
+    Empty/zero/negative/non-numeric values become None so the POS falls back
+    to the regular online price.
+    """
+    if value in (None, ''):
+        return None
+    try:
+        val = float(value)
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
 def _get_current_warehouse_id():
     """Resolves the warehouse id for the current token.
 
@@ -2126,14 +2141,8 @@ def warehouse_add_inventory():
 
         # Persist offline (POS) sale price when registering an existing
         # catalog product to this warehouse (mirrors the PATCH meta path).
-        off_price = data.get('offline_price')
-        if off_price not in (None, ''):
-            try:
-                off_val = float(off_price)
-                if off_val <= 0:
-                    off_val = None
-            except (TypeError, ValueError):
-                off_val = None
+        off_val = _normalize_offline_price(data.get('offline_price'))
+        if off_val is not None or data.get('offline_price') not in (None, ''):
             conn.execute("UPDATE products SET offline_price = ? WHERE id = ?", (off_val, product_id))
 
         conn.commit()
@@ -2155,13 +2164,7 @@ def warehouse_create_product():
     price = data.get('price')
     # Optional separate price used by counter/offline (POS) billing.
     # When empty/None the POS falls back to the regular online price.
-    offline_price = data.get('offline_price')
-    try:
-        offline_price = float(offline_price) if offline_price not in (None, '') else None
-        if offline_price is not None and offline_price <= 0:
-            offline_price = None
-    except (TypeError, ValueError):
-        offline_price = None
+    offline_price = _normalize_offline_price(data.get('offline_price'))
     category = data.get('category')
     category_id = data.get('category_id')
     images = data.get('images')
@@ -2428,7 +2431,7 @@ def warehouse_patch_inventory(item_id):
     }
     updates = {k: v for k, v in data.items() if k in allowed}
     
-    if not updates and "images" not in data and "description" not in data:
+    if not updates and "images" not in data and "description" not in data and "offline_price" not in data:
         return error_response("No valid fields to update", 400)
 
     conn = get_db()
@@ -2453,12 +2456,7 @@ def warehouse_patch_inventory(item_id):
                 if field == "images" and isinstance(val, list):
                     val = json.dumps(val)
                 if field == "offline_price":
-                    try:
-                        val = float(val) if val not in (None, '') else None
-                        if val is not None and val <= 0:
-                            val = None
-                    except (TypeError, ValueError):
-                        val = None
+                    val = _normalize_offline_price(val)
                 meta_updates.append(f"{field} = ?")
                 meta_values.append(val)
         

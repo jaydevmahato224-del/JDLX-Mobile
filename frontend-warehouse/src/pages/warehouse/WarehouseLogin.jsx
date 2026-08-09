@@ -38,7 +38,17 @@ function WarehouseLogin() {
             }
         }
         if (warehouseToken) {
-            navigate('/warehouse/dashboard', { replace: true })
+            // Billing agents only have POS access — send them straight to
+            // billing. Owners/managers go to the dashboard. (Without this,
+            // staff logins were bounced to /warehouse/dashboard and got an
+            // Access Denied screen instead of the POS.)
+            const sessionUser = useStore.getState().warehouseUser
+            const sessionRole = (sessionUser?.role || sessionUser?.role_name || '').toLowerCase()
+            if (sessionRole.includes('billing') || sessionRole.includes('staff')) {
+                navigate('/warehouse/billing', { replace: true })
+            } else {
+                navigate('/warehouse/dashboard', { replace: true })
+            }
         }
     }, [navigate, params, setWarehouseUser, warehouseToken])
 

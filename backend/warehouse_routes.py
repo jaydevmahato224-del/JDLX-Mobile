@@ -3952,6 +3952,163 @@ def _first_product_image(images):
 
 # ── POS Billing API Endpoints ──────────────────────────────────────────────────
 
+
+def _ensure_billing_schema(conn):
+    """Ensures the extra columns used by the POS billing flows (returns,
+    exchanges, cancellations, and stored invoice amounts) exist.
+
+    Safe to call on every billing request — existing tables get the new
+    columns, fresh ones already have them via init_db.
+    """
+    cur = conn.cursor()
+    try:
+        item_cols = [r[1] for r in cur.execute("PRAGMA table_info(order_items)").fetchall()]
+        if "returned_qty" not in item_cols:
+            cur.execute("ALTER TABLE order_items ADD COLUMN returned_qty INTEGER DEFAULT 0")
+        order_cols = [r[1] for r in cur.execute("PRAGMA table_info(orders)").fetchall()]
+        for col, ddl in (
+            ("billing_status", "TEXT DEFAULT 'active'"),
+            ("subtotal_amount", "REAL DEFAULT 0"),
+            ("tax_amount", "REAL DEFAULT 0"),
+            ("gst_rate", "REAL DEFAULT 0"),
+            ("discount_amount", "REAL DEFAULT 0"),
+        ):
+            if col not in order_cols:
+                cur.execute(f"ALTER TABLE orders ADD COLUMN {col} {ddl}")
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _get_counter_user_id(cur):
+    """Returns (creating if needed) the dedicated counter-sales system user."""
+    counter_user = cur.execute(
+        "SELECT id FROM users WHERE email = ?",
+        ("counter@jdlx.internal",),
+    ).fetchone()
+    if counter_user:
+        return counter_user["id"]
+    cur.execute(
+        "INSERT INTO users (google_id, name, email, role) VALUES (?, ?, ?, ?)",
+        ("counter-sales", "Counter Sales", "counter@jdlx.internal", "user"),
+    )
+    return cur.lastrowid
+
+
+def _validate_billing_items(cur, vendor_id, items):
+    """Validates billing cart items against stock and DB prices.
+
+    Returns (subtotal, validated_items). Raises ValueError on any problem.
+    Counter/offline sales use the dedicated offline price when set, otherwise
+    fall back to the regular online price.
+    """
+    subtotal = 0.0
+    validated = []
+    for item in items:
+        product_id = item.get("product_id") or item.get("id")
+        try:
+            qty = int(item.get("quantity") or item.get("qty") or 1)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid quantity for product")
+        if not product_id or qty <= 0:
+            raise ValueError("Invalid product or quantity")
+
+        p_row = cur.execute(
+            "SELECT id, name, price, offline_price, stock FROM products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        if not p_row:
+            raise ValueError(f"Product #{product_id} not found")
+
+        wi_row = cur.execute(
+            "SELECT stock_quantity, available_stock FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
+            (vendor_id, product_id),
+        ).fetchone()
+
+        # available_stock may be NULL for some warehouses (the products
+        # listing mirrors this with COALESCE) — never compare None < qty.
+        if wi_row:
+            avail_stock = wi_row["available_stock"]
+            if avail_stock is None:
+                avail_stock = wi_row["stock_quantity"]
+            if avail_stock is None:
+                avail_stock = p_row["stock"]
+        else:
+            avail_stock = p_row["stock"]
+        if avail_stock < qty:
+            raise ValueError(
+                f"Insufficient stock for '{p_row['name']}'. Available: {avail_stock}, Requested: {qty}"
+            )
+
+        try:
+            item_price = float(p_row["offline_price"]) if p_row["offline_price"] else float(p_row["price"])
+        except (TypeError, ValueError):
+            item_price = float(p_row["price"])
+        item_total = item_price * qty
+        subtotal += item_total
+        validated.append({
+            "product_id": product_id,
+            "name": p_row["name"],
+            "qty": qty,
+            "price": item_price,
+            "subtotal": item_total,
+        })
+    return subtotal, validated
+
+
+def _insert_offline_order(cur, *, order_number, user_id, vendor_id, agent_id,
+                          customer_name, customer_phone, payment_mode,
+                          subtotal, tax_amount, gst_rate, discount_amount, total_amount):
+    """Inserts an OFFLINE counter-sale order and returns its id."""
+    cur.execute(
+        """
+        INSERT INTO orders (
+            order_number, user_id, vendor_id, source, agent_id, customer_name, customer_phone,
+            delivery_address, total_amount, subtotal_amount, tax_amount, gst_rate, discount_amount,
+            order_status, payment_status, payment_type
+        )
+        VALUES (?, ?, ?, 'OFFLINE', ?, ?, ?, 'Store Counter Sale', ?, ?, ?, ?, ?, 'CONFIRMED', 'completed', ?)
+        """,
+        (order_number, user_id, vendor_id, agent_id, customer_name, customer_phone,
+         total_amount, subtotal, tax_amount, gst_rate, discount_amount, payment_mode),
+    )
+    return cur.lastrowid
+
+
+def _decrement_billing_stock(cur, vendor_id, product_id, qty):
+    """Atomically decrements global + warehouse inventory stock."""
+    cur.execute(
+        "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
+        (qty, product_id, qty),
+    )
+    cur.execute(
+        """
+        UPDATE warehouse_inventory
+        SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
+            available_stock = CASE WHEN COALESCE(available_stock, 0) >= ? THEN available_stock - ? ELSE 0 END
+        WHERE warehouse_id = ? AND product_id = ?
+        """,
+        (qty, qty, qty, qty, vendor_id, product_id),
+    )
+
+
+def _restock_billing_item(cur, vendor_id, product_id, qty):
+    """Restocks global + warehouse inventory after a return/cancel/exchange."""
+    cur.execute("UPDATE products SET stock = stock + ? WHERE id = ?", (qty, product_id))
+    cur.execute(
+        """
+        UPDATE warehouse_inventory
+        SET stock_quantity = COALESCE(stock_quantity, 0) + ?,
+            available_stock = COALESCE(available_stock, 0) + ?
+        WHERE warehouse_id = ? AND product_id = ?
+        """,
+        (qty, qty, vendor_id, product_id),
+    )
+
+
 @warehouse_bp.route("/api/warehouse/billing/products", methods=["GET"])
 @require_warehouse_staff_permission("billing")
 def get_billing_products():
@@ -4015,6 +4172,12 @@ def generate_billing_order():
     customer_phone = data.get("customer_phone", "").strip()
     payment_mode = data.get("payment_mode", "CASH").upper()
     discount_amount = max(0.0, float(data.get("discount_amount", 0)))
+    # GST is opt-in per bill: default 0% (no GST). The POS frontend sends the
+    # rate selected from its dropdown; clamp to a sane 0-100 range.
+    try:
+        gst_rate = max(0.0, min(100.0, float(data.get("gst_rate", 0) or 0)))
+    except (TypeError, ValueError):
+        gst_rate = 0.0
     
     if not items or not isinstance(items, list):
         return error_response("Items list is required for billing", 400)
@@ -4024,98 +4187,40 @@ def generate_billing_order():
     
     conn = get_db()
     try:
+        _ensure_billing_schema(conn)
         cur = conn.cursor()
         cur.execute("BEGIN IMMEDIATE")
-        
-        subtotal = 0.0
-        validated_items = []
-        
-        # 1. Validate stock & calculate subtotal
-        for item in items:
-            product_id = item.get("product_id") or item.get("id")
-            try:
-                qty = int(item.get("quantity") or item.get("qty") or 1)
-            except (TypeError, ValueError):
-                conn.rollback()
-                return error_response("Invalid quantity for product", 400)
-            
-            if not product_id or qty <= 0:
-                conn.rollback()
-                return error_response("Invalid product or quantity", 400)
-                
-            p_row = cur.execute("SELECT id, name, price, offline_price, stock FROM products WHERE id = ?", (product_id,)).fetchone()
-            if not p_row:
-                conn.rollback()
-                return error_response(f"Product #{product_id} not found", 404)
-                
-            wi_row = cur.execute(
-                "SELECT stock_quantity, available_stock FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
-                (vendor_id, product_id)
-            ).fetchone()
-            
-            # available_stock may be NULL for some warehouses (the products
-            # listing mirrors this with COALESCE) — never compare None < qty.
-            if wi_row:
-                avail_stock = wi_row["available_stock"]
-                if avail_stock is None:
-                    avail_stock = wi_row["stock_quantity"]
-                if avail_stock is None:
-                    avail_stock = p_row["stock"]
-            else:
-                avail_stock = p_row["stock"]
-            if avail_stock < qty:
-                conn.rollback()
-                return error_response(f"Insufficient stock for '{p_row['name']}'. Available: {avail_stock}, Requested: {qty}", 400)
-                
-            # Counter/offline sales use the dedicated offline price when set;
-            # otherwise fall back to the regular online price.
-            try:
-                item_price = float(p_row["offline_price"]) if p_row["offline_price"] else float(p_row["price"])
-            except (TypeError, ValueError):
-                item_price = float(p_row["price"])
-            item_total = item_price * qty
-            subtotal += item_total
-            validated_items.append({
-                "product_id": product_id,
-                "name": p_row["name"],
-                "qty": qty,
-                "price": item_price,
-                "subtotal": item_total
-            })
-            
-        tax_amount = round(subtotal * 0.18, 2) # 18% GST standard
+
+        # 1. Validate stock & calculate subtotal (shared with the exchange flow)
+        try:
+            subtotal, validated_items = _validate_billing_items(cur, vendor_id, items)
+        except ValueError as e:
+            conn.rollback()
+            return error_response(str(e), 400)
+
+        tax_amount = round(subtotal * gst_rate / 100, 2)
         total_amount = max(0.0, round(subtotal + tax_amount - discount_amount, 2))
         order_number = f"BILL-{int(time.time())}-{random.randint(1000, 9999)}"
 
-        # Offline counter sales have no app user; orders.user_id is NOT NULL, so
-        # use (or lazily create) a dedicated system counter-sales user.
-        counter_user = cur.execute(
-            "SELECT id FROM users WHERE email = ?",
-            ("counter@jdlx.internal",),
-        ).fetchone()
-        if counter_user:
-            user_id = counter_user["id"]
-        else:
-            cur.execute(
-                "INSERT INTO users (google_id, name, email, role) VALUES (?, ?, ?, ?)",
-                ("counter-sales", "Counter Sales", "counter@jdlx.internal", "user"),
-            )
-            user_id = cur.lastrowid
-
-        # 2. Insert offline order (delivery_address is NOT NULL; counter sales
-        #    are completed at the store, so use a placeholder counter address).
-        cur.execute(
-            """
-            INSERT INTO orders (
-                order_number, user_id, vendor_id, source, agent_id, customer_name, customer_phone,
-                delivery_address, total_amount, order_status, payment_status, payment_type
-            )
-            VALUES (?, ?, ?, 'OFFLINE', ?, ?, ?, 'Store Counter Sale', ?, 'CONFIRMED', 'completed', ?)
-            """,
-            (order_number, user_id, vendor_id, agent_id, customer_name, customer_phone, total_amount, payment_mode)
+        # 2. Insert offline order (counter sales are completed at the store, so
+        #    delivery_address uses a placeholder counter address).
+        user_id = _get_counter_user_id(cur)
+        order_id = _insert_offline_order(
+            cur,
+            order_number=order_number,
+            user_id=user_id,
+            vendor_id=vendor_id,
+            agent_id=agent_id,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            payment_mode=payment_mode,
+            subtotal=round(subtotal, 2),
+            tax_amount=tax_amount,
+            gst_rate=gst_rate,
+            discount_amount=discount_amount,
+            total_amount=total_amount,
         )
-        order_id = cur.lastrowid
-        
+
         # 3. Insert order items & decrement inventory stock atomically
         for item in validated_items:
             cur.execute(
@@ -4125,26 +4230,21 @@ def generate_billing_order():
                 """,
                 (order_id, item["product_id"], item["name"], item["qty"], item["price"], item["subtotal"])
             )
-            
-            # Decrement global product stock
-            cur.execute(
-                "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
-                (item["qty"], item["product_id"], item["qty"])
-            )
-            
-            # Decrement warehouse specific inventory stock
-            cur.execute(
-                """
-                UPDATE warehouse_inventory
-                SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
-                    available_stock = CASE WHEN available_stock >= ? THEN available_stock - ? ELSE 0 END
-                WHERE warehouse_id = ? AND product_id = ?
-                """,
-                (item["qty"], item["qty"], item["qty"], item["qty"], vendor_id, item["product_id"])
-            )
-            
+            _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"])
+
         conn.commit()
-        
+
+        # created_at is the DB's UTC timestamp (CURRENT_TIMESTAMP) — return that
+        # so the invoice time matches what history shows (both parsed as UTC).
+        created_at_row = cur.execute(
+            "SELECT created_at FROM orders WHERE id = ?", (order_id,)
+        ).fetchone()
+        created_at = (
+            created_at_row["created_at"]
+            if created_at_row and created_at_row["created_at"]
+            else datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        )
+
         return jsonify({
             "message": "Bill generated successfully!",
             "order_id": order_id,
@@ -4154,14 +4254,399 @@ def generate_billing_order():
             "payment_mode": payment_mode,
             "subtotal": round(subtotal, 2),
             "tax_amount": tax_amount,
+            "gst_rate": gst_rate,
             "discount_amount": discount_amount,
             "total_amount": total_amount,
             "items": validated_items,
-            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "created_at": created_at
         }), 201
     except Exception as exc:
         conn.rollback()
         return error_response(f"Failed to generate bill: {str(exc)}", 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/history", methods=["GET"])
+@require_warehouse_staff_permission("billing")
+def get_billing_history():
+    """Lists this vendor's OFFLINE counter-sale bills with their items.
+
+    Supports ?q= search (order number / customer) and ?limit= pagination.
+    """
+    vendor_id = request.vendor_id
+    limit_raw = request.args.get("limit", "50")
+    try:
+        limit = max(1, min(int(limit_raw), 200))
+    except (TypeError, ValueError):
+        limit = 50
+    search = (request.args.get("q") or "").strip()
+    # Date range (UTC datetimes, e.g. "2026-08-09 00:00:00"; bare dates like
+    # "2026-08-09" are also accepted and expanded to the full day) and an
+    # optional payment-mode filter.
+    date_from = (request.args.get("from") or "").strip()
+    date_to = (request.args.get("to") or "").strip()
+    payment = (request.args.get("payment") or "").strip().upper()
+
+    conn = get_db()
+    try:
+        _ensure_billing_schema(conn)
+        query = """
+            SELECT id, order_number, customer_name, customer_phone, total_amount,
+                   payment_type AS payment_mode, created_at, order_status, payment_status,
+                   COALESCE(billing_status, 'active') AS billing_status,
+                   COALESCE(gst_rate, 0) AS gst_rate,
+                   COALESCE(discount_amount, 0) AS discount_amount,
+                   COALESCE(subtotal_amount, 0) AS subtotal_amount,
+                   COALESCE(tax_amount, 0) AS tax_amount
+            FROM orders
+            WHERE vendor_id = ? AND source = 'OFFLINE'
+        """
+        params = [vendor_id]
+        if search:
+            query += " AND (order_number LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ?)"
+            like = f"%{search}%"
+            params += [like, like, like]
+        if date_from:
+            query += " AND created_at >= ?"
+            params.append(date_from if len(date_from) > 10 else date_from + " 00:00:00")
+        if date_to:
+            query += " AND created_at <= ?"
+            params.append(date_to if len(date_to) > 10 else date_to + " 23:59:59")
+        if payment:
+            query += " AND UPPER(payment_type) = ?"
+            params.append(payment)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+
+        result = []
+        for r in rows:
+            items = conn.execute(
+                """
+                SELECT id, product_id, product_name, quantity, price, subtotal,
+                       COALESCE(returned_qty, 0) AS returned_qty
+                FROM order_items WHERE order_id = ?
+                """,
+                (r["id"],),
+            ).fetchall()
+            item_list = [dict(i) for i in items]
+            # Legacy bills (created before stored amounts) fall back to the
+            # sum of their line items.
+            stored_subtotal = float(r["subtotal_amount"] or 0)
+            subtotal = stored_subtotal if stored_subtotal > 0 else round(sum(float(i["subtotal"] or 0) for i in item_list), 2)
+            stored_tax = float(r["tax_amount"] or 0)
+            tax = stored_tax if stored_tax > 0 else round(max(0.0, float(r["total_amount"] or 0) - subtotal - float(r["discount_amount"] or 0)), 2)
+            result.append({
+                "id": r["id"],
+                "order_number": r["order_number"],
+                "customer_name": r["customer_name"] or "Counter Customer",
+                "customer_phone": r["customer_phone"] or "",
+                "total_amount": float(r["total_amount"] or 0),
+                "payment_mode": r["payment_mode"] or "CASH",
+                "created_at": r["created_at"],
+                "order_status": r["order_status"],
+                "payment_status": r["payment_status"],
+                "billing_status": r["billing_status"] or "active",
+                "gst_rate": float(r["gst_rate"] or 0),
+                "discount_amount": float(r["discount_amount"] or 0),
+                "subtotal": subtotal,
+                "tax_amount": tax,
+                "items": item_list,
+            })
+        return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/return", methods=["POST"])
+@require_warehouse_staff_permission("billing")
+def return_billing_order():
+    """Processes a return on a counter-sale bill: restocks returned quantities
+    and updates the bill status (fully/partially returned)."""
+    data = request.get_json(silent=True) or {}
+    order_id = data.get("order_id")
+    return_items = data.get("items", []) or []
+    if not order_id or not isinstance(return_items, list) or not return_items:
+        return error_response("order_id and items are required", 400)
+
+    vendor_id = request.vendor_id
+    conn = get_db()
+    try:
+        _ensure_billing_schema(conn)
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+
+        order = cur.execute(
+            "SELECT * FROM orders WHERE id = ? AND vendor_id = ? AND source = 'OFFLINE'",
+            (order_id, vendor_id),
+        ).fetchone()
+        if not order:
+            conn.rollback()
+            return error_response("Bill not found", 404)
+        if order["order_status"] in ("CANCELLED", "EXCHANGED"):
+            conn.rollback()
+            return error_response("Cancelled or exchanged bills cannot be returned", 400)
+
+        refund_amount = 0.0
+        for ri in return_items:
+            item_id = ri.get("item_id") or ri.get("id")
+            try:
+                qty = int(ri.get("qty") or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            if qty <= 0:
+                continue
+            oi = cur.execute(
+                "SELECT * FROM order_items WHERE id = ? AND order_id = ?",
+                (item_id, order_id),
+            ).fetchone()
+            if not oi:
+                conn.rollback()
+                return error_response(f"Order item {item_id} not found", 404)
+            already = int(oi["returned_qty"] or 0)
+            if qty > (int(oi["quantity"]) - already):
+                conn.rollback()
+                return error_response(
+                    f"Return qty exceeds purchased qty for '{oi['product_name']}'", 400
+                )
+            _restock_billing_item(cur, vendor_id, oi["product_id"], qty)
+            cur.execute(
+                "UPDATE order_items SET returned_qty = COALESCE(returned_qty, 0) + ? WHERE id = ?",
+                (qty, item_id),
+            )
+            refund_amount += float(oi["price"] or 0) * qty
+
+        all_returned = all(
+            int(r["rq"]) >= int(r["quantity"])
+            for r in cur.execute(
+                "SELECT quantity, COALESCE(returned_qty, 0) AS rq FROM order_items WHERE order_id = ?",
+                (order_id,),
+            ).fetchall()
+        )
+        if all_returned:
+            cur.execute(
+                "UPDATE orders SET order_status = 'RETURNED', payment_status = 'refunded', billing_status = 'returned' WHERE id = ?",
+                (order_id,),
+            )
+        else:
+            cur.execute(
+                "UPDATE orders SET billing_status = 'partially_returned' WHERE id = ?",
+                (order_id,),
+            )
+        conn.commit()
+        return jsonify({
+            "message": "Return processed",
+            "refund_amount": round(refund_amount, 2),
+            "billing_status": "returned" if all_returned else "partially_returned",
+        }), 200
+    except Exception as exc:
+        conn.rollback()
+        return error_response(f"Failed to process return: {str(exc)}", 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/cancel", methods=["POST"])
+@require_warehouse_staff_permission("billing")
+def cancel_billing_order():
+    """Cancels a counter-sale bill: restocks all remaining quantities and marks
+    the bill cancelled/refunded."""
+    data = request.get_json(silent=True) or {}
+    order_id = data.get("order_id")
+    if not order_id:
+        return error_response("order_id is required", 400)
+
+    vendor_id = request.vendor_id
+    conn = get_db()
+    try:
+        _ensure_billing_schema(conn)
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+
+        order = cur.execute(
+            "SELECT * FROM orders WHERE id = ? AND vendor_id = ? AND source = 'OFFLINE'",
+            (order_id, vendor_id),
+        ).fetchone()
+        if not order:
+            conn.rollback()
+            return error_response("Bill not found", 404)
+        if order["order_status"] in ("CANCELLED", "RETURNED", "EXCHANGED"):
+            conn.rollback()
+            return error_response(f"Bill is already {order['order_status'].lower()}", 400)
+
+        items = cur.execute(
+            "SELECT id, product_id, quantity, price, COALESCE(returned_qty, 0) AS returned_qty FROM order_items WHERE order_id = ?",
+            (order_id,),
+        ).fetchall()
+        refund_amount = 0.0
+        for oi in items:
+            remaining = int(oi["quantity"]) - int(oi["returned_qty"] or 0)
+            if remaining <= 0:
+                continue
+            _restock_billing_item(cur, vendor_id, oi["product_id"], remaining)
+            cur.execute(
+                "UPDATE order_items SET returned_qty = quantity WHERE id = ?",
+                (oi["id"],),
+            )
+            refund_amount += float(oi["price"] or 0) * remaining
+
+        cur.execute(
+            "UPDATE orders SET order_status = 'CANCELLED', payment_status = 'refunded', billing_status = 'cancelled' WHERE id = ?",
+            (order_id,),
+        )
+        conn.commit()
+        return jsonify({
+            "message": "Bill cancelled",
+            "refund_amount": round(refund_amount, 2),
+            "billing_status": "cancelled",
+        }), 200
+    except Exception as exc:
+        conn.rollback()
+        return error_response(f"Failed to cancel bill: {str(exc)}", 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/exchange", methods=["POST"])
+@require_warehouse_staff_permission("billing")
+def exchange_billing_order():
+    """Processes an exchange on a counter-sale bill: restocks the returned
+    quantities and immediately creates a new replacement bill for the chosen
+    items. Returns the price difference (positive = customer pays extra,
+    negative = refund due)."""
+    data = request.get_json(silent=True) or {}
+    order_id = data.get("order_id")
+    return_items = data.get("return_items", []) or []
+    new_items = data.get("new_items", []) or []
+    if not order_id or not isinstance(return_items, list) or not isinstance(new_items, list) or not return_items or not new_items:
+        return error_response("order_id, return_items and new_items are required", 400)
+
+    vendor_id = request.vendor_id
+    agent_id = request.staff_id
+    customer_name = (data.get("customer_name") or "Counter Customer").strip()
+    customer_phone = (data.get("customer_phone") or "").strip()
+    payment_mode = (data.get("payment_mode") or "CASH").upper()
+    try:
+        gst_rate = max(0.0, min(100.0, float(data.get("gst_rate", 0) or 0)))
+    except (TypeError, ValueError):
+        gst_rate = 0.0
+
+    conn = get_db()
+    try:
+        _ensure_billing_schema(conn)
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+
+        order = cur.execute(
+            "SELECT * FROM orders WHERE id = ? AND vendor_id = ? AND source = 'OFFLINE'",
+            (order_id, vendor_id),
+        ).fetchone()
+        if not order:
+            conn.rollback()
+            return error_response("Bill not found", 404)
+        if order["order_status"] in ("CANCELLED",):
+            conn.rollback()
+            return error_response("Cancelled bills cannot be exchanged", 400)
+
+        # 1. Process the returned quantities (restock)
+        refund_value = 0.0
+        for ri in return_items:
+            item_id = ri.get("item_id") or ri.get("id")
+            try:
+                qty = int(ri.get("qty") or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            if qty <= 0:
+                continue
+            oi = cur.execute(
+                "SELECT * FROM order_items WHERE id = ? AND order_id = ?",
+                (item_id, order_id),
+            ).fetchone()
+            if not oi:
+                conn.rollback()
+                return error_response(f"Order item {item_id} not found", 404)
+            already = int(oi["returned_qty"] or 0)
+            if qty > (int(oi["quantity"]) - already):
+                conn.rollback()
+                return error_response(
+                    f"Return qty exceeds purchased qty for '{oi['product_name']}'", 400
+                )
+            _restock_billing_item(cur, vendor_id, oi["product_id"], qty)
+            cur.execute(
+                "UPDATE order_items SET returned_qty = COALESCE(returned_qty, 0) + ? WHERE id = ?",
+                (qty, item_id),
+            )
+            refund_value += float(oi["price"] or 0) * qty
+
+        # 2. Validate the replacement items (stock + prices)
+        try:
+            new_subtotal, new_validated = _validate_billing_items(cur, vendor_id, new_items)
+        except ValueError as e:
+            conn.rollback()
+            return error_response(str(e), 400)
+        new_tax = round(new_subtotal * gst_rate / 100, 2)
+        new_total = max(0.0, round(new_subtotal + new_tax, 2))
+
+        # 3. Create the replacement order
+        order_number = f"BILL-{int(time.time())}-{random.randint(1000, 9999)}"
+        user_id = _get_counter_user_id(cur)
+        new_order_id = _insert_offline_order(
+            cur,
+            order_number=order_number,
+            user_id=user_id,
+            vendor_id=vendor_id,
+            agent_id=agent_id,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            payment_mode=payment_mode,
+            subtotal=round(new_subtotal, 2),
+            tax_amount=new_tax,
+            gst_rate=gst_rate,
+            discount_amount=0.0,
+            total_amount=new_total,
+        )
+        for item in new_validated:
+            cur.execute(
+                """
+                INSERT INTO order_items (order_id, product_id, product_name, quantity, price, subtotal)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (new_order_id, item["product_id"], item["name"], item["qty"], item["price"], item["subtotal"]),
+            )
+            _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"])
+
+        # 4. Update original bill status
+        all_returned = all(
+            int(r["rq"]) >= int(r["quantity"])
+            for r in cur.execute(
+                "SELECT quantity, COALESCE(returned_qty, 0) AS rq FROM order_items WHERE order_id = ?",
+                (order_id,),
+            ).fetchall()
+        )
+        if all_returned:
+            cur.execute(
+                "UPDATE orders SET order_status = 'EXCHANGED', payment_status = 'refunded', billing_status = 'exchanged' WHERE id = ?",
+                (order_id,),
+            )
+        else:
+            cur.execute(
+                "UPDATE orders SET billing_status = 'partially_exchanged' WHERE id = ?",
+                (order_id,),
+            )
+        conn.commit()
+
+        return jsonify({
+            "message": "Exchange completed",
+            "order_id": new_order_id,
+            "order_number": order_number,
+            "exchange_difference": round(new_total - refund_value, 2),
+            "refund_value": round(refund_value, 2),
+            "new_total": new_total,
+        }), 200
+    except Exception as exc:
+        conn.rollback()
+        return error_response(f"Failed to process exchange: {str(exc)}", 500)
     finally:
         conn.close()
 

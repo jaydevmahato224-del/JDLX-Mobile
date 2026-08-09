@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  ShoppingBag, Search, Plus, Minus, Trash2, CreditCard, 
-  DollarSign, QrCode, Printer, Download, CheckCircle, AlertCircle, 
-  Smartphone, ShieldAlert, Sparkles, RefreshCw, X, ArrowLeft
+import {
+  ShoppingBag, Search, Plus, Minus, Trash2, CreditCard,
+  DollarSign, QrCode, Printer, Smartphone, ShieldAlert, RefreshCw, History
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
+import SalesHistory from './billing/SalesHistory';
+import InvoiceModal from './billing/InvoiceModal';
 
 export default function StaffBilling() {
   const [products, setProducts] = useState([]);
@@ -20,6 +21,12 @@ export default function StaffBilling() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMode, setPaymentMode] = useState('CASH');
   const [discountAmount, setDiscountAmount] = useState(0);
+  // GST is opt-in per bill — default 0% (No GST). The billing agent picks a
+  // rate from the dropdown only when GST actually needs to be charged.
+  const [gstRate, setGstRate] = useState(0);
+
+  // POS / Sales History tab
+  const [activeTab, setActiveTab] = useState('pos');
 
   // Billing modal / invoice receipt state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,6 +43,42 @@ export default function StaffBilling() {
     localStorage.getItem('warehouseToken') ||
     localStorage.getItem('warehouse_token') ||
     localStorage.getItem('staff_token');
+
+  // NOTE: must be declared BEFORE the useEffect below. `const` lives in the
+  // temporal dead zone until this line runs — if the effect (or its deps array)
+  // referenced it earlier, the whole POS page crashed on mount with
+  // "Cannot access 'fetchBillingProducts' before initialization" -> blank page.
+  const fetchBillingProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/warehouse/billing/products`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.status === 403) {
+        setError('Access Denied: You do not have permission to access the Billing System.');
+        setLoading(false);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error('Failed to load products for billing');
+      }
+
+      const data = await res.json();
+      setProducts(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Fetch billing products error:', err);
+      setError(err.message || 'Error loading billing products');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchBillingProducts();
@@ -68,37 +111,12 @@ export default function StaffBilling() {
     };
   }, [fetchBillingProducts]);
 
-  const fetchBillingProducts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/warehouse/billing/products`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  // Refresh stock whenever the agent returns to the POS tab — otherwise
+  // returns/exchanges done from Sales History leave stale stock counts.
+  useEffect(() => {
+    if (activeTab === 'pos') fetchBillingProducts();
+  }, [activeTab, fetchBillingProducts]);
 
-      if (res.status === 403) {
-        setError('Access Denied: You do not have permission to access the Billing System.');
-        setLoading(false);
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error('Failed to load products for billing');
-      }
-
-      const data = await res.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Fetch billing products error:', err);
-      setError(err.message || 'Error loading billing products');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const handleInstallApp = async () => {
     if (!deferredPrompt) {
@@ -167,7 +185,8 @@ export default function StaffBilling() {
 
   // Calculations
   const subtotal = cart.reduce((acc, item) => acc + item.price * item.qty, 0);
-  const taxAmount = Math.round(subtotal * 0.18 * 100) / 100; // 18% GST
+  // Tax uses the selected GST rate (0% by default = no GST charged).
+  const taxAmount = Math.round(subtotal * (Number(gstRate) / 100) * 100) / 100;
   const grandTotal = Math.max(0, Math.round((subtotal + taxAmount - Number(discountAmount || 0)) * 100) / 100);
 
   // Generate Bill handler
@@ -185,6 +204,7 @@ export default function StaffBilling() {
         customer_phone: customerPhone,
         payment_mode: paymentMode,
         discount_amount: Number(discountAmount || 0),
+        gst_rate: Number(gstRate || 0),
         items: cart.map((item) => ({
           product_id: item.id,
           qty: item.qty,
@@ -222,7 +242,10 @@ export default function StaffBilling() {
   const categories = ['ALL', ...new Set(products.map((p) => p.category || 'General'))];
 
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    // Guard against incomplete/bad product rows (e.g. NULL name from legacy
+    // inventory) so a single bad record can never crash the POS page.
+    const productName = (p.name || '').toString().toLowerCase();
+    const matchesSearch = productName.includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'ALL' || (p.category || 'General') === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -247,6 +270,30 @@ export default function StaffBilling() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 lg:p-6 font-sans">
+      {/* POS / Sales History tabs */}
+      <div className="max-w-7xl mx-auto mb-4 grid grid-cols-2 gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl">
+        <button
+          onClick={() => setActiveTab('pos')}
+          className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'pos'
+              ? 'bg-indigo-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4" /> Counter Billing (POS)
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+            activeTab === 'history'
+              ? 'bg-indigo-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <History className="w-4 h-4" /> Sales History
+        </button>
+      </div>
+
       {/* Top Header Bar */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl backdrop-blur-md">
         <div className="flex items-center gap-3">
@@ -288,6 +335,7 @@ export default function StaffBilling() {
       </div>
 
       {/* Main Grid: Left Catalog, Right Cart/Checkout */}
+      {activeTab === 'pos' && (
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Product Selection (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
@@ -518,6 +566,21 @@ export default function StaffBilling() {
                 />
               </div>
 
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">GST (Tax)</label>
+                <select
+                  value={gstRate}
+                  onChange={(e) => setGstRate(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value={0}>No GST (0%)</option>
+                  <option value={5}>GST 5%</option>
+                  <option value={12}>GST 12%</option>
+                  <option value={18}>GST 18%</option>
+                  <option value={28}>GST 28%</option>
+                </select>
+              </div>
+
               {/* Price Breakdown */}
               <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between text-slate-400">
@@ -525,7 +588,7 @@ export default function StaffBilling() {
                   <span>₹{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>GST (18%)</span>
+                  <span>{Number(gstRate) > 0 ? `GST (${gstRate}%)` : 'No GST'}</span>
                   <span>₹{taxAmount.toFixed(2)}</span>
                 </div>
                 {Number(discountAmount) > 0 && (
@@ -565,86 +628,13 @@ export default function StaffBilling() {
           </div>
         </div>
       </div>
+      )}
+
+      {activeTab === 'history' && <SalesHistory />}
 
       {/* Generated Bill / Receipt Modal */}
       {showInvoiceModal && generatedInvoice && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95">
-            <button
-              onClick={() => setShowInvoiceModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="text-center border-b border-slate-800 pb-4 mb-4">
-              <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-2 text-emerald-400">
-                <CheckCircle className="w-6 h-6" />
-              </div>
-              <h2 className="text-lg font-bold text-white">JDLX Mobile - Tax Invoice</h2>
-              <p className="text-xs text-slate-400">Counter Sale Receipt</p>
-            </div>
-
-            <div className="space-y-3 text-xs text-slate-300">
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400">Invoice No:</span>
-                <span className="font-mono font-bold text-white">{generatedInvoice.order_number}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400">Customer:</span>
-                <span className="font-medium text-white">{generatedInvoice.customer_name}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400">Payment Method:</span>
-                <span className="font-medium text-emerald-400">{generatedInvoice.payment_mode}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-800/60 pb-2">
-                <span className="text-slate-400">Date & Time:</span>
-                <span className="text-slate-300">{generatedInvoice.created_at}</span>
-              </div>
-
-              {/* Items Table */}
-              <div className="mt-3 bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
-                <p className="font-bold text-slate-400 uppercase text-[10px] tracking-wider mb-1">Purchased Items</p>
-                {generatedInvoice.items?.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-xs">
-                    <span className="truncate pr-2">{item.name} x{item.qty}</span>
-                    <span className="font-semibold text-white">₹{item.subtotal}</span>
-                  </div>
-                ))}
-                <div className="pt-2 border-t border-slate-800 space-y-1">
-                  <div className="flex justify-between text-slate-400 text-[11px]">
-                    <span>Subtotal:</span>
-                    <span>₹{generatedInvoice.subtotal}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-400 text-[11px]">
-                    <span>GST (18%):</span>
-                    <span>₹{generatedInvoice.tax_amount}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold text-white pt-1">
-                    <span>Total Amount Paid:</span>
-                    <span className="text-emerald-400 text-base">₹{generatedInvoice.total_amount}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Printer className="w-4 h-4" /> Print Receipt
-              </button>
-              <button
-                onClick={() => setShowInvoiceModal(false)}
-                className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <InvoiceModal invoice={generatedInvoice} onClose={() => setShowInvoiceModal(false)} />
       )}
     </div>
   );

@@ -161,10 +161,15 @@ const WarehouseLayoutWrapper = () => (
 
 function App() {
   return (
-    <ErrorBoundary>
+    <>
+      {/* Toaster / GlobalErrorOverlay / TopLoader stay OUTSIDE ErrorBoundary so
+          they remain mounted even when the boundary swaps to a fallback screen.
+          If they were inside, a caught error would unmount them too and the
+          network/server overlay could never display (blank page). */}
       <Toaster position="top-center" reverseOrder={false} />
       <GlobalErrorOverlay />
       <TopLoader />
+      <ErrorBoundary>
       <Router>
         <RouteChangeTracker />
         <Routes>
@@ -246,7 +251,8 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </>
   )
 }
 

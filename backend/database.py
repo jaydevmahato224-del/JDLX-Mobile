@@ -325,6 +325,11 @@ def init_db():
         ('source', "TEXT DEFAULT 'ONLINE'"),
         ('agent_id', 'INTEGER'),
         ('vendor_id', 'INTEGER'),
+        ('billing_status', "TEXT DEFAULT 'active'"),
+        ('subtotal_amount', 'REAL DEFAULT 0'),
+        ('tax_amount', 'REAL DEFAULT 0'),
+        ('gst_rate', 'REAL DEFAULT 0'),
+        ('discount_amount', 'REAL DEFAULT 0'),
         ('order_number', 'TEXT'),
         ('customer_name', 'TEXT'),
         ('customer_phone', 'TEXT'),
@@ -367,7 +372,8 @@ def init_db():
         ('variant_id', 'INTEGER REFERENCES product_variants(id)'),
         ('subtotal', 'REAL'),
         ('device_model', 'TEXT'),
-        ('fitting_charge', 'REAL DEFAULT 0')
+        ('fitting_charge', 'REAL DEFAULT 0'),
+        ('returned_qty', 'INTEGER DEFAULT 0')
     ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS cart (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id))''')

@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShoppingBag, Search, Plus, Minus, Trash2, CreditCard,
-  DollarSign, QrCode, Printer, Smartphone, ShieldAlert, RefreshCw, History
+  DollarSign, QrCode, Printer, Smartphone, ShieldAlert, RefreshCw, History,
+  AlertTriangle, Camera, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
 import SalesHistory from './billing/SalesHistory';
 import InvoiceModal from './billing/InvoiceModal';
+import { billingUploadDamageImage } from './billing/BillingApi';
 
 export default function StaffBilling() {
   const [products, setProducts] = useState([]);
@@ -150,7 +152,7 @@ export default function StaffBilling() {
           item.id === product.id ? { ...item, qty: item.qty + 1 } : item
         );
       }
-      return [...prevCart, { ...product, qty: 1 }];
+      return [...prevCart, { ...product, qty: 1, damage_qty: 0, damageComment: '', damageImageUrl: '', damageMode: false }];
     });
   };
 
@@ -164,7 +166,10 @@ export default function StaffBilling() {
               toast.error(`Only ${item.stock} in stock!`);
               return item;
             }
-            return newQty > 0 ? { ...item, qty: newQty } : null;
+            // Never let damage exceed the total qty (e.g. qty 3 -> 1 keeps
+            // damage clamped to 1).
+            const clampedDamage = Math.min(item.damage_qty || 0, newQty);
+            return newQty > 0 ? { ...item, qty: newQty, damage_qty: clampedDamage } : null;
           }
           return item;
         })
@@ -176,6 +181,61 @@ export default function StaffBilling() {
     setCart((prevCart) => prevCart.filter((item) => item.id !== id));
   };
 
+  // --- Damage handling (optional per line item) ---
+  // Damaged units are excluded from the bill — the customer only pays for
+  // (qty - damage_qty). Damage qty / comment / photo are kept for records.
+  const toggleDamageMode = (id) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => {
+        if (item.id !== id) return item;
+        const damageMode = !item.damageMode;
+        return {
+          ...item,
+          damageMode,
+          // Sensible default: mark 1 unit damaged when enabling.
+          damage_qty: damageMode ? Math.min(1, item.qty) : item.damage_qty
+        };
+      })
+    );
+  };
+
+  const setDamageQty = (id, delta) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => {
+        if (item.id !== id) return item;
+        const dq = Math.min(Math.max(0, (item.damage_qty || 0) + delta), item.qty);
+        return { ...item, damage_qty: dq };
+      })
+    );
+  };
+
+  const setDamageComment = (id, value) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => (item.id === id ? { ...item, damageComment: value } : item))
+    );
+  };
+
+  const handleDamageImage = async (id, file) => {
+    if (!file) return;
+    try {
+      const url = await billingUploadDamageImage(file);
+      if (!url) throw new Error('Upload returned no URL');
+      setCart((prevCart) =>
+        prevCart.map((item) => (item.id === id ? { ...item, damageImageUrl: url } : item))
+      );
+      toast.success('Damage photo attached');
+    } catch (err) {
+      console.error('Damage image upload error:', err);
+      toast.error(err.message || 'Damage photo upload failed');
+    }
+  };
+
+  const removeDamageImage = (id) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => (item.id === id ? { ...item, damageImageUrl: '' } : item))
+    );
+  };
+
   const clearCart = () => {
     setCart([]);
     setCustomerName('');
@@ -183,8 +243,9 @@ export default function StaffBilling() {
     setDiscountAmount(0);
   };
 
-  // Calculations
-  const subtotal = cart.reduce((acc, item) => acc + item.price * item.qty, 0);
+  // Calculations — only non-damaged units are charged (damage is not billed).
+  const billedQtyOf = (item) => Math.max(0, (item.qty || 0) - (item.damage_qty || 0));
+  const subtotal = cart.reduce((acc, item) => acc + item.price * billedQtyOf(item), 0);
   // Tax uses the selected GST rate (0% by default = no GST charged).
   const taxAmount = Math.round(subtotal * (Number(gstRate) / 100) * 100) / 100;
   const grandTotal = Math.max(0, Math.round((subtotal + taxAmount - Number(discountAmount || 0)) * 100) / 100);
@@ -208,7 +269,10 @@ export default function StaffBilling() {
         items: cart.map((item) => ({
           product_id: item.id,
           qty: item.qty,
-          price: item.price
+          price: item.price,
+          damage_qty: item.damage_qty || 0,
+          damage_comment: item.damageComment || '',
+          damage_image_url: item.damageImageUrl || ''
         }))
       };
 
@@ -467,37 +531,136 @@ export default function StaffBilling() {
                   <p>Click items from catalog to add</p>
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div key={item.id} className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-slate-200 truncate">{item.name}</p>
-                      <p className="text-[11px] text-slate-400">₹{item.price} x {item.qty} = <span className="text-emerald-400 font-semibold">₹{item.price * item.qty}</span></p>
-                    </div>
+                cart.map((item) => {
+                  const damageQty = item.damage_qty || 0;
+                  const billedQty = billedQtyOf(item);
+                  const hasDamage = damageQty > 0;
+                  return (
+                    <div key={item.id} className={`bg-slate-950 border p-2.5 rounded-xl ${hasDamage ? 'border-red-500/40' : 'border-slate-800'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-slate-200 truncate">{item.name}</p>
+                          <p className="text-[11px] text-slate-400">
+                            ₹{item.price} x {billedQty} = <span className="text-emerald-400 font-semibold">₹{(item.price * billedQty).toFixed(2)}</span>
+                            {hasDamage && (
+                              <span className="text-red-400 ml-1">({damageQty} damaged — not billed)</span>
+                            )}
+                          </p>
+                        </div>
 
-                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
-                      <button
-                        onClick={() => updateQuantity(item.id, -1)}
-                        className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-bold w-5 text-center">{item.qty}</span>
-                      <button
-                        onClick={() => updateQuantity(item.id, 1)}
-                        className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
+                        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                          <button
+                            onClick={() => updateQuantity(item.id, -1)}
+                            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="text-xs font-bold w-5 text-center">{item.qty}</span>
+                          <button
+                            onClick={() => updateQuantity(item.id, 1)}
+                            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
 
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="p-1 text-slate-500 hover:text-red-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="p-1 text-slate-500 hover:text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Damage section — the comment/photo options only appear
+                          once damage mode is switched on for this line. */}
+                      <div className="mt-2 pt-2 border-t border-slate-900 flex flex-col items-start">
+                        <button
+                          type="button"
+                          onClick={() => toggleDamageMode(item.id)}
+                          className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
+                            item.damageMode
+                              ? 'bg-red-500/15 text-red-400 border-red-500/40'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-red-400 hover:border-red-500/40'
+                          }`}
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          {item.damageMode ? 'Damage On' : 'Add Damage'}
+                        </button>
+
+                        {item.damageMode && (
+                          <div className="w-full mt-2 space-y-2 bg-red-950/20 border border-red-500/20 rounded-lg p-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-semibold text-red-300">Damaged Qty (max {item.qty})</span>
+                              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                                <button
+                                  onClick={() => setDamageQty(item.id, -1)}
+                                  className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="text-xs font-bold w-5 text-center">{damageQty}</span>
+                                <button
+                                  onClick={() => setDamageQty(item.id, 1)}
+                                  className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-medium text-slate-400 mb-1">Damage Comment (optional)</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Screen cracked while unboxing"
+                                value={item.damageComment || ''}
+                                onChange={(e) => setDamageComment(item.id, e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none focus:border-red-500"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-medium text-slate-400 mb-1">Damage Photo (optional)</label>
+                              {item.damageImageUrl ? (
+                                <div className="flex items-center gap-2">
+                                  <img
+                                    src={resolveMediaUrl(item.damageImageUrl)}
+                                    alt="Damage proof"
+                                    className="w-12 h-12 rounded-lg object-cover border border-red-500/40"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeDamageImage(item.id)}
+                                    className="p-1.5 bg-slate-900 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg"
+                                    title="Remove photo"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <label className="flex items-center gap-2 w-full bg-slate-950 border border-dashed border-slate-700 rounded-lg px-2.5 py-2 text-[11px] text-slate-400 hover:border-red-500/50 hover:text-red-300 cursor-pointer">
+                                  <Camera className="w-3.5 h-3.5" />
+                                  Choose photo
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files && e.target.files[0];
+                                      if (file) handleDamageImage(item.id, file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 

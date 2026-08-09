@@ -1,5 +1,6 @@
 import { CheckCircle, Printer, X } from 'lucide-react'
 import { formatBillDate } from './BillingApi'
+import { resolveMediaUrl } from '../../../config'
 
 /**
  * Shared counter-sale invoice/receipt modal.
@@ -56,12 +57,41 @@ export default function InvoiceModal({ invoice, onClose }) {
           {/* Items Table */}
           <div className="mt-3 bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
             <p className="font-bold text-slate-400 uppercase text-[10px] tracking-wider mb-1">Purchased Items</p>
-            {(invoice.items || []).map((item, idx) => (
-              <div key={idx} className="flex justify-between text-xs">
-                <span className="truncate pr-2">{item.name} x{item.qty}</span>
-                <span className="font-semibold text-white">₹{item.subtotal}</span>
+            {(invoice.items || [])
+              .filter((item) => (item.billed_qty ?? item.quantity ?? item.qty ?? 0) > 0)
+              .map((item, idx) => (
+                <div key={idx} className="flex justify-between text-xs">
+                  <span className="truncate pr-2">{item.name} x{item.billed_qty ?? item.quantity ?? item.qty}</span>
+                  <span className="font-semibold text-white">₹{item.subtotal}</span>
+                </div>
+              ))}
+            {(invoice.items || []).filter((item) => Number(item.damage_qty || 0) > 0).length > 0 && (
+              <div className="pt-2 border-t border-red-500/30 space-y-1.5">
+                <p className="font-bold text-red-400 uppercase text-[10px] tracking-wider">Damaged (Not Billed)</p>
+                {(invoice.items || [])
+                  .filter((item) => Number(item.damage_qty || 0) > 0)
+                  .map((item, idx) => (
+                    <div key={idx} className="bg-red-950/20 border border-red-500/20 rounded-lg p-2 space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-red-300 font-medium truncate pr-2">
+                          {item.name} x{item.damage_qty}
+                        </span>
+                        <span className="text-red-400 font-semibold whitespace-nowrap">₹0</span>
+                      </div>
+                      {item.damage_comment && (
+                        <p className="text-[10px] text-slate-400 italic">“{item.damage_comment}”</p>
+                      )}
+                      {item.damage_image_url && (
+                        <img
+                          src={resolveMediaUrl(item.damage_image_url)}
+                          alt="Damage proof"
+                          className="w-14 h-14 rounded-lg object-cover border border-red-500/30 mt-1"
+                        />
+                      )}
+                    </div>
+                  ))}
               </div>
-            ))}
+            )}
             <div className="pt-2 border-t border-slate-800 space-y-1">
               <div className="flex justify-between text-slate-400 text-[11px]">
                 <span>Subtotal:</span>

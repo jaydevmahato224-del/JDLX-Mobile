@@ -7,4 +7,5 @@ venv_new/
 jdlx.db
 *.db.backup-*
 *.log
+static/uploads/
 

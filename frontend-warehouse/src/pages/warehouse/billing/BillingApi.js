@@ -44,6 +44,25 @@ export const billingApi = {
   exchange: (payload) => billingFetch('/exchange', { method: 'POST', body: JSON.stringify(payload) }),
 }
 
+// Optional damage-proof image upload for a billing line item (multipart — no
+// JSON content-type so the browser sets the boundary). Returns the saved URL.
+export async function billingUploadDamageImage(file) {
+  const token = getBillingToken()
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/warehouse/billing/damage-upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: form,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(data.error || data.message || `Upload failed (${res.status})`)
+  }
+  // success_response returns { success, data: { url }, message }
+  return (data.data && data.data.url) || data.url || ''
+}
+
 // The DB stores created_at as UTC ("YYYY-MM-DD HH:MM:SS", CURRENT_TIMESTAMP).
 // JavaScript treats space-separated strings as LOCAL time, which would show
 // UTC wall-clock as local — so parse those as UTC first. ISO strings pass

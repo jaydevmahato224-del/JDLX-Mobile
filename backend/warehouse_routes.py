@@ -3965,6 +3965,13 @@ def _ensure_billing_schema(conn):
         item_cols = [r[1] for r in cur.execute("PRAGMA table_info(order_items)").fetchall()]
         if "returned_qty" not in item_cols:
             cur.execute("ALTER TABLE order_items ADD COLUMN returned_qty INTEGER DEFAULT 0")
+        for col, ddl in (
+            ("damage_qty", "INTEGER DEFAULT 0"),
+            ("damage_comment", "TEXT DEFAULT ''"),
+            ("damage_image_url", "TEXT DEFAULT ''"),
+        ):
+            if col not in item_cols:
+                cur.execute(f"ALTER TABLE order_items ADD COLUMN {col} {ddl}")
         order_cols = [r[1] for r in cur.execute("PRAGMA table_info(orders)").fetchall()]
         for col, ddl in (
             ("billing_status", "TEXT DEFAULT 'active'"),
@@ -4004,6 +4011,11 @@ def _validate_billing_items(cur, vendor_id, items):
     Returns (subtotal, validated_items). Raises ValueError on any problem.
     Counter/offline sales use the dedicated offline price when set, otherwise
     fall back to the regular online price.
+
+    Items may carry an optional damage_qty (0..qty) plus optional
+    damage_comment / damage_image_url. Damaged units are physically removed
+    from stock (they still count against available stock) but are NEVER
+    charged — the bill subtotal only covers (qty - damage_qty) units.
     """
     subtotal = 0.0
     validated = []
@@ -4015,6 +4027,14 @@ def _validate_billing_items(cur, vendor_id, items):
             raise ValueError("Invalid quantity for product")
         if not product_id or qty <= 0:
             raise ValueError("Invalid product or quantity")
+
+        try:
+            damage_qty = int(item.get("damage_qty") or 0)
+        except (TypeError, ValueError):
+            damage_qty = 0
+        if damage_qty < 0 or damage_qty > qty:
+            raise ValueError("Damage quantity must be between 0 and item quantity")
+        billed_qty = qty - damage_qty
 
         p_row = cur.execute(
             "SELECT id, name, price, offline_price, stock FROM products WHERE id = ?",
@@ -4047,12 +4067,18 @@ def _validate_billing_items(cur, vendor_id, items):
             item_price = float(p_row["offline_price"]) if p_row["offline_price"] else float(p_row["price"])
         except (TypeError, ValueError):
             item_price = float(p_row["price"])
-        item_total = item_price * qty
+        # Only the non-damaged units are charged. Damaged units still leave
+        # stock (they're unusable) but contribute ₹0 to the bill.
+        item_total = item_price * billed_qty
         subtotal += item_total
         validated.append({
             "product_id": product_id,
             "name": p_row["name"],
-            "qty": qty,
+            "qty": qty,          # total units taken from stock
+            "billed_qty": billed_qty,
+            "damage_qty": damage_qty,
+            "damage_comment": (item.get("damage_comment") or "").strip(),
+            "damage_image_url": (item.get("damage_image_url") or "").strip(),
             "price": item_price,
             "subtotal": item_total,
         })
@@ -4221,14 +4247,19 @@ def generate_billing_order():
             total_amount=total_amount,
         )
 
-        # 3. Insert order items & decrement inventory stock atomically
+        # 3. Insert order items & decrement inventory stock atomically.
+        #    quantity stores the BILLED qty (damaged units are never charged);
+        #    damage_qty/comment/image are kept alongside for records. Stock is
+        #    decremented by the FULL qty — damaged units also leave inventory.
         for item in validated_items:
             cur.execute(
                 """
-                INSERT INTO order_items (order_id, product_id, product_name, quantity, price, subtotal)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO order_items (order_id, product_id, product_name, quantity, price, subtotal,
+                                         damage_qty, damage_comment, damage_image_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (order_id, item["product_id"], item["name"], item["qty"], item["price"], item["subtotal"])
+                (order_id, item["product_id"], item["name"], item["billed_qty"], item["price"], item["subtotal"],
+                 item["damage_qty"], item["damage_comment"], item["damage_image_url"])
             )
             _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"])
 
@@ -4265,6 +4296,31 @@ def generate_billing_order():
         return error_response(f"Failed to generate bill: {str(exc)}", 500)
     finally:
         conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/damage-upload", methods=["POST"])
+@require_warehouse_staff_permission("billing")
+def upload_billing_damage_image():
+    """Uploads an optional damage-proof image for a POS billing line item.
+
+    Reuses the existing warehouse asset-save helper; returns the relative URL
+    that gets stored on the order_item (damage_image_url) for the records.
+    """
+    if "file" not in request.files:
+        return error_response("No file part", 400)
+    file = request.files["file"]
+    if file.filename == "":
+        return error_response("No selected file", 400)
+    try:
+        url = _save_uploaded_asset(file, "damage")
+        if not url:
+            return error_response("File upload failed", 400)
+        return success_response({"url": url}, "Damage image uploaded successfully", 201)
+    except ValueError as e:
+        return error_response(str(e), 400)
+    except Exception as e:
+        current_app.logger.error(f"Damage image upload failed: {str(e)}")
+        return error_response(str(e), 500)
 
 
 @warehouse_bp.route("/api/warehouse/billing/history", methods=["GET"])
@@ -4325,7 +4381,10 @@ def get_billing_history():
             items = conn.execute(
                 """
                 SELECT id, product_id, product_name, quantity, price, subtotal,
-                       COALESCE(returned_qty, 0) AS returned_qty
+                       COALESCE(returned_qty, 0) AS returned_qty,
+                       COALESCE(damage_qty, 0) AS damage_qty,
+                       COALESCE(damage_comment, '') AS damage_comment,
+                       COALESCE(damage_image_url, '') AS damage_image_url
                 FROM order_items WHERE order_id = ?
                 """,
                 (r["id"],),

@@ -375,9 +375,20 @@ def init_db():
         ('fitting_charge', 'REAL DEFAULT 0'),
         ('returned_qty', 'INTEGER DEFAULT 0')
     ])
+    # Hot-path indexes: order history (get_user_orders / get_admin_orders filter by
+    # user + sort by created_at) and every order_items lookup by order_id (order
+    # details, returns/exchange, billing history). Idempotent — no data changes.
+    # Composite (user_id, created_at) serves both the user filter and the
+    # created_at DESC sort in a single index scan (SQLite scans it backwards).
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_created ON orders(user_id, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(order_status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id)")
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS cart (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, product_id INTEGER NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
     ensure_columns('cart', [('updated_at', 'TIMESTAMP'), ('variant_id', 'INTEGER REFERENCES product_variants(id)')])
+    # Guest cart fetches always look up by session_id — index it.
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cart_session ON cart(session_id)")
 
     # --- Logistics & Stores ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS dark_stores (id INTEGER PRIMARY KEY AUTOINCREMENT, store_code TEXT UNIQUE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')

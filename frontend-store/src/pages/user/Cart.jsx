@@ -186,7 +186,7 @@ function Cart() {
                                 <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                     {/* Image Section */}
                                     <div className={`relative w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-white p-3 flex-shrink-0 border border-[var(--color-surface-high)] shadow-sm transition-transform group-hover:rotate-2 ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
-                                        <img src={getProductImage(item)} alt={item.name} className="w-full h-full object-contain transition-transform group-hover:scale-110 duration-500" />
+                                        <img src={getProductImage(item)} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-contain transition-transform group-hover:scale-110 duration-500" />
                                         {isUnavailable && (
                                             <div className="absolute inset-0 bg-red-900/5 backdrop-blur-[2px] rounded-3xl flex items-center justify-center">
                                                 <X className="text-red-600 w-8 h-8" />

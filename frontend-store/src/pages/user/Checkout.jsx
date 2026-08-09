@@ -868,7 +868,7 @@ function Checkout() {
                                 <div key={item.id} className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-slate-50 rounded-xl flex-shrink-0 border border-slate-100 p-1">
-                                            <img src={item.image_url || 'https://placehold.co/100'} alt="" className="w-full h-full object-contain" />
+                                            <img src={item.image_url || 'https://placehold.co/100'} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-[13px] font-black text-slate-900 truncate max-w-[120px] sm:max-w-[200px]">{item.name}</p>

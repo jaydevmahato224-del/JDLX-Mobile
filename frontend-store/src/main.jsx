@@ -1,6 +1,5 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { GoogleOAuthProvider } from '@react-oauth/google'
 import App from './App.jsx'
 import './index.css'
 import './styles/fpsOptimize.css'
@@ -12,14 +11,9 @@ import { useStore } from './store/useStore'
 initFrameRateDetection();
 initPerformanceManager();
 
-// Google Client ID for storefront (loaded from environment or using the correct default for port 5173)
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "473832938691-0et3o47opidpim0k0ufau8tq1qtn4sc9.apps.googleusercontent.com"
-
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <App />
-    </GoogleOAuthProvider>
+    <App />
   </React.StrictMode>,
 )
 

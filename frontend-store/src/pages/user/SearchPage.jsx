@@ -68,23 +68,23 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">
           {outOfStock ? (
-            <span className="bg-slate-900/90 backdrop-blur text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
+            <span className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
               Sold Out
             </span>
           ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
+            <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
               Low Stock
             </span>
           ) : (Number(product.is_featured) === 1 || product.is_featured === true) ? (
-            <span className="bg-primary text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-soft-glow">
+            <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-soft-glow">
               Premium
             </span>
           ) : product.average_rating >= 4.5 ? (
-            <span className="bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
+            <span className="bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
               Best Seller
             </span>
           ) : (
-            <span className="bg-blue-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
+            <span className="bg-blue-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
               New
             </span>
           )}
@@ -113,7 +113,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
             ) : (
               <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100">
                 <ShieldCheck size={8} className="text-blue-500" />
-                <span className="text-[8px] font-black text-blue-700 uppercase">Verified</span>
+                <span className="text-[10px] font-black text-blue-700 uppercase">Verified</span>
               </div>
             )}
           </div>

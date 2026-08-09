@@ -42,7 +42,7 @@ const AlertItem = ({ alert, onClose }) => {
 
     return (
         <div className={`
-            min-w-[320px] max-w-[450px] p-4 rounded-2xl border backdrop-blur-xl shadow-2xl
+            w-[calc(100vw-3rem)] min-w-0 max-w-[450px] sm:w-auto sm:min-w-[320px] p-4 rounded-2xl border backdrop-blur-xl shadow-2xl
             flex items-start gap-4 ${backgrounds[alert.type]}
         `}>
             <div className="mt-0.5">{icons[alert.type]}</div>

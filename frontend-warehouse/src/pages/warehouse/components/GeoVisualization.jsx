@@ -37,7 +37,7 @@ const GeoVisualization = ({ pincode, radius }) => {
                         <span className="text-[9px] font-black text-[var(--text-primary)] uppercase tracking-[0.25em] italic">ACTIVE HUB: {pincode || '832108'}</span>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 text-[8px] font-black text-slate-600 uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full border border-white/5">
+                <div className="flex items-center gap-2 text-[9px] font-black text-slate-600 uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full border border-white/5">
                     <div className="h-1 w-1 bg-emerald-500/50 rounded-full animate-pulse" />
                     Feed Sync Active
                 </div>

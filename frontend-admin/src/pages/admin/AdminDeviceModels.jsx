@@ -144,8 +144,8 @@ export default function AdminDeviceModels() {
                 </button>
             </form>
 
-            <div className="glass-card overflow-hidden">
-                <div className="grid grid-cols-12 gap-3 border-b border-gray-100 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">
+            <div className="glass-card overflow-x-auto">
+                <div className="grid grid-cols-12 gap-3 border-b border-gray-100 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 min-w-[720px]">
                     <span className="col-span-4">Model</span>
                     <span className="col-span-2">Brand</span>
                     <span className="col-span-2">Type</span>
@@ -153,7 +153,7 @@ export default function AdminDeviceModels() {
                     <span className="col-span-2 text-right">Actions</span>
                 </div>
                 {models.map((model) => (
-                    <div key={model.id} className="grid grid-cols-12 gap-3 px-5 py-4 border-b border-gray-100 last:border-0 items-center">
+                    <div key={model.id} className="grid grid-cols-12 gap-3 px-5 py-4 border-b border-gray-100 last:border-0 items-center min-w-[720px]">
                         {editingId === model.id ? (
                             <>
                                 {['name', 'brand', 'type'].map((field, index) => (

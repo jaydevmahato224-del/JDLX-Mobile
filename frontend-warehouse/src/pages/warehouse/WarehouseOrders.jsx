@@ -243,7 +243,7 @@ const WarehouseOrders = () => {
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-black text-white">#ORD-{order.order_id}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter border ${
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${
                                                     order.delivery_type === 'quick' 
                                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                                                     : 'bg-blue-500/10 text-blue-400 border-blue-500/20'

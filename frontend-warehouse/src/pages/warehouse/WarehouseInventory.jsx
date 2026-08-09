@@ -957,7 +957,7 @@ const WarehouseInventory = () => {
                                             <div className="flex items-center justify-between ml-1">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Product Name</label>
                                                 {newProductData.product_id && (
-                                                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-500 text-[8px] font-black uppercase tracking-tighter border border-amber-400/20">
+                                                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-500 text-[9px] font-black uppercase tracking-tighter border border-amber-400/20">
                                                         <Zap size={8} /> Catalog Linked
                                                     </span>
                                                 )}
@@ -1009,7 +1009,7 @@ const WarehouseInventory = () => {
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 flex items-center justify-between">
                                                 <span>Return Policy <span className="text-amber-500">*Mandatory</span></span>
-                                                <span className="text-[8px] text-slate-500 normal-case font-bold italic">Enter each point in a new line</span>
+                                                <span className="text-[9px] text-slate-500 normal-case font-bold italic">Enter each point in a new line</span>
                                             </label>
                                             <textarea
                                                 required
@@ -1243,7 +1243,7 @@ const WarehouseInventory = () => {
                                                     </div>
                                                     <div>
                                                         <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Enable Product Variants</h4>
-                                                        <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">Support multiple sizes, colors, or models</p>
+                                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">Support multiple sizes, colors, or models</p>
                                                     </div>
                                                 </div>
                                                 <label className="relative inline-flex items-center cursor-pointer">
@@ -1442,7 +1442,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="text-center">
                                                     <span className="block text-[10px] font-black uppercase tracking-widest">Add Precision Location Mapping</span>
-                                                    <span className="block text-[8px] font-bold opacity-50 mt-1 uppercase">Define Rack, Shelf, and Bin Location</span>
+                                                    <span className="block text-[9px] font-bold opacity-50 mt-1 uppercase">Define Rack, Shelf, and Bin Location</span>
                                                 </div>
                                             </button>
                                         ) : (
@@ -1463,7 +1463,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div className="space-y-2">
-                                                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Rack No</label>
+                                                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-600">Rack No</label>
                                                         <input
                                                             type="text" placeholder="R-01"
                                                             value={newProductData.rack_no}
@@ -1472,7 +1472,7 @@ const WarehouseInventory = () => {
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Shelf No</label>
+                                                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-600">Shelf No</label>
                                                         <input
                                                             type="text" placeholder="S-04"
                                                             value={newProductData.shelf_no}
@@ -1481,7 +1481,7 @@ const WarehouseInventory = () => {
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Bin ID</label>
+                                                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-600">Bin ID</label>
                                                         <input
                                                             type="text" placeholder="B12"
                                                             value={newProductData.bin_id}
@@ -1490,7 +1490,7 @@ const WarehouseInventory = () => {
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-600">Legacy Loc.</label>
+                                                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-600">Legacy Loc.</label>
                                                         <input
                                                             type="text" placeholder="A-01-04"
                                                             value={newProductData.bin_location}
@@ -1551,7 +1551,7 @@ const WarehouseInventory = () => {
                                                             <span className={`text-[9px] font-black uppercase tracking-[0.1em] ${parseFloat(newProductData.price) - parseFloat(newProductData.cost_price) >= 0 ? 'text-emerald-500' : 'text-rose-400'}`}>
                                                                 Profit: ₹{(parseFloat(newProductData.price) - parseFloat(newProductData.cost_price)).toFixed(2)}
                                                             </span>
-                                                            <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black tracking-tighter ${parseFloat(newProductData.price) - parseFloat(newProductData.cost_price) >= 0 ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-400/20'}`}>
+                                                            <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black tracking-tighter ${parseFloat(newProductData.price) - parseFloat(newProductData.cost_price) >= 0 ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-400/20'}`}>
                                                                 {((parseFloat(newProductData.price) - parseFloat(newProductData.cost_price)) / parseFloat(newProductData.cost_price) * 100).toFixed(1)}%
                                                             </span>
                                                         </div>
@@ -1641,7 +1641,7 @@ const WarehouseInventory = () => {
                                                 <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${newProductData.apply_gst ? 'bg-cyan-400/5 border-cyan-400/20' : 'bg-slate-950/30 border-white/5'}`}>
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">GST / Tax</span>
-                                                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tight">{newProductData.apply_gst ? 'Enabled' : 'Disabled'}</span>
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">{newProductData.apply_gst ? 'Enabled' : 'Disabled'}</span>
                                                     </div>
                                                     <button
                                                         type="button"
@@ -1762,7 +1762,7 @@ const WarehouseInventory = () => {
                                         </div>
                                         <div className="text-center">
                                             <span className="block text-[10px] font-black uppercase tracking-widest">Add Logistics & Handling Details</span>
-                                            <span className="block text-[8px] font-bold opacity-50 mt-1 uppercase">Define Weight, Dimensions, and Sensitivity</span>
+                                            <span className="block text-[9px] font-bold opacity-50 mt-1 uppercase">Define Weight, Dimensions, and Sensitivity</span>
                                         </div>
                                     </button>
                                 ) : (
@@ -1849,7 +1849,7 @@ const WarehouseInventory = () => {
                                                         <Shield size={18} className={newProductData.is_fragile ? 'text-rose-400' : 'text-slate-600'} />
                                                         <div>
                                                             <div className="text-[10px] font-black text-white uppercase tracking-wider text-left">Fragile Item</div>
-                                                            <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Special handling required</div>
+                                                            <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Special handling required</div>
                                                         </div>
                                                     </div>
                                                     <div className={`w-10 h-6 rounded-full p-1 transition-all ${newProductData.is_fragile ? 'bg-rose-400' : 'bg-slate-800'}`}>
@@ -1869,7 +1869,7 @@ const WarehouseInventory = () => {
                                                         <Thermometer size={18} className={newProductData.is_temp_sensitive ? 'text-blue-400' : 'text-slate-600'} />
                                                         <div>
                                                             <div className="text-[10px] font-black text-white uppercase tracking-wider text-left">Temp Sensitive</div>
-                                                            <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Maintain specific environment</div>
+                                                            <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Maintain specific environment</div>
                                                         </div>
                                                     </div>
                                                     <div className={`w-10 h-6 rounded-full p-1 transition-all ${newProductData.is_temp_sensitive ? 'bg-blue-400' : 'bg-slate-800'}`}>
@@ -1950,7 +1950,7 @@ const WarehouseInventory = () => {
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Active Status</div>
-                                                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Available for orders</div>
+                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Available for orders</div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -1964,7 +1964,7 @@ const WarehouseInventory = () => {
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Store Visibility</div>
-                                                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Visible to customers</div>
+                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Visible to customers</div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -1980,7 +1980,7 @@ const WarehouseInventory = () => {
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Perishable Goods</div>
-                                                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Has short shelf life</div>
+                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Has short shelf life</div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -1994,7 +1994,7 @@ const WarehouseInventory = () => {
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Featured Product</div>
-                                                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Show in Popular section</div>
+                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Show in Popular section</div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -2144,7 +2144,7 @@ const WarehouseInventory = () => {
                                                     onChange={(e) => setNewProductData(prev => ({ ...prev, recommendation_priority: parseInt(e.target.value) }))}
                                                     className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                                                 />
-                                                <p className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Higher priority products appear first in manual recommendation slots</p>
+                                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Higher priority products appear first in manual recommendation slots</p>
                                             </div>
 
                                             <div className="space-y-4">
@@ -2161,7 +2161,7 @@ const WarehouseInventory = () => {
                                                     onChange={(e) => setNewProductData(prev => ({ ...prev, recommendation_weight: parseFloat(e.target.value) }))}
                                                     className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                                                 />
-                                                <p className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Influences AI-driven cross-sell probability (1.0 = neutral)</p>
+                                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Influences AI-driven cross-sell probability (1.0 = neutral)</p>
                                             </div>
 
                                             <div className="p-4 rounded-2xl bg-indigo-400/5 border border-indigo-400/10 space-y-2">
@@ -2447,7 +2447,7 @@ const WarehouseInventory = () => {
                                                     {activeBadge && (
                                                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                                             <div className="flex items-center justify-between">
-                                                                <label className="text-[8px] font-black uppercase tracking-tighter text-slate-500">Priority</label>
+                                                                <label className="text-[9px] font-black uppercase tracking-tighter text-slate-500">Priority</label>
                                                                 <span className="text-[10px] font-black text-white">{activeBadge.priority}</span>
                                                             </div>
                                                             <input
@@ -2530,7 +2530,7 @@ const WarehouseInventory = () => {
                                                         { label: 'Height', key: 'height' }
                                                     ].map((dim) => (
                                                         <div key={dim.key} className="space-y-1">
-                                                            <div className="text-[8px] font-black uppercase tracking-tighter text-slate-600 ml-1">{dim.label}</div>
+                                                            <div className="text-[9px] font-black uppercase tracking-tighter text-slate-600 ml-1">{dim.label}</div>
                                                             <input
                                                                 type="number"
                                                                 placeholder="0"
@@ -2741,7 +2741,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                                 <div>
                                                     <div className="text-[18px] font-black text-white leading-none">{stat.value}</div>
-                                                    <div className="text-[8px] font-black uppercase tracking-widest text-slate-600 mt-2">{stat.label}</div>
+                                                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-600 mt-2">{stat.label}</div>
                                                 </div>
                                             </div>
                                         ))}
@@ -3018,7 +3018,7 @@ const WarehouseInventory = () => {
                                                             <div className="flex items-center gap-2 mb-0.5">
                                                                 <div className="text-sm font-bold text-white">{item.product_name}</div>
                                                                 {(item.is_featured === 1 || item.is_featured === true) && (
-                                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase tracking-tighter border border-indigo-500/20">
+                                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 text-[9px] font-black uppercase tracking-tighter border border-indigo-500/20">
                                                                         <Zap size={8} fill="currentColor" />
                                                                         Featured
                                                                     </span>

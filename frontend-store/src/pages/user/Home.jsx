@@ -162,23 +162,23 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-1 md:gap-2">
           {outOfStock ? (
-            <span className="bg-slate-900/90 backdrop-blur text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-xl">
+            <span className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-xl">
               Sold Out
             </span>
           ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="bg-red-500 text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-red-500/20 animate-pulse">
+            <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-red-500/20 animate-pulse">
               Low Stock
             </span>
           ) : (Number(product.is_featured) === 1 || product.is_featured === true) ? (
-            <span className="bg-primary text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-primary/30 animate-soft-glow">
+            <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-primary/30 animate-soft-glow">
               Premium
             </span>
           ) : product.average_rating >= 4.5 ? (
-            <span className="bg-emerald-500 text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-emerald-500/20">
+            <span className="bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-emerald-500/20">
               Best Seller
             </span>
           ) : (
-            <span className="bg-blue-500 text-white text-[8px] md:text-[9px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-blue-500/20">
+            <span className="bg-blue-500 text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-blue-500/20">
               New
             </span>
           )}
@@ -204,7 +204,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
       <div className="p-4 md:p-8 flex-1 flex flex-col gap-2 md:gap-4">
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-primary/60">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-primary/60">
               {product.category || 'Elite'}
             </span>
             {product.average_rating > 0 ? (
@@ -215,7 +215,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
             ) : (
               <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-100">
                 <ShieldCheck size={8} className="text-blue-500" />
-                <span className="text-[8px] font-black text-blue-700 uppercase tracking-tighter">Verified</span>
+                <span className="text-[10px] font-black text-blue-700 uppercase tracking-tighter">Verified</span>
               </div>
             )}
           </div>
@@ -233,7 +233,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
                )}
              </div>
              {product.mrp > product.price && (
-               <span className="block text-[8px] md:text-[10px] font-black text-emerald-600 uppercase">Save {Math.round(((product.mrp - product.price) / product.mrp) * 100)}%</span>
+               <span className="block text-[10px] font-black text-emerald-600 uppercase">Save {Math.round(((product.mrp - product.price) / product.mrp) * 100)}%</span>
              )}
           </div>
 
@@ -795,7 +795,7 @@ export default function Home() {
                           <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{offer.description}</p>
                         )}
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-gradient-to-r ${grad} text-white flex-shrink-0`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-gradient-to-r ${grad} text-white flex-shrink-0`}>
                         {offer.offer_type}
                       </span>
                     </div>

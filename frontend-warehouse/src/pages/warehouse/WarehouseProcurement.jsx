@@ -790,7 +790,7 @@ const WarehouseProcurement = () => {
                                                     className="w-full p-4 text-left hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors flex items-center justify-between group"
                                                 >
                                                     <div className="text-xs font-black text-white uppercase tracking-tight">{v.name}</div>
-                                                    <div className="text-[8px] font-black text-slate-600 uppercase group-hover:text-amber-500 transition-colors tracking-widest">Select Vendor</div>
+                                                    <div className="text-[9px] font-black text-slate-600 uppercase group-hover:text-amber-500 transition-colors tracking-widest">Select Vendor</div>
                                                 </button>
                                             ))}
                                             {vendorSearchAttempted && foundVendors.length === 0 && !selectedVendor && (
@@ -953,13 +953,13 @@ const WarehouseProcurement = () => {
                                                                                 <div className="flex items-center gap-2">
                                                                                     <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">ID: #{p.id}</div>
                                                                                     {p.category && (
-                                                                                        <div className="text-[8px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-full">{p.category}</div>
+                                                                                        <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-full">{p.category}</div>
                                                                                     )}
                                                                                 </div>
                                                                             </div>
                                                                             <div className="text-right flex-shrink-0">
                                                                                 <div className="text-[11px] font-black text-white">₹{p.price}</div>
-                                                                                <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Current MRP</div>
+                                                                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Current MRP</div>
                                                                             </div>
                                                                         </button>
                                                                     ))}

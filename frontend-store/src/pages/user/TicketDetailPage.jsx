@@ -176,7 +176,7 @@ function TicketDetailPage() {
                                 </div>
 
                                 {/* Time */}
-                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1.5 px-1">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1.5 px-1">
                                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             </div>

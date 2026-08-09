@@ -619,7 +619,7 @@ function Checkout() {
                                             </div>
                                             <div className="flex flex-col">
                                                 <p className="text-[14px] font-black tracking-tight text-[var(--color-on-surface)] truncate max-w-[200px] sm:max-w-md">{addr.address_text}</p>
-                                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Verified Location</p>
+                                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Verified Location</p>
                                             </div>
                                         </div>
                                         {selectedAddressId === addr.id && <CheckCircle2 size={20} className="text-primary" />}
@@ -757,7 +757,7 @@ function Checkout() {
                                 className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer overflow-hidden group ${paymentMethod === 'PREPAID' ? 'border-primary bg-primary/[0.03] shadow-lg ring-4 ring-primary/5' : 'border-slate-100 bg-white hover:border-primary/30'}`}
                             >
                                 {paymentMethod === 'PREPAID' && showPrepaidRecommendation && (
-                                    <div className="absolute top-0 right-0 bg-primary text-white text-[9px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest animate-in slide-in-from-right">Recommended</div>
+                                    <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest animate-in slide-in-from-right">Recommended</div>
                                 )}
                                 <div className="flex flex-col gap-3">
                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'PREPAID' ? 'bg-primary text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>

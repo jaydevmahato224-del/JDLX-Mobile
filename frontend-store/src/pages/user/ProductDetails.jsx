@@ -277,9 +277,9 @@ export default function ProductDetails() {
           <div className="md:glass-card overflow-hidden md:p-1.5 -mx-4 md:mx-0">
             <div className="relative overflow-hidden md:rounded-[28px] bg-white md:bg-transparent">
               <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 md:hidden">
-                <span className="bg-slate-900/90 backdrop-blur-md text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-white/10">{product.category || 'General'}</span>
-                {stock <= LOW_STOCK_LIMIT && stock > 0 && <span className="bg-primary text-slate-900 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-500/20 shadow-lg">Only {stock} Left</span>}
-                {stock <= 0 && <span className="bg-red-500 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-red-600 shadow-lg animate-pulse">Sold Out</span>}
+                <span className="bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-white/10">{product.category || 'General'}</span>
+                {stock <= LOW_STOCK_LIMIT && stock > 0 && <span className="bg-primary text-slate-900 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-500/20 shadow-lg">Only {stock} Left</span>}
+                {stock <= 0 && <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-red-600 shadow-lg animate-pulse">Sold Out</span>}
               </div>
 
               {/* Floating Favorite (Heart) Button with Pop Animation */}
@@ -346,7 +346,7 @@ export default function ProductDetails() {
             <div className="mt-8 overflow-hidden rounded-[2.5rem] border border-slate-100 bg-slate-50">
               <div className="flex items-center justify-between bg-white px-6 py-5 border-b border-slate-100">
                 <div className="flex items-center gap-3"><div className="rounded-2xl bg-emerald-500/10 p-2.5 text-emerald-600"><Undo2 size={20} /></div><div><h4 className="text-[12px] font-black uppercase tracking-[0.1em]">Return Policy</h4><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Verified</p></div></div>
-                <button onClick={() => setShowPolicyModal(true)} className="rounded-full bg-slate-900 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-white shadow-lg active:scale-95 transition-all">View Details</button>
+                <button onClick={() => setShowPolicyModal(true)} className="rounded-full bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-lg active:scale-95 transition-all">View Details</button>
               </div>
             </div>
             <div className="mt-8 grid grid-cols-2 gap-4">

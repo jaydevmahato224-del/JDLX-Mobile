@@ -140,7 +140,7 @@ function AdminAuditLogs() {
       ) : error ? (
         <div className="glass-card p-6 text-center text-red-600">{error}</div>
       ) : (
-        <div className="glass-card overflow-hidden">
+        <div className="glass-card overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-white/50 border-b border-gray-100">
               <tr>

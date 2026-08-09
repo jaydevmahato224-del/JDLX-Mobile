@@ -3696,7 +3696,11 @@ def setup_staff_password():
         ).fetchone()
         
         if not staff:
-            return error_response("Invalid or expired setup token", 400)
+            return error_response(
+                "This setup link is no longer valid. Please use the most recent invite email "
+                "from your Warehouse Manager, or ask them to resend the invite.",
+                400,
+            )
 
         # Enforce the 7-day setup link expiry
         expires_raw = staff["setup_token_expires"]

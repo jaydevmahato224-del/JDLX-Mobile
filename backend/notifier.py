@@ -806,6 +806,11 @@ def send_staff_billing_setup_email(to_email, staff_name, warehouse_name, setup_l
                 If the button above does not work, copy and paste this link into your browser:<br/>
                 <a href="{setup_link}" style="color: #2563eb; word-break: break-all;">{setup_link}</a>
             </p>
+            <p style="font-size: 13px; color: #64748b; margin-top: 20px; line-height: 1.6;">
+                <strong style="color: #475569;">⏳ This link is valid for 7 days</strong> from the time it was sent.
+                If the link does not work, you may be using an older invite email — only the most recent invite from your Warehouse Manager will work.
+                Ask your manager to resend the invite if this link has expired or stopped working.
+            </p>
         </div>
         
         <div style="background: #f1f5f9; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">

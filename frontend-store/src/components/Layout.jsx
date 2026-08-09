@@ -148,12 +148,17 @@ function Layout({ children }) {
 
               <NotificationBell />
 
+              {/* Account lives ONLY here (top-right corner) — never in the
+                  floating bottom dock. Visible on every screen size so mobile
+                  users keep account access; the label collapses to an icon on
+                  the narrowest phones. */}
               <Link
                 to={user ? '/profile' : '/login'}
-                className="hidden sm:inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-3 sm:px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
+                aria-label="Account"
               >
                 <User className="h-4 w-4" />
-                <span>{user ? 'Account' : 'Login'}</span>
+                <span className="hidden min-[420px]:inline">{user ? 'Account' : 'Login'}</span>
               </Link>
             </div>
           </div>

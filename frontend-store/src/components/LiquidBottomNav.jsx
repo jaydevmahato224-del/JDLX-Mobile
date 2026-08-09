@@ -1,28 +1,35 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, ShoppingBag, User, Gift } from 'lucide-react';
+import { Home, Search, ShoppingBag, Gift } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
-const LiquidBottomNav = ({ cartItemCount, user }) => {
+const LiquidBottomNav = ({ cartItemCount }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const prevIndexRef = useRef(-1);
   const indicatorRef = useRef(null);
   const cleanupTimerRef = useRef(null);
   const searchInputRef = useRef(null);
+  const lastScrollYRef = useRef(0);
+  const [collapsed, setCollapsed] = useState(false);
 
   const globalSearchQuery = useStore(state => state.globalSearchQuery);
   const setGlobalSearchQuery = useStore(state => state.setGlobalSearchQuery);
   const isSearching = useStore(state => state.isSearching);
   const setIsSearching = useStore(state => state.setIsSearching);
+  // Must be declared AFTER `isSearching` above (const lives in the temporal
+  // dead zone until its declaration runs — referencing it earlier crashes the
+  // whole store page on mount).
+  const isSearchingRef = useRef(isSearching);
 
+  // Account intentionally lives ONLY in the top-right header — keeping the
+  // floating dock to 4 items so it stays uncluttered on small screens.
   const navItems = useMemo(() => [
     { id: 'home', to: '/', icon: Home, label: 'Home' },
     { id: 'search', to: '/search', icon: Search, label: 'Explore' },
     { id: 'cart', to: '/cart', icon: ShoppingBag, label: 'Cart', badge: cartItemCount },
     { id: 'refer', to: '/refer', icon: Gift, label: 'Refer' },
-    { id: 'profile', to: user ? '/profile' : '/login', icon: User, label: user ? 'Account' : 'Login' },
-  ], [cartItemCount, user]);
+  ], [cartItemCount]);
 
   const isActive = useCallback((path) => {
     if (path === '/') return location.pathname === '/';
@@ -40,10 +47,34 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
   }, [location.pathname, isSearching, setIsSearching]);
 
   useEffect(() => {
+    isSearchingRef.current = isSearching;
+  }, [isSearching]);
+
+  useEffect(() => {
     if (isSearching && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, [isSearching]);
+
+  // Auto-collapse while scrolling down so the content below stays fully
+  // visible — the dock slides completely off-screen (no leftover circle). A
+  // small upward scroll brings it back with the same animation in reverse.
+  // Disabled while the in-dock search box is open.
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastScrollYRef.current;
+      // Always keep the baseline fresh (even while searching) so the first
+      // scroll after closing search doesn't compute a bogus jump.
+      lastScrollYRef.current = y;
+      if (isSearchingRef.current) return;
+      if (Math.abs(delta) < 6) return;
+      if (delta > 0 && y > 120) setCollapsed(true);
+      else if (delta < 0) setCollapsed(false);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     const indicator = indicatorRef.current;
@@ -75,6 +106,7 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
     if (item.id === 'search') {
       e.preventDefault();
       e.stopPropagation();
+      setCollapsed(false);
       setIsSearching(true);
       if (location.pathname !== '/' && location.pathname !== '/search') {
         navigate('/search');
@@ -83,8 +115,11 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
   };
 
   return (
-    <div className="concierge-nav-wrapper md:hidden" style={{ zIndex: 100 }}>
-      <nav 
+    <div
+      className={`concierge-nav-wrapper md:hidden ${collapsed && !isSearching ? 'nav-collapsed' : ''}`}
+      style={{ zIndex: 100 }}
+    >
+      <nav
         className={`concierge-nav-container ${isSearching ? 'searching-mode' : ''}`}
         style={{ position: 'relative', overflow: 'hidden' }}
       >
@@ -96,7 +131,9 @@ const LiquidBottomNav = ({ cartItemCount, user }) => {
             style={{
               left: indicatorLeft,
               width: indicatorWidth,
-              opacity: showHighlight ? 1 : 0,
+              // Inline opacity (CSS alone can't override it) — hide it too when
+              // the dock collapses so the active pill doesn't peek out of the circle.
+              opacity: (showHighlight && !collapsed) ? 1 : 0,
               zIndex: 1,
               pointerEvents: 'none'
             }}

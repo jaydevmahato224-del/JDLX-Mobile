@@ -281,6 +281,23 @@ body::before {
   @apply absolute -top-1.5 -right-2 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center px-1;
 }
 
+/* Collapsed state: the dock slides FULLY down out of view while scrolling
+   down — no leftover circle, nothing remains on screen. A small upward
+   scroll animates it back up (same transition, reverse direction). */
+.concierge-nav-wrapper.nav-collapsed .concierge-nav-container {
+  /* calc(100% + 120px) = the dock's own height plus a fixed offset — always
+     clears the viewport bottom regardless of dock height. */
+  transform: translateY(calc(100% + 120px));
+  opacity: 0;
+  transition-duration: 450ms;
+}
+.concierge-nav-wrapper.nav-collapsed .concierge-nav-indicator,
+.concierge-nav-wrapper.nav-collapsed .concierge-nav-item {
+  opacity: 0;
+  visibility: hidden; /* also removes the hidden links from keyboard tab order */
+  pointer-events: none;
+}
+
 /* Specialty UI Elements */
 .hero-banner { 
   @apply rounded-3xl overflow-hidden relative; 

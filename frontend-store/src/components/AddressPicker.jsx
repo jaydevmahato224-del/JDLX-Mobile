@@ -1,7 +1,8 @@
 import toast from "react-hot-toast"
 import { useState } from 'react'
-import { MapPin, Navigation, X, Save, Info } from 'lucide-react'
+import { X, Save, Info } from 'lucide-react'
 import { API_BASE_URL } from '../config'
+import MapPicker from './MapPicker'
 
 function AddressPicker({ onSelect, onClose }) {
     const [location, setLocation] = useState({ lat: 28.6139, lng: 77.2090 }); // Default Delhi
@@ -13,7 +14,6 @@ function AddressPicker({ onSelect, onClose }) {
         state: '',
         pincode: ''
     });
-    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
     const [pincodeMessage, setPincodeMessage] = useState('');
@@ -84,27 +84,25 @@ function AddressPicker({ onSelect, onClose }) {
         }
     };
 
-    const detectLocation = () => {
-        setLoading(true);
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition((position) => {
-                const { latitude, longitude } = position.coords;
-                setLocation({ lat: latitude, lng: longitude });
-                setFormData(prev => ({
-                    ...prev,
-                    city: prev.city || 'Delhi',
-                    state: prev.state || 'Delhi'
-                }));
-                setLoading(false);
-                toast.success("Location coordinates loaded!");
-            }, (error) => {
-                console.error("GPS Error:", error);
-                setLoading(false);
-                toast.error("GPS access denied. You can still type details manually.");
-            });
-        } else {
-            toast.error("Geolocation is not supported by this browser.");
-            setLoading(false);
+    // Real map picked a point: save the exact coordinates and auto-fill the form
+    // from the reverse-geocoded address (falling back to existing values). The
+    // pincode is run through the same serviceability check as manual entry.
+    const handleMapLocation = (data, lat, lng) => {
+        if (typeof lat === 'number' && typeof lng === 'number') {
+            setLocation({ lat, lng });
+        }
+        const pin = data.pincode || '';
+        const hasNewPincode = /^\d{6}$/.test(pin) && pin !== formData.pincode;
+        setFormData(prev => ({
+            ...prev,
+            area: data.house || prev.area,
+            city: data.city || prev.city,
+            state: data.state || prev.state,
+            landmark: data.landmark || prev.landmark,
+            pincode: data.pincode || prev.pincode
+        }));
+        if (hasNewPincode) {
+            fetchCityStateFromPincode(pin, setFormData);
         }
     };
 
@@ -180,34 +178,11 @@ function AddressPicker({ onSelect, onClose }) {
                     </button>
                 </div>
 
-                {/* Simulated Map View */}
-                <div className="relative h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
-                    {/* Visual Grid Mockup */}
-                    <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-
-                    {/* Draggable Circle Mockup */}
-                    <div className="relative group cursor-move">
-                        <div className="w-12 h-12 bg-primary/20 rounded-full animate-ping absolute -inset-0 border-2 border-primary"></div>
-                        <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white shadow-lg relative z-10 scale-110">
-                            <MapPin size={24} />
-                        </div>
-                    </div>
-
-                    <p className="absolute bottom-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-bold text-gray-400 shadow-sm border border-gray-100">
-                        {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-                    </p>
-
-                    <button
-                        type="button"
-                        onClick={detectLocation}
-                        className="absolute bottom-4 right-4 p-3 bg-white text-primary rounded-full shadow-xl hover:scale-105 transition-transform border border-gray-100 active:scale-95"
-                    >
-                        <Navigation size={20} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                </div>
-
                 {/* Scrollable Form Section */}
-                <div className="p-6 space-y-4 max-h-[50vh] overflow-y-auto">
+                <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+                    {/* Real Interactive Map — tap (or drag) to pick your exact
+                        delivery point; address fields auto-fill below. */}
+                    <MapPicker onLocationSelect={handleMapLocation} />
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Flat / House No. *</label>

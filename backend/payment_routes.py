@@ -7,6 +7,7 @@ import razorpay
 from auth.role_guard import _current_user_claims
 from database import get_db
 from utils.response_utils import success_response, error_response
+from security.anomaly_detector import create_security_alert
 
 payment_bp = Blueprint('payment', __name__)
 
@@ -180,14 +181,23 @@ def verify_payment():
 
 @payment_bp.route('/api/payment/webhook', methods=['POST'])
 def payment_webhook():
+    # Fail-closed: reject when the webhook secret is not configured instead of
+    # silently accepting unauthenticated events (same pattern as the Shiprocket
+    # webhook). Without this, a forged payment.captured could confirm an order
+    # and decrement stock without any money being paid.
     webhook_secret = os.environ.get('RAZORPAY_WEBHOOK_SECRET')
+    if not webhook_secret:
+        return error_response("Webhook not configured", 503)
+
     signature = request.headers.get('X-Razorpay-Signature')
     payload = request.data.decode()
 
+    if not signature:
+        return error_response("Missing Razorpay signature", 400)
+
     client = get_razorpay_client()
     try:
-        if webhook_secret:
-            client.utility.verify_webhook_signature(payload, signature, webhook_secret)
+        client.utility.verify_webhook_signature(payload, signature, webhook_secret)
     except Exception as e:
         return error_response(f"Webhook verification failed: {str(e)}", 400)
 
@@ -208,6 +218,42 @@ def payment_webhook():
         
         # Handle simple events
         if event_type == 'payment.captured':
+            # Amount validation (defense in depth): the captured amount must match
+            # the Razorpay order created for this order. payments.amount is stored
+            # in paise by /api/payment/create-order and in rupees (float) by the
+            # legacy /api/payment/create route — accept either convention.
+            captured_amount = data.get('payload', {}).get('payment', {}).get('entity', {}).get('amount')
+            # The captured amount is mandatory for a payment.captured event and
+            # must be numeric — reject malformed payloads cleanly instead of 500ing.
+            if not isinstance(captured_amount, int):
+                return jsonify({"status": "error", "message": "Missing or invalid amount"}), 400
+            cursor.execute(
+                "SELECT order_id, amount FROM payments WHERE razorpay_order_id = ?",
+                (razorpay_order_id,)
+            )
+            payment = cursor.fetchone()
+            if not payment:
+                return jsonify({"status": "error", "message": "Unknown razorpay_order_id"}), 404
+            if payment['amount'] is not None:
+                stored_amount = payment['amount']
+                # payments.amount is stored in paise by /api/payment/create-order
+                # and in rupees by the legacy /api/payment/create route. Note that
+                # SQLite INTEGER affinity converts a rupees float (e.g. 349.0) back
+                # to an int (349), so we accept either interpretation.
+                stored_paise = int(round(float(stored_amount) * 100))
+                stored_int = int(stored_amount)
+                if captured_amount != stored_int and captured_amount != stored_paise:
+                    try:
+                        create_security_alert(
+                            "payment_amount_mismatch",
+                            f"Webhook captured amount {captured_amount} != expected {stored_int}/{stored_paise} paise for Razorpay order {razorpay_order_id}",
+                            severity="high",
+                            ip_address=request.remote_addr or "unknown",
+                        )
+                    except Exception:
+                        pass
+                    return jsonify({"status": "error", "message": "Amount mismatch"}), 400
+
             cursor.execute(
                 "UPDATE payments SET status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE razorpay_order_id = ?",
                 (razorpay_order_id,)
@@ -226,6 +272,16 @@ def payment_webhook():
                         trigger_order_email(payment['order_id'])
                 except Exception as conf_err:
                     print(f"Error during order confirmation/email via webhook: {conf_err}")
+                    # confirm_order_and_decrement_stock_logic rolls back its own
+                    # partial decrements via savepoint, so mark the order clearly
+                    # as unfulfillable instead of leaving it PLACED-but-paid.
+                    try:
+                        cursor.execute(
+                            "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
+                            (payment['order_id'],)
+                        )
+                    except Exception:
+                        pass
         elif event_type == 'payment.failed':
             cursor.execute(
                 "UPDATE payments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE razorpay_order_id = ?",

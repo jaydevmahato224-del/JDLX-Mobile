@@ -1,5 +1,6 @@
 import os
 import datetime
+import html as _html
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -9,6 +10,20 @@ load_dotenv()
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
+
+
+def _esc(value):
+    """HTML-escapes a user-controlled value for safe interpolation into an email body."""
+    if value is None:
+        return ""
+    return _html.escape(str(value), quote=True)
+
+
+def _clean_subject(value):
+    """Strips CR/LF from user-controlled subject parts (email header-injection guard)."""
+    if value is None:
+        return ""
+    return str(value).replace("\r", " ").replace("\n", " ")
 
 def send_order_email(to_email, order_details):
     msg = MIMEMultipart()
@@ -21,7 +36,7 @@ def send_order_email(to_email, order_details):
     msg['Subject'] = f"JDLX Mobile: Order #{order_details['order_id']} {subject_status}!"
 
     # Format items
-    items_list = "".join([f"<li>{item['name']} x {item['qty']} - ₹{item['price'] * item['qty']}</li>" for item in order_details['items']])
+    items_list = "".join([f"<li>{_esc(item['name'])} x {item['qty']} - ₹{item['price'] * item['qty']}</li>" for item in order_details['items']])
 
     # Build pricing breakdown
     breakdown = f"""
@@ -37,14 +52,14 @@ def send_order_email(to_email, order_details):
     """
 
     body = f"""
-    <h2>Thank you for your order, {order_details['customer_name']}!</h2>
+    <h2>Thank you for your order, {_esc(order_details['customer_name'])}!</h2>
     <p>Your order for <b>₹{order_details['total_amount']}</b> has been confirmed successfully.</p>
     <h3>Order Summary:</h3>
     <ul>
         {items_list}
     </ul>
     {breakdown}
-    <p><b>Delivery Address:</b> {order_details['address']}</p>
+    <p><b>Delivery Address:</b> {_esc(order_details['address'])}</p>
     <p><b>Estimated Delivery:</b> {order_details.get('estimated_delivery', '3-5 business days')}</p>
     <br/>
     <p>Track your order on our app!</p>
@@ -72,21 +87,21 @@ def send_warehouse_application_email(to_email, status, owner_name, notes=None):
     if status == "approved":
         msg['Subject'] = "JDLX Mobile: Warehouse Application Approved!"
         body = f"""
-        <h2>Congratulations, {owner_name}!</h2>
+        <h2>Congratulations, {_esc(owner_name)}!</h2>
         <p>Your application to become a JDLX Mobile Warehouse Partner has been <b style="color:green;">Approved</b>.</p>
         <p>You can now log in to the Warehouse Dashboard using your registered email and start receiving orders.</p>
         """
         if notes:
-            body += f"<p><b>Admin Notes:</b> {notes}</p>"
+            body += f"<p><b>Admin Notes:</b> {_esc(notes)}</p>"
     elif status == "rejected":
         msg['Subject'] = "JDLX Mobile: Update on your Warehouse Application"
         body = f"""
-        <h2>Dear {owner_name},</h2>
+        <h2>Dear {_esc(owner_name)},</h2>
         <p>Thank you for applying to be a JDLX Mobile Warehouse Partner.</p>
         <p>Unfortunately, your application has been <b style="color:red;">Rejected</b> at this time.</p>
         """
         if notes:
-            body += f"<p><b>Reason / Admin Notes:</b> {notes}</p>"
+            body += f"<p><b>Reason / Admin Notes:</b> {_esc(notes)}</p>"
         body += "<p>You may correct the issues and apply again.</p>"
     else:
         return False
@@ -112,8 +127,8 @@ def send_warehouse_registration_confirmation_email(to_email, owner_name, warehou
     msg['Subject'] = "JDLX Mobile: Warehouse Application Received!"
     
     body = f"""
-    <h2>Thank you for your application, {owner_name}!</h2>
-    <p>We have successfully received your request to register <b>{warehouse_name}</b> as a JDLX Mobile Warehouse Partner.</p>
+    <h2>Thank you for your application, {_esc(owner_name)}!</h2>
+    <p>We have successfully received your request to register <b>{_esc(warehouse_name)}</b> as a JDLX Mobile Warehouse Partner.</p>
     <p>Our admin team is currently reviewing your application. You will receive another email once your request has been approved or if we need more information.</p>
     <p>We appreciate your interest in partnering with us!</p>
     <br/>
@@ -143,7 +158,7 @@ def send_review_thank_you_email(to_email, user_name, product_name, rating, custo
     
     if custom_body:
         # Simple placeholder replacement if body is provided from DB template
-        body_content = custom_body.replace('{user_name}', user_name).replace('{product_name}', product_name).replace('{stars}', stars)
+        body_content = custom_body.replace('{user_name}', _esc(user_name)).replace('{product_name}', _esc(product_name)).replace('{stars}', stars)
         body_content_html = body_content.replace('\n', '<br/>')
         body = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -155,8 +170,8 @@ def send_review_thank_you_email(to_email, user_name, product_name, rating, custo
     else:
         body = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h2 style="color: #4F46E5;">Thank you for your feedback, {user_name}!</h2>
-            <p>We've received your review for <b>{product_name}</b>.</p>
+            <h2 style="color: #4F46E5;">Thank you for your feedback, {_esc(user_name)}!</h2>
+            <p>We've received your review for <b>{_esc(product_name)}</b>.</p>
             <div style="background: #F9FAFB; padding: 15px; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 0; font-size: 14px; color: #6B7280;">Your Rating:</p>
                 <p style="margin: 5px 0 0 0; font-size: 24px; color: #F59E0B;">{stars}</p>
@@ -184,7 +199,7 @@ def send_warehouse_kyc_pending_email(to_email, owner_name, warehouse_name):
     msg = MIMEMultipart()
     msg['From'] = GMAIL_USER
     msg['To'] = to_email
-    msg['Subject'] = f"JDLX Mobile: KYC Update Required for {warehouse_name}"
+    msg['Subject'] = f"JDLX Mobile: KYC Update Required for {_clean_subject(warehouse_name)}"
 
     body = f"""
     <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
@@ -192,8 +207,8 @@ def send_warehouse_kyc_pending_email(to_email, owner_name, warehouse_name):
             <h2 style="margin: 0; font-size: 20px;">Profile Update Required</h2>
         </div>
         <div style="padding: 22px;">
-            <p>Hello <b>{owner_name}</b>,</p>
-            <p>Your warehouse profile for <b>{warehouse_name}</b> needs KYC updates to continue smooth partner operations.</p>
+            <p>Hello <b>{_esc(owner_name)}</b>,</p>
+            <p>Your warehouse profile for <b>{_esc(warehouse_name)}</b> needs KYC updates to continue smooth partner operations.</p>
             <p>Please open the warehouse partner portal and complete the missing KYC documents:</p>
             <ul>
                 <li>Store image(s)</li>
@@ -230,17 +245,17 @@ def send_delivery_application_email(to_email, status, partner_name, notes=None):
     if status == "approved":
         msg['Subject'] = "JDLX Mobile: Final Approval - Partner Activated!"
         body = f"""
-        <h2 style="color: green;">Congratulations, {partner_name}!</h2>
+        <h2 style="color: green;">Congratulations, {_esc(partner_name)}!</h2>
         <p>All stages of your verification are complete. Your JDLX Mobile Delivery Partner account is now <b style="color:green;">Activated</b>.</p>
         <p>You can now log in to the Delivery Portal and start accepting delivery tasks.</p>
         """
         if notes:
-            body += f"<div style='background:#f1f5f9; padding: 15px; border-radius: 8px;'><b>Admin Notes:</b> {notes}</div>"
+            body += f"<div style='background:#f1f5f9; padding: 15px; border-radius: 8px;'><b>Admin Notes:</b> {_esc(notes)}</div>"
 
     elif status == "pending_admin":
         msg['Subject'] = "JDLX Mobile: Store Approval Complete - Moved to High Authority"
         body = f"""
-        <h2>Good news, {partner_name}!</h2>
+        <h2>Good news, {_esc(partner_name)}!</h2>
         <p>Your local store has <b style="color: #14b8a6;">Approved</b> your application.</p>
         <p>Your request has been <b>sent to the High Authority (Admin Panel)</b> for final verification. Once they authorize your credentials, your account will be activated.</p>
         <p>Please wait for the final onboarding confirmation email.</p>
@@ -249,12 +264,12 @@ def send_delivery_application_email(to_email, status, partner_name, notes=None):
     elif status == "rejected":
         msg['Subject'] = "JDLX Mobile: Update on your Delivery Partner Request"
         body = f"""
-        <h2>Dear {partner_name},</h2>
+        <h2>Dear {_esc(partner_name)},</h2>
         <p>Thank you for applying to be a JDLX Mobile Delivery Partner.</p>
         <p>Unfortunately, your application has been <b style="color:red;">Rejected</b> at this time.</p>
         """
         if notes:
-            body += f"<div style='background:#fef2f2; padding: 15px; border-radius: 8px;'><b>Reason / Notes:</b> {notes}</div>"
+            body += f"<div style='background:#fef2f2; padding: 15px; border-radius: 8px;'><b>Reason / Notes:</b> {_esc(notes)}</div>"
         else:
             body += "<p>You may correct the issues and apply again after 24 hours.</p>"
             
@@ -283,7 +298,7 @@ def send_delivery_registration_confirmation_email(to_email, partner_name):
     
     body = f"""
     <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
-        <h2 style="color: #0f172a; font-size: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">Application Received, {partner_name}!</h2>
+        <h2 style="color: #0f172a; font-size: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">Application Received, {_esc(partner_name)}!</h2>
         <p>Your request to join JDLX Mobile as a Delivery Partner has been submitted successfully.</p>
         
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 25px 0;">
@@ -358,7 +373,7 @@ def send_welcome_email(to_email, user_name):
     msg = MIMEMultipart()
     msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
     msg['To'] = to_email
-    msg['Subject'] = f"Welcome to JDLX Mobile, {user_name}! 🚀"
+    msg['Subject'] = f"Welcome to JDLX Mobile, {_clean_subject(user_name)}! 🚀"
     
     body = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #eee; border-radius: 20px; text-align: center;">
@@ -366,7 +381,7 @@ def send_welcome_email(to_email, user_name):
             <h1 style="color: #ffffff; margin: 0; font-size: 24px; tracking-tight: -0.02em;">JDLX MOBILE</h1>
         </div>
         
-        <h2 style="color: #333; font-size: 22px;">Hello {user_name}, welcome to the family!</h2>
+        <h2 style="color: #333; font-size: 22px;">Hello {_esc(user_name)}, welcome to the family!</h2>
         
         <p style="color: #666; font-size: 16px; line-height: 1.6;">
             We're thrilled to have you join our premium hyperlocal network. Your journey towards the fastest and most reliable mobile shopping experience starts here.
@@ -415,14 +430,14 @@ def send_user_status_update_email(to_email, user_name, new_status, reason=None):
     status_label = new_status.upper()
     color = "red" if new_status in ["suspended", "banned", "inactive"] else "green"
     
-    msg['Subject'] = f"JDLX Mobile: Account Status Updated to {status_label}"
+    msg['Subject'] = f"JDLX Mobile: Account Status Updated to {_clean_subject(status_label)}"
     
     body = f"""
-    <h2>Hello {user_name},</h2>
-    <p>This is to inform you that your JDLX Mobile account status has been updated to: <b style="color:{color};">{status_label}</b>.</p>
+    <h2>Hello {_esc(user_name)},</h2>
+    <p>This is to inform you that your JDLX Mobile account status has been updated to: <b style="color:{color};">{_esc(status_label)}</b>.</p>
     """
     if reason:
-        body += f"<p><b>Admin Note:</b> {reason}</p>"
+        body += f"<p><b>Admin Note:</b> {_esc(reason)}</p>"
         
     if new_status == "active":
         body += "<p>You can now continue using all our services as usual. Thank you for being part of JDLX Mobile!</p>"
@@ -457,10 +472,12 @@ def send_individual_email(to_email, user_name, subject, message):
     msg['To'] = to_email
     msg['Subject'] = f"JDLX Mobile: {subject}"
     
+    # NOTE: `message` is intentionally NOT escaped — it is server/admin-generated
+    # HTML (OTP codes, admin notices). Do not interpolate raw user input here.
     message_html = (message or '').replace('\n', '<br/>')
     body = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
-        <h2 style="color: #001f3f;">Hello {user_name},</h2>
+        <h2 style="color: #001f3f;">Hello {_esc(user_name)},</h2>
         <div style="padding: 15px; border-left: 4px solid #001f3f; background: #f9f9f9; font-style: italic; border-radius: 4px; margin: 20px 0;">
             {message_html}
         </div>
@@ -493,20 +510,20 @@ def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, re
     color = "red"
     if action == "unban" or action == "activate":
         color = "green"
-        msg['Subject'] = f"JDLX Mobile: Warehouse Access Restored - {warehouse_name}"
-        body_title = f"Great news, {owner_name}!"
-        body_text = f"Your warehouse <b>{warehouse_name}</b> has been reactivated. You can now log in and receive orders again."
+        msg['Subject'] = f"JDLX Mobile: Warehouse Access Restored - {_clean_subject(warehouse_name)}"
+        body_title = f"Great news, {_esc(owner_name)}!"
+        body_text = f"Your warehouse <b>{_esc(warehouse_name)}</b> has been reactivated. You can now log in and receive orders again."
     elif action == "suspend":
-        msg['Subject'] = f"JDLX Mobile: Warehouse Suspended - {warehouse_name}"
-        body_title = f"Notice of Suspension: {warehouse_name}"
+        msg['Subject'] = f"JDLX Mobile: Warehouse Suspended - {_clean_subject(warehouse_name)}"
+        body_title = f"Notice of Suspension: {_esc(warehouse_name)}"
         body_text = "Your warehouse account has been temporarily suspended. You will not be able to receive new orders during this time."
     elif action == "ban":
-        msg['Subject'] = f"JDLX Mobile: Warehouse Banned - {warehouse_name}"
-        body_title = f"Account Banned: {warehouse_name}"
+        msg['Subject'] = f"JDLX Mobile: Warehouse Banned - {_clean_subject(warehouse_name)}"
+        body_title = f"Account Banned: {_esc(warehouse_name)}"
         body_text = "Your warehouse account has been permanently banned from the JDLX Mobile network due to policy violations."
     elif action == "remove":
-        msg['Subject'] = f"JDLX Mobile: Account Removed - {warehouse_name}"
-        body_title = f"Account Removal: {warehouse_name}"
+        msg['Subject'] = f"JDLX Mobile: Account Removed - {_clean_subject(warehouse_name)}"
+        body_title = f"Account Removal: {_esc(warehouse_name)}"
         body_text = "Your warehouse account and all associated data have been removed from our active secondary fulfillment network."
     else:
         return False
@@ -517,7 +534,7 @@ def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, re
         <p>{body_text}</p>
     """
     if reason:
-        reason_html = reason.replace('\n', '<br/>')
+        reason_html = _esc(reason).replace('\n', '<br/>')
         body += f"""
         <div style="background: #f8f9fa; padding: 15px; border-left: 4px solid {color}; margin: 20px 0;">
             <p style="margin: 0; font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase;">Admin Message:</p>
@@ -562,6 +579,8 @@ def send_bulk_notification_email(recipient_emails, subject, message):
             msg['To'] = to_email
             msg['Subject'] = f"JDLX Mobile: {subject}"
             
+            # NOTE: `message` is admin-authored (bulk announcement) — intentionally
+            # left unescaped so admins can use HTML. Never pass user input here.
             message_html = message.replace('\n', '<br/>')
             body = f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
@@ -595,10 +614,10 @@ def send_low_stock_catchy_email(to_email, user_name, product_name, stock_left,
     msg = MIMEMultipart()
     msg['From'] = GMAIL_USER
     msg['To'] = to_email
-    msg['Subject'] = custom_subject if custom_subject else f"Don't let it slip away! 🏃‍♂️ {product_name} is almost gone!"
+    msg['Subject'] = custom_subject if custom_subject else f"Don't let it slip away! 🏃‍♂️ {_clean_subject(product_name)} is almost gone!"
 
     header_title = custom_title if custom_title else "Almost Sold Out!"
-    main_message = custom_message if custom_message else f"We noticed you have <strong>{product_name}</strong> in your cart. We wanted to give you a heads-up that it's currently one of our hottest items and supply is extremely limited!"
+    main_message = custom_message if custom_message else f"We noticed you have <strong>{_esc(product_name)}</strong> in your cart. We wanted to give you a heads-up that it's currently one of our hottest items and supply is extremely limited!"
 
     body = f"""
     <!DOCTYPE html>
@@ -614,7 +633,7 @@ def send_low_stock_catchy_email(to_email, user_name, product_name, stock_left,
             </div>
             
             <div style="padding: 40px 35px;">
-                <p style="font-size: 18px; margin-bottom: 25px; color: #0f172a;">Hello <strong>{user_name}</strong>,</p>
+                <p style="font-size: 18px; margin-bottom: 25px; color: #0f172a;">Hello <strong>{_esc(user_name)}</strong>,</p>
                 
                 <p style="font-size: 16px; margin-bottom: 35px; color: #475569;">
                     {main_message}
@@ -664,12 +683,12 @@ def send_availability_subscription_confirmation(to_email, product_name):
     msg = MIMEMultipart()
     msg['From'] = GMAIL_USER
     msg['To'] = to_email
-    msg['Subject'] = f"JDLX Mobile: Alert Active for {product_name}"
+    msg['Subject'] = f"JDLX Mobile: Alert Active for {_clean_subject(product_name)}"
     
     body = f"""
     <h2>Notification Alert Active!</h2>
     <p>We've successfully set up an availability alert for you.</p>
-    <p>Product: <b>{product_name}</b></p>
+    <p>Product: <b>{_esc(product_name)}</b></p>
     <p>We will send you an email the moment this item is back in stock in our warehouse.</p>
     <br/>
     <p>Thank you for shopping with JDLX Mobile!</p>
@@ -691,12 +710,12 @@ def send_product_restock_alert(to_email, product_name):
     msg = MIMEMultipart()
     msg['From'] = GMAIL_USER
     msg['To'] = to_email
-    msg['Subject'] = f"JDLX Mobile: {product_name} is BACK IN STOCK!"
+    msg['Subject'] = f"JDLX Mobile: {_clean_subject(product_name)} is BACK IN STOCK!"
     
     body = f"""
     <h2>Good News! It's Back!</h2>
     <p>The product you were waiting for is now available in our warehouse.</p>
-    <h3 style="color: #2563eb;">{product_name}</h3>
+    <h3 style="color: #2563eb;">{_esc(product_name)}</h3>
     <p>Hurry and grab it before it sells out again!</p>
     <br/>
     <a href="https://jdlx.app" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Shop Now</a>

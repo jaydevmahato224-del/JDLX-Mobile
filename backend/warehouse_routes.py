@@ -25,6 +25,7 @@ import sqlite3
 import subprocess
 import traceback
 from jwt_config import get_jwt_secret
+from auth.role_guard import ADMIN_ROLES, normalize_role
 from functools import wraps
 from threading import Thread
 from urllib.parse import quote
@@ -851,9 +852,23 @@ def partner_auth_google_callback():
                 return redirect(f"{admin_frontend}/admin/login?error=not_authorized")
                 
             role = user['role'] if user else ('super_admin' if is_initial_super else 'user')
+            role = normalize_role(role)
             
-            if role not in ('admin', 'super_admin'):
+            # Accept any admin role (admin, super_admin + sub-roles) — consistent
+            # with auth.role_guard.ADMIN_ROLES and the main admin login flow.
+            if role not in ADMIN_ROLES:
                 return redirect(f"{admin_frontend}/admin/login?error=not_authorized")
+            
+            # Disabled admins cannot log in via this flow either (same as main flow).
+            if user:
+                try:
+                    st_row = conn.execute(
+                        "SELECT status FROM admins WHERE user_id = ?", (user['id'],)
+                    ).fetchone()
+                    if st_row and str(st_row['status']).strip().lower() == 'disabled':
+                        return redirect(f"{admin_frontend}/admin/login?error=account_disabled")
+                except Exception:
+                    pass  # never break login on status read failure
             
             is_super = (role == 'super_admin')
             user_id = user['id'] if user else -1
@@ -2978,19 +2993,20 @@ def warehouse_settings():
 # ── Admin Warehouse Management ───────────────────────────────────────────────
 
 def _require_admin_token():
-    """Raise 401 if request has no valid admin JWT."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        abort(401)
-        
-    token = auth.split(" ", 1)[1]
-    try:
-        payload = jwt.decode(token, _get_jwt_secret(), algorithms=["HS256"])
-        role = payload.get("role", "")
-        if role not in ("admin", "super_admin"):
-            abort(403)
-    except jwt.InvalidTokenError:
-        abort(401)
+    """Raise 401/403 if request has no valid admin JWT.
+
+    Delegates to auth.role_guard._current_user_claims so the enforcement stays
+    identical to the rest of the admin panel: any admin role
+    (super_admin/admin/manager/inventory_admin/delivery_admin/support_admin) is
+    accepted, and disabled admin accounts are rejected even with a live JWT.
+    """
+    from auth.role_guard import _current_user_claims
+    claims, error = _current_user_claims()
+    if error:
+        message, code = error
+        abort(code)
+    if claims.get("role") not in ADMIN_ROLES:
+        abort(403)
 
 
 @warehouse_bp.route("/api/admin/warehouse/applications")

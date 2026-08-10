@@ -1,0 +1,27 @@
+security: admin panel hardening + repo cleanup (PII)
+
+Backend security fixes (from full audit):
+- Admins CRUD endpoints (/api/admin/admins*) + status column + disabled-admin
+  login block + live-JWT revocation for disabled accounts
+- Analytics sub-endpoints (top-pages, traffic-sources, devices, searches,
+  funnel, user-journeys)
+- /api/admin/suppliers endpoint
+- Role consistency: sub-roles (manager, inventory_admin, delivery_admin,
+  support_admin) preserved end-to-end; role->permission mapping; permission
+  guard accepts sub-roles; partner OAuth admin flow accepts sub-roles
+- Public admin routes closed: 3 delivery routes (delivery_routes.py) +
+  warehouse blueprint admin routes now enforce ADMIN_ROLES + disabled check
+- audit-logs -> super_admin, activity-logs -> admin+super_admin (match frontend)
+- stale permissions revoked on role change; self-demotion guard
+- pincode-rules GET requires manage_settings
+- Blueprint audit script detects in-body guards (0 unprotected admin routes)
+
+Repo cleanup (customer PII risk):
+- Untrack backend/.venv, backups/*.db + zips, *.db files, server logs
+
+Frontend:
+- AdminAdmins.jsx role options match backend (support_admin + sub-roles)
+- frontend-store: real interactive MapPicker in AddressPicker (tap/drag/geocode)
+
+All regression suites green: business 36, high 21, medium 21, low 20,
+admin security 48; frontend-admin build passes.

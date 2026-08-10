@@ -6,6 +6,8 @@ import uuid
 import jwt
 from jwt_config import get_jwt_secret
 from flask import Blueprint, request, jsonify
+from auth.role_guard import require_admin, require_super_admin
+from auth.permission_guard import require_permission
 from utils.response_utils import success_response, error_response
 from functools import wraps
 import xml.etree.ElementTree as ET
@@ -375,6 +377,8 @@ def warehouse_approve_rider():
 # ── Admin Routes ────────────────────────────────────────────────────────────
 
 @delivery_bp.route('/api/admin/delivery/applications', methods=['GET'])
+@require_admin()
+@require_permission("manage_delivery")
 def list_delivery_applications():
     conn = get_db()
     try:
@@ -398,6 +402,8 @@ def list_delivery_applications():
         conn.close()
 
 @delivery_bp.route('/api/admin/delivery/approve', methods=['POST'])
+@require_admin()
+@require_permission("manage_delivery")
 def approve_delivery_application():
     data = request.json
     app_id = data.get('application_id')
@@ -438,6 +444,8 @@ def approve_delivery_application():
         conn.close()
 
 @delivery_bp.route('/api/admin/delivery-partners', methods=['GET'])
+@require_admin()
+@require_permission("manage_delivery")
 def list_delivery_partners():
     conn = get_db()
     try:

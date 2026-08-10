@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { MapPin, Navigation } from 'lucide-react';
@@ -23,7 +23,13 @@ function LocationMarker({ position, setPosition }) {
     });
 
     return position === null ? null : (
-        <Marker position={position} />
+        <Marker
+            position={position}
+            draggable
+            eventHandlers={{
+                dragend: (e) => setPosition(e.target.getLatLng()),
+            }}
+        />
     );
 }
 
@@ -42,8 +48,17 @@ export default function MapPicker({ onLocationSelect }) {
     const [address, setAddress] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Default to some central location (e.g., Delhi) if geolocation fails
+    // Default to a central location (e.g., Delhi) if geolocation fails
     const [center, setCenter] = useState([28.6139, 77.2090]);
+
+    // Keep the latest parent callback in a ref. The reverse-geocode effect only
+    // depends on `position`, so parent re-renders (e.g. pincode serviceability
+    // state updates triggered by this same callback) can never re-fire the
+    // geocode request — that would otherwise loop forever.
+    const onLocationSelectRef = useRef(onLocationSelect);
+    useEffect(() => {
+        onLocationSelectRef.current = onLocationSelect;
+    }, [onLocationSelect]);
 
     useEffect(() => {
         if (navigator.geolocation) {
@@ -62,6 +77,9 @@ export default function MapPicker({ onLocationSelect }) {
 
     const fetchAddress = useCallback(async (lat, lng) => {
         setLoading(true);
+        // Coordinates are always passed back so the parent form can save the
+        // exact picked point even when reverse geocoding is unavailable.
+        const coordsOnly = { full: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, house: '', city: '', state: '', pincode: '', landmark: '' };
         try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
             const data = await res.json();
@@ -75,15 +93,22 @@ export default function MapPicker({ onLocationSelect }) {
                     landmark: data.address.amenity || data.address.landmark || ''
                 };
                 setAddress(data.display_name);
-                onLocationSelect(addr);
+                onLocationSelectRef.current(addr, lat, lng);
+            } else {
+                setAddress(coordsOnly.full);
+                onLocationSelectRef.current(coordsOnly, lat, lng);
             }
         } catch (error) {
             console.error("Geocoding failed:", error);
+            setAddress(coordsOnly.full);
+            onLocationSelectRef.current(coordsOnly, lat, lng);
         } finally {
             setLoading(false);
         }
-    }, [onLocationSelect]);
+    }, []);
 
+    // Reverse-geocode whenever the user picks a new point (tap / drag /
+    // geolocate). Depends only on `position` — never on the parent callback.
     useEffect(() => {
         if (position) {
             fetchAddress(position.lat, position.lng);
@@ -93,7 +118,7 @@ export default function MapPicker({ onLocationSelect }) {
     return (
         <div className="space-y-4">
             <div className="relative h-[300px] w-full overflow-hidden rounded-[24px] border-2 border-[var(--color-surface-high)] shadow-inner">
-                <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
+                <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
                     <TileLayer
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -101,9 +126,9 @@ export default function MapPicker({ onLocationSelect }) {
                     <LocationMarker position={position} setPosition={setPosition} />
                     <ChangeView center={center} />
                 </MapContainer>
-                
+
                 <div className="absolute bottom-4 left-4 z-[1000]">
-                    <button 
+                    <button
                         type="button"
                         onClick={() => {
                             if (navigator.geolocation) {

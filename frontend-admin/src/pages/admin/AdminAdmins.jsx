@@ -225,7 +225,9 @@ function AdminAdmins() {
             <option value="super_admin">Super Admin</option>
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
-            <option value="support">Support</option>
+            <option value="inventory_admin">Inventory Admin</option>
+            <option value="delivery_admin">Delivery Admin</option>
+            <option value="support_admin">Support Admin</option>
           </select>
         </div>
       </div>
@@ -366,7 +368,9 @@ function AdminAdmins() {
                 >
                   <option value="admin">Admin</option>
                   <option value="manager">Manager</option>
-                  <option value="support">Support</option>
+                  <option value="inventory_admin">Inventory Admin</option>
+                  <option value="delivery_admin">Delivery Admin</option>
+                  <option value="support_admin">Support Admin</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
@@ -428,7 +432,9 @@ function AdminAdmins() {
                 >
                   <option value="admin">Admin</option>
                   <option value="manager">Manager</option>
-                  <option value="support">Support</option>
+                  <option value="inventory_admin">Inventory Admin</option>
+                  <option value="delivery_admin">Delivery Admin</option>
+                  <option value="support_admin">Support Admin</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>

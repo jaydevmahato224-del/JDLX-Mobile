@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import jsonify, request
 from database import get_db
-from auth.role_guard import _current_user_claims
+from auth.role_guard import _current_user_claims, ADMIN_ROLES
 
 
 def _has_permission(user_id, permission_name):
@@ -33,7 +33,9 @@ def require_permission(permission_name):
             role = user_claims.get("role", "user")
             if role == "super_admin":
                 return f(*args, **kwargs)
-            if role != "admin":
+            # Any admin-panel role (admin, manager, inventory_admin, delivery_admin,
+            # support_admin) must carry the requested permission in admin_permissions.
+            if role not in ADMIN_ROLES:
                 return jsonify({"error": "Unauthorized"}), 403
 
             user_id = user_claims.get("user_id")

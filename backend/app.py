@@ -52,7 +52,7 @@ from notifier import (
     send_welcome_email
 )
 from services.inventory_service import trigger_low_stock_notifications as trigger_low_stock_notifications_svc
-from auth.role_guard import normalize_role, require_admin, require_super_admin
+from auth.role_guard import normalize_role, require_admin, require_super_admin, ADMIN_ROLES
 from auth.permission_guard import require_permission
 from warehouse_routes import warehouse_bp, issue_warehouse_token, _normalize_offline_price
 from delivery_routes import delivery_bp
@@ -724,8 +724,17 @@ def token_required(f):
     return decorated
 
 
-# --- Admin OTP Store for Re-authentication ---
-admin_otp_store = {}
+# --- Admin OTP Re-authentication ---
+# DB-backed (admin_otps table) so OTPs survive gunicorn worker restarts and are
+# shared across workers. OTPs are stored hashed with a per-record salt, are
+# one-time use, attempt-limited, rate-limited, and failures feed the existing
+# login_guard lockout so brute-force is impossible.
+OTP_MAX_ATTEMPTS = 5
+
+
+def _hash_admin_otp(otp, salt):
+    return hashlib.sha256(f"{salt}:{otp}".encode()).hexdigest()
+
 
 @app.route('/api/auth/verify-token', methods=['GET'])
 @token_required
@@ -742,8 +751,14 @@ def verify_token():
     })
 
 @app.route('/api/admin/request-otp', methods=['POST'])
+@limiter.limit("3 per 10 minutes")
 def admin_request_otp():
-    """Requests an OTP for admin session re-authentication."""
+    """Requests an OTP for admin session re-authentication.
+
+    Enumeration-safe: non-existent or non-admin accounts receive the same generic
+    success response, so the API never reveals which emails are admins. OTP is
+    only generated (and emailed) for real admin accounts.
+    """
     data = request.get_json(silent=True) or {}
     email = data.get('email', '').strip().lower()
     if not email:
@@ -751,44 +766,63 @@ def admin_request_otp():
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
-    user = cursor.fetchone()
-    conn.close()
+    try:
+        # Purge any expired OTP rows for this email first.
+        cursor.execute("DELETE FROM admin_otps WHERE email = ? AND expires_at <= datetime('now')", (email,))
 
-    if not user:
-        return error_response("Admin account not found", 404)
+        # Respect the existing account lockout (login_guard) so a locked admin
+        # cannot keep requesting OTPs.
+        if is_account_locked(email):
+            return error_response("Account temporarily locked. Try again later.", 423)
 
-    user = dict(user)
-    role = normalize_role(user.get('role'))
-    admin_roles = ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']
-    if role not in admin_roles:
-        return error_response("Unauthorized: This account is not an admin", 403)
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
+        user = cursor.fetchone()
 
-    # Generate 6-digit OTP
-    import random
-    import string
-    otp = ''.join(random.choices(string.digits, k=6))
-    
-    # Store OTP with 5-minute expiry
-    admin_otp_store[email] = {
-        'otp': otp,
-        'expiry': time.time() + 300,
-        'user_id': user['id'],
-        'role': role,
-        'name': user['name']
-    }
+        admin_roles = ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']
+        role = None
+        if user:
+            role = normalize_role(user['role'])
+        is_admin = bool(user) and role in admin_roles
 
-    # Send OTP via email in a background thread
-    from threading import Thread
-    subject = "Admin Session Re-authentication OTP"
-    message = f"Your OTP for JDLX Admin Panel session re-authentication is: <br/><br/><b style='font-size: 24px; color: #4F46E5;'>{otp}</b><br/><br/>It will expire in 5 minutes."
-    Thread(target=send_individual_email, args=(email, user['name'] or 'Admin', subject, message)).start()
+        # Send the OTP ONLY for valid admin accounts; everyone else gets the
+        # same generic 200 response (no email enumeration).
+        if is_admin:
+            user = dict(user)
+            import random
+            import string
+            otp = ''.join(random.choices(string.digits, k=6))
+            salt = secrets.token_hex(8)
+            otp_hash = _hash_admin_otp(otp, salt)
 
-    return success_response(None, "OTP sent successfully to your registered email")
+            cursor.execute(
+                '''INSERT INTO admin_otps (email, user_id, role, name, otp_hash, otp_salt, expires_at)
+                   VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+5 minutes'))''',
+                (email, user['id'], role, user.get('name'), otp_hash, salt),
+            )
+            conn.commit()
+
+            # Send OTP via email in a background thread
+            from threading import Thread
+            subject = "Admin Session Re-authentication OTP"
+            message = f"Your OTP for JDLX Admin Panel session re-authentication is: <br/><br/><b style='font-size: 24px; color: #4F46E5;'>{otp}</b><br/><br/>It will expire in 5 minutes."
+            Thread(target=send_individual_email, args=(email, user.get('name') or 'Admin', subject, message)).start()
+
+        return success_response(None, "If an account exists for this email, an OTP has been sent.")
+    except Exception as e:
+        logger.error(f"admin_request_otp error: {e}")
+        return error_response("Failed to send OTP", 500)
+    finally:
+        conn.close()
 
 @app.route('/api/admin/verify-otp', methods=['POST'])
+@limiter.limit("10 per 10 minutes")
 def admin_verify_otp():
-    """Verifies OTP and issues a new admin token."""
+    """Verifies an OTP and issues a new admin token.
+
+    Hardened: attempt-limited (5 wrong guesses invalidate the OTP), rate-limited
+    per IP, one-time use (row deleted on success or exhaustion), and failures are
+    recorded via login_guard so repeated abuse locks the account out.
+    """
     data = request.get_json(silent=True) or {}
     email = data.get('email', '').strip().lower()
     otp = data.get('otp', '').strip()
@@ -796,71 +830,104 @@ def admin_verify_otp():
     if not email or not otp:
         return error_response("Email and OTP are required", 400)
 
-    stored_data = admin_otp_store.get(email)
-    if not stored_data:
-        return error_response("No OTP requested for this email", 400)
-
-    if time.time() > stored_data['expiry']:
-        del admin_otp_store[email]
-        return error_response("OTP has expired. Please request a new one.", 401)
-
-    if stored_data['otp'] != otp:
-        return error_response("Invalid OTP", 401)
-
-    # OTP verified!
-    user_id = stored_data['user_id']
-    user_role = stored_data['role']
-    user_name = stored_data['name']
-
-    # Generate new token
-    now_utc = datetime.datetime.utcnow()
-    token_expiry = datetime.timedelta(hours=8)
-    payload = {
-        'user_id': user_id,
-        'email': email,
-        'role': user_role,
-        'iat': now_utc,
-        'jti': secrets.token_hex(16),
-        'exp': now_utc + token_expiry
-    }
-    jwt_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-    # Fetch fresh user data
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+    try:
+        cursor.execute(
+            "SELECT * FROM admin_otps WHERE email = ? AND expires_at > datetime('now') ORDER BY id DESC LIMIT 1",
+            (email,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            # No active OTP (missing or expired) — purge any stale row and give one answer.
+            cursor.execute("DELETE FROM admin_otps WHERE email = ?", (email,))
+            conn.commit()
+            return error_response("OTP has expired. Please request a new one.", 401)
 
-    if not user:
-        return error_response("User not found", 404)
+        otp_record = dict(row)
+        expected_hash = _hash_admin_otp(otp, otp_record['otp_salt'])
 
-    user = dict(user)
-    user_data = {
-        "id": user.get('id'),
-        "name": user.get('name'),
-        "email": user.get('email'),
-        "profile_image": user.get('profile_image'),
-        "role": user_role
-    }
+        if not hmac.compare_digest(expected_hash, otp_record['otp_hash']):
+            # Wrong OTP: count the attempt; once exhausted, invalidate the OTP and
+            # feed the shared login lockout so the account gets temporarily locked.
+            new_attempts = int(otp_record['attempts'] or 0) + 1
+            cursor.execute("UPDATE admin_otps SET attempts = ? WHERE id = ?", (new_attempts, otp_record['id']))
+            if new_attempts >= OTP_MAX_ATTEMPTS:
+                cursor.execute("DELETE FROM admin_otps WHERE id = ?", (otp_record['id'],))
+                record_login_attempt(email, get_client_ip(), "failed")
+                try:
+                    create_security_alert(
+                        "admin_otp_bruteforce",
+                        f"Admin OTP exhausted after {new_attempts} attempts for {email}.",
+                        severity="high",
+                        ip_address=get_client_ip(),
+                    )
+                except Exception:
+                    pass
+            conn.commit()
+            return error_response("Invalid OTP", 401)
 
-    # Clean up OTP store
-    del admin_otp_store[email]
+        # OTP verified! Atomically claim the row (one-time use). If a concurrent
+        # request already consumed it, rowcount is 0 and we fail closed instead
+        # of issuing a second token from the same OTP.
+        user_id = otp_record['user_id']
+        cursor.execute("DELETE FROM admin_otps WHERE id = ? AND expires_at > datetime('now')", (otp_record['id'],))
+        if cursor.rowcount != 1:
+            conn.commit()
+            return error_response("OTP has expired. Please request a new one.", 401)
+        conn.commit()
 
-    # Log successful re-auth
-    log_admin_event(
-        user_id,
-        "admin_reauth_otp",
-        "auth",
-        user_id,
-        "Admin re-authenticated via OTP successfully",
-    )
+        # Fetch fresh user data and use the CURRENT role from the DB (never trust
+        # the stale role stored with the OTP request).
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            return error_response("User not found", 404)
 
-    return jsonify({
-        "success": True,
-        "token": jwt_token,
-        "user": user_data
-    })
+        user = dict(user)
+        user_role = normalize_role(user.get('role'))
+        user_name = user.get('name')
+
+        # Generate new token
+        now_utc = datetime.datetime.utcnow()
+        token_expiry = datetime.timedelta(hours=8)
+        payload = {
+            'user_id': user_id,
+            'email': email,
+            'role': user_role,
+            'iat': now_utc,
+            'jti': secrets.token_hex(16),
+            'exp': now_utc + token_expiry
+        }
+        jwt_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+        user_data = {
+            "id": user.get('id'),
+            "name": user_name,
+            "email": user.get('email'),
+            "profile_image": user.get('profile_image'),
+            "role": user_role
+        }
+
+        # Log successful re-auth
+        log_admin_event(
+            user_id,
+            "admin_reauth_otp",
+            "auth",
+            user_id,
+            "Admin re-authenticated via OTP successfully",
+        )
+
+        return jsonify({
+            "success": True,
+            "token": jwt_token,
+            "user": user_data
+        })
+    except Exception as e:
+        logger.error(f"admin_verify_otp error: {e}")
+        return error_response("Failed to verify OTP", 500)
+    finally:
+        conn.close()
 
 
 def run_admin_anomaly_check(admin_id, action_type):
@@ -871,9 +938,45 @@ def run_admin_anomaly_check(admin_id, action_type):
         pass
 
 
+# Role -> default permission mapping. Sub-roles (manager, inventory_admin,
+# delivery_admin, support_admin) get a scoped permission set matching the pages
+# the admin panel shows them, so a manager cannot silently edit products, etc.
+ROLE_DEFAULT_PERMISSIONS = {
+    "admin": [
+        "manage_products",
+        "manage_orders",
+        "manage_inventory",
+        "manage_delivery",
+        "manage_users",
+    ],
+    "manager": [
+        "manage_products",
+        "manage_orders",
+        "manage_inventory",
+        "manage_delivery",
+        "manage_users",
+        "view_analytics",
+    ],
+    "inventory_admin": [
+        "manage_products",
+        "manage_inventory",
+        "view_analytics",
+    ],
+    "delivery_admin": [
+        "manage_orders",
+        "manage_delivery",
+    ],
+    "support_admin": [
+        "manage_orders",
+        "manage_users",
+    ],
+    "super_admin": AVAILABLE_ADMIN_PERMISSIONS,
+}
+
+
 def ensure_default_admin_permissions(cursor, admin_id, role="admin"):
     """Bootstraps default permissions for new admin accounts."""
-    permissions = DEFAULT_ADMIN_PERMISSIONS
+    permissions = ROLE_DEFAULT_PERMISSIONS.get(role) or DEFAULT_ADMIN_PERMISSIONS
     if role == "super_admin":
         permissions = AVAILABLE_ADMIN_PERMISSIONS
     for permission in permissions:
@@ -983,7 +1086,7 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
     user = cursor.fetchone()
     user_dict = dict(user)
     user_role = normalize_role(user_dict.get('role'))
-    if user_role in {'admin', 'super_admin'}:
+    if user_role in ADMIN_ROLES:
         ensure_default_admin_permissions(cursor, user['id'], role=user_role)
         upsert_admin_record(cursor, user['id'], user_role)
     else:
@@ -1005,7 +1108,7 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
     conn.close()
 
     record_login_attempt(email, ip_address, "success")
-    if user_role in {'admin', 'super_admin'}:
+    if user_role in ADMIN_ROLES:
         log_admin_event(
             user_dict['id'],
             "admin_login",
@@ -1017,7 +1120,7 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
 
     # Admin sessions expire in 8 hours (security, unchanged); regular users get the
     # admin-controlled duration from system_settings (default 8760h = 365 days).
-    is_admin = user_role in ('admin', 'super_admin')
+    is_admin = user_role in ADMIN_ROLES
     token_expiry = datetime.timedelta(hours=8) if is_admin else datetime.timedelta(hours=user_session_hours)
     now_utc = datetime.datetime.utcnow()
     payload = {
@@ -1237,6 +1340,19 @@ def admin_google_callback():
         if user_role not in admin_roles:
             logger.warning(f"Non-admin login attempt via admin OAuth: {email} (role={user_role})")
             return redirect(f"{frontend_url}/admin/login?error=unauthorized")
+
+        # Block disabled admin accounts (security control for the AdminAdmins page).
+        try:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT status FROM admins WHERE user_id = ?", (user_data.get('id'),)
+            ).fetchone()
+            conn.close()
+            if row and str(row['status']).strip().lower() == 'disabled':
+                logger.warning(f"Disabled admin login attempt: {email}")
+                return redirect(f"{frontend_url}/admin/login?error=account_disabled")
+        except Exception:
+            pass  # never break login on status read failure
 
         encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
         return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
@@ -1636,8 +1752,8 @@ def create_admin_user():
 
     if not email:
         return error_response("email is required", 400)
-    if role not in {'admin', 'super_admin'}:
-        return error_response("role must be admin or super_admin", 400)
+    if role not in ADMIN_ROLES:
+        return error_response(f"role must be one of: {', '.join(sorted(ADMIN_ROLES))}", 400)
 
     try:
         conn = get_db()
@@ -1729,10 +1845,187 @@ def remove_admin_user():
         return error_response(str(e), 500)
 
 
+@app.route('/api/admin/admins', methods=['GET'])
+@token_required
+@require_super_admin()
+@require_permission("manage_admins")
+def list_admins_v2():
+    """Lists all admin accounts with status and last login (AdminAdmins page)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT a.id, a.user_id, a.role, COALESCE(a.status, 'active') AS status,
+                   a.created_at, u.name, u.email, u.profile_image, u.last_login
+            FROM admins a
+            JOIN users u ON u.id = a.user_id
+            ORDER BY a.created_at DESC
+        ''')
+        admins = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(admins), 200
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/admins', methods=['POST'])
+@token_required
+@require_super_admin()
+@require_permission("manage_admins")
+def create_admin_v2():
+    """Promotes a user to an admin role (name, email, role)."""
+    data = request.json or {}
+    email = (data.get('email') or '').strip().lower()
+    name = (data.get('name') or '').strip()
+    role = normalize_role(data.get('role'))
+
+    if not email:
+        return error_response("email is required", 400)
+    if role not in ADMIN_ROLES:
+        return error_response(f"role must be one of: {', '.join(sorted(ADMIN_ROLES))}", 400)
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, role FROM users WHERE LOWER(email) = ?", (email,))
+        user = cursor.fetchone()
+        if not user:
+            conn.close()
+            return error_response("User not found. Ask the user to login first.", 404)
+
+        cursor.execute("UPDATE users SET role = ?, name = COALESCE(?, name) WHERE id = ?", (role, name or None, user['id']))
+        upsert_admin_record(cursor, user['id'], role)
+        ensure_default_admin_permissions(cursor, user['id'], role=role)
+        conn.commit()
+        conn.close()
+        log_admin_action(request.user.get('user_id'), "admin_created", "admin", user['id'])
+        log_admin_event(
+            request.user.get('user_id'),
+            "admin_created_admin",
+            "admin",
+            user['id'],
+            f"Created or elevated admin account for {email} with role {role}",
+        )
+        run_admin_anomaly_check(request.user.get('user_id'), "admin_created_admin")
+        return jsonify({
+            "message": "Admin user updated successfully",
+            "admin_id": user['id'],
+            "email": email,
+            "role": role,
+        }), 201
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/admins/<int:admin_id>', methods=['PUT'])
+@token_required
+@require_super_admin()
+@require_permission("manage_admins")
+def update_admin_v2(admin_id):
+    """Updates an admin's display name and/or role (admin_id = admins.id)."""
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    role = normalize_role(data.get('role'))
+    if role not in ADMIN_ROLES:
+        return error_response(f"role must be one of: {', '.join(sorted(ADMIN_ROLES))}", 400)
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, role AS old_role FROM admins WHERE id = ?", (admin_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return error_response("Admin not found", 404)
+        user_id = row['user_id']
+        # A super_admin must not be able to demote themselves (would lock the
+        # panel out of super-admin control).
+        if row['old_role'] == 'super_admin' and user_id == request.user.get('user_id') and role != 'super_admin':
+            conn.close()
+            return error_response("You cannot change your own super_admin role", 400)
+        if name:
+            cursor.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
+        cursor.execute("UPDATE admins SET role = ? WHERE id = ?", (role, admin_id))
+        cursor.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+        # Revoke permissions the new role no longer carries (least privilege),
+        # then ensure the new role's defaults are present.
+        allowed_perms = ROLE_DEFAULT_PERMISSIONS.get(role) or []
+        placeholders = ','.join('?' * len(allowed_perms)) if allowed_perms else "''"
+        cursor.execute(
+            f"DELETE FROM admin_permissions WHERE admin_id = ? AND permission NOT IN ({placeholders})",
+            [user_id] + (allowed_perms if allowed_perms else []),
+        )
+        ensure_default_admin_permissions(cursor, user_id, role=role)
+        conn.commit()
+        conn.close()
+        log_admin_action(request.user.get('user_id'), "admin_updated", "admin", user_id)
+        return jsonify({"message": "Admin updated successfully", "role": role}), 200
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/admins/<int:admin_id>/status', methods=['PATCH'])
+@token_required
+@require_super_admin()
+@require_permission("manage_admins")
+def update_admin_status_v2(admin_id):
+    """Enables / disables an admin account. Disabled admins cannot log in."""
+    data = request.json or {}
+    status = (data.get('status') or '').strip().lower()
+    if status not in ('active', 'disabled'):
+        return error_response("status must be 'active' or 'disabled'", 400)
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, role FROM admins WHERE id = ?", (admin_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return error_response("Admin not found", 404)
+        # Prevent a super_admin from disabling their own account (would lock them out).
+        if row['role'] == 'super_admin' and status == 'disabled' and row['user_id'] == request.user.get('user_id'):
+            conn.close()
+            return error_response("You cannot disable your own account", 400)
+        cursor.execute("UPDATE admins SET status = ? WHERE id = ?", (status, admin_id))
+        conn.commit()
+        conn.close()
+        log_admin_action(request.user.get('user_id'), "admin_status_changed", "admin", row['user_id'])
+        return jsonify({"message": f"Admin {status}", "status": status}), 200
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/admins/<int:admin_id>', methods=['DELETE'])
+@token_required
+@require_super_admin()
+@require_permission("manage_admins")
+def delete_admin_v2(admin_id):
+    """Revokes admin access (admin_id = admins.id)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, role FROM admins WHERE id = ?", (admin_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return error_response("Admin not found", 404)
+        user_id = row['user_id']
+        if row['role'] == 'super_admin' and user_id == request.user.get('user_id'):
+            conn.close()
+            return error_response("You cannot remove your own account", 400)
+        cursor.execute("UPDATE users SET role = 'user' WHERE id = ?", (user_id,))
+        remove_admin_record(cursor, user_id)
+        cursor.execute("DELETE FROM admin_permissions WHERE admin_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        log_admin_action(request.user.get('user_id'), "admin_removed", "admin", user_id)
+        return jsonify({"message": "Admin removed successfully"}), 200
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
 @app.route('/api/admin/activity-logs', methods=['GET'])
 @token_required
-@require_admin()
-@require_permission("view_analytics")
+@require_admin(['super_admin', 'admin'])
 def get_activity_logs():
     """Retrieves activity logs for administrators."""
     admin_id = request.args.get('admin_id', type=int)
@@ -1781,8 +2074,7 @@ def get_activity_logs():
 
 @app.route('/api/admin/audit-logs', methods=['GET'])
 @token_required
-@require_admin()
-@require_permission("view_analytics")
+@require_super_admin()
 def get_admin_audit_logs():
     """Retrieves security-focused audit logs for admin actions."""
     admin_id = request.args.get('admin', type=int)
@@ -1844,8 +2136,7 @@ def get_admin_audit_logs():
 
 @app.route('/api/admin/audit-logs/<int:admin_id>', methods=['GET'])
 @token_required
-@require_admin()
-@require_permission("view_analytics")
+@require_super_admin()
 def get_admin_audit_logs_by_admin(admin_id):
     """Retrieves audit logs for a specific administrator."""
     action_type = (request.args.get('action_type') or '').strip()
@@ -1972,7 +2263,7 @@ def assign_admin_permission():
         cursor = conn.cursor()
         cursor.execute("SELECT role FROM users WHERE id = ?", (admin_user_id,))
         user = cursor.fetchone()
-        if not user or normalize_role(user['role']) not in {'admin', 'super_admin'}:
+        if not user or normalize_role(user['role']) not in ADMIN_ROLES:
             conn.close()
             return error_response("Target user is not an admin", 400)
 
@@ -3093,7 +3384,11 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     cursor.execute("SELECT product_id, quantity, variant_id FROM order_items WHERE order_id = ?", (order_id,))
     items = cursor.fetchall()
 
-    # 4. Decrement global product/variant stock atomically.
+    # 4. Decrement global product/variant stock atomically. A mid-loop stock
+    #    failure must NOT leave partial decrements behind — the whole set is
+    #    wrapped in a savepoint so it stays all-or-nothing even when the caller
+    #    commits after catching the ValueError (e.g. payment verify/webhook).
+    cursor.execute("SAVEPOINT confirm_stock_decrement")
     for item in items:
         product_id = item['product_id']
         qty = item['quantity']
@@ -3111,6 +3406,8 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
                     "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
                     (order_id,)
                 )
+                # Undo the decrements already applied for earlier items in this order.
+                cursor.execute("ROLLBACK TO SAVEPOINT confirm_stock_decrement")
                 raise ValueError(f"Insufficient variant stock for product {product_id}")
 
             cursor.execute("""
@@ -3130,6 +3427,8 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
                     "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
                     (order_id,)
                 )
+                # Undo the decrements already applied for earlier items in this order.
+                cursor.execute("ROLLBACK TO SAVEPOINT confirm_stock_decrement")
                 raise ValueError(f"Insufficient stock for product {product_id}")
 
         # Decrement warehouse partner inventory stock if store_id is set (Multi-Vendor stock sync)
@@ -3165,6 +3464,8 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
                 )
             except Exception as notify_err:
                 print(f"[LOW STOCK WARNING] Failed to trigger notification: {notify_err}")
+
+    cursor.execute("RELEASE SAVEPOINT confirm_stock_decrement")
 
     # 5. Update order status to 'CONFIRMED' and confirmed_at timestamp
     cursor.execute(
@@ -3739,6 +4040,18 @@ def get_order_tracking(order_id):
     except Exception as e:
         return error_response(str(e), 500)
 
+# Order statuses an admin may set manually via /api/admin/order/<id>/status.
+# Arbitrary strings (e.g. 'HACKED') must never be written into orders.order_status.
+ALLOWED_ADMIN_ORDER_STATUSES = {
+    'PLACED', 'CONFIRMED', 'PACKING', 'PACKED', 'SHIPPED', 'OUT_FOR_DELIVERY',
+    'DELIVERED', 'CANCELLED', 'REFUNDED', 'REJECTED',
+}
+# Statuses that are final — an order in one of these cannot be moved anywhere else.
+# Prevents resurrecting finished orders (protects stock accounting and prevents
+# double-decrement / double referral-reward scenarios).
+TERMINAL_ORDER_STATUSES = {'DELIVERED', 'CANCELLED', 'REFUNDED', 'REJECTED'}
+
+
 def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
     """Adjusts inventory based on order status transitions."""
     if old_status == new_status:
@@ -3749,11 +4062,17 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
     if new_status == 'DELIVERED' and old_status != 'DELIVERED':
         pass
 
-    # Transitions to CANCELLED/REFUNDED/REJECTED after confirmation: add global stock back.
+    # Transitions to CANCELLED/REFUNDED/REJECTED after confirmation: add global
+    # stock AND warehouse inventory back (the decrement at confirm time reduces
+    # both, so both must be restored or warehouse partner stock is lost forever).
     elif (
         new_status in ['CANCELLED', 'REFUNDED', 'REJECTED']
         and old_status in ['CONFIRMED', 'PACKING', 'PACKED', 'SHIPPED', 'OUT_FOR_DELIVERY']
     ):
+        cursor.execute("SELECT dark_store_id FROM orders WHERE id = ?", (order_id,))
+        order_row = cursor.fetchone()
+        store_id = order_row['dark_store_id'] if order_row else None
+
         cursor.execute("SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?", (order_id,))
         items = cursor.fetchall()
         for item in items:
@@ -3766,6 +4085,25 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
                 "UPDATE products SET stock = stock + ? WHERE id = ?",
                 (item['quantity'], item['product_id'])
             )
+            # Mirror the confirm-time warehouse_inventory decrement (same WHERE
+            # shape, variant-aware) so warehouse partner stock is restored too.
+            if store_id:
+                if item['variant_id']:
+                    cursor.execute(
+                        """UPDATE warehouse_inventory
+                           SET stock_quantity = COALESCE(stock_quantity, 0) + ?,
+                               available_stock = COALESCE(available_stock, 0) + ?
+                           WHERE (warehouse_id = ? OR warehouse_partner_id = ?) AND product_id = ? AND variant_id = ?""",
+                        (item['quantity'], item['quantity'], store_id, store_id, item['product_id'], item['variant_id'])
+                    )
+                else:
+                    cursor.execute(
+                        """UPDATE warehouse_inventory
+                           SET stock_quantity = COALESCE(stock_quantity, 0) + ?,
+                               available_stock = COALESCE(available_stock, 0) + ?
+                           WHERE (warehouse_id = ? OR warehouse_partner_id = ?) AND product_id = ?""",
+                        (item['quantity'], item['quantity'], store_id, store_id, item['product_id'])
+                    )
 @app.route('/api/admin/order/<int:order_id>/status', methods=['PATCH'])
 @token_required
 @require_admin()
@@ -3773,8 +4111,12 @@ def handle_stock_on_status_change(cursor, order_id, old_status, new_status):
 def admin_update_order_status(order_id):
     data = request.json
     new_status = data.get('status', '').upper()
-    
-    # Valid stages: PLACED, PACKED, SHIPPED, DELIVERED, CANCELLED
+
+    # Whitelist: only real lifecycle statuses may be set. Arbitrary strings (e.g.
+    # 'HACKED') can no longer be written into orders.order_status.
+    if new_status not in ALLOWED_ADMIN_ORDER_STATUSES:
+        return error_response(f"Invalid order status '{new_status}'", 400)
+
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -3782,7 +4124,16 @@ def admin_update_order_status(order_id):
         # Get current status
         cursor.execute("SELECT order_status FROM orders WHERE id = ?", (order_id,))
         current_status_row = cursor.fetchone()
+        if current_status_row is None:
+            conn.close()
+            return error_response("Order not found", 404)
         old_status = current_status_row['order_status'] if current_status_row else None
+
+        # Terminal states (DELIVERED/CANCELLED/REFUNDED/REJECTED) are final — an
+        # order cannot be resurrected from them.
+        if old_status in TERMINAL_ORDER_STATUSES and new_status != old_status:
+            conn.close()
+            return error_response(f"Cannot change status of a {old_status} order", 400)
 
         handle_stock_on_status_change(cursor, order_id, old_status, new_status)
 
@@ -4675,7 +5026,7 @@ def admin_system_stats():
 
 @app.route('/api/admin/system/health', methods=['GET'])
 @token_required
-@require_admin()
+@require_super_admin()
 def admin_system_health_detail():
     """Retrieves detailed health metrics for system components."""
     try:
@@ -4687,7 +5038,7 @@ def admin_system_health_detail():
 
 @app.route('/api/admin/system/logs', methods=['GET'])
 @token_required
-@require_admin()
+@require_super_admin()
 def get_admin_system_logs():
     """Retrieves security alerts, blocked IPs, and failed login logs."""
     try:
@@ -4713,7 +5064,7 @@ def get_admin_system_logs():
 
 @app.route('/api/admin/system/self-healing', methods=['GET'])
 @token_required
-@require_admin()
+@require_super_admin()
 def get_self_healing_status():
     """Retrieves logs and current status of the self-healing system."""
     try:
@@ -4732,7 +5083,7 @@ def get_self_healing_status():
 
 @app.route('/api/admin/system/self-healing/scan', methods=['POST'])
 @token_required
-@require_admin()
+@require_super_admin()
 def run_system_scan():
     """Triggers a manual system integrity scan."""
     try:
@@ -4772,6 +5123,181 @@ def get_admin_orders():
         return jsonify(orders)
     except Exception as e:
         return error_response(str(e), 500)
+
+
+@app.route('/api/admin/analytics/top-pages', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_top_pages():
+    """Top visited pages from the analytics_events table."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT page_path, COUNT(*) AS views,
+                   COALESCE(ROUND(AVG(CAST(event_value AS REAL)), 1), 0) AS avg_duration
+            FROM analytics_events
+            WHERE page_path IS NOT NULL AND page_path != ''
+            GROUP BY page_path
+            ORDER BY views DESC
+            LIMIT 15
+        ''')
+        data = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({"success": True, "data": data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
+@app.route('/api/admin/analytics/traffic-sources', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_traffic_sources():
+    """Traffic source breakdown from analytics sessions."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(NULLIF(referrer, ''), 'Direct') AS source, COUNT(*) AS visits
+            FROM analytics_sessions
+            GROUP BY source
+            ORDER BY visits DESC
+            LIMIT 15
+        ''')
+        data = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({"success": True, "data": data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
+@app.route('/api/admin/analytics/devices', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_devices():
+    """Device type breakdown (summary + details)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(NULLIF(device_type, ''), 'desktop') AS device, COUNT(*) AS count
+            FROM analytics_sessions
+            GROUP BY device
+            ORDER BY count DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        summary = {"mobile": 0, "desktop": 0, "tablet": 0}
+        details = []
+        for row in rows:
+            device = (row['device'] or 'desktop').lower()
+            count = row['count']
+            if 'mobile' in device:
+                summary['mobile'] += count
+            elif 'tablet' in device:
+                summary['tablet'] += count
+            else:
+                summary['desktop'] += count
+            details.append({"device": row['device'], "count": count})
+        return jsonify({"success": True, "data": {"summary": summary, "details": details}}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
+@app.route('/api/admin/analytics/searches', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_searches():
+    """Top search queries."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT query, COUNT(*) AS count
+            FROM search_queries
+            WHERE query IS NOT NULL AND query != ''
+            GROUP BY query
+            ORDER BY count DESC
+            LIMIT 15
+        ''')
+        data = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({"success": True, "data": data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
+@app.route('/api/admin/analytics/funnel', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_funnel():
+    """Conversion funnel from analytics events (view -> cart -> checkout -> purchase)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        # Normalize event types to funnel stages; unknown events are skipped.
+        cursor.execute('''
+            SELECT
+                CASE
+                    WHEN LOWER(event_type) LIKE '%purchase%' OR LOWER(event_type) LIKE '%order%' THEN 'purchase'
+                    WHEN LOWER(event_type) LIKE '%checkout%' THEN 'checkout'
+                    WHEN LOWER(event_type) LIKE '%cart%' OR LOWER(event_type) LIKE '%add_to_cart%' THEN 'add_to_cart'
+                    WHEN LOWER(event_type) LIKE '%view%' OR LOWER(event_type) LIKE '%page%' THEN 'view'
+                    ELSE NULL
+                END AS stage,
+                COUNT(*) AS count
+            FROM analytics_events
+            GROUP BY stage
+            HAVING stage IS NOT NULL
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        order = ['view', 'add_to_cart', 'checkout', 'purchase']
+        by_stage = {r['stage']: r['count'] for r in rows if r['stage']}
+        steps = []
+        total = by_stage.get('view', 0) or 1
+        for stage in order:
+            count = by_stage.get(stage, 0)
+            percentage = round((count / total) * 100, 1) if total else 0
+            steps.append({"name": stage.replace('_', ' ').title(), "count": count, "percentage": percentage})
+        return jsonify({"success": True, "data": {"steps": steps}}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
+@app.route('/api/admin/analytics/user-journeys', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_user_journeys():
+    """Most common page-to-page transitions."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            WITH ordered AS (
+                SELECT session_id, page_path,
+                       LAG(page_path) OVER (PARTITION BY session_id ORDER BY created_at) AS prev_path
+                FROM analytics_events
+                WHERE page_path IS NOT NULL AND page_path != ''
+            )
+            SELECT prev_path AS from_page, page_path AS to_page, COUNT(*) AS count
+            FROM ordered
+            WHERE prev_path IS NOT NULL AND prev_path != page_path
+            GROUP BY from_page, to_page
+            ORDER BY count DESC
+            LIMIT 15
+        ''')
+        data = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({"success": True, "data": data}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
 
 
 @app.route('/api/admin/cancelled-analytics', methods=['GET'])
@@ -5395,6 +5921,23 @@ def admin_upsert_darkstore(store_id=None):
         return error_response(str(e), 500)
 
 
+@app.route('/api/admin/suppliers', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("manage_inventory")
+def admin_list_suppliers():
+    """Lists all suppliers (AdminRestocking page)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM suppliers ORDER BY name")
+        suppliers = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(suppliers), 200
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
 @app.route('/api/admin/restock-alerts', methods=['GET'])
 @token_required
 @require_admin()
@@ -5818,6 +6361,7 @@ def check_pincode_serviceability(pincode):
 @app.route('/api/admin/pincode-rules', methods=['GET'])
 @token_required
 @require_admin()
+@require_permission("manage_settings")
 def get_pincode_rules():
     try:
         conn = get_db()
@@ -6420,8 +6964,9 @@ def register_push_token():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        # Insert or update if token already exists for another user? 
-        # Usually tokens are unique per device.
+        # Owner-guarded upsert: a token can only be (re)claimed by the user who
+        # already owns it. Without the WHERE clause any authenticated user could
+        # register another user's FCM token and hijack their push notifications.
         cursor.execute('''
             INSERT INTO user_push_tokens (user_id, fcm_token, device_type)
             VALUES (?, ?, ?)
@@ -6429,6 +6974,7 @@ def register_push_token():
                 user_id = excluded.user_id,
                 device_type = excluded.device_type,
                 updated_at = CURRENT_TIMESTAMP
+            WHERE user_push_tokens.user_id = excluded.user_id
         ''', (user_id, token, device_type))
         conn.commit()
         conn.close()
@@ -6444,11 +6990,24 @@ def add_review():
     data = request.json
     user_id = request.user['user_id']
     product_id = data.get('product_id')
-    rating = data.get('rating')
-    review_text = data.get('review_text', '')
+    raw_rating = data.get('rating')
+    review_text = (data.get('review_text') or '').strip()
 
-    if not product_id or not rating:
-        return error_response("Product ID and rating are required", 400)
+    if not product_id:
+        return error_response("Product ID is required", 400)
+    try:
+        product_id = int(product_id)
+    except (TypeError, ValueError):
+        return error_response("Invalid product ID", 400)
+    try:
+        rating = float(raw_rating)
+    except (TypeError, ValueError):
+        return error_response("Rating must be a number between 1 and 5", 400)
+    if not (1 <= rating <= 5):
+        return error_response("Rating must be between 1 and 5", 400)
+    rating = int(rating)
+    if len(review_text) > 2000:
+        return error_response("Review text is too long (max 2000 characters)", 400)
 
     try:
         conn = get_db()

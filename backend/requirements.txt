@@ -12,6 +12,7 @@ razorpay
 Authlib
 gunicorn
 pdfplumber
+Pillow
 psutil
 libsql-experimental
 firebase-admin

@@ -195,3 +195,9 @@
   background: rgba(255, 193, 7, 0.45);
   background-clip: content-box;
 }
+
+/* Safe area (iOS notch/status bar) — standalone PWA uses viewport-fit=cover */
+.safe-area-top {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+}

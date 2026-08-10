@@ -4,6 +4,7 @@
 
 # --- Standard Library Imports ---
 import datetime
+import gzip
 import html
 import hashlib
 import hmac
@@ -378,6 +379,46 @@ cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 # 4. Scheduled Backups (daily database + weekly full backup)
 scheduler = BackgroundScheduler(daemon=True)
 
+# Only ONE process should run the scheduler. With multiple gunicorn workers (or
+# docker replicas sharing the backend directory) an unlocked scheduler would run
+# N copies of the daily/weekly backup jobs. An exclusive flock on a shared
+# lockfile keeps it single-instance across workers AND containers.
+_scheduler_lock_holder = None
+
+
+def _try_acquire_scheduler_lock():
+    global _scheduler_lock_holder
+    try:
+        import fcntl
+    except ImportError:
+        # Non-POSIX (e.g. Windows dev): flock is unavailable — keep the previous
+        # single-process behavior and let the scheduler start.
+        return True
+    # Candidate lockfile dirs, best first:
+    #  1. /app/backups — the docker-compose shared volume, so the lock also
+    #     serializes the scheduler across the backend replicas (not just the
+    #     gunicorn workers inside one container).
+    #  2. BACKUP_DIR — the dir backup_service actually writes to.
+    #  3. BASE_DIR — single-container fallback (Render multi-worker).
+    candidates = [BASE_DIR]
+    try:
+        from backup.backup_service import BACKUP_DIR
+        candidates.insert(0, str(BACKUP_DIR))
+    except Exception:
+        pass
+    if os.path.isdir("/app/backups"):
+        candidates.insert(0, "/app/backups")
+    for directory in candidates:
+        try:
+            os.makedirs(directory, exist_ok=True)
+            _scheduler_lock_holder = open(os.path.join(directory, ".scheduler.lock"), "a")
+            fcntl.flock(_scheduler_lock_holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except Exception:
+            continue
+    _scheduler_lock_holder = None
+    return False
+
 
 def run_daily_database_backup():
     try:
@@ -395,7 +436,10 @@ def run_weekly_full_backup():
         logger.error(f"Weekly full backup failed: {str(e)}")
 
 
-should_start_scheduler = os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug
+should_start_scheduler = (
+    (os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug)
+    and _try_acquire_scheduler_lock()
+)
 if should_start_scheduler and not scheduler.running:
     scheduler.add_job(run_daily_database_backup, 'cron', hour=2, minute=0, id='daily_db_backup', replace_existing=True)
     scheduler.add_job(run_weekly_full_backup, 'cron', day_of_week='sun', hour=3, minute=0, id='weekly_full_backup', replace_existing=True)
@@ -428,6 +472,73 @@ def handle_exception(e):
 # ==============================================================================
 # MIDDLEWARE & HOOKS
 # ==============================================================================
+
+@app.teardown_appcontext
+def _close_request_db_connection(exception):
+    """Releases the request-scoped DB connection when the app context ends.
+
+    Pairs with database._RequestScopedConnection: get_db() within a request
+    returns a shared connection whose close() is deferred, and this hook does
+    the real close once the request (and its teardowns) complete.
+    """
+    try:
+        from flask import g as _g
+        conn = getattr(_g, "_jdlx_request_db", None)
+        if conn is not None:
+            conn._hard_close()
+    except Exception:
+        pass
+
+
+@app.after_request
+def _maybe_gzip_response(response):
+    """Gzips text-like responses (JSON/HTML/JS/CSS/SVG) when the client accepts it.
+
+    Pure transport optimization — body and header semantics are unchanged, and
+    binary payloads (images, PDFs, downloads) are never touched. This matters
+    because the Render deployment serves gunicorn directly with no nginx in
+    front, so API responses were previously sent uncompressed.
+    """
+    if response.status_code < 200 or response.status_code >= 300:
+        return response
+    if response.headers.get("Content-Encoding"):
+        return response
+    accept_encoding = request.headers.get("Accept-Encoding", "")
+    mimetype = (response.mimetype or "").lower()
+    compressible = (
+        mimetype.startswith("text/")
+        or mimetype in (
+            "application/json",
+            "application/javascript",
+            "application/xml",
+            "image/svg+xml",
+        )
+    )
+    if not compressible:
+        return response
+    # Always advertise the Accept-Encoding dependency for compressible types so
+    # shared caches don't serve an uncompressed variant to gzip clients.
+    vary = response.headers.get("Vary", "")
+    if "Accept-Encoding" not in vary:
+        response.headers["Vary"] = f"{vary}, Accept-Encoding" if vary else "Accept-Encoding"
+    if "gzip" not in accept_encoding:
+        return response
+    if response.direct_passthrough:
+        return response
+    try:
+        data = response.get_data()
+    except Exception:
+        return response
+    if not data or len(data) < 500:
+        return response
+    compressed = gzip.compress(data, compresslevel=6)
+    if len(compressed) >= len(data):
+        return response
+    response.set_data(compressed)
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers["Content-Length"] = str(len(compressed))
+    return response
+
 
 @app.before_request
 def log_request_info():
@@ -1323,6 +1434,7 @@ def google_callback():
 # ==============================================================================
 
 @app.route('/api/settings', methods=['GET'])
+@cache.cached(timeout=60)
 def get_system_settings():
     """Retrieves public system settings."""
     try:
@@ -1408,6 +1520,7 @@ def update_system_settings():
 # --- Banner Management ---
 
 @app.route('/api/banners', methods=['GET'])
+@cache.cached(timeout=60)
 def get_banners():
     """Retrieves active banners for the storefront."""
     try:
@@ -1916,6 +2029,7 @@ def remove_admin_permission():
 # ==============================================================================
 
 @app.route('/api/categories', methods=['GET'])
+@cache.cached(timeout=60)
 def get_categories():
     """Retrieves all product categories."""
     conn = get_db()
@@ -2304,6 +2418,7 @@ def create_brand():
 
 
 @app.route('/api/categories/<int:category_id>/products', methods=['GET'])
+@cache.cached(timeout=30, query_string=True)
 def get_category_products(category_id):
     """Retrieves all available products within a specific category."""
     try:
@@ -2494,6 +2609,7 @@ def get_products():
 
 
 @app.route('/api/products/recommendations', methods=['GET'])
+@cache.cached(timeout=60, query_string=True)
 def get_recommendations():
     """Get recommended products based on ratings and popularity."""
     limit = request.args.get('limit', default=8, type=int)
@@ -3784,7 +3900,11 @@ def user_profile():
                     logger.warning("Cloud upload failed for profile image. Falling back to ephemeral local storage.")
                     filename = secure_filename(file.filename)
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
+                    # Performance: resize + re-encode before saving. Same URL,
+                    # smaller file — optimize_and_save is internally failsafe
+                    # and saves the original bytes on any processing failure.
+                    from utils.image_optimizer import optimize_and_save
+                    optimize_and_save(file, filepath)
                     image_url = f"/static/uploads/{filename}"
                 
         try:
@@ -6011,7 +6131,11 @@ def admin_upload_image():
         # 2. Fallback to Base64 Data URL to store directly in Turso if cloud upload fails/is blocked
         try:
             import base64
-            file_data = file.read()
+            from utils.image_optimizer import optimize_image_bytes
+            # Performance: resize + re-encode before base64-encoding. These URLs
+            # live inside the DB and are served to every visitor, so smaller is
+            # doubly valuable. Falls back to original bytes on any failure.
+            file_data = optimize_image_bytes(file.read(), file.filename)
             file.seek(0)
             encoded = base64.b64encode(file_data).decode('utf-8')
             mime_type = file.mimetype or "image/jpeg"

@@ -119,7 +119,8 @@ if not FORCE_LOCAL_DB and TURSO_URL and TURSO_TOKEN:
 else:
     USE_TURSO = False
 
-def get_db():
+def _open_connection():
+    """Opens a brand-new DB connection (Turso in production, local SQLite in dev)."""
     if USE_TURSO:
         try:
             raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
@@ -132,6 +133,64 @@ def get_db():
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 10000")  # 10s retry on lock
     return conn
+
+
+def _has_flask_app_context():
+    try:
+        import flask
+        return flask.has_app_context()
+    except Exception:
+        return False
+
+
+class _RequestScopedConnection:
+    """Wraps a DB connection so ``close()`` is deferred to request teardown.
+
+    Routes open a connection and close it in a ``finally`` block. Most
+    authenticated requests actually call ``get_db()`` twice (auth check + route
+    handler); sharing ONE connection per request instead of opening two saves a
+    full connect round-trip on every request (a remote handshake on Turso).
+    ``close()`` becomes a no-op and ``_hard_close()`` is invoked by
+    ``teardown_appcontext`` in app.py.
+
+    Outside a Flask app context (scripts, migrations, scheduler jobs, background
+    threads) ``get_db`` keeps its original behavior: a fresh connection that
+    closes normally.
+    """
+    def __init__(self, conn):
+        object.__setattr__(self, '_conn', conn)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, '_conn'), name)
+
+    def __setattr__(self, name, value):
+        if name == '_conn':
+            object.__setattr__(self, name, value)
+        else:
+            setattr(object.__getattribute__(self, '_conn'), name, value)
+
+    def close(self):
+        """Deferred — the connection is released at request teardown."""
+        pass
+
+    def _hard_close(self):
+        object.__getattribute__(self, '_conn').close()
+
+
+def get_db():
+    conn = _open_connection()
+    if not _has_flask_app_context():
+        return conn
+    import flask
+    g = flask.g
+    if not hasattr(g, "_jdlx_request_db"):
+        g._jdlx_request_db = _RequestScopedConnection(conn)
+    else:
+        # Second get_db() in the same request: discard the extra connection and
+        # reuse the request-scoped one.
+        conn.close()
+        return g._jdlx_request_db
+    return g._jdlx_request_db
 
 def init_db():
     conn = get_db()

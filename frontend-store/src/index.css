@@ -258,7 +258,24 @@ body::before {
 }
 
 /* Concierge Bottom Navigation */
-.concierge-nav-wrapper { @apply fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-6 pt-2 pointer-events-none; }
+.concierge-nav-wrapper {
+  @apply fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pt-2 pointer-events-none;
+  /* Keep the 1.5rem baseline on non-notched devices; add the home-indicator
+     inset on notched iPhones (iPhone X/XR and newer) in standalone PWA mode. */
+  padding-bottom: max(1.5rem, constant(safe-area-inset-bottom));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+/* ------------------------------------------------------------------------------
+   SAFE AREA (iOS notch / status bar / home indicator)
+   The app runs as a standalone PWA (viewport-fit=cover), so fixed/sticky chrome
+   must respect the notched-device insets. constant() is the iOS 11.0-11.1
+   fallback; env() is supported everywhere else.
+   ------------------------------------------------------------------------------ */
+.safe-area-top {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+}
 .concierge-nav-container {
   @apply w-full max-w-[480px] h-[72px] rounded-[36px] flex items-center relative pointer-events-auto shadow-2xl transition-all duration-500;
   background: var(--glass-bg);

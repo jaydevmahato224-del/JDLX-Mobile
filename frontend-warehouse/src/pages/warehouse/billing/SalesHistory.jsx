@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   History, Search, RotateCcw, ArrowLeftRight, Ban, X,
   RefreshCw, AlertCircle, Minus, Plus, Receipt, Phone, User, Filter,
-  Calendar, Wallet
+  Calendar, Wallet, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { billingApi, formatBillDate, parseDbDate } from './BillingApi';
@@ -34,6 +34,30 @@ const FILTERS = ['ALL', 'active', 'partially_returned', 'partially_exchanged', '
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
 const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
 const toUtc = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+
+/* Counter-sale bills follow a 24-hour return/exchange/cancel window (offline
+   POS policy only — the online store's return policy is unaffected). The
+   backend enforces the same rule; these helpers just keep the UI in sync. */
+const RETURN_WINDOW_HOURS = 24;
+const isWithinReturnWindow = (bill) => {
+  const d = parseDbDate(bill.created_at);
+  if (!d) return true; // unparseable timestamp → don't block in UI (backend enforces anyway)
+  return Date.now() - d.getTime() <= RETURN_WINDOW_HOURS * 60 * 60 * 1000;
+};
+const returnWindowDeadline = (bill) => {
+  const d = parseDbDate(bill.created_at);
+  return d ? new Date(d.getTime() + RETURN_WINDOW_HOURS * 60 * 60 * 1000) : null;
+};
+const formatDeadline = (bill) => {
+  const d = returnWindowDeadline(bill);
+  if (!d) return '';
+  const now = new Date();
+  return d.toLocaleString(undefined, {
+    ...(d.toDateString() === now.toDateString() ? {} : { day: 'numeric', month: 'short' }),
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 function StatusBadge({ status }) {
   const key = status || 'active';
@@ -611,6 +635,20 @@ export default function SalesHistory() {
                     </span>
                     <span className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1">{b.payment_mode || 'CASH'}</span>
                     <span className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1">{formatBillDate(b.created_at)}</span>
+                    {/* 24h window chip — only while the bill is still actionable,
+                        and only when its timestamp can be parsed. */}
+                    {canAct && returnWindowDeadline(b) && (
+                      <span className={`bg-slate-950 border rounded-lg px-2.5 py-1 flex items-center gap-1 ${
+                        isWithinReturnWindow(b)
+                          ? 'border-emerald-500/30 text-emerald-400'
+                          : 'border-red-500/30 text-red-400'
+                      }`}>
+                        <Clock className="w-3 h-3 shrink-0" />
+                        {isWithinReturnWindow(b)
+                          ? `Return/Exchange/Cancel till ${formatDeadline(b)}`
+                          : 'Return/Exchange/Cancel window closed'}
+                      </span>
+                    )}
                     {Number(b.gst_rate) > 0 && (
                       <span className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1">GST {b.gst_rate}%</span>
                     )}
@@ -646,7 +684,7 @@ export default function SalesHistory() {
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions — Return/Exchange/Cancel only inside the 24h window */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <button
                       onClick={() => openInvoice(b)}
@@ -654,29 +692,33 @@ export default function SalesHistory() {
                     >
                       <Receipt className="w-3.5 h-3.5" /> Invoice
                     </button>
-                    {canAct && (
-                      <button
-                        onClick={() => openReturn(b)}
-                        className="flex items-center justify-center gap-1.5 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 rounded-xl border border-amber-500/40 text-[11px] font-semibold transition"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" /> Return
-                      </button>
+                    {canAct && isWithinReturnWindow(b) && (
+                      <>
+                        <button
+                          onClick={() => openReturn(b)}
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 rounded-xl border border-amber-500/40 text-[11px] font-semibold transition"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Return
+                        </button>
+                        <button
+                          onClick={() => openExchange(b)}
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 rounded-xl border border-sky-500/40 text-[11px] font-semibold transition"
+                        >
+                          <ArrowLeftRight className="w-3.5 h-3.5" /> Exchange
+                        </button>
+                        <button
+                          onClick={() => setCancelBill(b)}
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-xl border border-red-500/40 text-[11px] font-semibold transition"
+                        >
+                          <Ban className="w-3.5 h-3.5" /> Cancel Bill
+                        </button>
+                      </>
                     )}
-                    {canAct && st !== 'cancelled' && (
-                      <button
-                        onClick={() => openExchange(b)}
-                        className="flex items-center justify-center gap-1.5 py-2.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 rounded-xl border border-sky-500/40 text-[11px] font-semibold transition"
-                      >
-                        <ArrowLeftRight className="w-3.5 h-3.5" /> Exchange
-                      </button>
-                    )}
-                    {canAct && (
-                      <button
-                        onClick={() => setCancelBill(b)}
-                        className="flex items-center justify-center gap-1.5 py-2.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-xl border border-red-500/40 text-[11px] font-semibold transition"
-                      >
-                        <Ban className="w-3.5 h-3.5" /> Cancel Bill
-                      </button>
+                    {canAct && !isWithinReturnWindow(b) && (
+                      <div className="col-span-2 sm:col-span-3 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-500">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        Return/Exchange closed — only available within 24 hours of the bill
+                      </div>
                     )}
                   </div>
                 </div>

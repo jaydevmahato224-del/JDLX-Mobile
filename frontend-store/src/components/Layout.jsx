@@ -64,11 +64,11 @@ function Layout({ children }) {
   return (
     <div className={`min-h-[100dvh] bg-[var(--color-surface)] text-[var(--color-on-surface)] transition-all duration-500 ${theme}`}>
       {/* Top chrome (no fixed overlays) */}
-      <div className="sticky top-0 z-50">
+      <div className="sticky top-0 z-50 safe-area-top bg-[var(--color-surface-white)]/90 backdrop-blur border-b border-[var(--color-surface-high)] transition-all duration-500">
         {/* Ticker Banner Removed */}
 
-        <header className="border-b border-[var(--color-surface-high)] bg-[var(--color-surface-white)]/90 backdrop-blur transition-all duration-500">
-          <div className="container-standard grid grid-cols-3 h-[var(--app-header-height)] items-center gap-4">
+        <header className="transition-all duration-500">
+          <div className="container-standard grid grid-cols-3 h-[var(--app-header-height)] items-center gap-2 md:gap-4">
             {/* Left side empty for balance or secondary actions */}
             <div className="flex items-center">
               {location.pathname !== '/' ? (
@@ -93,7 +93,7 @@ function Layout({ children }) {
                   {/* Delivery Mode Badge */}
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-500 shadow-sm bg-[var(--color-surface-low)] border-[var(--color-surface-high)] text-[var(--color-on-surface-variant)]">
                     <Clock size={10} />
-                    <span className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
+                    <span className="hidden min-[420px]:inline text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
                       Standard
                     </span>
                   </div>
@@ -110,7 +110,7 @@ function Layout({ children }) {
                   className="h-8 w-8 md:h-10 md:w-10 object-contain transition-transform duration-500 group-hover:scale-110" 
                 />
                 <div className="flex flex-col items-start leading-none">
-                  <div className="text-lg md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap">
+                  <div className="text-base md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap">
                     <span className="text-[var(--color-on-surface)]">JDLX</span> <span className="text-primary">MOBILE</span>
                   </div>
                   <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">

@@ -7,6 +7,7 @@ import {
     Zap, CreditCard, Wallet, AlertTriangle, ArrowRight 
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
+import { loadRazorpay } from '../../utils/loadRazorpay'
 import { trackBeginCheckout, trackPurchase } from '../../utils/analytics'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 import AddressPicker from '../../components/AddressPicker'
@@ -302,10 +303,10 @@ function Checkout() {
 
             if (!res.ok) throw new Error(data?.message || data?.error || 'Payment initiation failed');
 
-            // Check if Razorpay SDK is loaded
-            if (!window.Razorpay) {
-                throw new Error('Payment gateway is loading. Please wait a moment and try again.');
-            }
+            // Lazy-load the Razorpay SDK on the first payment attempt (it was
+            // removed from index.html so it no longer blocks every page load).
+            // The loader resolves only after the SDK is ready.
+            await loadRazorpay();
 
             // Step 2: Open Razorpay checkout
             const paymentData = data.data || {};

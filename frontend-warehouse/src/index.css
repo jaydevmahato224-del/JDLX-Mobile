@@ -142,3 +142,9 @@
     @apply text-amber-500;
   }
 }
+
+/* Safe area (iOS notch/status bar) — standalone PWA uses viewport-fit=cover */
+.safe-area-top {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+}

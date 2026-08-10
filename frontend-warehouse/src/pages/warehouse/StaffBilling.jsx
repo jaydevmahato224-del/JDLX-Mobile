@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShoppingBag, Search, Plus, Minus, Trash2, CreditCard,
   DollarSign, QrCode, Printer, Smartphone, ShieldAlert, RefreshCw, History,
-  AlertTriangle, Camera, X
+  AlertTriangle, Camera, X, Clock, Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
@@ -15,7 +15,15 @@ export default function StaffBilling() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  // 'RECENT' (recently sold at this counter) is the default landing view.
+  const [selectedCategory, setSelectedCategory] = useState('RECENT');
+  // Recently-sold products (from /billing/recent-products) for the RECENT view.
+  const [recentProducts, setRecentProducts] = useState([]);
+  const [recentLoading, setRecentLoading] = useState(false);
+  // On small screens the grid collapses to the first 4 products until
+  // "View All" is tapped — keeps the DOM light and the UI clean.
+  const [isMobile, setIsMobile] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(4);
 
   // Cart state
   const [cart, setCart] = useState([]);
@@ -82,8 +90,33 @@ export default function StaffBilling() {
     }
   }, []);
 
+  // Recently-sold products for the RECENT view. Re-fetched on mount, when
+  // returning to the POS tab, and after every bill so the counter always
+  // surfaces what was sold most recently.
+  const fetchRecentProducts = useCallback(async () => {
+    setRecentLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/warehouse/billing/recent-products`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!res.ok) throw new Error('Failed to load recent products');
+      const data = await res.json();
+      setRecentProducts(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Fetch recent products error:', err);
+      setRecentProducts([]);
+    } finally {
+      setRecentLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchBillingProducts();
+    fetchRecentProducts();
 
     // Listen for PWA installation prompt
     const handleBeforeInstallPrompt = (e) => {
@@ -111,13 +144,34 @@ export default function StaffBilling() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, [fetchBillingProducts]);
+  }, [fetchBillingProducts, fetchRecentProducts]);
 
-  // Refresh stock whenever the agent returns to the POS tab — otherwise
-  // returns/exchanges done from Sales History leave stale stock counts.
+  // Refresh stock + recent list whenever the agent returns to the POS tab —
+  // otherwise returns/exchanges done from Sales History leave stale counts.
   useEffect(() => {
-    if (activeTab === 'pos') fetchBillingProducts();
-  }, [activeTab, fetchBillingProducts]);
+    if (activeTab === 'pos') {
+      fetchBillingProducts();
+      fetchRecentProducts();
+    }
+  }, [activeTab, fetchBillingProducts, fetchRecentProducts]);
+
+  // Detect small (mobile) screens so the grid can collapse to 4 products.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    if (mq.addEventListener) mq.addEventListener('change', apply);
+    else mq.addListener(apply); // older Safari
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', apply);
+      else mq.removeListener(apply);
+    };
+  }, []);
+
+  // Reset the mobile collapse whenever the active filter/search changes.
+  useEffect(() => {
+    setVisibleCount(4);
+  }, [selectedCategory, searchQuery]);
 
 
   const handleInstallApp = async () => {
@@ -295,6 +349,7 @@ export default function StaffBilling() {
       toast.success('Bill generated successfully!');
       clearCart();
       fetchBillingProducts(); // Refresh stock
+      fetchRecentProducts(); // The sold items now lead the RECENT view
     } catch (err) {
       console.error('Generate bill error:', err);
       toast.error(err.message || 'Failed to generate bill');
@@ -303,16 +358,38 @@ export default function StaffBilling() {
     }
   };
 
-  const categories = ['ALL', ...new Set(products.map((p) => p.category || 'General'))];
+  // NOTE: 'ALL'/'RECENT' are intentionally excluded — the pills below render
+  // ['RECENT', 'ALL', ...categories], so including them here would duplicate
+  // those pills (and their React keys).
+  const categories = [...new Set(products.map((p) => p.category || 'General'))]
+    .filter((c) => c !== 'ALL' && c !== 'RECENT');
+  const isRecentTab = selectedCategory === 'RECENT';
 
-  const filteredProducts = products.filter((p) => {
-    // Guard against incomplete/bad product rows (e.g. NULL name from legacy
-    // inventory) so a single bad record can never crash the POS page.
+  // Catalog filtered by search + category (RECENT ignores category — the
+  // recent list is recency-ordered instead). Guard against incomplete/bad
+  // product rows (e.g. NULL name from legacy inventory) so a single bad
+  // record can never crash the POS page.
+  const catalogProducts = products.filter((p) => {
     const productName = (p.name || '').toString().toLowerCase();
     const matchesSearch = productName.includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'ALL' || (p.category || 'General') === selectedCategory;
+    const matchesCategory = selectedCategory === 'ALL' || isRecentTab || (p.category || 'General') === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const recentFiltered = recentProducts.filter((p) =>
+    (p.name || '').toString().toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // RECENT tab: show the recency-ordered list; if the counter has no sales
+  // yet, fall back to the full catalog so billing is never blocked.
+  const activeList = isRecentTab && recentFiltered.length > 0 ? recentFiltered : catalogProducts;
+  // Info banner only when no sales exist yet (not while actively searching,
+  // where "no recent match" is expected and the catalog results stand alone).
+  const recentEmptyFallback = isRecentTab && recentFiltered.length === 0 && catalogProducts.length > 0 && !searchQuery.trim();
+
+  // On mobile show only the first 4 products until "View All" is tapped.
+  const collapsedMobile = isMobile && activeList.length > 4;
+  const shownProducts = collapsedMobile ? activeList.slice(0, visibleCount) : activeList;
 
   if (error) {
     return (
@@ -416,19 +493,20 @@ export default function StaffBilling() {
               />
             </div>
 
-            {/* Category selector */}
+            {/* Filter pills: Recent (default) | All | Categories */}
             <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-              {categories.map((cat) => (
+              {['RECENT', 'ALL', ...categories].map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border transition ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap border transition ${
                     selectedCategory === cat
                       ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
                       : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
                   }`}
                 >
-                  {cat}
+                  {cat === 'RECENT' && <Clock className="w-3.5 h-3.5" />}
+                  {cat === 'RECENT' ? 'Recent' : cat}
                 </button>
               ))}
             </div>
@@ -436,18 +514,37 @@ export default function StaffBilling() {
 
           {/* Product Grid */}
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl min-h-[500px]">
-            {loading ? (
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                {isRecentTab ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                    Recently Sold
+                  </>
+                ) : selectedCategory === 'ALL' ? 'All Products' : selectedCategory}
+              </div>
+              <span className="text-[11px] text-slate-500">{activeList.length} items</span>
+            </div>
+
+            {recentEmptyFallback && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                No recent counter sales yet — showing all products.
+              </div>
+            )}
+
+            {loading || (isRecentTab && recentLoading) ? (
               <div className="min-h-[400px] flex items-center justify-center">
                 <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
               </div>
-            ) : filteredProducts.length === 0 ? (
+            ) : activeList.length === 0 ? (
               <div className="min-h-[400px] flex flex-col items-center justify-center text-slate-500">
                 <ShoppingBag className="w-12 h-12 mb-2 opacity-50" />
                 <p>No products available for billing</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {filteredProducts.map((product) => {
+                {shownProducts.map((product) => {
                   const inCart = cart.find((item) => item.id === product.id);
                   const isOutOfStock = product.stock <= 0;
 
@@ -500,6 +597,28 @@ export default function StaffBilling() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Mobile: collapse to 4 products until "View All" is tapped */}
+            {collapsedMobile && (
+              <div className="mt-4 flex justify-center">
+                {visibleCount < activeList.length ? (
+                  <button
+                    onClick={() => setVisibleCount(activeList.length)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-xl border border-slate-700 text-xs font-bold transition active:scale-95"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View All ({activeList.length} Products)
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setVisibleCount(4)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl border border-slate-700 text-xs font-semibold transition active:scale-95"
+                  >
+                    Show Less
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -129,7 +129,11 @@ def _save_uploaded_image(file_storage, prefix):
     stamp = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
     final_name = f"{prefix}_{stamp}_{uuid.uuid4().hex[:10]}{ext}"
     target_path = os.path.join(DELIVERY_UPLOAD_DIR, final_name)
-    file_storage.save(target_path)
+    # Performance: resize + re-encode images before saving. Same URL, smaller
+    # file — optimize_and_save is internally failsafe and saves the original
+    # bytes on any processing failure.
+    from utils.image_optimizer import optimize_and_save
+    optimize_and_save(file_storage, target_path)
     return f"/static/uploads/delivery_docs/{final_name}"
 
 def _coerce_bool(value):

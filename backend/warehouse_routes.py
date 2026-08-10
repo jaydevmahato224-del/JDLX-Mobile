@@ -153,7 +153,11 @@ def _save_uploaded_asset(file_storage, prefix):
     stamp = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
     final_name = f"{prefix}_{stamp}_{uuid.uuid4().hex[:10]}{ext}"
     target_path = os.path.join(WAREHOUSE_REQUEST_UPLOAD_DIR, final_name)
-    file_storage.save(target_path)
+    # Performance: resize + re-encode images before saving (PDFs pass through
+    # untouched). Same URL, smaller file — optimize_and_save is internally
+    # failsafe and saves the original bytes on any processing failure.
+    from utils.image_optimizer import optimize_and_save
+    optimize_and_save(file_storage, target_path)
     
     return f"/static/uploads/warehouse_requests/{final_name}"
 
@@ -4135,6 +4139,56 @@ def _restock_billing_item(cur, vendor_id, product_id, qty):
     )
 
 
+# Counter-sale (offline POS) bills can only be returned / exchanged / cancelled
+# within 24 hours of the sale. This is a POS-counter policy only — the online
+# store's return policy is untouched.
+BILLING_RETURN_WINDOW_HOURS = 24
+
+
+def _billing_window_expired(order):
+    """True if a counter-sale bill falls outside the 24h return window.
+
+    ``created_at`` is stored in UTC ("YYYY-MM-DD HH:MM:SS"). If the timestamp
+    can't be parsed (legacy/malformed) the check is skipped so bad data can
+    never permanently lock a bill.
+    """
+    created = order["created_at"]
+    if isinstance(created, str):
+        try:
+            created_dt = datetime.datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            return False
+    elif isinstance(created, datetime.datetime):
+        created_dt = created.replace(tzinfo=None)
+    else:
+        return False
+    return datetime.datetime.utcnow() > created_dt + datetime.timedelta(hours=BILLING_RETURN_WINDOW_HOURS)
+
+
+def _serialize_billing_product(r):
+    """Serializes one billing-product row into the POS frontend shape.
+
+    Counter/offline sales use the dedicated offline price when set; otherwise
+    they fall back to the regular online price.
+    """
+    regular_price = float(r["price"] or 0)
+    offline_price = r["offline_price"]
+    try:
+        effective_price = float(offline_price) if offline_price else regular_price
+    except (TypeError, ValueError):
+        effective_price = regular_price
+    return {
+        "id": r["id"],
+        "name": r["name"],
+        "price": effective_price,
+        "offline_price": offline_price,
+        "regular_price": regular_price,
+        "image_url": _first_product_image(r["images"]),
+        "category": r["category"] if "category" in r.keys() else "General",
+        "stock": r["stock"]
+    }
+
+
 @warehouse_bp.route("/api/warehouse/billing/products", methods=["GET"])
 @require_warehouse_staff_permission("billing")
 def get_billing_products():
@@ -4158,28 +4212,44 @@ def get_billing_products():
             """,
             (vendor_id,)
         ).fetchall()
-        
-        result = []
-        for r in rows:
-            regular_price = float(r["price"] or 0)
-            offline_price = r["offline_price"]
-            # Counter/offline sales use the dedicated offline price when set;
-            # otherwise they fall back to the regular online price.
-            try:
-                effective_price = float(offline_price) if offline_price else regular_price
-            except (TypeError, ValueError):
-                effective_price = regular_price
-            result.append({
-                "id": r["id"],
-                "name": r["name"],
-                "price": effective_price,
-                "offline_price": offline_price,
-                "regular_price": regular_price,
-                "image_url": _first_product_image(r["images"]),
-                "category": r["category"] if "category" in r.keys() else "General",
-                "stock": r["stock"]
-            })
+
+        result = [_serialize_billing_product(r) for r in rows]
         return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/billing/recent-products", methods=["GET"])
+@require_warehouse_staff_permission("billing")
+def get_billing_recent_products():
+    """Returns products most recently sold at this counter (OFFLINE bills).
+
+    Ordered most-recently-sold first so billing agents can instantly re-add
+    the items their counter sells often. Only in-stock products appear, and
+    cancelled bills are excluded. Limited to the last 20 distinct products so
+    the payload stays tiny.
+    """
+    vendor_id = request.vendor_id
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT p.id, p.name, p.price, p.offline_price, p.images, p.category,
+                   COALESCE(wi.available_stock, wi.stock_quantity, p.stock) AS stock,
+                   MAX(o.created_at) AS last_sold_at
+            FROM products p
+            JOIN warehouse_inventory wi ON wi.product_id = p.id AND wi.warehouse_id = ?
+            JOIN orders o ON o.vendor_id = ? AND o.source = 'OFFLINE'
+                AND COALESCE(o.order_status, '') != 'CANCELLED'
+            JOIN order_items oi ON oi.order_id = o.id AND oi.product_id = p.id
+            WHERE COALESCE(wi.stock_quantity, 0) > 0 OR COALESCE(wi.available_stock, 0) > 0
+            GROUP BY p.id
+            ORDER BY last_sold_at DESC
+            LIMIT 20
+            """,
+            (vendor_id, vendor_id),
+        ).fetchall()
+        return jsonify([_serialize_billing_product(r) for r in rows]), 200
     finally:
         conn.close()
 
@@ -4446,6 +4516,11 @@ def return_billing_order():
         if order["order_status"] in ("CANCELLED", "EXCHANGED"):
             conn.rollback()
             return error_response("Cancelled or exchanged bills cannot be returned", 400)
+        if _billing_window_expired(order):
+            conn.rollback()
+            return error_response(
+                "Return window expired — counter-sale bills can only be returned within 24 hours of purchase", 400
+            )
 
         refund_amount = 0.0
         for ri in return_items:
@@ -4533,6 +4608,11 @@ def cancel_billing_order():
         if order["order_status"] in ("CANCELLED", "RETURNED", "EXCHANGED"):
             conn.rollback()
             return error_response(f"Bill is already {order['order_status'].lower()}", 400)
+        if _billing_window_expired(order):
+            conn.rollback()
+            return error_response(
+                "Cancellation window expired — counter-sale bills can only be cancelled within 24 hours of purchase", 400
+            )
 
         items = cur.execute(
             "SELECT id, product_id, quantity, price, COALESCE(returned_qty, 0) AS returned_qty FROM order_items WHERE order_id = ?",
@@ -4607,6 +4687,11 @@ def exchange_billing_order():
         if order["order_status"] in ("CANCELLED",):
             conn.rollback()
             return error_response("Cancelled bills cannot be exchanged", 400)
+        if _billing_window_expired(order):
+            conn.rollback()
+            return error_response(
+                "Exchange window expired — counter-sale bills can only be exchanged within 24 hours of purchase", 400
+            )
 
         # 1. Process the returned quantities (restock)
         refund_value = 0.0

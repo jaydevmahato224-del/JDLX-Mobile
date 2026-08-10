@@ -162,9 +162,19 @@ def upload_file_object_to_cloud(file_storage, filename=None):
         file_data = file_storage.read()
         # Reset the stream position so it can be re-read if needed for local fallback
         file_storage.seek(0)
-        
+
         name = filename or file_storage.filename or "image.jpg"
-        
+
+        # Performance: resize + re-encode before it leaves the server. This is a
+        # pure transport optimization — the returned URL is identical, the image
+        # is just smaller to download. Falls back to the original bytes on any
+        # processing failure, so an upload can never break because of this.
+        try:
+            from utils.image_optimizer import optimize_image_bytes
+            file_data = optimize_image_bytes(file_data, name)
+        except Exception:
+            pass
+
         return upload_image_to_cloud(file_data, name)
     except Exception as e:
         logger.error(f"Error reading file for cloud upload: {str(e)}")

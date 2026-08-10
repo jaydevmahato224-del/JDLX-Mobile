@@ -107,7 +107,7 @@ function AdminLayout({ children }) {
                 )}
 
                 {/* Admin Header (Sticky Sibling) */}
-                <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10 sticky top-0 h-[var(--app-header-height)]">
+                <header className="safe-area-top bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10 sticky top-0 h-[var(--app-header-height)]">
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setIsSidebarOpen(true)}

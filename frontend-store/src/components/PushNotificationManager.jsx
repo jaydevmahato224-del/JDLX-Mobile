@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { requestForToken, onMessageListener } from '../firebase';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
 import toast from 'react-hot-toast';
@@ -9,6 +8,10 @@ const PushNotificationManager = () => {
 
   const handlePushRegistration = async () => {
     try {
+      // Firebase (vendor-firebase chunk) is now lazy-loaded: it was previously
+      // statically imported, which put ~44 kB into the initial page load even
+      // though push notifications are only used once a user logs in.
+      const { requestForToken } = await import('../firebase');
       const fcmToken = await requestForToken();
       if (fcmToken) {
         console.log('FCM Token:', fcmToken);
@@ -37,8 +40,14 @@ const PushNotificationManager = () => {
   }, [token, user]);
 
   useEffect(() => {
-    onMessageListener()
+    let active = true;
+    import('../firebase')
+      .then(({ onMessageListener }) => {
+        if (!active) return null;
+        return onMessageListener();
+      })
       .then((payload) => {
+        if (!active || !payload) return;
         console.log('Foreground Message received:', payload);
         toast.success(`${payload.notification.title}: ${payload.notification.body}`, {
           duration: 5000,
@@ -46,6 +55,9 @@ const PushNotificationManager = () => {
         });
       })
       .catch((err) => console.log('failed: ', err));
+    return () => {
+      active = false;
+    };
   }, []);
 
   return null; // This component doesn't render anything

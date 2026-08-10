@@ -181,13 +181,16 @@ function Checkout() {
     const hasOutOfStockItems = cart.some(item => (item.stock ?? 0) <= 0);
     
     // Dynamic Settings
-    const freeThreshold = Number(availability?.free_delivery_threshold || 499);
+    // NOTE: `??` (not `||`) for these numeric fallbacks — admin can set any of
+    // them to 0 (e.g. COD advance ₹0) and `0 || default` would wrongly fall back
+    // to the default. `??` only falls back when the API omits the key entirely.
+    const freeThreshold = Number(availability?.free_delivery_threshold ?? 499);
     const isFreeDeliveryEnabled = availability?.free_delivery_enabled !== false; // Default true
-    const platformFee = Number(availability?.platform_fee || 7);
-    const prepaidFee = Number(availability?.prepaid_delivery_charge || 49);
-    const codFee = Number(availability?.cod_delivery_charge || 99);
-    const codAdvance = Number(availability?.cod_advance_amount || 49);
-    const minOrderCod = Number(availability?.min_order_cod || 0);
+    const platformFee = Number(availability?.platform_fee ?? 7);
+    const prepaidFee = Number(availability?.prepaid_delivery_charge ?? 49);
+    const codFee = Number(availability?.cod_delivery_charge ?? 99);
+    const codAdvance = Number(availability?.cod_advance_amount ?? 49);
+    const minOrderCod = Number(availability?.min_order_cod ?? 0);
     const codEnabled = availability?.cod_enabled !== false;
     const showPrepaidRecommendation = availability?.prepaid_recommendation_enabled !== false;
     const showPriorityBadge = availability?.priority_dispatch_enabled !== false;
@@ -507,7 +510,21 @@ function Checkout() {
             if (!orderRes.ok) throw new Error(orderData.error || "Order creation failed");
 
             const orderId = orderData.order_id;
-            
+
+            // No online payment is needed when the server's pay-now amount is ₹0:
+            // COD orders with advance set to 0 (and PREPAID orders fully covered
+            // by the wallet) are already confirmed by the backend. Skipping the
+            // gateway here avoids the "Payment amount must be greater than zero"
+            // failure from /payment/create-order.
+            // Default to a positive value when the server omits the summary so a
+            // missing field never skips payment for an order that still needs it.
+            const serverPayNow = Number(orderData?.summary?.pay_now_amount ?? 1);
+            if (serverPayNow <= 0) {
+                clearCart();
+                navigate(`/order-success/${orderId}`);
+                return;
+            }
+
             // Start Razorpay Payment Flow
             await handlePayment(orderId);
 
@@ -789,7 +806,11 @@ function Checkout() {
                                         <div>
                                             <p className="font-black text-[16px] text-[var(--color-on-surface)]">Cash on Delivery</p>
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">
-                                                {isCodDisabledByAmount ? `Min. ₹${minOrderCod} required` : `₹${codAdvance} Advance Confirmation`}
+                                                {isCodDisabledByAmount
+                                                    ? `Min. ₹${minOrderCod} required`
+                                                    : codAdvance > 0
+                                                        ? `₹${codAdvance} Advance Confirmation`
+                                                        : 'No Advance Required'}
                                             </p>
                                         </div>
                                     </div>
@@ -835,7 +856,7 @@ function Checkout() {
                                     <div className="space-y-2">
                                         <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">COD Orders include:</p>
                                         <ul className="space-y-1.5">
-                                            {[`₹${codFee} delivery fee`, `₹${codAdvance} advance payment`].map((item, i) => (
+                                            {[`₹${codFee} delivery fee`, ...(codAdvance > 0 ? [`₹${codAdvance} advance payment`] : [])].map((item, i) => (
                                                 <li key={i} className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
                                                     <Info size={12} className="text-amber-500" /> {item}
                                                 </li>
@@ -845,7 +866,9 @@ function Checkout() {
                                 </div>
                                 <div className="pt-2 border-t border-amber-200/50">
                                     <p className="text-[11px] font-black text-amber-800 text-center">
-                                        ₹{codAdvance} advance payment is required to confirm Cash on Delivery orders.
+                                        {codAdvance > 0
+                                            ? `₹${codAdvance} advance payment is required to confirm Cash on Delivery orders.`
+                                            : 'No advance required — pay the full amount when your order arrives.'}
                                     </p>
                                 </div>
                             </div>
@@ -1001,14 +1024,23 @@ function Checkout() {
                             {/* COD Breakdown / Shiprocket Info */}
                             {paymentMethod === 'COD' ? (
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in zoom-in">
-                                    <div className="flex justify-between text-[13px] font-black text-slate-900">
-                                        <span className="flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Pay Now (Advance)</span>
-                                        <span className="text-primary font-black">₹{payNowAmount.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[12px] font-bold text-slate-500">
-                                        <span>Remaining Amount (at Delivery)</span>
-                                        <span>₹{remainingCodAmount.toLocaleString()}</span>
-                                    </div>
+                                    {codAdvance > 0 ? (
+                                        <>
+                                            <div className="flex justify-between text-[13px] font-black text-slate-900">
+                                                <span className="flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Pay Now (Advance)</span>
+                                                <span className="text-primary font-black">₹{payNowAmount.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[12px] font-bold text-slate-500">
+                                                <span>Remaining Amount (at Delivery)</span>
+                                                <span>₹{remainingCodAmount.toLocaleString()}</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex justify-between text-[13px] font-black text-slate-900">
+                                            <span className="flex items-center gap-1.5"><Zap size={14} className="text-emerald-500" /> Full Amount at Delivery</span>
+                                            <span className="text-emerald-600 font-black">₹{finalTotal.toLocaleString()}</span>
+                                        </div>
+                                    )}
                                     {isShiprocket && (
                                         <div className="text-[10px] text-blue-600 font-bold border-t border-slate-100 pt-2 flex items-center gap-1">
                                             <Truck size={12} /> Standard courier shipping (3-5 business days)
@@ -1044,7 +1076,9 @@ function Checkout() {
                                     ) : (
                                         <>
                                             <span className="text-xl">
-                                                {paymentMethod === 'COD' ? 'Authorize Advance' : (isShiprocket ? 'Pay Now' : 'Authorize Payment')}
+                                                {paymentMethod === 'COD'
+                                                    ? (codAdvance > 0 ? 'Authorize Advance' : 'Place COD Order')
+                                                    : (isShiprocket ? 'Pay Now' : 'Authorize Payment')}
                                             </span>
                                             <ArrowRight size={24} className="opacity-50" />
                                         </>

@@ -416,7 +416,7 @@ function AdminOrders() {
                                                     {!['PLACED', 'PENDING', 'CANCELLED', 'REJECTED'].includes(order.status?.toUpperCase()) && (
                                                         order.payment_type === 'COD' ? (
                                                             <div className="flex gap-1.5 text-[9px] font-bold mt-0.5">
-                                                                <span className="text-emerald-700 bg-emerald-50 px-1 rounded">Paid: ₹{order.cod_advance_paid || 49}</span>
+                                                                <span className="text-emerald-700 bg-emerald-50 px-1 rounded">Paid: ₹{order.cod_advance_paid ?? 0}</span>
                                                                 <span className="text-rose-700 bg-rose-50 px-1 rounded">Due: ₹{order.cod_remaining_amount}</span>
                                                             </div>
                                                         ) : (

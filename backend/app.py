@@ -98,7 +98,7 @@ from recovery.recovery_service import (
     restore_files,
     verify_backup_integrity,
 )
-from utils.response_utils import success_response, error_response
+from utils.response_utils import success_response, error_response, safe_float
 from utils.product_optimizer import optimizer
 from utils.product_url_utils import (
     generate_share_token, 
@@ -3370,12 +3370,12 @@ def checkout():
         settings_rows = cursor.fetchall()
         settings = {row['key']: row['value'] for row in settings_rows}
         
-        platform_fee = float(settings.get('platform_fee', 7))
-        free_thresh = float(settings.get('free_delivery_threshold', 499))
+        platform_fee = safe_float(settings.get('platform_fee'), 7)
+        free_thresh = safe_float(settings.get('free_delivery_threshold'), 499)
         free_delivery_enabled = settings.get('free_delivery_enabled', 'true').lower() == 'true'
-        prepaid_fee = float(settings.get('prepaid_delivery_charge', 49))
-        cod_fee = float(settings.get('cod_delivery_charge', 99))
-        cod_advance = float(settings.get('cod_advance_amount', 49))
+        prepaid_fee = safe_float(settings.get('prepaid_delivery_charge'), 49)
+        cod_fee = safe_float(settings.get('cod_delivery_charge'), 99)
+        cod_advance = max(0, safe_float(settings.get('cod_advance_amount'), 49))
         cod_enabled = settings.get('cod_enabled', 'true').lower() == 'true'
         cod_enabled_shiprocket = settings.get('cod_enabled_shiprocket', 'false').lower() == 'true'
         auto_cod_protection = settings.get('auto_cod_protection', 'true').lower() == 'true'
@@ -7076,13 +7076,13 @@ def warehouse_availability():
                 "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.'),
                 "cod_enabled_shiprocket": settings.get('cod_enabled_shiprocket', 'false').lower() == 'true',
                 "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
-                "platform_fee": float(settings.get('platform_fee', 7)),
+                "platform_fee": safe_float(settings.get('platform_fee'), 7),
                 "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
-                "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
-                "delivery_fee": float(settings.get('delivery_fee', 49)),
-                "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),
-                "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
-                "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
+                "free_delivery_threshold": safe_float(settings.get('free_delivery_threshold'), 499),
+                "delivery_fee": safe_float(settings.get('delivery_fee'), 49),
+                "prepaid_delivery_charge": safe_float(settings.get('prepaid_delivery_charge'), 49),
+                "cod_delivery_charge": safe_float(settings.get('cod_delivery_charge'), 99),
+                "cod_advance_amount": max(0, safe_float(settings.get('cod_advance_amount'), 49)),
                 "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
                 "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
                 "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true'
@@ -7115,13 +7115,13 @@ def warehouse_availability():
             "store_name": store["name"],
             "store_id": store["id"],
             "quick_mode_enabled": False,
-            "platform_fee": float(settings.get('platform_fee', 7)),
+            "platform_fee": safe_float(settings.get('platform_fee'), 7),
             "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
-            "free_delivery_threshold": float(settings.get('free_delivery_threshold', 499)),
-            "delivery_fee": float(settings.get('delivery_fee', 49)),
-            "prepaid_delivery_charge": float(settings.get('prepaid_delivery_charge', 49)),
-            "cod_delivery_charge": float(settings.get('cod_delivery_charge', 99)),
-            "cod_advance_amount": float(settings.get('cod_advance_amount', 49)),
+            "free_delivery_threshold": safe_float(settings.get('free_delivery_threshold'), 499),
+            "delivery_fee": safe_float(settings.get('delivery_fee'), 49),
+            "prepaid_delivery_charge": safe_float(settings.get('prepaid_delivery_charge'), 49),
+            "cod_delivery_charge": safe_float(settings.get('cod_delivery_charge'), 99),
+            "cod_advance_amount": max(0, safe_float(settings.get('cod_advance_amount'), 49)),
             "cod_enabled": settings.get('cod_enabled', 'true').lower() == 'true',
             "cod_enabled_shiprocket": settings.get('cod_enabled_shiprocket', 'false').lower() == 'true',
             "user_cod_restricted": user_cod_restricted,

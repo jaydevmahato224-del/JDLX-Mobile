@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home as HomeIcon, Search, ShoppingCart, User, ChevronLeft, Heart as HeartIcon, Clock, Wallet } from 'lucide-react'
+import { User, ChevronLeft, Heart as HeartIcon, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { API_BASE_URL } from '../config'
 import NotificationBell from './NotificationBell'
@@ -68,52 +68,32 @@ function Layout({ children }) {
         {/* Ticker Banner Removed */}
 
         <header className="transition-all duration-500">
-          <div className="container-standard grid grid-cols-3 h-[var(--app-header-height)] items-center gap-2 md:gap-4">
-            {/* Left side empty for balance or secondary actions */}
-            <div className="flex items-center">
-              {location.pathname !== '/' ? (
+          <div className="container-standard flex h-[var(--app-header-height)] items-center gap-2 md:gap-4">
+            {/* Left: back button (non-home) + main branding.
+                (Left logo + Standard/clock badge removed for a cleaner header.) */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+              {location.pathname !== '/' && (
                 <button
                   onClick={() => navigate(-1)}
-                  className="grid h-10 w-10 place-items-center rounded-xl hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2"
                   aria-label="Go back"
                 >
                   <ChevronLeft className="h-6 w-6 text-[var(--color-on-surface)] group-hover:-translate-x-0.5 transition-transform" />
                 </button>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Link to="/" className="flex items-center gap-2 group transition-all">
-                    <img 
-                      src="/logo192.png" 
-                      alt="JDLX Logo" 
-                      className="h-8 w-8 object-contain transition-all group-hover:scale-110" 
-                      fetchPriority="high"
-                    />
-                  </Link>
-                  
-                  {/* Delivery Mode Badge */}
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-500 shadow-sm bg-[var(--color-surface-low)] border-[var(--color-surface-high)] text-[var(--color-on-surface-variant)]">
-                    <Clock size={10} />
-                    <span className="hidden min-[420px]:inline text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
-                      Standard
-                    </span>
-                  </div>
-                </div>
               )}
-            </div>
 
-            {/* Center: Main Branding */}
-            <div className="flex justify-center">
-              <Link to="/" className="flex items-center gap-2 md:gap-3 group transition-all">
+              <Link to="/" className="group flex min-w-0 items-center gap-2 md:gap-3 transition-all">
                 <img 
                   src="/logo192.png" 
-                  alt="Logo" 
-                  className="h-8 w-8 md:h-10 md:w-10 object-contain transition-transform duration-500 group-hover:scale-110" 
+                  alt="JDLX Logo" 
+                  className="h-8 w-8 md:h-10 md:w-10 shrink-0 object-contain transition-transform duration-500 group-hover:scale-110" 
+                  fetchPriority="high"
                 />
-                <div className="flex flex-col items-start leading-none">
-                  <div className="text-base md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal whitespace-nowrap">
+                <div className="flex min-w-0 flex-col items-start leading-none">
+                  <div className="truncate text-base md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal">
                     <span className="text-[var(--color-on-surface)]">JDLX</span> <span className="text-primary">MOBILE</span>
                   </div>
-                  <div className="text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 whitespace-nowrap">
+                  <div className="hidden min-[420px]:block truncate text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5">
                     Premium Mobile Store
                   </div>
                 </div>

@@ -301,13 +301,18 @@ export default function ProductDetails() {
                 <Heart size={20} fill={isInWishlist ? 'currentColor' : 'none'} className="transition-transform duration-300" />
               </button>
               <div className="overflow-hidden bg-white">
-                <img src={productImages[activeImageIndex]} alt={product.name} className="h-[400px] w-full object-contain transition-all duration-700 sm:h-[540px] md:rounded-[28px]" />
+                <img
+                  src={productImages[activeImageIndex]}
+                  alt={product.name}
+                  onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+                  className="h-[400px] w-full object-contain transition-all duration-700 sm:h-[540px] md:rounded-[28px]"
+                />
               </div>
               {productImages.length > 1 && (
                 <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center gap-2 px-6">
                   <div className="flex gap-2 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10">
                     {productImages.map((img, idx) => (
-                      <button key={idx} onClick={() => setActiveImageIndex(idx)} className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${activeImageIndex === idx ? 'border-amber-400 scale-105' : 'border-transparent opacity-60'}`}><img src={img} alt="" className="h-full w-full object-cover" /></button>
+                      <button key={idx} onClick={() => setActiveImageIndex(idx)} className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${activeImageIndex === idx ? 'border-amber-400 scale-105' : 'border-transparent opacity-60'}`}><img src={img} alt="" onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }} className="h-full w-full object-cover" /></button>
                     ))}
                   </div>
                 </div>

@@ -4,6 +4,39 @@ import datetime
 
 analytics_bp = Blueprint('analytics', __name__)
 
+
+@analytics_bp.route('/api/user/interactions', methods=['POST'])
+def post_user_interaction():
+    """Records a user interaction (view/click) on the storefront.
+
+    The storefront (Home.jsx logInteraction) posts engagement events here.
+    Missing/optional fields are tolerated so tracking never breaks the UI.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    interaction_type = data.get('interaction_type')
+    target_id = data.get('target_id')
+    session_id = data.get('session_id')
+
+    # Require only the core identifying fields; everything else is optional.
+    if not interaction_type or not target_id:
+        return jsonify({"error": "Missing interaction_type or target_id"}), 400
+
+    user_id = data.get('user_id')
+    category = data.get('category')
+
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO user_interactions (
+                user_id, session_id, interaction_type, target_id, category
+            ) VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, session_id, interaction_type, str(target_id), category))
+        conn.commit()
+        return jsonify({"ok": True}), 200
+    finally:
+        conn.close()
+
 ALLOWED_EVENT_TYPES = {
     'click', 'search', 'add_to_cart', 'purchase',
     'page_view', 'scroll', 'form_submit', 'video_play'

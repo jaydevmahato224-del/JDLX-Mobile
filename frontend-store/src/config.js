@@ -30,9 +30,49 @@ function getDefaultApiBaseUrl() {
 const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 const isLocalhost = currentHostname === 'localhost' || currentHostname === '127.0.0.1';
 
+function resolveApiBaseUrl() {
+  let base = import.meta.env.VITE_API_URL ||
+    (isLocalhost ? getDefaultApiBaseUrl() : PROD_BACKEND_URL);
+
+  if (typeof window === 'undefined') return base;
+
+  const hostname = window.location.hostname;
+  const isAndroid = /Android/i.test(navigator.userAgent || '');
+  const baseUsesLoopback = /localhost|127\.0\.0\.1/.test(base);
+
+  // Android emulator: even when VITE_API_URL is set in .env, `localhost` /
+  // `127.0.0.1` still point to the emulator itself, not the host machine.
+  // Rewrite the host so the emulator can reach the backend.
+  // (Only needed for the VITE_API_URL path — getDefaultApiBaseUrl() already
+  // resolves 10.0.2.2 when no env override is present.)
+  if (isAndroid && (hostname === 'localhost' || hostname === '127.0.0.1') && baseUsesLoopback) {
+    return base
+      .replace('localhost', '10.0.2.2')
+      .replace('127.0.0.1', '10.0.2.2');
+  }
+
+  // Real phone/tablet on the same Wi-Fi: the page is served from the dev
+  // machine's LAN IP (e.g. http://192.168.x.x:5173), but a loopback API base
+  // (localhost/127.0.0.1 from .env) would point at the *device itself* and
+  // every API call would fail — which is why the frontend shows no data on
+  // mobile. The backend runs on the same machine as Vite, so rewrite the
+  // loopback host to the host the page was loaded from.
+  // Safety guard: never rewrite on known production/vercel domains.
+  const isProductionDomain =
+    hostname === 'jdlxmobile.in' ||
+    hostname === 'www.jdlxmobile.in' ||
+    hostname.endsWith('.vercel.app') ||
+    hostname.endsWith('onrender.com');
+
+  if (!isProductionDomain && hostname !== 'localhost' && hostname !== '127.0.0.1' && baseUsesLoopback) {
+    return base.replace(/localhost|127\.0\.0\.1/, hostname);
+  }
+
+  return base;
+}
+
 // Export API_BASE_URL: Use environment variable if set, otherwise use local fallback for localhost or production URL for everything else.
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (isLocalhost ? getDefaultApiBaseUrl() : PROD_BACKEND_URL);
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 

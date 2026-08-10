@@ -19,3 +19,4 @@ backups/
 .venv/
 .aider*
 !.aider.md
+.vercel

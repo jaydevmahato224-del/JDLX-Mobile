@@ -513,12 +513,13 @@ export default function Home() {
 
   const logInteraction = useCallback(async (type, targetId, category) => {
     try {
-      const sessionId = localStorage.getItem('jdlx_session_id')
+      const sessionId = localStorage.getItem('jdlx_session_id') || 'anon'
       await fetch(`${API_BASE_URL}/user/interactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: user?.user_id,
+          // user object uses `id`, not `user_id` — support both for safety
+          user_id: user?.id ?? user?.user_id ?? null,
           session_id: sessionId,
           interaction_type: type,
           target_id: String(targetId),

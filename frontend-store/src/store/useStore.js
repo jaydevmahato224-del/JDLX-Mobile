@@ -417,21 +417,37 @@ export const useStore = create((set, get) => ({
         try {
             const res = await fetch(`${API_BASE_URL}/settings?_t=${Date.now()}`);
             const json = await res.json();
+            let bannersData = [];
             if (res.ok && json.data) {
                 // Ensure banners is always an array
-                const bannersData = json.data.banners || [];
+                bannersData = json.data.banners || [];
                 const isBlocked = json.data.store_blocked === 'true' || json.data.store_blocked === true;
                 const isConstruction = json.data.construction_mode === 'true' || json.data.construction_mode === true;
                 const constructionMsg = json.data.construction_mode_message || 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!';
                 set({ 
-                    banners: bannersData,
                     storeBlocked: isBlocked,
                     constructionMode: isConstruction,
                     constructionModeMessage: constructionMsg
                 });
-                return bannersData;
             }
-            return [];
+
+            // The /settings payload does NOT always include banners (and may
+            // itself fail). Fall back to the dedicated /banners endpoint so the
+            // carousel still renders even when settings lacks a banners key.
+            if (!Array.isArray(bannersData) || bannersData.length === 0) {
+                try {
+                    const bRes = await fetch(`${API_BASE_URL}/banners?_t=${Date.now()}`);
+                    const bJson = await bRes.json();
+                    if (bRes.ok && Array.isArray(bJson.data)) {
+                        bannersData = bJson.data;
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch banners fallback:', e);
+                }
+            }
+
+            set({ banners: bannersData });
+            return bannersData;
         } catch (e) {
             console.error('Failed to fetch banners:', e);
             return [];

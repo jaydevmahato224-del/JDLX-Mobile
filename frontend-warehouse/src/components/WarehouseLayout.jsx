@@ -290,15 +290,27 @@ export default function WarehouseLayout() {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
                 {/* Header */}
-                <header className="safe-area-top h-20 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 px-6 flex items-center justify-between z-10 sticky top-0">
-                    <div className="flex items-center gap-4">
+                <header className="safe-area-top h-20 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 px-4 sm:px-6 flex items-center justify-between z-10 sticky top-0">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                         <button
                             onClick={() => setIsSidebarOpen(true)}
                             className="lg:hidden p-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-300"
                         >
                             <Menu className="w-6 h-6" />
                         </button>
-                        <div className="hidden sm:block">
+
+                        {/* Brand — always visible in the header (no need to open the sidebar) */}
+                        <Link to="/warehouse/dashboard" className="flex items-center gap-2.5 min-w-0 group">
+                            <div className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-inner group-hover:scale-105 transition-transform">
+                                <Warehouse className="w-4 h-4 text-slate-900" />
+                            </div>
+                            <div className="flex flex-col leading-none">
+                                <span className="text-sm font-black tracking-widest text-white uppercase">JDLX</span>
+                                <span className="text-[8px] font-bold text-amber-500/80 uppercase tracking-[0.2em]">Warehouse</span>
+                            </div>
+                        </Link>
+
+                        <div className="hidden lg:block">
                             <h2 className="text-lg font-black text-white tracking-tight capitalize">
                                 {location.pathname.split('/').pop() || 'Dashboard'}
                             </h2>
@@ -390,7 +402,7 @@ export default function WarehouseLayout() {
 
                 {/* Content Area */}
                 <main className="flex-1 w-full flex flex-col overflow-y-auto custom-scrollbar scroll-smooth">
-                    <div className="flex-1 p-6 lg:p-10 max-w-[1600px] w-full mx-auto relative">
+                    <div className="flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:p-10 max-w-[1600px] w-full mx-auto relative">
                         <Outlet />
                     </div>
                 </main>

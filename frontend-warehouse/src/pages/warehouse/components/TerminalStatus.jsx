@@ -1,7 +1,7 @@
 import { CloudRain, MapPin, ShieldCheck, Zap, AlertTriangle, X as CloseIcon, Check } from 'lucide-react'
 import { useState } from 'react'
 
-const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStatus, updatingStatus, quickModeEnabled, onToggleQuickMode }) => {
+const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStatus, updatingStatus, quickModeEnabled, onToggleQuickMode, compact = false }) => {
     const [showConfirm, setShowConfirm] = useState(false)
     const isOpen = operationsStatus === 'open'
 
@@ -11,7 +11,7 @@ const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStat
     }
 
     return (
-        <section className="warehouse-panel p-8 relative overflow-hidden">
+        <section className={`warehouse-panel relative overflow-hidden ${compact ? 'p-5 sm:p-8' : 'p-8'}`}>
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <p className="wh-ui-label">

@@ -137,6 +137,14 @@ html {
   text-rendering: optimizeSpeed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* App-like: stop mobile Safari from auto-inflating text on orientation
+     change / after zoom, which is what makes text jump to the side. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* App-like: kill the blue tap flash on every element (native apps don't
+     flash their chrome). */
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
 }
 
 body {
@@ -147,6 +155,31 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   overflow-x: hidden;
   transition: background-color var(--transition-speed) var(--transition-cubic);
+  /* App-like: prevent browser pull-to-refresh / overscroll glow that drags
+     the whole UI around. Scroll stays fully functional. */
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
+  -webkit-touch-callout: none; /* no iOS long-press callout on chrome */
+}
+
+/* App-like: chrome (nav, buttons, badges, labels) should never be
+   selectable — tapping shouldn't produce a text highlight. Body copy
+   (descriptions, addresses, order IDs) stays selectable/copyable. */
+.app-shell .concierge-nav-wrapper,
+.app-shell button,
+.app-shell [role="button"],
+.app-shell .category-chip,
+.app-shell .concierge-badge,
+.app-shell .concierge-nav-label {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Long-press callout (iOS) stays disabled ONLY on the floating dock chrome;
+   links everywhere else keep their long-press menu (copy link, tel:, etc.). */
+.app-shell .concierge-nav-wrapper,
+.app-shell .concierge-nav-item {
+  -webkit-touch-callout: none;
 }
 
 /* Performance Layer Promotion */
@@ -348,14 +381,29 @@ body::before {
   }
 }
 
-/* Optimization for mobile tap delay and scroll performance */
-@media (max-width: 1024px) {
-  button, 
-  a, 
-  [role="button"] {
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
+/* App-like touch handling on ALL screen sizes (not just mobile):
+   - touch-action: manipulation  -> removes the 300ms double-tap-zoom delay
+     and stops double-tap zoom on interactive elements.
+   - Selectable text (inputs, textareas) keeps pan/zoom-free native feel. */
+button, 
+ a, 
+ [role="button"],
+ .concierge-nav-item,
+ .category-chip,
+ input,
+ select,
+ textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* App-like: prevent double-tap-zoom on the whole shell and stop pinch-zoom
+   even if a browser ignores the viewport meta (belt-and-suspenders).
+   touch-action is not inherited, but the browser intersects the touched
+   element's value with all ancestors — so this on <body class="app-shell">
+   covers everything inside (portals included). */
+.app-shell {
+  touch-action: pan-x pan-y;
 }
 
 /* ------------------------------------------------------------------------------

@@ -354,7 +354,25 @@ def warehouse_upload_product_image():
         ext = os.path.splitext(filename)[1].lower()
         if ext not in ALLOWED_UPLOAD_EXTENSIONS:
              return error_response("File type not allowed. Use JPG, PNG, WEBP or PDF.", 400)
-             
+
+        # 1. Try uploading to persistent cloud storage first (ImgBB -> Catbox ->
+        #    Telegra.ph). Render's filesystem is ephemeral — local-only uploads
+        #    are wiped on every redeploy and the stored /static/uploads/... URL
+        #    then 404s for every visitor, which is why product images showed only
+        #    the text fallback on the storefront. Cloud URLs survive restarts.
+        try:
+            from services.cloud_image_service import upload_file_object_to_cloud
+            cloud_url = upload_file_object_to_cloud(file, filename)
+            if cloud_url:
+                current_app.logger.info(f"Warehouse product image uploaded to cloud: {cloud_url}")
+                return success_response({"url": cloud_url}, "Image uploaded successfully", 201)
+        except Exception as cloud_error:
+            current_app.logger.warning(f"Cloud upload failed for product image, falling back to local: {cloud_error}")
+
+        # 2. Fallback: save locally (dev / offline environments). The file stream
+        #    is re-readable here because upload_file_object_to_cloud seeks back;
+        #    reset explicitly so the fallback never writes from a bad offset.
+        file.seek(0)
         stamp = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
         final_name = f"product_{stamp}_{uuid.uuid4().hex[:10]}{ext}"
         

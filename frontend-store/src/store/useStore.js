@@ -2,6 +2,7 @@ import toast from "react-hot-toast"
 import { create } from 'zustand'
 import { API_BASE_URL } from '../config'
 import { getDeviceModelValue } from '../utils/stickerCustomization'
+import { refreshRecentlyViewed } from '../utils/recentlyViewedSync'
 
 let processingSync = false;
 
@@ -460,6 +461,19 @@ export const useStore = create((set, get) => ({
             const data = await res.json();
             const normalized = Array.isArray(data) ? data : (data.data || []);
             set({ products: normalized });
+            // Self-heal: recently-viewed items are cached in localStorage with a
+            // snapshot of the product (including image URLs). If product images
+            // changed server-side (e.g. migrated to cloud storage), those cached
+            // paths go stale and show the text fallback. Refresh each entry with
+            // the freshest catalog data so images always resolve (order kept).
+            const currentRV = get().recentlyViewed;
+            if (currentRV.length > 0 && normalized.length > 0) {
+                const refreshed = refreshRecentlyViewed(currentRV, normalized);
+                if (JSON.stringify(refreshed) !== JSON.stringify(currentRV)) {
+                    set({ recentlyViewed: refreshed });
+                    localStorage.setItem('recentlyViewed', JSON.stringify(refreshed));
+                }
+            }
             return normalized;
         } catch (e) {
             console.error('Failed to fetch products:', e);

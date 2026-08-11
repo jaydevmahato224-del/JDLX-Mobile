@@ -13,6 +13,7 @@ import RecommendationsSection from '../../components/RecommendationsSection'
 import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
+import { refreshRecentlyViewed } from '../../utils/recentlyViewedSync'
 import { isStickerProduct } from '../../utils/stickerCustomization'
 import { getProductUrl } from '../../utils/productSlug'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
@@ -414,6 +415,15 @@ export default function Home() {
   const featuredProducts = useMemo(() => products.filter(p => Number(p.is_featured) === 1 || p.is_featured === true), [products])
   const regularProducts = useMemo(() => products.filter(p => !p.is_featured), [products])
 
+  // Continue Exploring: recentlyViewed is cached in localStorage with a product
+  // snapshot, so its image URLs can be stale (e.g. after the images were migrated
+  // to cloud storage). Overlay fresh catalog data by id so every card shows the
+  // latest image/price/stock — cached entries without a fresh match stay as-is.
+  const freshRecentlyViewed = useMemo(
+    () => refreshRecentlyViewed(recentlyViewed, products),
+    [recentlyViewed, products]
+  )
+
   const allBanners = useMemo(() => {
     const apiBanners = banners.map(b => ({ ...b, image: resolveMediaUrl(b.image_url), type: 'promo' }));
     const productBanners = featuredProducts.slice(0, 3).map(p => ({
@@ -672,7 +682,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar pb-8 -mx-6 px-6">
-            {recentlyViewed.map((p) => (
+            {freshRecentlyViewed.map((p) => (
               <div key={`recent-${p.id}`} className="min-w-[180px] xs:min-w-[200px] md:min-w-[320px]">
                 <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
               </div>

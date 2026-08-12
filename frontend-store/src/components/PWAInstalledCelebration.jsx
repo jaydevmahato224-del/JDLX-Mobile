@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Smartphone, Check, X } from 'lucide-react';
+import useScrollLock from '../hooks/useScrollLock';
 
 export default function PWAInstalledCelebration() {
   const [isOpen, setIsOpen] = useState(false);
@@ -26,12 +27,16 @@ export default function PWAInstalledCelebration() {
     };
   }, []);
 
+  // Lock the page behind the celebration so background scrolling never
+  // happens while the modal is open (scroll chaining).
+  useScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-md animate-in fade-in duration-300">
-      
-      <div className="relative w-full max-w-sm overflow-hidden rounded-[24px] border border-white/[0.06] bg-gradient-to-b from-[#1c1c1f] to-[#121214] p-8 text-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 z-[9999] overflow-y-auto overscroll-contain bg-zinc-950/70 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="relative my-auto w-full max-w-sm overflow-hidden rounded-[24px] border border-white/[0.06] bg-gradient-to-b from-[#1c1c1f] to-[#121214] p-8 text-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         
         {/* Soft elegant top glow */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
@@ -85,6 +90,7 @@ export default function PWAInstalledCelebration() {
           Open App
         </button>
 
+      </div>
       </div>
     </div>
   );

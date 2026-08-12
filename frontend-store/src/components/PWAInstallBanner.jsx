@@ -1,18 +1,27 @@
 import toast from "react-hot-toast"
-import React, { useState, useEffect } from 'react';
-import { Download, X, Smartphone, Zap } from 'lucide-react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { Download, X, Smartphone } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import useScrollLock from '../hooks/useScrollLock';
 import { API_BASE_URL } from '../config';
 
 /**
- * PWAInstallBanner - A premium glassmorphism banner to prompt app installation.
- * Shows up only when the app is 'installable' and not yet installed.
+ * PWAInstallBanner - A bottom-left floating card inviting the user to install
+ * the app. A cute animated 2D doll mascot waves at first-time visitors to
+ * nudge them toward installing.
+ *
+ * UX: while the page scrolls, the card jelly-hides into the LEFT edge of the
+ * screen (like it slips behind the wall) and jelly-bounces back in as soon as
+ * scrolling stops — so users never need a close (X) button. The banner quietly
+ * retires itself after a few appearances without an install.
  */
 const PWAInstallBanner = () => {
   const { isInstallable, isInstalled, handleInstallClick } = usePWAInstall();
   const [isVisible, setIsVisible] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
   const [isDismissed, setIsDismissed] = useState(() => localStorage.getItem('pwa_banner_dismissed') === 'true');
+  // Hidden while the user is actively scrolling — returns (jelly) on idle.
+  const [isScrollHidden, setIsScrollHidden] = useState(false);
   const [config, setConfig] = useState({
     enabled: true,
     title: 'Install JDLX Mobile',
@@ -20,16 +29,38 @@ const PWAInstallBanner = () => {
   });
 
   const isPreview = new URLSearchParams(window.location.search).get('preview_pwa') === '1';
-  // Show banner on all devices where the app is not installed, so older devices and iOS also get PWA benefits
+  // Show on all devices where the app is not installed, so older devices and
+  // iOS also get PWA benefits.
   const shouldShowBanner = !isInstalled && !isDismissed && config.enabled;
+
+  const lastScrollYRef = useRef(typeof window !== 'undefined' ? window.scrollY : 0);
+  const scrollIdleTimerRef = useRef(null);
+  const guidePointerStartedOnBackdrop = useRef(false);
 
   const handleInstallClickWithFallback = async () => {
     if (isInstallable) {
-      await handleInstallClick();
+      const usedNativePrompt = await handleInstallClick();
+      // Prompt was dismissed / already used / errored → show the manual guide
+      // instead of a dead "Install" button.
+      if (!usedNativePrompt) {
+        setShowPwaGuide(true);
+      }
     } else {
       setShowPwaGuide(true);
     }
   };
+
+  // Dismissal persistence — kept so the banner retires itself quietly after a
+  // few no-install appearances instead of nagging forever.
+  const handleDismiss = useCallback(() => {
+    setIsVisible(false);
+    localStorage.setItem('pwa_banner_dismissed', 'true');
+    setIsDismissed(true);
+  }, []);
+
+  // Lock the page behind the guide modal so scrolling inside the guide never
+  // scrolls the background app (scroll chaining).
+  useScrollLock(showPwaGuide);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/settings`)
@@ -47,128 +78,219 @@ const PWAInstallBanner = () => {
   }, []);
 
   useEffect(() => {
-    if (shouldShowBanner && !isVisible) {
-      const timer = setTimeout(() => setIsVisible(true), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isVisible, shouldShowBanner]);
+    if (!shouldShowBanner || isVisible) return;
+    const timer = setTimeout(() => {
+      // Quiet auto-dismiss after a few no-install appearances (dismissal logic
+      // preserved — no UI close button, so the banner retires on its own).
+      const appearances = Number(localStorage.getItem('pwa_banner_appearances') || 0) + 1;
+      localStorage.setItem('pwa_banner_appearances', String(appearances));
+      if (appearances >= 5) {
+        handleDismiss();
+      } else {
+        setIsVisible(true);
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isVisible, shouldShowBanner, handleDismiss]);
 
-  const handleDismiss = () => {
-    setIsVisible(false);
-    // Optional: Save dismissal in localStorage to avoid showing it too often
-    localStorage.setItem('pwa_banner_dismissed', 'true');
-    setIsDismissed(true);
-  };
+  // Auto-hide while scrolling (jelly into the left wall) — jelly back in
+  // shortly after scrolling stops. Always visible near the top of the page.
+  useEffect(() => {
+    if (!shouldShowBanner) return;
 
-  if (!shouldShowBanner || !isVisible) return null;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastScrollYRef.current;
+      lastScrollYRef.current = y;
+
+      if (Math.abs(delta) < 6) return;
+
+      if (y < 100) {
+        setIsScrollHidden(false);
+        if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+        return;
+      }
+
+      // Hide while actively scrolling (any direction)…
+      setIsScrollHidden(true);
+
+      // …and jelly back in once the scroll settles.
+      if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+      scrollIdleTimerRef.current = setTimeout(() => setIsScrollHidden(false), 350);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+    };
+  }, [shouldShowBanner]);
 
   return (
     <>
-    <div className="fixed bottom-28 left-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-8 duration-700">
-      <div className="mx-auto max-w-lg overflow-hidden rounded-[32px] border-4 border-white/70 bg-white/60 backdrop-blur-xl p-1 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] ring-1 ring-slate-200/30">
-        <div className="flex items-center gap-4 p-4 bg-transparent">
-          {/* App Icon Glow */}
-          <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white/80 border border-white shadow-sm">
-            <img src="/logo192.png" alt="JDLX Mobile" className="w-10 h-10 object-contain rounded-xl" />
-            <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-amber-950 shadow-sm ring-2 ring-white">
-              <Zap size={10} fill="currentColor" />
+      {shouldShowBanner && isVisible && (
+        <div
+          className={`pwa-install-banner ${isScrollHidden ? 'is-hiding' : 'is-showing'}`}
+          role="region"
+          aria-label="Install JDLX Mobile"
+        >
+          {/* Animated wrapper — transform/opacity only (GPU composited). */}
+          <div className="pwa-install-card">
+            {/* Glass visuals live on an inner layer so backdrop-filter never
+                sits on the animated element. */}
+            <div className="overflow-hidden rounded-[28px] border border-white/70 bg-white/85 backdrop-blur-xl shadow-[0_24px_48px_-16px_rgba(0,0,0,0.18)] ring-1 ring-slate-200/40">
+              <div className="flex items-center gap-2.5 p-2.5 pl-3 pr-2.5">
+                {/* Cute animated 2D doll mascot */}
+                <div className="doll-wrap relative h-[62px] w-[62px] shrink-0">
+                  <svg viewBox="0 0 100 100" className="h-full w-full drop-shadow-md" aria-hidden="true">
+                    {/* Sparkles */}
+                    <g className="doll-sparkle">
+                      <path d="M17 22l2.1 4.8 4.8 2.1-4.8 2.1-2.1 4.8-2.1-4.8-4.8-2.1 4.8-2.1z" fill="#f59e0b" />
+                    </g>
+                    <g className="doll-sparkle doll-sparkle-2">
+                      <path d="M84 30l1.8 4.2 4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2-4.2-1.8 4.2-1.8z" fill="#fbbf24" />
+                    </g>
+
+                    {/* Soft warm glow behind the doll */}
+                    <circle cx="50" cy="54" r="31" fill="#f59e0b" opacity="0.12" />
+
+                    {/* Antenna + tip heart */}
+                    <line x1="50" y1="18" x2="50" y2="30" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
+                    <circle className="doll-heart" cx="50" cy="14" r="4.2" fill="#f59e0b" />
+
+                    {/* Feet */}
+                    <ellipse cx="42" cy="86" rx="7" ry="3.5" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+                    <ellipse cx="58" cy="86" rx="7" ry="3.5" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+
+                    {/* Ears (drawn behind the head) */}
+                    <circle cx="28.5" cy="37" r="5.5" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+                    <circle cx="71.5" cy="37" r="5.5" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+
+                    {/* Head */}
+                    <circle cx="50" cy="38" r="20" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+
+                    {/* Eyes (blink together) */}
+                    <g className="doll-eye">
+                      <circle cx="42.5" cy="37" r="4.2" fill="#0f172a" />
+                      <circle cx="42.5" cy="35.4" r="1.3" fill="#ffffff" />
+                      <circle cx="57.5" cy="37" r="4.2" fill="#0f172a" />
+                      <circle cx="57.5" cy="35.4" r="1.3" fill="#ffffff" />
+                    </g>
+
+                    {/* Rosy cheeks */}
+                    <circle cx="34.5" cy="44" r="3.2" fill="#fda4af" opacity="0.75" />
+                    <circle cx="65.5" cy="44" r="3.2" fill="#fda4af" opacity="0.75" />
+
+                    {/* Smile */}
+                    <path d="M43.5 44.5 Q50 50 56.5 44.5" stroke="#0f172a" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+
+                    {/* Waving hand */}
+                    <g className="doll-wave-hand">
+                      <path d="M64 54q8.5-2 6.5-10" stroke="#ffffff" strokeWidth="6" fill="none" strokeLinecap="round" />
+                      <circle cx="72.5" cy="44" r="5.5" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+                    </g>
+
+                    {/* Chest heart */}
+                    <path
+                      className="doll-heart"
+                      d="M50 63.5c-1.5-2.4-5.4-2.2-5.4.4 0 2.2 2.5 3.7 5.4 5.4 2.9-1.7 5.4-3.2 5.4-5.4 0-2.6-3.9-2.8-5.4-.4z"
+                      fill="#f43f5e"
+                    />
+                  </svg>
+                </div>
+
+                {/* Content */}
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-[14px] font-black tracking-tight text-slate-900">
+                    {config.title}
+                  </h3>
+                  <p className="mt-0.5 line-clamp-2 text-[11.5px] font-bold leading-snug text-slate-500">
+                    {config.description}
+                  </p>
+                </div>
+
+                {/* Install CTA */}
+                <button
+                  onClick={isPreview ? () => toast.error('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClickWithFallback}
+                  className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-slate-900 px-3.5 py-2.5 text-[11px] font-black uppercase tracking-wide text-white shadow-lg shadow-slate-900/20 transition-all hover:bg-slate-800 active:scale-95"
+                >
+                  <Download size={14} />
+                  Install
+                </button>
+              </div>
             </div>
           </div>
-
-          {/* Content */}
-          <div className="flex-1">
-            <h3 className="text-[16px] font-black tracking-tight text-slate-900">
-              {config.title}
-            </h3>
-            <p className="mt-0.5 text-[13px] font-bold leading-tight text-slate-600">
-              {config.description}
-            </p>
-          </div>
-
-          {/* Actions */}
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={isPreview ? () => toast.error('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClickWithFallback}
-              className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-slate-900/20 transition-all hover:bg-slate-800 active:scale-95"
-            >
-              <Download size={14} />
-              Install
-            </button>
-            <button
-              onClick={handleDismiss}
-              className="flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-primary transition-colors"
-            >
-              <X size={12} />
-              Later
-            </button>
-          </div>
         </div>
-        
-        {/* Subtle bottom accent line */}
-        <div className="h-1 w-full bg-gradient-to-r from-transparent via-primary-500/30 to-transparent" />
-      </div>
-    </div>
+      )}
 
       {/* Premium PWA Guide Modal - rendered outside the banner for proper z-index and positioning */}
       {showPwaGuide && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-[#16161a] to-[#0a0a0c] p-6 text-white shadow-2xl animate-in zoom-in-95 duration-300">
-            {/* Close button */}
-            <button 
-              onClick={() => setShowPwaGuide(false)}
-              className="absolute top-5 right-5 p-2 rounded-full bg-white/5 text-slate-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div
+          className="fixed inset-0 z-[999] overflow-y-auto overscroll-contain bg-black/85 backdrop-blur-md animate-in fade-in duration-300"
+          onPointerDown={(e) => { guidePointerStartedOnBackdrop.current = e.target === e.currentTarget; }}
+          onClick={() => { if (guidePointerStartedOnBackdrop.current) setShowPwaGuide(false); }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="How to install JDLX Mobile"
+        >
+          <div className="flex min-h-full items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="relative my-auto w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-[#16161a] to-[#0a0a0c] p-6 text-white shadow-2xl animate-in zoom-in-95 duration-300">
+              {/* Close button */}
+              <button
+                onClick={() => setShowPwaGuide(false)}
+                className="absolute top-5 right-5 p-2 rounded-full bg-white/5 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-            <div className="flex flex-col items-center text-center mt-4">
-              <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-lg border border-slate-100/10 animate-bounce p-3">
-                <img src="/logo192.png" alt="JDLX Logo" className="w-full h-full object-contain" />
-              </div>
-              <h3 className="text-xl font-black mt-4 tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
-              <p className="text-[13px] text-slate-400 mt-2 font-medium leading-relaxed">
-                Install the digital concierge app on your device screen for full performance, instant checkout, and order tracking.
-              </p>
-            </div>
-
-            {/* Instructions */}
-            <div className="mt-6 space-y-4">
-              {/* Android/Chrome */}
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                <h4 className="text-[12px] font-black uppercase tracking-wider text-primary flex items-center gap-2">
-                  <Smartphone className="w-4 h-4" /> Android & Windows (Chrome/Edge)
-                </h4>
-                <ol className="list-decimal pl-4 mt-2 text-[12px] font-bold text-slate-300 space-y-1">
-                  <li>Tap the <strong>three dots (⋮)</strong> in Chrome/Edge top-right.</li>
-                  <li>Select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
-                  <li>Confirm the prompt. JDLX is now installed!</li>
-                </ol>
+              <div className="flex flex-col items-center text-center mt-4">
+                <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-lg border border-slate-100/10 animate-bounce p-3">
+                  <img src="/logo192.png" alt="JDLX Logo" className="w-full h-full object-contain" />
+                </div>
+                <h3 className="text-xl font-black mt-4 tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
+                <p className="text-[13px] text-slate-400 mt-2 font-medium leading-relaxed">
+                  Install the digital concierge app on your device screen for full performance, instant checkout, and order tracking.
+                </p>
               </div>
 
-              {/* iOS/Safari */}
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                <h4 className="text-[12px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                  📲 iPhone & iPad (Safari Only)
-                </h4>
-                <ol className="list-decimal pl-4 mt-2 text-[12px] font-bold text-slate-300 space-y-1">
-                  <li>Tap the <strong>Share</strong> button (box with up arrow) in Safari.</li>
-                  <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
-                  <li>Tap <strong>"Add"</strong> in the top right. JDLX is ready!</li>
-                </ol>
+              {/* Instructions */}
+              <div className="mt-6 space-y-4">
+                {/* Android/Chrome */}
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                  <h4 className="text-[12px] font-black uppercase tracking-wider text-primary flex items-center gap-2">
+                    <Smartphone className="w-4 h-4" /> Android & Windows (Chrome/Edge)
+                  </h4>
+                  <ol className="list-decimal pl-4 mt-2 text-[12px] font-bold text-slate-300 space-y-1">
+                    <li>Tap the <strong>three dots (⋮)</strong> in Chrome/Edge top-right.</li>
+                    <li>Select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+                    <li>Confirm the prompt. JDLX is now installed!</li>
+                  </ol>
+                </div>
+
+                {/* iOS/Safari */}
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                  <h4 className="text-[12px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                    📲 iPhone & iPad (Safari Only)
+                  </h4>
+                  <ol className="list-decimal pl-4 mt-2 text-[12px] font-bold text-slate-300 space-y-1">
+                    <li>Tap the <strong>Share</strong> button (box with up arrow) in Safari.</li>
+                    <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
+                    <li>Tap <strong>"Add"</strong> in the top right. JDLX is ready!</li>
+                  </ol>
+                </div>
               </div>
-            </div>
 
-            {/* Note about HTTPS */}
-            <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/10 text-amber-400 text-[10px] font-bold leading-normal">
-              ⚠️ Note: Secure connection (HTTPS) is strictly required by browser policies for PWA installation. Please access using your standard domain (jdlxmobile.in) for the best experience.
-            </div>
+              {/* Note about HTTPS */}
+              <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/10 text-amber-400 text-[10px] font-bold leading-normal">
+                ⚠️ Note: Secure connection (HTTPS) is strictly required by browser policies for PWA installation. Please access using your standard domain (jdlxmobile.in) for the best experience.
+              </div>
 
-            <button
-              onClick={() => setShowPwaGuide(false)}
-              className="mt-6 w-full py-3.5 bg-slate-100 text-slate-900 rounded-2xl hover:bg-white active:scale-95 transition-all font-black text-xs tracking-wider uppercase"
-            >
-              Got It
-            </button>
+              <button
+                onClick={() => setShowPwaGuide(false)}
+                className="mt-6 w-full py-3.5 bg-slate-100 text-slate-900 rounded-2xl hover:bg-white active:scale-95 transition-all font-black text-xs tracking-wider uppercase"
+              >
+                Got It
+              </button>
+            </div>
           </div>
         </div>
       )}

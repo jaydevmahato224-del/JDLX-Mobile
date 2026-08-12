@@ -472,3 +472,120 @@ button,
   background-color: rgba(23, 23, 23, 0.85);
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* ------------------------------------------------------------------------------
+   8. PWA INSTALL BANNER — bottom-left card that jelly-hides into the left wall
+   ------------------------------------------------------------------------------ */
+.pwa-install-banner {
+  position: fixed;
+  left: 16px;
+  bottom: calc(var(--app-bottom-nav-height) + max(24px, env(safe-area-inset-bottom)));
+  z-index: 60;
+  width: min(360px, calc(100vw - 32px));
+}
+
+/* Only transform/opacity animate (GPU-composited). The glass visuals live on
+   an inner wrapper so backdrop-filter never sits on the animated layer. */
+.pwa-install-card {
+  transform-origin: left center;
+  will-change: transform, opacity;
+}
+
+.pwa-install-banner.is-showing .pwa-install-card {
+  animation: pwa-jelly-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.pwa-install-banner.is-hiding .pwa-install-card {
+  animation: pwa-jelly-out 0.55s cubic-bezier(0.5, 0, 0.4, 1) forwards;
+  pointer-events: none;
+}
+
+/* Jelly entrance: bounces in from the left edge of the screen. */
+@keyframes pwa-jelly-in {
+  0% { opacity: 0; transform: translateX(-130%) scale(0.72, 0.7); }
+  55% { opacity: 1; transform: translateX(9%) scale(1.06, 0.9); }
+  75% { transform: translateX(-4%) scale(0.96, 1.04); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* Jelly exit: gives a little wobble, then slides fully behind the left wall
+   so it feels like the banner hides into the edge of the screen. */
+@keyframes pwa-jelly-out {
+  0% { opacity: 1; transform: translateX(0) scale(1); }
+  35% { opacity: 1; transform: translateX(14%) scale(1.09, 0.85); }
+  100% { opacity: 0; transform: translateX(-145%) scale(0.68, 0.78); }
+}
+
+/* ------------------------------------------------------------------------------
+   Cute install-doll mascot (2D CSS/SVG animations)
+   ------------------------------------------------------------------------------ */
+.doll-wrap {
+  transform-origin: 50% 100%;
+  animation: doll-float 3.2s ease-in-out infinite;
+}
+.doll-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: doll-wink 4.2s ease-in-out infinite;
+}
+.doll-wave-hand {
+  transform-box: fill-box;
+  transform-origin: 50% 80%;
+  animation: doll-wave 2.4s ease-in-out infinite;
+}
+.doll-heart {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: doll-heartbeat 1.7s ease-in-out infinite;
+}
+.doll-sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: doll-sparkle 2.4s ease-in-out infinite;
+}
+.doll-sparkle-2 {
+  animation-delay: 1.2s;
+}
+
+@keyframes doll-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+
+@keyframes doll-wink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  93%, 96% { transform: scaleY(0.12); }
+}
+
+@keyframes doll-wave {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(18deg); }
+  35% { transform: rotate(-10deg); }
+  50% { transform: rotate(14deg); }
+  65% { transform: rotate(-6deg); }
+  80% { transform: rotate(8deg); }
+}
+
+@keyframes doll-heartbeat {
+  0%, 100% { transform: scale(1); }
+  12% { transform: scale(1.3); }
+  24% { transform: scale(1); }
+}
+
+@keyframes doll-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(50deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwa-install-banner .pwa-install-card {
+    animation-duration: 0.01s !important;
+  }
+  .doll-wrap,
+  .doll-eye,
+  .doll-wave-hand,
+  .doll-heart,
+  .doll-sparkle {
+    animation: none !important;
+  }
+}

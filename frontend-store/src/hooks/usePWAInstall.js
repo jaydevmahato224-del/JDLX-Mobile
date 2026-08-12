@@ -4,6 +4,12 @@ import { useStore } from '../store/useStore';
 /**
  * Hook to manage PWA installation prompt logic.
  * Uses the global store to access the 'beforeinstallprompt' event.
+ *
+ * handleInstallClick resolves to:
+ *   true  -> the native browser install prompt was shown AND accepted.
+ *   false -> no prompt available / user dismissed it / it errored. Callers
+ *            should fall back to the step-by-step install guide so the user
+ *            is never stuck on a dead "Install" button.
  */
 export function usePWAInstall() {
   const installPrompt = useStore((state) => state.pwaInstallPrompt);
@@ -32,18 +38,29 @@ export function usePWAInstall() {
   }, [clearPwaInstallPrompt]);
 
   const handleInstallClick = async () => {
-    if (!installPrompt) return;
+    if (!installPrompt) return false;
 
     try {
+      // prompt() must run inside a user gesture and can only be invoked ONCE
+      // per captured beforeinstallprompt event. After the user dismisses it or
+      // the event is reused, calling prompt() again silently does nothing — so
+      // always clear the stale prompt and let the UI fall back to the guide.
       installPrompt.prompt();
       const { outcome } = await installPrompt.userChoice;
       console.log(`User response to install prompt: ${outcome}`);
       
       if (outcome === 'accepted') {
         clearPwaInstallPrompt();
+        return true;
       }
+
+      // User dismissed the native prompt — it cannot be re-shown.
+      clearPwaInstallPrompt();
+      return false;
     } catch (err) {
       console.error('Installation failed:', err);
+      clearPwaInstallPrompt();
+      return false;
     }
   };
 

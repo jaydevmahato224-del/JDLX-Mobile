@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Sparkles, X } from 'lucide-react'
 import { CUSTOMER_RELEASE_UPDATES } from '../config/releaseUpdates'
+import useScrollLock from '../hooks/useScrollLock'
 
 const STORAGE_KEY = 'jdlx_customer_seen_release_update'
 
@@ -17,14 +18,8 @@ export default function ReleaseUpdateModal() {
     }
   }, [release?.id])
 
-  useEffect(() => {
-    if (!open) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [open])
+  // Lock the page behind the release-notes modal while it is open.
+  useScrollLock(open)
 
   const releaseItems = useMemo(() => {
     return Array.isArray(release?.items) ? release.items.filter((item) => item?.title) : []

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle, CheckCircle2, Shield } from 'lucide-react'
 
 import { usePWAInstall } from '../../hooks/usePWAInstall'
+import useScrollLock from '../../hooks/useScrollLock'
 import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 
@@ -102,6 +103,15 @@ function Profile() {
         }
     };
 
+    // Lock the page behind the install guide so background scrolling never
+    // happens while the guide is open (scroll chaining).
+    useScrollLock(showPwaGuide);
+
+    // Only close the guide via backdrop when the touch/click actually started
+    // on the backdrop — otherwise a scroll-drag ending outside the card would
+    // fire a retargeted click on the overlay and close the guide mid-scroll.
+    const guidePointerStartedOnBackdrop = useRef(false);
+
     if (!user) return null;
     const profileImageUrl = imageFailed ? '' : resolveMediaUrl(user.profile_image);
 
@@ -129,17 +139,20 @@ function Profile() {
         { 
             icon: Download, 
             label: 'Download App', 
-            onClick: () => {
+            onClick: async () => {
                 console.log('Download App Clicked. Status:', { isInstalled, isInstallable });
                 if (isInstalled) {
                     toast.success('JDLX Mobile is already installed!', {
                         icon: '🚀',
                         style: { borderRadius: '16px', background: 'var(--color-surface-high)', color: 'var(--color-on-surface)', fontWeight: 'bold' }
                     });
-                } else if (isInstallable) {
-                    handleInstallClick();
                 } else {
-                    setShowPwaGuide(true);
+                    // Try the native prompt first; if it was dismissed/errored,
+                    // fall back to the step-by-step guide instead of a dead button.
+                    const usedNativePrompt = await handleInstallClick();
+                    if (!usedNativePrompt) {
+                        setShowPwaGuide(true);
+                    }
                 }
             }, 
             color: 'text-primary-600', 
@@ -389,8 +402,16 @@ function Profile() {
 
             {/* Premium PWA Guide Modal */}
             {showPwaGuide && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-[#16161a] to-[#0a0a0c] p-6 text-white shadow-2xl animate-in zoom-in-95 duration-300">
+                <div
+                    className="fixed inset-0 z-[999] overflow-y-auto overscroll-contain bg-black/85 backdrop-blur-md animate-in fade-in duration-300"
+                    onPointerDown={(e) => { guidePointerStartedOnBackdrop.current = e.target === e.currentTarget; }}
+                    onClick={() => { if (guidePointerStartedOnBackdrop.current) setShowPwaGuide(false); }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="How to install JDLX Mobile"
+                >
+                    <div className="flex min-h-full items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+                    <div className="relative my-auto w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-[#16161a] to-[#0a0a0c] p-6 text-white shadow-2xl animate-in zoom-in-95 duration-300">
                         {/* Close button */}
                         <button 
                             onClick={() => setShowPwaGuide(false)}
@@ -447,6 +468,7 @@ function Profile() {
                         >
                             Got It
                         </button>
+                    </div>
                     </div>
                 </div>
             )}

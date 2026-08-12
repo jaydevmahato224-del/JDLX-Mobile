@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { User, ChevronLeft, Heart as HeartIcon, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
@@ -14,6 +14,7 @@ import ReleaseUpdateModal from './ReleaseUpdateModal'
 function Layout({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const hasBackButton = location.pathname !== '/'
   
   const cartItemCount = useStore((state) => 
     state.cart.reduce((acc, item) => acc + Number(item.qty || 0), 0))
@@ -22,8 +23,10 @@ function Layout({ children }) {
   const theme = useStore((state) => state.theme)
   const token = useStore((state) => state.token)
 
-  const [tickerText, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
-  const [loadingSettings, setLoadingSettings] = useState(true)
+  // Ticker banner was removed earlier; the setter is kept so the settings
+  // fetch below still works, but the value itself is no longer rendered.
+  const [, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
+  const [, setLoadingSettings] = useState(true)
   const [walletBalance, setWalletBalance] = useState(0)
 
   useEffect(() => {
@@ -70,41 +73,48 @@ function Layout({ children }) {
         <header className="transition-all duration-500">
           <div className="container-standard flex h-[var(--app-header-height)] items-center gap-2 md:gap-4">
             {/* Left: back button (non-home) + main branding.
-                (Left logo + Standard/clock badge removed for a cleaner header.) */}
+                The wordmark collapses to the logo on sub-pages below `sm` so
+                branding can never crowd the right-side actions (wishlist /
+                wallet / bell / account). It smoothly expands again once there
+                is room. (Left logo + Standard/clock badge removed earlier.) */}
             <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
-              {location.pathname !== '/' && (
+              {hasBackButton && (
                 <button
                   onClick={() => navigate(-1)}
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2 animate-in fade-in slide-in-from-left-2 duration-300"
                   aria-label="Go back"
                 >
                   <ChevronLeft className="h-6 w-6 text-[var(--color-on-surface)] group-hover:-translate-x-0.5 transition-transform" />
                 </button>
               )}
 
-              <Link to="/" className="group flex min-w-0 items-center gap-2 md:gap-3 transition-all">
+              <Link to="/" className="group flex min-w-0 items-center gap-2 md:gap-3 transition-all" aria-label="JDLX Mobile home">
                 <img 
                   src="/logo192.png" 
                   alt="JDLX Logo" 
                   className="h-8 w-8 md:h-10 md:w-10 shrink-0 object-contain transition-transform duration-500 group-hover:scale-110" 
                   fetchPriority="high"
                 />
-                <div className="flex min-w-0 flex-col items-start leading-none">
+                {/* Brand wordmark — width-capped + truncating so it can never
+                    reach the right-side icons, and collapses to logo-only on
+                    sub-pages where space is tight. */}
+                <div className={`flex min-w-0 flex-col items-start leading-none overflow-hidden whitespace-nowrap transition-all duration-500 ${hasBackButton ? 'max-w-0 opacity-0 sm:max-w-[300px] sm:opacity-100' : 'max-w-[300px] opacity-100'}`}>
                   <div className="truncate text-base md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal">
                     <span className="text-[var(--color-on-surface)]">JDLX</span> <span className="text-primary">MOBILE</span>
                   </div>
-                  <div className="hidden min-[420px]:block truncate text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5">
+                  <div className={`truncate text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 ${hasBackButton ? 'hidden' : 'hidden min-[420px]:block'}`}>
                     Premium Mobile Store
                   </div>
                 </div>
               </Link>
             </div>
 
-            {/* Right: Functional actions */}
-            <div className="flex items-center justify-end gap-3 px-1">
+            {/* Right: Functional actions — shrink-0 keeps every icon at its
+                fixed size so the header can never squeeze them together. */}
+            <div className="flex shrink-0 items-center justify-end gap-3 px-1">
               <Link
                 to="/profile/wishlist"
-                className="relative h-10 w-10 flex items-center justify-center rounded-full hover:bg-[var(--color-surface-low)] transition-all active:scale-90"
+                className="relative h-10 w-10 shrink-0 flex items-center justify-center rounded-full hover:bg-[var(--color-surface-low)] transition-all active:scale-90"
                 aria-label="Wishlist"
               >
                 <HeartIcon size={20} className={wishlistCount > 0 ? "text-red-500" : "text-[var(--color-on-surface-variant)]"} fill={wishlistCount > 0 ? "currentColor" : "none"} />
@@ -118,7 +128,7 @@ function Layout({ children }) {
               {walletBalance > 0 && (
                 <Link
                   to="/wallet"
-                  className="flex items-center gap-1.5 bg-[#F5A623]/10 text-[#D48A12] px-2.5 py-1.5 rounded-xl border border-[#F5A623]/20 shadow-sm"
+                  className="flex shrink-0 items-center gap-1.5 bg-[#F5A623]/10 text-[#D48A12] px-2.5 py-1.5 rounded-xl border border-[#F5A623]/20 shadow-sm"
                   aria-label="Wallet"
                 >
                   <Wallet size={16} />
@@ -126,7 +136,7 @@ function Layout({ children }) {
                 </Link>
               )}
 
-              <NotificationBell />
+              <div className="shrink-0"><NotificationBell /></div>
 
               {/* Account lives ONLY here (top-right corner) — never in the
                   floating bottom dock. Visible on every screen size so mobile
@@ -134,7 +144,7 @@ function Layout({ children }) {
                   the narrowest phones. */}
               <Link
                 to={user ? '/profile' : '/login'}
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-3 sm:px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-3 sm:px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
                 aria-label="Account"
               >
                 <User className="h-4 w-4" />

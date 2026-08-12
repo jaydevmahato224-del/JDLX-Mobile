@@ -51,7 +51,9 @@ export default function ProductDetails() {
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [deviceModel, setDeviceModel] = useState('');
   const [isNotified, setIsNotified] = useState(false);
-  const [fitting, setFitting] = useState(false);
+  // fitting is always false today (its only setter lived in a dead `false &&`
+  // block that was removed); the value is still read when adding to cart.
+  const [fitting] = useState(false);
   const [availability, setAvailability] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -120,7 +122,12 @@ export default function ProductDetails() {
   useEffect(() => {
     const rawToken = token || slugToken;
     if (!rawToken || product) {
-      if (product) setLoadingToken(false);
+      if (product) {
+        // Product resolved locally — no remote fetch happens in this branch,
+        // so clearing the loading flag here is intentional (not a cascade).
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLoadingToken(false);
+      }
       return;
     }
 
@@ -168,7 +175,12 @@ export default function ProductDetails() {
       .catch(() => {});
   }, [storeProducts?.length]);
   useEffect(() => {
-    if (cartItem?.device_model) setDeviceModel(cartItem.device_model);
+    if (cartItem?.device_model) {
+      // Keep the selected device model in sync with the cart line item
+      // (external store state) — intentional effect-based sync.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDeviceModel(cartItem.device_model);
+    }
   }, [cartItem?.device_model]);
 
   const deliveryTimeDisplay = useMemo(() => {
@@ -231,7 +243,7 @@ export default function ProductDetails() {
   const seoImage = useMemo(() => {
     const rawImage = productImages[0] || FALLBACK_IMAGE;
     return (rawImage.includes('localhost') || rawImage.includes('127.0.0.1') || rawImage.includes('10.0.2.2'))
-      ? rawImage.replace(/https?:\/\/[^\/]+/, 'https://jdlx-mobile.onrender.com')
+      ? rawImage.replace(/https?:\/\/[^/]+/, 'https://jdlx-mobile.onrender.com')
       : rawImage;
   }, [productImages]);
 
@@ -270,7 +282,9 @@ export default function ProductDetails() {
         image={seoImage}
         url={shareUrl}
       />
-      <button onClick={() => navigate(-1)} className="fixed top-4 left-4 z-[110] md:hidden h-10 w-10 flex items-center justify-center rounded-full bg-slate-900/40 backdrop-blur-md text-white border border-white/10 active:scale-90 transition-all shadow-xl"><ArrowLeft size={20} /></button>
+      {/* Back navigation is provided by the sticky app header (top-left),
+          which already navigates back on every non-home route — a second
+          floating button here overlapped it on mobile. */}
 
       <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr] animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="space-y-6">
@@ -403,13 +417,10 @@ export default function ProductDetails() {
             {/* Mobile-only Customization */}
             <div className="md:hidden space-y-6 mt-6">
                {requiresDeviceModel && <div className="p-6 rounded-[2.5rem] bg-slate-50 border border-slate-100" id="device-model-selector"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
-               {false && product.category_id === 7 && (
-                  <div className="p-5 rounded-[2rem] bg-amber-50 border border-amber-100 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-3"><div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-sm text-primary"><Truck size={24} /></div><div><p className="text-[13px] font-black text-slate-900 uppercase">Expert Fitting</p><p className="text-[10px] font-bold text-primary uppercase">Doorstep Installation</p></div></div>
-                    <div className="flex items-center gap-4"><span className="text-sm font-black text-slate-900">₹{product.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40}</span>
-                    <button type="button" onClick={() => setFitting(!fitting)} className={`w-14 h-8 rounded-full transition-all relative ${fitting ? 'bg-primary' : 'bg-slate-200'}`}><div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-sm transition-all ${fitting ? 'right-1' : 'left-1'}`} /></button></div>
-                  </div>
-               )}
+               {/* Note: the mobile 'Expert Fitting' toggle block was removed —
+                   it was gated behind a hardcoded `false &&` so it never
+                   rendered. The `fitting` state is still used by
+                   handleAddToCart, so cart logic is unchanged. */}
             </div>
           </div>
           <div className="glass-card p-4 md:p-8 rounded-[2.5rem]">
@@ -429,7 +440,7 @@ export default function ProductDetails() {
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowPolicyModal(false)} />
           <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
             <div className="bg-slate-900 p-8 text-white relative"><button onClick={() => setShowPolicyModal(false)} className="absolute top-6 right-6 p-2 rounded-full bg-white/10"><X size={20} /></button><div className="flex items-center gap-4"><div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck size={24} className="text-emerald-400" /></div><div><h3 className="text-2xl font-black tracking-tight">Protection</h3><p className="ui-label text-slate-400">Verified by JDLX</p></div></div></div>
-            <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar bg-white"><div className="space-y-4">{(product.final_return_policy || '7 Days Return Policy').split('\n').filter(p => p.trim()).map((p, i) => (<div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100"><div className="w-2 h-2 rounded-full bg-slate-900 mt-1.5 shrink-0" /><p className="text-[13px] font-bold text-slate-700 leading-relaxed">{p.replace(/\*\*/g, '').replace(/^\s*[\*\-]\s*/, '').trim()}</p></div>))}</div></div>
+            <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar bg-white"><div className="space-y-4">{(product.final_return_policy || '7 Days Return Policy').split('\n').filter(p => p.trim()).map((p, i) => (<div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100"><div className="w-2 h-2 rounded-full bg-slate-900 mt-1.5 shrink-0" /><p className="text-[13px] font-bold text-slate-700 leading-relaxed">{p.replace(/\*\*/g, '').replace(/^\s*[*-]\s*/, '').trim()}</p></div>))}</div></div>
             <div className="p-6 bg-slate-50 border-t border-slate-100"><button onClick={() => setShowPolicyModal(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Got it</button></div>
           </div>
         </div>

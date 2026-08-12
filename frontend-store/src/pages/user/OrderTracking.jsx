@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check } from 'lucide-react'
-import { API_BASE_URL } from '../../config'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban } from 'lucide-react'
+import { API_BASE_URL, resolveMediaUrl } from '../../config'
 
 function OrderTracking() {
     const { orderId } = useParams();
@@ -207,6 +207,15 @@ function OrderTracking() {
         }
     };
 
+    // Terminal/blocked statuses shown distinctly instead of the delivery timeline.
+    const terminalStatuses = ['CANCELLED', 'REFUNDED', 'REJECTED', 'RETURNED', 'INVENTORY_UNAVAILABLE'];
+    const isTerminalStatus = terminalStatuses.includes(order?.status?.toUpperCase());
+    // REFUND_REQUESTED is a pending state (not terminal) but still needs the
+    // status banner + Need Help section so the "Refund request submitted"
+    // message stays visible after the user submits it.
+    const isPendingRefundRequest = order?.status?.toUpperCase() === 'REFUND_REQUESTED';
+    const isOrderInactive = isTerminalStatus || isPendingRefundRequest;
+
     const stages = [
         { id: 'PLACED', label: 'Order Placed', icon: Clock, time: order?.created_at },
         { id: 'CONFIRMED', label: 'Confirmed', icon: CheckCircle, time: order?.confirmed_at },
@@ -217,6 +226,20 @@ function OrderTracking() {
 
     const getCurrentStageIndex = () => {
         return stages.findIndex(s => s.id === order?.status);
+    };
+
+    // First image from the product's image list (JSON array or comma-separated).
+    const getItemImage = (item) => {
+        const raw = item?.images || '';
+        if (!raw) return '';
+        try {
+            if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+            }
+        } catch { /* ignore */ }
+        const first = String(raw).split(',')[0]?.trim();
+        return first || '';
     };
 
     if (loading) return <div className="p-10 text-center text-gray-500">Tracking your order...</div>;
@@ -243,48 +266,78 @@ function OrderTracking() {
                     <Truck className="w-24 h-24 text-primary" />
                 </div>
 
-                <div className="flex flex-col">
-                    <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">Estimated Delivery</div>
-                    <div className="text-3xl font-black text-primary">
-                        {order?.status === 'DELIVERED' ? 'Delivered' : (trackingInfo?.estimated_delivery_time || order?.estimated_delivery)}
-                    </div>
-                </div>
-
-                <div className="relative flex flex-col gap-8 mt-4">
-                    {/* Vertical Line */}
-                    <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-gray-100"></div>
-
-                    {stages.map((stage, index) => {
-                        const Icon = stage.icon;
-                        const isCompleted = index <= activeIndex;
-                        const isCurrent = index === activeIndex;
-
-                        return (
-                            <div key={stage.id} className="flex gap-4 items-start relative z-10">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${isCurrent ? 'bg-primary text-white scale-110 shadow-lg ring-4 ring-primary/20' :
-                                    isCompleted ? 'bg-green-500 text-white' : 'bg-white text-gray-300 border-2 border-gray-50'
-                                    }`}>
-                                    <Icon className="w-5 h-5" />
-                                </div>
-                                <div className="flex-1 pt-1">
-                                    <h3 className={`font-bold text-sm ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
-                                        {stage.label}
-                                    </h3>
-                                    {stage.time && (
-                                        <p className="text-[10px] text-gray-400">
-                                            {new Date(stage.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </p>
-                                    )}
-                                    {isCurrent && stage.id !== 'DELIVERED' && (
-                                        <p className="text-[11px] text-primary font-medium mt-1 animate-pulse">
-                                            In Progress...
-                                        </p>
-                                    )}
-                                </div>
+                {isOrderInactive ? (
+                    <div className="flex flex-col gap-4">
+                        <div className={`flex items-center gap-3 p-4 rounded-2xl ${order?.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-50 border border-red-100' : 'bg-slate-50 border border-slate-100'}`}>
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${order?.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-500 text-white' : 'bg-slate-400 text-white'}`}>
+                                <Ban className="w-6 h-6" />
                             </div>
-                        );
-                    })}
-                </div>
+                            <div>
+                                <p className={`text-lg font-black tracking-tight ${order?.status?.toUpperCase() === 'CANCELLED' ? 'text-red-600' : 'text-slate-700'}`}>
+                                    {isPendingRefundRequest ? 'Refund Requested' : (order?.status || 'Cancelled').replace(/_/g, ' ')}
+                                </p>
+                                <p className="text-[11px] font-bold text-gray-400 mt-0.5">
+                                    {order?.status?.toUpperCase() === 'CANCELLED'
+                                        ? 'This order has been cancelled.'
+                                        : isPendingRefundRequest
+                                            ? 'Your refund request has been submitted and is being reviewed.'
+                                            : 'This order is no longer active.'}
+                                </p>
+                            </div>
+                        </div>
+                        {order?.cancellation_reason && (
+                            <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-0.5">Cancellation Reason</p>
+                                <p className="text-xs font-bold text-amber-800">{order.cancellation_reason}</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex flex-col">
+                            <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">Estimated Delivery</div>
+                            <div className="text-3xl font-black text-primary">
+                                {order?.status === 'DELIVERED' ? 'Delivered' : (trackingInfo?.estimated_delivery_time || order?.estimated_delivery)}
+                            </div>
+                        </div>
+
+                        <div className="relative flex flex-col gap-8 mt-4">
+                            {/* Vertical Line */}
+                            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-gray-100"></div>
+
+                            {stages.map((stage, index) => {
+                                const Icon = stage.icon;
+                                const isCompleted = index <= activeIndex;
+                                const isCurrent = index === activeIndex;
+
+                                return (
+                                    <div key={stage.id} className="flex gap-4 items-start relative z-10">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${isCurrent ? 'bg-primary text-white scale-110 shadow-lg ring-4 ring-primary/20' :
+                                            isCompleted ? 'bg-green-500 text-white' : 'bg-white text-gray-300 border-2 border-gray-50'
+                                            }`}>
+                                            <Icon className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1 pt-1">
+                                            <h3 className={`font-bold text-sm ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                {stage.label}
+                                            </h3>
+                                            {stage.time && (
+                                                <p className="text-[10px] text-gray-400">
+                                                    {new Date(stage.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            )}
+                                            {isCurrent && stage.id !== 'DELIVERED' && (
+                                                <p className="text-[11px] text-primary font-medium mt-1 animate-pulse">
+                                                    In Progress...
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
             </div>
 
             {(trackingInfo?.assigned_rider || order?.partner_name) && (
@@ -374,6 +427,48 @@ function OrderTracking() {
                 </div>
             </div>
 
+            {/* Ordered Products */}
+            {Array.isArray(order?.items) && order.items.length > 0 && (
+                <div className="glass-card p-5 flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+                            <Package className="w-4 h-4 text-primary" /> Items ({order.items.length})
+                        </h3>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty × Price</span>
+                    </div>
+                    <div className="flex flex-col divide-y divide-gray-50">
+                        {order.items.map((item, idx) => {
+                            const img = getItemImage(item);
+                            const qty = Number(item.quantity || 1);
+                            const price = Number(item.price || 0);
+                            const fitting = Number(item.fitting_charge || 0);
+                            const lineTotal = (price * qty) + (fitting * qty);
+                            return (
+                                <div key={idx} className="py-3 flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center shrink-0 p-1">
+                                        {img ? (
+                                            <img src={resolveMediaUrl(img)} alt={item.product_name || 'Product'} className="w-full h-full object-contain" loading="lazy" decoding="async" />
+                                        ) : (
+                                            <Package className="w-6 h-6 text-slate-300" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-black text-gray-800 truncate">{item.product_name || 'Product'}</p>
+                                        {item.device_model && (
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.device_model}</p>
+                                        )}
+                                        <p className="text-[10px] font-bold text-gray-400 mt-0.5">Qty {qty} × ₹{price}{fitting > 0 ? ` + ₹${fitting} fitting` : ''}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-sm font-black text-gray-900">₹{lineTotal.toFixed(0)}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Shipment Tracking Section (Shiprocket) */}
             {shipmentData && (
                 <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
@@ -450,8 +545,9 @@ function OrderTracking() {
                 </div>
             )}
 
-            {/* Order Actions Section */}
-            {(['PLACED', 'PACKING', 'PACKED', 'PENDING_PAYMENT', 'PENDING', 'DELIVERED'].includes(order?.status)) && (
+            {/* Order Actions Section — also shows for cancelled/terminal orders so
+                the status message + relevant actions are never hidden. */}
+            {(isOrderInactive || ['PLACED', 'PACKING', 'PACKED', 'PENDING_PAYMENT', 'PENDING', 'DELIVERED'].includes(order?.status)) && (
                 <div className="glass-card p-5 flex flex-col gap-4 border-t-4 border-t-red-400">
                     <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
                         <AlertCircle className="w-5 h-5 text-red-500" /> Need Help?
@@ -642,10 +738,21 @@ function OrderTracking() {
                         </form>
                     )}
 
-                    {['CANCELLED', 'REFUND_REQUESTED', 'REFUNDED'].includes(order?.status) && (
-                        <div className="flex flex-col items-center gap-2 py-4 italic text-gray-400">
-                            <span className="text-sm font-medium">Order Status: {order.status.replace('_', ' ')}</span>
-                            <p className="text-[10px] text-center">Refer to our help center for more details</p>
+                    {isOrderInactive && (
+                        <div className="flex flex-col items-center gap-2 py-2">
+                            <span className={`text-sm font-black ${order?.status?.toUpperCase() === 'CANCELLED' ? 'text-red-500' : 'text-slate-500'}`}>Order Status: {(order.status || 'CANCELLED').replace('_', ' ')}</span>
+                            <p className="text-[10px] text-center text-gray-400">
+                                {order?.status?.toUpperCase() === 'CANCELLED'
+                                    ? 'This order has been cancelled and cannot be modified.'
+                                    : isPendingRefundRequest
+                                        ? 'Your refund request is under review. We will notify you once it is processed.'
+                                        : 'This order is no longer active. Contact support if you need help.'}
+                            </p>
+                            {order?.cancellation_reason && (
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-full px-3 py-1">
+                                    Reason: {order.cancellation_reason}
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

@@ -4001,11 +4001,28 @@ def get_order_status(order_id):
             WHERE o.id = ? AND o.user_id = ?
         ''', (order_id, user_id))
         order = cursor.fetchone()
+        
+        if not order:
+            conn.close()
+            return error_response("Order not found", 404)
+        
+        # Include the ordered products (name + image) so the tracking page can
+        # render the item list. Falls back to the snapshot name stored on the
+        # item if the product row was deleted or never linked.
+        cursor.execute('''
+            SELECT oi.product_id, oi.quantity, oi.price, oi.subtotal,
+                   oi.fitting_charge, oi.product_name, oi.device_model,
+                   COALESCE(p.images, '') as images
+            FROM order_items oi
+            LEFT JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        ''', (str(order_id),))
+        items = [dict(row) for row in cursor.fetchall()]
         conn.close()
         
-        if order:
-            return jsonify(dict(order))
-        return error_response("Order not found", 404)
+        order_dict = dict(order)
+        order_dict['items'] = items
+        return jsonify(order_dict)
     except Exception as e:
         return error_response(str(e), 500)
 

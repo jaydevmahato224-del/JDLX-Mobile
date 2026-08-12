@@ -971,6 +971,12 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
+    # Older databases created before the is_read rename only had read_status;
+    # ensure the columns the notification panel + mark-read route rely on.
+    ensure_columns('notifications', [
+        ('is_read', 'INTEGER DEFAULT 0'),
+        ('metadata', 'TEXT'),
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_push_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

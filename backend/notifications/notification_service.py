@@ -1,7 +1,20 @@
-import sqlite3
 import os
+import sys
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATABASE_PATH = os.path.join(BASE_DIR, 'jdlx.db')
+sys.path.append(BASE_DIR)
+
+# Use the app-wide Turso-aware connection helper so in-app notifications land
+# in the SAME database the API reads from (production Turso) and therefore
+# appear in the user's notification panel. Falls back to a local SQLite file
+# only if the helper cannot be imported.
+try:
+    from database import get_db as _app_get_db
+    _HAS_APP_DB = True
+except ImportError:
+    _HAS_APP_DB = False
+    import sqlite3
+    DATABASE_PATH = os.path.join(BASE_DIR, 'jdlx.db')
 
 # Initialize Firebase Admin
 try:
@@ -28,6 +41,8 @@ class NotificationService:
         pass
 
     def _get_db(self):
+        if _HAS_APP_DB:
+            return _app_get_db()
         conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         return conn

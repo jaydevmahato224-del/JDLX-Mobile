@@ -87,7 +87,7 @@ function TicketDetailPage() {
             } else {
                 toast.error(json.message || "Failed to send reply");
             }
-        } catch (err) {
+        } catch {
             toast.error("Something went wrong");
         } finally {
             setSubmitting(false);

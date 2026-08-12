@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Bell, Check, Trash2, Package, Tag, Info } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
@@ -13,34 +13,30 @@ function NotificationBell() {
     const token = useStore(state => state.token);
     const user = useStore(state => state.user);
 
-    const fetchNotifications = useCallback(async () => {
+    // Load notifications on mount and refresh when the dropdown is opened.
+    // setState only runs inside promise callbacks (never synchronously in the
+    // effect body) to avoid cascading renders.
+    useEffect(() => {
+        let ignore = false;
         const activeToken = token || localStorage.getItem('token');
-        if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
-        try {
-            const res = await fetch(`${API_BASE_URL}/notifications`, {
-                headers: { 'Authorization': `Bearer ${activeToken}` }
-            });
-            if (res.status === 401) return;
-            const json = await res.json();
-            if (res.ok) {
+        if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return undefined;
+
+        fetch(`${API_BASE_URL}/notifications`, {
+            headers: { 'Authorization': `Bearer ${activeToken}` }
+        })
+            .then(async (res) => (res.status === 401 ? null : res.json()))
+            .then((json) => {
+                if (ignore || !json) return;
                 const notificationsData = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
                 setNotifications(notificationsData);
                 setUnreadCount(notificationsData.filter(isUnreadNotification).length);
-            }
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.warn('Notifications temporarily unavailable.');
-            }
-        }
-    }, [token]);
+            })
+            .catch(() => {
+                if (!ignore) console.warn('Notifications temporarily unavailable.');
+            });
 
-    useEffect(() => {
-        fetchNotifications();
-    }, [fetchNotifications]);
-
-    useEffect(() => {
-        if (isOpen) fetchNotifications();
-    }, [isOpen, fetchNotifications]);
+        return () => { ignore = true; };
+    }, [token, isOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {

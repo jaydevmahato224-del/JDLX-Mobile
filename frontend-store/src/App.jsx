@@ -119,7 +119,7 @@ const Login = lazy(() => import('./pages/user/Login'))
 const Cart = lazy(() => import('./pages/user/Cart'))
 const ProductDetails = lazy(() => import('./pages/user/ProductDetails'))
 const ProductRedirector = lazy(() => Promise.resolve({
-  default: () => {
+  default: function ProductRedirectorInner() {
     const { id } = useParams();
     const { products, fetchProducts } = useStore();
     const navigate = useNavigate();
@@ -377,7 +377,6 @@ function App() {
                       <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
                       <Route path="/product/:id" element={<ProductRedirector />} />
                       <Route path="/p/:token" element={<ProductDetails />} />
-                      <Route path="/p/:slugToken" element={<ProductDetails />} />
                       <Route path="/s/:token" element={<ShareRedirect />} />
                       <Route path="/admin/*" element={<OperationalRedirect />} />
                       <Route path="/warehouse/*" element={<OperationalRedirect />} />

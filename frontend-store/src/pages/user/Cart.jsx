@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, Truck, CheckCircle2, ShieldCheck } from 'lucide-react'
-import { resolveMediaUrl, API_BASE_URL } from '../../config'
+import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { resolveMediaUrl } from '../../config'
 import { trackRemoveFromCart } from '../../utils/analytics'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import LoadingScreen from '../../components/LoadingScreen'
@@ -20,7 +20,7 @@ function getProductImage(item) {
             if (Array.isArray(parsed) && parsed.length > 0) {
                 images = parsed[0];
             }
-        } catch (e) {
+        } catch {
             // Not valid JSON
         }
     }
@@ -39,21 +39,15 @@ function Cart() {
     const updateDeviceModel = useStore(state => state.updateDeviceModel);
     const removeFromCart = useStore(state => state.removeFromCart);
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
-    const toggleFittingService = useStore(state => state.toggleFittingService);
     const token = useStore(state => state.token);
     const isCartLoaded = useStore(state => state.isCartLoaded);
     const fetchCart = useStore(state => state.fetchCart);
     const { trackEvent } = useAnalyticsContext();
     const [isSyncing, setIsSyncing] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
-    const [availability, setAvailability] = useState(null);
 
     useEffect(() => {
         fetchCart();
-        fetch(`${API_BASE_URL}/warehouse/availability`)
-            .then(res => res.json())
-            .then(data => setAvailability(data))
-            .catch(e => console.error('Failed to load availability:', e));
 
         // Safety timeout: prevent infinite loading if API is unresponsive
         const safetyTimer = setTimeout(() => {
@@ -81,20 +75,6 @@ function Cart() {
         const qty = Number(item.qty || 1);
         return sum + (price * qty);
     }, 0);
-    const fittingTotal = availableItems.reduce((sum, item) => {
-        if (item.fitting) {
-            const charge = item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40;
-            const qty = Number(item.qty || 1);
-            return sum + (charge * qty);
-        }
-        return sum;
-    }, 0);
-
-    const freeDeliveryThreshold = Number(availability?.free_delivery_threshold || 499);
-    const deliveryFee = subtotal >= freeDeliveryThreshold ? 0 : Number(availability?.delivery_fee || 49);
-    const platformFee = Number(availability?.platform_fee || 7);
-    const finalToPay = subtotal + fittingTotal + deliveryFee + platformFee;
-
     const removeUnavailable = () => {
         const unavailableIds = cart.filter(item => item.removedFromInventory || Number(item.stock || 0) <= 0).map(i => i.id);
         unavailableIds.forEach(id => removeFromCart(id));
@@ -235,26 +215,6 @@ function Cart() {
                                                 />
                                             </div>
                                         )}
-
-                                        {false && item.category_id === 7 && (
-                                            <div className="mt-4 p-4 rounded-[24px] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] flex items-center justify-between group/fitting transition-all hover:bg-[var(--color-surface-white)] hover:shadow-md">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${item.fitting ? 'bg-primary text-[var(--color-on-primary)] scale-110 shadow-lg shadow-primary/20' : 'bg-[var(--color-surface-white)] text-[var(--color-on-surface-variant)]'}`}>
-                                                        <Truck className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[12px] font-black text-[var(--color-on-surface)] uppercase tracking-tight">Professional Fitting</p>
-                                                        <p className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">₹{item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40}</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => toggleFittingService(item.id)}
-                                                    className={`w-12 h-7 rounded-full transition-all relative p-1 ${item.fitting ? 'bg-primary' : 'bg-[var(--color-surface-highest)]'}`}
-                                                >
-                                                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-all transform ${item.fitting ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
 
                                     {/* Action Section */}
@@ -262,7 +222,6 @@ function Cart() {
                                         <div className="flex items-center gap-4 bg-[var(--color-surface-white)] rounded-2xl p-1 border border-[var(--color-surface-high)] shadow-sm">
                                             <button
                                                 onClick={() => {
-                                                    const qtyToRemove = 1;
                                                     if (item.qty === 1) {
                                                         trackRemoveFromCart(item, 1);
                                                         removeFromCart(item.id);

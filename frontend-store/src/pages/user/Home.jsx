@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Heart as HeartIcon, Zap, Star, Truck, ShieldCheck } from 'lucide-react'
+import { ChevronRight, RefreshCw, ShoppingBag, Plus, Minus, Heart as HeartIcon, Zap, Star, ShieldCheck } from 'lucide-react'
 
 import BlurImage from '../../components/BlurImage'
 import PaginationLoader from '../../components/PaginationLoader'
@@ -14,7 +14,6 @@ import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import { refreshRecentlyViewed } from '../../utils/recentlyViewedSync'
-import { isStickerProduct } from '../../utils/stickerCustomization'
 import { getProductUrl } from '../../utils/productSlug'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
@@ -51,7 +50,7 @@ function getProductImage(product) {
       if (Array.isArray(parsed) && parsed.length > 0) {
         images = parsed[0]
       }
-    } catch (e) {
+    } catch {
       // Not valid JSON, continue with original string
     }
   }
@@ -149,7 +148,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         onAddToCart(product);
         toast.success('Added to collection');
       }
-    } catch (err) {
+    } catch {
       onAddToCart(product);
       toast.success('Added to collection');
     } finally {
@@ -273,84 +272,9 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   )
 })
 
-function CategoryChips({ categories, selected, onSelect }) {
-  const categoryList = Array.isArray(categories) ? categories : []
-  return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2">
-      <button
-        onClick={() => onSelect('All')}
-        className={`category-chip ${selected === 'All' ? 'active' : ''}`}
-      >
-        All Products
-      </button>
-      {categoryList.map((cat) => (
-        <button
-          key={cat.id || cat.name}
-          onClick={() => onSelect(cat.id)}
-          className={`category-chip ${selected === cat.id ? 'active' : ''}`}
-        >
-          {cat.name}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function FiltersBar({ inputRef, query, onQueryChange, stockFilter, onStockFilterChange, sortBy, onSortByChange, hasActiveFilters, onClear }) {
-  return (
-    <div className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between border-t border-slate-100">
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search items by name or category..."
-          className="w-full h-12 rounded-2xl bg-slate-50 pl-11 pr-4 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-        />
-      </div>
-
-      <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
-        <select
-          value={stockFilter}
-          onChange={(e) => onStockFilterChange(e.target.value)}
-          className="glass-dropdown h-12 px-6"
-        >
-          <option value="all">Availability: All</option>
-          <option value="in-stock">In Stock Only</option>
-          <option value="low-stock">Low Stock</option>
-        </select>
-
-        <select
-          value={sortBy}
-          onChange={(e) => onSortByChange(e.target.value)}
-          className="glass-dropdown h-12 px-6"
-        >
-          <option value="recommended">Sort: Recommended</option>
-          <option value="price-low">Price: Low to High</option>
-          <option value="price-high">Price: High to Low</option>
-          <option value="newest">Newest First</option>
-        </select>
-
-        {hasActiveFilters && (
-          <button
-            onClick={onClear}
-            className="h-12 px-5 rounded-2xl bg-red-50 text-red-600 text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all whitespace-nowrap"
-          >
-            Clear Filters
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export default function Home() {
   const navigate = useNavigate()
-  const location = useLocation()
   const observerRef = useRef(null)
-  const searchInputRef = useRef(null)
   
   const user = useStore((state) => state.user)
   const token = useStore((state) => state.token)
@@ -374,7 +298,6 @@ export default function Home() {
   const {
     products,
     initialLoading,
-    pageRefreshing,
     paginationLoading,
     hasError,
     errorMessage,
@@ -385,11 +308,6 @@ export default function Home() {
     retryLoad,
     isWakingUp,
   } = useSmartProductLoader(20)
-
-  const [categories, setCategories] = useState([])
-  const [selectedCategory, setSelectedCategory] = useState('All')
-  const [stockFilter, setStockFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('recommended')
 
   const handleBannerClick = (url) => {
     if (!url) return;
@@ -409,7 +327,8 @@ export default function Home() {
     }
   };
 
-  const [banners, setBanners] = useState([])
+  // Banners are preloaded into the store by App.jsx; local state starts from it.
+  const [banners, setBanners] = useState(() => useStore.getState().banners || [])
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
 
   const featuredProducts = useMemo(() => products.filter(p => Number(p.is_featured) === 1 || p.is_featured === true), [products])
@@ -446,10 +365,12 @@ export default function Home() {
   const SWIPE_THRESHOLD = 50
 
   const handleBannerNext = useCallback(() => {
+    if (!allBanners.length) return
     setCurrentBannerIndex(prev => (prev + 1) % allBanners.length)
   }, [allBanners.length])
 
   const handleBannerPrev = useCallback(() => {
+    if (!allBanners.length) return
     setCurrentBannerIndex(prev => (prev - 1 + allBanners.length) % allBanners.length)
   }, [allBanners.length])
 
@@ -515,7 +436,6 @@ export default function Home() {
   }, [handleBannerNext, handleBannerPrev, resetBannerTimer])
   
   const globalSearchQuery = useStore((state) => state.globalSearchQuery)
-  const setGlobalSearchQuery = useStore((state) => state.setGlobalSearchQuery)
   const query = globalSearchQuery || ''
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
@@ -556,17 +476,10 @@ export default function Home() {
   const [activeOffers, setActiveOffers] = useState([])
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/categories`)
-      .then((res) => res.json())
-      .then((json) => setCategories(json.data || []))
-      .catch((err) => console.error('Categories failed:', err))
-
-    // Banners are preloaded in App.jsx via useStore.fetchBanners()
-    // but we still sync them to local state for compatibility with existing useMemo
+    // Banners are preloaded into the store by App.jsx; local state is initialized
+    // from it. Only hit the fallback endpoint when the store had nothing yet.
     const preloadedBanners = useStore.getState().banners;
-    if (preloadedBanners && preloadedBanners.length > 0) {
-      setBanners(preloadedBanners);
-    } else {
+    if (!preloadedBanners || preloadedBanners.length === 0) {
       fetch(`${API_BASE_URL}/banners`)
         .then((r) => r.json())
         .then((json) => {
@@ -603,8 +516,8 @@ export default function Home() {
 
 
   useEffect(() => {
-    loadInitialProducts(selectedCategory, debouncedQuery, null)
-  }, [selectedCategory, debouncedQuery, loadInitialProducts])
+    loadInitialProducts(null, debouncedQuery, null)
+  }, [debouncedQuery, loadInitialProducts])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -919,7 +832,7 @@ export default function Home() {
           <ProductLoadingGrid count={8} />
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
-            {regularProducts.slice(6, 18).map((p) => (
+            {regularProducts.slice(6).map((p) => (
               <div key={`main-${p.id}`} onClick={() => addToRecentlyViewed(p)}>
                 <ProductCard product={p} onAddToCart={addToCart} disabled={storeBlocked} />
               </div>

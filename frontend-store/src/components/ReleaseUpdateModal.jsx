@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CheckCircle2, Sparkles, X } from 'lucide-react'
 import { CUSTOMER_RELEASE_UPDATES } from '../config/releaseUpdates'
 import useScrollLock from '../hooks/useScrollLock'
@@ -7,16 +7,16 @@ const STORAGE_KEY = 'jdlx_customer_seen_release_update'
 
 export default function ReleaseUpdateModal() {
   const release = CUSTOMER_RELEASE_UPDATES
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
+  // Read the "seen" flag once at mount (the release payload is a module
+  // constant, so a lazy initializer is equivalent to the old effect).
+  const [open, setOpen] = useState(() => {
     try {
       const seenReleaseId = localStorage.getItem(STORAGE_KEY)
-      setOpen(Boolean(release?.id) && seenReleaseId !== release.id)
-    } catch (error) {
-      setOpen(Boolean(release?.id))
+      return Boolean(release?.id) && seenReleaseId !== release.id
+    } catch {
+      return Boolean(release?.id)
     }
-  }, [release?.id])
+  })
 
   // Lock the page behind the release-notes modal while it is open.
   useScrollLock(open)

@@ -41,7 +41,7 @@ function Addresses() {
                 headers: { Authorization: `Bearer ${token}` } 
             });
             if (res.ok) setAddresses(await res.json());
-        } catch (err) {
+        } catch {
             toast.error("Failed to load addresses");
         } finally {
             setLoading(false);
@@ -78,7 +78,7 @@ function Addresses() {
             } else {
                 toast.error("Failed to save address");
             }
-        } catch (err) {
+        } catch {
             toast.error("Something went wrong");
         }
     };
@@ -96,7 +96,7 @@ function Addresses() {
                 toast.success('Address deleted');
                 fetchAddresses();
             }
-        } catch (err) {
+        } catch {
             toast.error("Failed to delete address");
         }
     };

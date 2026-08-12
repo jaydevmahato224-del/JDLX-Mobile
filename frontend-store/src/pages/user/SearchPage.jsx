@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Star, ShieldCheck } from 'lucide-react'
 
@@ -35,7 +35,9 @@ function getProductImage(product) {
       if (Array.isArray(parsed) && parsed.length > 0) {
         images = parsed[0]
       }
-    } catch (e) {}
+    } catch {
+      // Invalid JSON string — fall through and keep the raw value
+    }
   }
 
   if (Array.isArray(images) && images.length > 0) {
@@ -249,11 +251,9 @@ function FiltersBar({ inputRef, query, onQueryChange, stockFilter, onStockFilter
 }
 
 export default function SearchPage() {
-  const location = useLocation()
   const navigate = useNavigate()
   const observerRef = useRef(null)
   const searchInputRef = useRef(null)
-  const user = useStore((state) => state.user)
   const addToCart = useStore((state) => state.addToCart)
   const storeBlocked = useStore((state) => state.storeBlocked)
   
@@ -327,7 +327,28 @@ export default function SearchPage() {
     return () => observer.disconnect()
   }, [hasMore, initialLoading, paginationLoading, loadMoreProducts])
 
-  const displayProducts = products
+  // Client-side availability filter + sort wired to the FiltersBar dropdowns.
+  // Pure presentation logic — the backend query and business rules are untouched.
+  const displayProducts = useMemo(() => {
+    let list = products
+    if (stockFilter === 'in-stock') {
+      list = list.filter((p) => (Number(p.stock ?? 0) - Number(p.hard_reserved ?? p.reserved_stock ?? 0)) > 0)
+    } else if (stockFilter === 'low-stock') {
+      list = list.filter((p) => {
+        const available = Number(p.stock ?? 0) - Number(p.hard_reserved ?? p.reserved_stock ?? 0)
+        return available > 0 && available <= LOW_STOCK_LIMIT
+      })
+    }
+    if (sortBy === 'price-low') {
+      list = [...list].sort((a, b) => Number(a.price) - Number(b.price))
+    } else if (sortBy === 'price-high') {
+      list = [...list].sort((a, b) => Number(b.price) - Number(a.price))
+    } else if (sortBy === 'newest') {
+      // Guard missing/invalid dates so the comparator never returns NaN
+      list = [...list].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    }
+    return list
+  }, [products, stockFilter, sortBy])
 
   const hasActiveFilters = selectedCategory !== 'All' || query.trim() !== '' || stockFilter !== 'all' || sortBy !== 'recommended'
 

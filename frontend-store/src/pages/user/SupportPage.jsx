@@ -90,7 +90,7 @@ function SupportPage() {
             } else {
                 toast.error(data.message || "Failed to create ticket");
             }
-        } catch (err) {
+        } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {
             setSubmitting(false);

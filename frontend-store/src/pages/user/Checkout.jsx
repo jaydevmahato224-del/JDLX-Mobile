@@ -19,7 +19,6 @@ function Checkout() {
     const cart = useStore(state => state.cart);
     const user = useStore(state => state.user);
     const clearCart = useStore(state => state.clearCart);
-    const removeFromCart = useStore(state => state.removeFromCart);
     const { trackEvent } = useAnalyticsContext();
 
     const [formData, setFormData] = useState({
@@ -36,16 +35,13 @@ function Checkout() {
     });
 
     const [coords, setCoords] = useState({ latitude: 28.6139, longitude: 77.2090 });
-    const [orderPlaced, setOrderPlaced] = useState(false);
+    const [orderPlaced] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState('PREPAID'); // Default to Prepaid as recommended
     const [isProcessing, setIsProcessing] = useState(false);
     const [savedAddresses, setSavedAddresses] = useState([]);
     const [selectedAddressId, setSelectedAddressId] = useState(null);
     const [showPicker, setShowPicker] = useState(false);
     const [availability, setAvailability] = useState(null);
-    const [pincode, setPincode] = useState('');
-    const [serviceability, setServiceability] = useState(null);
-    const [checkingPincode, setCheckingPincode] = useState(false);
     const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
     const [pincodeMessage, setPincodeMessage] = useState('');
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
@@ -86,7 +82,7 @@ function Checkout() {
                         longitude: position.coords.longitude
                     });
                 },
-                (error) => {
+                () => {
                     console.warn("Geolocation permission denied, using default Delhi coordinates.");
                 }
             );
@@ -116,7 +112,7 @@ function Checkout() {
                         setCoords({ latitude: defaultAddr.latitude, longitude: defaultAddr.longitude });
                     }
                 }
-            } catch (err) {
+            } catch {
                 console.error("Failed to fetch addresses");
             }
         };
@@ -134,19 +130,6 @@ function Checkout() {
             })
             .catch(e => console.error('Failed to load availability:', e));
     }, []);
-
-    const checkPincode = () => {
-        if (!pincode || pincode.length !== 6) return;
-        setCheckingPincode(true);
-        setTimeout(() => {
-            setServiceability({
-                status: 'serviceable',
-                edd: new Date(Date.now() + (3 * 24 * 60 * 60 * 1000)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-                courier: 'Shiprocket Express'
-            });
-            setCheckingPincode(false);
-        }, 800);
-    };
 
     useEffect(() => {
         if (subtotal > 0 && user) {
@@ -300,7 +283,7 @@ function Checkout() {
             let data;
             try {
                 data = await res.json();
-            } catch (jsonErr) {
+            } catch {
                 throw new Error('Server returned an invalid response. Please try again.');
             }
 

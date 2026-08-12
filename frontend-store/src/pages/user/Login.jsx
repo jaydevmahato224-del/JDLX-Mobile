@@ -1,13 +1,8 @@
 import { useEffect } from 'react'
 import toast from "react-hot-toast"
-import { useNavigate } from 'react-router-dom'
-import { useStore } from '../../store/useStore'
 import { API_BASE_URL } from '../../config'
 
 function Login() {
-    const navigate = useNavigate();
-    const setUser = useStore(state => state.setUser);
-
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const refCode = params.get('ref');

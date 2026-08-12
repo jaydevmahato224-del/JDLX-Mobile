@@ -15,7 +15,7 @@ function TermsAndConditions() {
         if (res.ok && typeof content === 'string') {
           setRemoteContent(content)
         }
-      } catch (e) {
+      } catch {
         // ignore: fallback content will render
       }
     }

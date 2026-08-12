@@ -5,7 +5,6 @@ import { useStore } from '../store/useStore'
 import toast from 'react-hot-toast'
 
 export default function ProductReviews({ productId }) {
-    const user = useStore((state) => state.user);
     const token = useStore((state) => state.token);
     const [reviews, setReviews] = useState([]);
     const [stats, setStats] = useState({ total: 0, average: 0, distribution: {} });
@@ -33,8 +32,8 @@ export default function ProductReviews({ productId }) {
                 setReviews(data.reviews || []);
                 setStats(data.stats || { total: 0, average: 0, distribution: {} });
             }
-        } catch (error) {
-            console.error('Failed to fetch reviews:', error);
+        } catch {
+            console.error('Failed to fetch reviews:');
         } finally {
             setLoading(false);
         }
@@ -69,7 +68,7 @@ export default function ProductReviews({ productId }) {
             } else {
                 toast.error(data.error || 'Submission failed');
             }
-        } catch (error) {
+        } catch {
             toast.error('Connection error');
         } finally {
             setSubmitting(false);
@@ -232,7 +231,7 @@ export default function ProductReviews({ productId }) {
                                                         setReviews(prev => prev.map(r => r.id === rev.id ? { ...r, helpful_count: newCount, user_has_liked: isUnliking ? 0 : 1 } : r));
                                                         toast.success(data.message);
                                                     }
-                                                } catch (err) {
+                                                } catch {
                                                     toast.error('Connection error');
                                                 }
                                             })();

@@ -41,7 +41,9 @@ export default function Wishlist() {
             try {
                 const parsed = JSON.parse(images);
                 if (Array.isArray(parsed) && parsed.length > 0) images = parsed[0];
-            } catch (e) {}
+            } catch {
+                // Invalid JSON string — keep original value
+            }
         }
         if (Array.isArray(images) && images.length > 0) images = images[0];
         return resolveMediaUrl(images) || 'https://placehold.co/400x400/f8fafc/0f172a?text=JDLX';
@@ -92,7 +94,7 @@ export default function Wishlist() {
             ) : (
                 <div className="grid gap-4">
                     {wishlist.map((product) => {
-                        const stock = Number(product.stock ?? 0);
+                        const stock = Math.max(0, Number(product.stock ?? 0) - Number(product.hard_reserved ?? product.reserved_stock ?? 0));
                         const isLowStock = stock > 0 && stock <= 2;
                         const isOutOfStock = stock <= 0;
 
@@ -126,9 +128,11 @@ export default function Wishlist() {
                                                     <span className="text-[11px] font-black text-slate-700">
                                                         {Number(product.average_rating).toFixed(1)}
                                                     </span>
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                                                        ({product.total_reviews} Reviews)
-                                                    </span>
+                                                    {product.total_reviews > 0 && (
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                                            ({product.total_reviews} Reviews)
+                                                        </span>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

@@ -509,7 +509,7 @@ export const useStore = create((set, get) => ({
                         qty: Math.min(safeQty, Math.max(1, available)),
                         removedFromInventory: false 
                     };
-                } catch (err) {
+                } catch {
                     return { ...item, removedFromInventory: true, stock: 0 };
                 }
             });

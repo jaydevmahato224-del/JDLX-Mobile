@@ -11,7 +11,7 @@ function OrderTracking() {
     const [riderLocation, setRiderLocation] = useState(null);
     const [routeData, setRouteData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [shipmentLoading, setShipmentLoading] = useState(false);
+    const [, setShipmentLoading] = useState(false);
     const [shipmentData, setShipmentData] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [refundReason, setRefundReason] = useState('');
@@ -45,7 +45,7 @@ function OrderTracking() {
                     const data = await res.json();
                     setTrackingInfo(data);
                 }
-            } catch (err) {
+            } catch {
                 console.error('Failed to fetch tracking info');
             }
         };
@@ -63,7 +63,7 @@ function OrderTracking() {
                 } else {
                     setError('Order not found or access denied.');
                 }
-            } catch (err) {
+            } catch {
                 setError('Failed to fetch order status.');
             } finally {
                 setLoading(false);
@@ -88,7 +88,7 @@ function OrderTracking() {
                         const data = await res.json();
                         setRiderLocation(data);
                     }
-                } catch (err) {
+                } catch {
                     console.error('Failed to fetch rider location');
                 }
             };
@@ -111,7 +111,7 @@ function OrderTracking() {
                         const data = await res.json();
                         setRouteData(data);
                     }
-                } catch (err) {
+                } catch {
                     console.error('Failed to fetch route info');
                 }
             };
@@ -134,7 +134,7 @@ function OrderTracking() {
                     const data = await res.json();
                     setShipmentData(data.data);
                 }
-            } catch (err) {
+            } catch {
                 console.error('Failed to fetch shipment tracking');
             } finally {
                 setShipmentLoading(false);
@@ -172,7 +172,7 @@ function OrderTracking() {
             } else {
                 setMessage({ type: "error", text: data.error || "Failed to cancel order." });
             }
-        } catch (err) {
+        } catch {
             setMessage({ type: "error", text: "An error occurred." });
         } finally {
             setActionLoading(false);
@@ -200,7 +200,7 @@ function OrderTracking() {
             } else {
                 setMessage({ type: 'error', text: data.error || "Failed to submit request." });
             }
-        } catch (err) {
+        } catch {
             setMessage({ type: 'error', text: "An error occurred." });
         } finally {
             setActionLoading(false);

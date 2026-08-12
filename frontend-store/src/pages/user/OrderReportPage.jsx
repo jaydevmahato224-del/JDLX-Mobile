@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, PackageSearch, ChevronDown, Check } from 'lucide-react'
 
@@ -9,7 +9,6 @@ function OrderReportPage() {
     const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
-    const location = useLocation();
 
     const [orders, setOrders] = useState([]);
     const [loadingOrders, setLoadingOrders] = useState(true);
@@ -120,7 +119,7 @@ function OrderReportPage() {
                     toast.error(data.message || "Failed to submit report");
                 }
             }
-        } catch (err) {
+        } catch {
             toast.error("Network issue. Please try again.");
         } finally {
             setSubmitting(false);

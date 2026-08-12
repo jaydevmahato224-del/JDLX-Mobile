@@ -121,7 +121,7 @@ function BugReportPage() {
             } else {
                 toast.error(data.message || "Failed to submit report");
             }
-        } catch (err) {
+        } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {
             setSubmitting(false);

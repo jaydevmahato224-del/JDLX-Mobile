@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { MapPin, ChevronRight } from 'lucide-react'
 
 function MyOrders() {

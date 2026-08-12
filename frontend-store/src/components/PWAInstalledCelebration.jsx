@@ -3,14 +3,11 @@ import { Smartphone, Check, X } from 'lucide-react';
 import useScrollLock from '../hooks/useScrollLock';
 
 export default function PWAInstalledCelebration() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(
+    () => new URLSearchParams(window.location.search).get('preview_celebration') === '1'
+  );
 
   useEffect(() => {
-    const isPreview = new URLSearchParams(window.location.search).get('preview_celebration') === '1';
-    if (isPreview) {
-      setIsOpen(true);
-    }
-
     const handleAppInstalled = () => {
       console.log('🎉 PWAInstalledCelebration: appinstalled event detected!');
       setIsOpen(true);

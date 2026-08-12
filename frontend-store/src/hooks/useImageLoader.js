@@ -28,8 +28,6 @@ export const useImageLoader = () => {
    * Initialize Intersection Observer for lazy loading
    */
   useEffect(() => {
-    const imageElements = new WeakMap()
-
     imageObserverRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {

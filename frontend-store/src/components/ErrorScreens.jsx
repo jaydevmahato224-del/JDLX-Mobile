@@ -171,7 +171,7 @@ const ReportModal = ({ onClose }) => {
             } else {
                 toast.error("Failed to send report");
             }
-        } catch (err) {
+        } catch {
             toast.error("Network error");
         } finally {
             setIsSubmitting(false);

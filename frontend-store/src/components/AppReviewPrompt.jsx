@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
 import toast from 'react-hot-toast';
 
-export default function AppReviewPrompt({ show, reason, onDismiss }) {
+export default function AppReviewPrompt({ show, onDismiss }) {
     const [rating, setRating] = useState(0);
     const [reviewText, setReviewText] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);

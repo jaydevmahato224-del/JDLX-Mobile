@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { 
     ChevronRight, 
@@ -22,7 +22,6 @@ function RefundRequestPage() {
     const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
-    const location = useLocation();
 
     const [orders, setOrders] = useState([]);
     const [loadingOrders, setLoadingOrders] = useState(true);
@@ -95,19 +94,10 @@ function RefundRequestPage() {
                     setErrorMsg(result.reason);
                 }
             }
-        } catch (err) {
+        } catch {
             toast.error("Eligibility check failed");
         } finally {
             setLoadingEligibility(false);
-        }
-    };
-
-    const handleOrderChange = (e) => {
-        const orderId = e.target.value;
-        setForm({ ...form, order_id: orderId });
-        setEligibility(null);
-        if (orderId) {
-            checkEligibility(orderId);
         }
     };
 
@@ -177,7 +167,7 @@ function RefundRequestPage() {
                     toast.error(data.message || "Failed to submit request");
                 }
             }
-        } catch (err) {
+        } catch {
             toast.error("Network issue.");
         } finally {
             setSubmitting(false);

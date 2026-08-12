@@ -41,7 +41,8 @@ function getUTMParams() {
 
 export function useAnalytics(userId = null) {
   const location = useLocation();
-  const pageEnterTime = useRef(Date.now());
+  // Initialized in the mount effect below (Date.now() must not run during render).
+  const pageEnterTime = useRef(0);
   const sessionId = getSessionId();
 
   // Auto track page view on route change

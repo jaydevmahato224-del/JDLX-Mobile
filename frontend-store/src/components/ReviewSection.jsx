@@ -63,7 +63,7 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
             } else {
                 setError(data.error || "Failed to submit review");
             }
-        } catch (err) {
+        } catch {
             setError("An error occurred while submitting your review.");
         } finally {
             setIsSubmitting(false);

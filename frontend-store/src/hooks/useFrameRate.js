@@ -87,19 +87,24 @@ function applyFPSClass(tier) {
  *   // fpsTier is 60, 90, or 120
  */
 export function useFrameRate() {
-  const [fpsTier, setFpsTier] = useState(60);
+  // Seed the tier from any cached detection (lazy initializer, so no
+  // synchronous setState is needed in the effect below).
+  const [fpsTier, setFpsTier] = useState(() => {
+    const cached = sessionStorage.getItem('jdlx_fps_tier');
+    const tier = Number(cached);
+    return [60, 90, 120].includes(tier) ? tier : 60;
+  });
   const detectedRef = useRef(false);
 
   useEffect(() => {
     // Only detect once per session
     if (detectedRef.current) return;
 
-    // Check if already cached in sessionStorage
+    // Cached tier from a previous session — just apply the CSS class.
     const cached = sessionStorage.getItem('jdlx_fps_tier');
     if (cached) {
       const tier = Number(cached);
       if ([60, 90, 120].includes(tier)) {
-        setFpsTier(tier);
         applyFPSClass(tier);
         detectedRef.current = true;
         return;

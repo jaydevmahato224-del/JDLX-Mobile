@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileText, ShieldCheck, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
@@ -15,26 +15,20 @@ function TermsGate() {
   const setUser = useStore((s) => s.setUser)
 
   const [requiredVersion, setRequiredVersion] = useState(1)
-  const [checking, setChecking] = useState(true)
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState('')
   const [termsContent, setTermsContent] = useState('')
   const [scrolledToBottom, setScrolledToBottom] = useState(false)
 
-  const acceptedVersion = useMemo(() => Number(user?.terms_accepted_version || 0), [user])
-  const needsAccept = Boolean(user) && acceptedVersion < requiredVersion
-
   useEffect(() => {
     const activeToken = token || localStorage.getItem('token');
     if (!user || !activeToken || activeToken === 'null' || activeToken === 'undefined') {
       setOpen(false)
-      setChecking(false)
       return
     }
 
     const run = async () => {
-      setChecking(true)
       try {
         const [settingsRes, profileRes] = await Promise.all([
           fetch(`${API_BASE_URL}/settings`),
@@ -56,10 +50,8 @@ function TermsGate() {
         }
         
         setOpen(freshAcceptedVersion < version)
-      } catch (e) {
+      } catch {
         // ignore; do not block app due to transient errors
-      } finally {
-        setChecking(false)
       }
     }
 
@@ -82,7 +74,7 @@ function TermsGate() {
       }
       setUser(json, token)
       setOpen(false)
-    } catch (e) {
+    } catch {
       setErr('Connection error while accepting terms')
     } finally {
       setSubmitting(false)

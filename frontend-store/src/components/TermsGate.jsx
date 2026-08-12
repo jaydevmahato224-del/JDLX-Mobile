@@ -48,7 +48,10 @@ function TermsGate() {
         let freshAcceptedVersion = Number(currentUser?.terms_accepted_version || 0)
 
         if (profileRes.ok && profileJson) {
-          setUser(profileJson, token)
+          // Pass the resolved token (activeToken), NOT the render-time store
+          // snapshot: if the store token was momentarily null while localStorage
+          // still had a valid one, setUser(user, null) would wipe the session.
+          setUser(profileJson, activeToken)
           freshAcceptedVersion = Number(profileJson.terms_accepted_version || 0)
         }
         

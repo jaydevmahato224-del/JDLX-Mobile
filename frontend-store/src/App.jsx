@@ -64,7 +64,23 @@ window.fetch = async (...args) => {
     }
 
     if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {
-      useStore.getState().logout();
+      // Only treat a 401 as a session-invalidation when THIS request actually
+      // carried the user's token. Unauthenticated requests that happen to return
+      // 401 (guest/OTP/admin endpoints, stale background calls, etc.) must not
+      // silently wipe a valid session — that caused random "auto-logouts".
+      const init = args[1] || {};
+      const headers = init.headers;
+      let hadAuthHeader = false;
+      if (headers) {
+        if (typeof headers.get === 'function') {
+          hadAuthHeader = !!headers.get('Authorization');
+        } else if (typeof headers === 'object') {
+          hadAuthHeader = Object.keys(headers).some(k => k.toLowerCase() === 'authorization' && headers[k]);
+        }
+      }
+      if (hadAuthHeader) {
+        useStore.getState().logout();
+      }
     }
 
     // Detection Logic for Server Errors - ONLY for our backend

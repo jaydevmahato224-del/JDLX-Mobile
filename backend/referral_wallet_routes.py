@@ -60,6 +60,12 @@ def my_referral_code():
     cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id = ? AND status = 'completed'", (user_id,))
     completed_referrals = cursor.fetchone()[0]
 
+    # Referrer total is always ₹50 per completed referral (₹10 instant + ₹40
+    # after the friend's first order). Pending referrals that already received
+    # the instant ₹10 are also counted toward earnings.
+    cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_id = ? AND status = 'pending' AND instant_bonus_given = 1", (user_id,))
+    pending_with_instant = cursor.fetchone()[0]
+
     # Check if user is already referred
     cursor.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
     is_referred = cursor.fetchone() is not None
@@ -82,7 +88,7 @@ def my_referral_code():
         'stats': {
             'total': total_referrals,
             'completed': completed_referrals,
-            'earnings': completed_referrals * 50
+            'earnings': completed_referrals * 50 + pending_with_instant * 10
         }
     })
 
@@ -160,7 +166,7 @@ def apply_code_from_profile():
         if success:
             return jsonify({
                 'success': True, 
-                'message': 'Code applied! ₹30 will be credited after your first order of ₹199+'
+                'message': 'Code applied! ₹10 instantly credited to your wallet. ₹20 more after your first order of ₹199+'
             })
         else:
             return jsonify({'message': message}), 400

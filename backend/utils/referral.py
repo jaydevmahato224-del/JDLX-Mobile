@@ -86,8 +86,37 @@ def apply_referral_code(referred_user_id, code):
             INSERT INTO referrals (referrer_id, referred_id, referral_code, status)
             VALUES (?, ?, ?, 'pending')
         ''', (referrer_id, referred_user_id, code, ))
+        referral_id = cursor.lastrowid
         
         conn.commit()
+        
+        # 6. Instant signup bonus — ₹10 to BOTH users the moment the code is
+        # applied (no more waiting for the first order). The remaining reward
+        # (₹40 referrer / ₹20 referred) is still paid after the referred user's
+        # first order of ₹199+ via process_referral_reward().
+        #
+        # Tradeoff note: credits commit on their own connections BEFORE the
+        # instant_bonus_given flag is set. In the (tiny) crash window between
+        # the two, the flag stays 0 and process_referral_reward pays the full
+        # legacy ₹50/₹30 — an ₹10/user overpay rather than a user shortfall.
+        # Failing on the side of never shortchanging users is intentional.
+        instant_bonus = 10.0
+        ref_credited = add_wallet_credit(
+            referrer_id, instant_bonus,
+            "Referral Signup Bonus (Referrer)",
+            f"REF_INSTANT_{referral_id}"
+        )
+        refd_credited = add_wallet_credit(
+            referred_user_id, instant_bonus,
+            "Referral Signup Bonus (Referred)",
+            f"REF_INSTANT_{referral_id}"
+        )
+        if ref_credited and refd_credited:
+            cursor.execute("UPDATE referrals SET instant_bonus_given = 1 WHERE id = ?", (referral_id,))
+            conn.commit()
+        
+        if ref_credited and refd_credited:
+            return True, "Referral code applied successfully! ₹10 instantly credited to you and your friend."
         return True, "Referral code applied successfully!"
     except Exception as e:
         print(f"Error applying referral code: {e}")
@@ -96,7 +125,13 @@ def apply_referral_code(referred_user_id, code):
         conn.close()
 
 def process_referral_reward(order_id, user_id, order_amount):
-    """Processes referral rewards if criteria are met (first completed order, amount >= 199)."""
+    """Processes referral rewards if criteria are met (first completed order, amount >= 199).
+
+    With the instant-bonus split: if the ₹10 signup bonus was already credited
+    (instant_bonus_given = 1), the referrer receives the remaining ₹40 and the
+    referred user the remaining ₹20. Legacy pending referrals that never got the
+    instant bonus receive the full original ₹50 / ₹30 so nobody loses money.
+    """
     if order_amount < 199:
         return False
         
@@ -111,7 +146,7 @@ def process_referral_reward(order_id, user_id, order_amount):
             
         # 2. Check for pending referral
         cursor.execute('''
-            SELECT id, referrer_id FROM referrals 
+            SELECT id, referrer_id, instant_bonus_given FROM referrals 
             WHERE referred_id = ? AND status = 'pending'
         ''', (user_id,))
         referral_row = cursor.fetchone()
@@ -121,13 +156,22 @@ def process_referral_reward(order_id, user_id, order_amount):
             
         referral_id = referral_row['id'] if hasattr(referral_row, '__getitem__') and 'id' in referral_row.keys() else referral_row[0]
         referrer_id = referral_row['referrer_id'] if hasattr(referral_row, '__getitem__') and 'referrer_id' in referral_row.keys() else referral_row[1]
+        # Column is guaranteed by init_db()'s ensure_columns; both row types
+        # (sqlite3.Row / LibsqlRow) expose key access.
+        instant_given = referral_row['instant_bonus_given']
         
         # 3. Process rewards
-        # Referrer gets ₹50
-        add_wallet_credit(referrer_id, 50.0, "Referral Reward (Referrer)", f"REF_ORD_{order_id}")
+        if instant_given:
+            # Instant ₹10 was already credited to both — pay the remainder.
+            referrer_reward = 40.0
+            referred_reward = 20.0
+        else:
+            # Legacy pending referral (no instant bonus yet) — full original amount.
+            referrer_reward = 50.0
+            referred_reward = 30.0
         
-        # Referred gets ₹30
-        add_wallet_credit(user_id, 30.0, "Referral Reward (Referred)", f"REF_ORD_{order_id}")
+        add_wallet_credit(referrer_id, referrer_reward, "Referral Reward (Referrer)", f"REF_ORD_{order_id}")
+        add_wallet_credit(user_id, referred_reward, "Referral Reward (Referred)", f"REF_ORD_{order_id}")
         
         # 4. Update referral status
         cursor.execute('''

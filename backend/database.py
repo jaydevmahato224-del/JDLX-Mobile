@@ -791,10 +791,21 @@ def init_db():
         status TEXT DEFAULT 'pending',
         qualifying_order_id INTEGER,
         reward_given_at TIMESTAMP,
+        instant_bonus_given INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(referrer_id) REFERENCES users(id),
         FOREIGN KEY(referred_id) REFERENCES users(id)
     )''')
+    # instant_bonus_given tracks whether the ₹10 instant signup bonus was
+    # already credited to BOTH users for this referral (old rows won't have it
+    # until the backfill migration credits them).
+    ensure_columns('referrals', [('instant_bonus_given', 'INTEGER DEFAULT 0')])
+    # Guard against duplicate referral records (one per referred user) so the
+    # instant bonus can never be credited twice.
+    try:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
+    except Exception as e:
+        print(f"Ignored referrals unique index error (pre-existing duplicates?): {e}")
     cursor.execute('''CREATE TABLE IF NOT EXISTS referral_attempts (
         user_id INTEGER UNIQUE,
         attempts INTEGER DEFAULT 0,

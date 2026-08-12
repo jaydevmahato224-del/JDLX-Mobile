@@ -62,12 +62,20 @@ def migrate():
             status TEXT DEFAULT 'pending',
             qualifying_order_id INTEGER,
             reward_given_at TIMESTAMP,
+            instant_bonus_given INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(referrer_id) REFERENCES users(id),
             FOREIGN KEY(referred_id) REFERENCES users(id),
             FOREIGN KEY(qualifying_order_id) REFERENCES orders(id)
         )
     ''')
+
+    # Ensure the instant bonus flag column exists on older databases
+    cursor.execute("PRAGMA table_info(referrals)")
+    ref_cols = [r[1] for r in cursor.fetchall()]
+    if 'instant_bonus_given' not in ref_cols:
+        cursor.execute("ALTER TABLE referrals ADD COLUMN instant_bonus_given INTEGER DEFAULT 0")
+        print("Added instant_bonus_given column to referrals.")
 
     # 4. ALTER TABLE users ADD COLUMN referral_code TEXT UNIQUE
     print("Adding referral_code to users table...")

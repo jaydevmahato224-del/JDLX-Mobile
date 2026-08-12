@@ -36,7 +36,7 @@ const ReferAndEarn = () => {
 
   const shareOnWhatsApp = () => {
     if (!refData) return;
-    const text = `Hey! Shop on JDLX Mobile, get ₹30 off first order! Use my link: ${refData.referral_url}`;
+    const text = `Hey! Shop on JDLX Mobile — get ₹10 instantly + ₹20 after your first order! Use my link: ${refData.referral_url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -52,7 +52,7 @@ const ReferAndEarn = () => {
             Limited Time Offer
           </div>
           <h1 className="text-4xl font-black tracking-tight mb-2">Refer & Earn 🎉</h1>
-          <p className="text-indigo-200 font-medium">Invite friends, earn ₹50 per referral</p>
+          <p className="text-indigo-200 font-medium">Invite friends, earn ₹10 instantly + ₹40 after their first order</p>
         </div>
         <Gift className="absolute bottom-4 right-4 text-white/5 w-24 h-24 rotate-12" />
       </div>
@@ -103,15 +103,15 @@ const ReferAndEarn = () => {
           <div className="flex gap-4">
             <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 font-black">2</div>
             <div>
-              <p className="font-bold text-slate-800">Friend orders ₹199 or more</p>
-              <p className="text-slate-500 text-sm">When they complete their first order, both of you benefit.</p>
+              <p className="font-bold text-slate-800">Friend applies your code</p>
+              <p className="text-slate-500 text-sm">You both get ₹10 in your wallets the moment they apply it.</p>
             </div>
           </div>
           <div className="flex gap-4">
             <div className="w-10 h-10 bg-[#F5A623]/10 text-[#F5A623] rounded-xl flex items-center justify-center shrink-0 font-black">3</div>
             <div>
               <p className="font-bold text-slate-800">Get Rewarded</p>
-              <p className="text-slate-500 text-sm">You get ₹50 and they get ₹30 in their wallet instantly.</p>
+              <p className="text-slate-500 text-sm">After their first order of ₹199+, you get ₹40 more and they get ₹20 more (₹50 & ₹30 total).</p>
             </div>
           </div>
         </div>

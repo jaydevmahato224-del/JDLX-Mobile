@@ -5,6 +5,7 @@ import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart
 
 import { usePWAInstall } from '../../hooks/usePWAInstall'
 import useScrollLock from '../../hooks/useScrollLock'
+import ReferralSuccessPopup from '../../components/ReferralSuccessPopup'
 import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 
@@ -25,6 +26,7 @@ function Profile() {
     const [isApplying, setIsApplying] = useState(false);
     const [referralError, setReferralError] = useState('');
     const [referralSuccess, setReferralSuccess] = useState(localStorage.getItem('jdlx_ref_applied') === 'true');
+    const [showReferralPopup, setShowReferralPopup] = useState(false);
 
     useEffect(() => {
         if (!user) {
@@ -91,12 +93,13 @@ function Profile() {
                 setReferralSuccess(true);
                 localStorage.setItem('jdlx_ref_applied', 'true');
                 toast.success('Referral code applied successfully!');
+                setShowReferralPopup(true);
             } else {
                 setReferralError(data.message || 'Failed to apply code');
                 // Increment local attempts to potentially block UI immediately
                 setReferralInfo(prev => ({ ...prev, attempts: prev.attempts + 1 }));
             }
-        } catch (err) {
+        } catch {
             setReferralError('Connection error. Please try again.');
         } finally {
             setIsApplying(false);
@@ -344,14 +347,14 @@ function Profile() {
                         </div>
                         <div>
                             <h3 className="font-black text-slate-800 tracking-tight">Have a Referral Code?</h3>
-                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Get ₹30 off your first order of ₹199+</p>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Get ₹10 instantly + ₹20 after your first order of ₹199+</p>
                         </div>
                     </div>
 
                     {referralSuccess ? (
                         <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl border border-emerald-100 flex items-center gap-3 animate-in zoom-in-95 duration-500">
                             <CheckCircle2 size={18} />
-                            <p className="text-xs font-black">Referral code applied! ₹30 credited after first order</p>
+                            <p className="text-xs font-black">Referral code applied! ₹10 credited instantly + ₹20 after your first order</p>
                         </div>
                     ) : referralInfo.attempts >= 3 ? (
                         <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl border border-rose-100 flex items-center gap-3 animate-in fade-in duration-500">
@@ -399,6 +402,14 @@ function Profile() {
                     Logout Account
                 </button>
             </div>
+
+            {/* Referral Success Popup — cute 2D celebration shown right after
+                a referral code is applied (₹10 instant bonus). */}
+            <ReferralSuccessPopup
+                open={showReferralPopup}
+                onClose={() => setShowReferralPopup(false)}
+                amount={10}
+            />
 
             {/* Premium PWA Guide Modal */}
             {showPwaGuide && (

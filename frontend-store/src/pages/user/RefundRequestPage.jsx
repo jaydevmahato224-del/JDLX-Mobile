@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
@@ -76,9 +76,9 @@ function RefundRequestPage() {
         };
 
         initialize();
-    }, [user, navigate, token]);
+    }, [user, navigate, checkEligibility, token]);
 
-    const checkEligibility = async (orderId) => {
+    const checkEligibility = useCallback(async (orderId) => {
         if (!orderId) return;
         setLoadingEligibility(true);
         setErrorMsg(null);
@@ -99,7 +99,7 @@ function RefundRequestPage() {
         } finally {
             setLoadingEligibility(false);
         }
-    };
+    }, [token]);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];

@@ -3,6 +3,82 @@ import { Link } from 'react-router-dom'
 import { Info, Truck, Clock, Shield, CreditCard, RefreshCcw, Headphones, MapPin, ChevronRight } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 
+// Module-level constant so the useMemo below has a stable dependency
+// (kept outside the component so it isn't recreated on every render).
+const defaultSections = [
+  {
+    icon: Info,
+    title: 'About JDLX MOBILE',
+    points: [
+      'Premium mobile commerce platform for daily essentials.',
+      'Designed for fast discovery, reliable stock, and smooth checkout.',
+      'Single account experience across shopping, tracking, wallet, and support.',
+    ],
+  },
+  {
+    icon: Clock,
+    title: 'How It Works',
+    points: [
+      'Browse products and add to cart.',
+      'Choose delivery mode (quick/scheduled) where available.',
+      'Place order, track in real-time, and get updates in your account.',
+    ],
+  },
+  {
+    icon: Truck,
+    title: 'Delivery & Service',
+    points: [
+      'Delivery time depends on location, store availability, and demand.',
+      'Order updates show in “My Orders” and tracking page.',
+      'For address issues, update your saved addresses before ordering.',
+    ],
+  },
+  {
+    icon: CreditCard,
+    title: 'Payments',
+    points: [
+      'Secure payment flow for a smoother checkout.',
+      'Wallet (if enabled) can be used for faster repeat orders.',
+      'Payment status is reflected in order history.',
+    ],
+  },
+  {
+    icon: RefreshCcw,
+    title: 'Returns & Refunds',
+    points: [
+      'Item eligibility depends on product type and order status.',
+      'Report issues quickly from Support with order details.',
+      'Refunds are provided as in-app wallet balance. Product replacements or original source refunds may be processed if possible.',
+    ],
+  },
+  {
+    icon: Shield,
+    title: 'Security & Privacy',
+    points: [
+      'Your account is protected via token-based login sessions.',
+      'We recommend using a strong password/sign-in method and logging out on shared devices.',
+      'We store only the necessary details to fulfill orders and support requests.',
+    ],
+  },
+  {
+    icon: Headphones,
+    title: 'Help & Support',
+    points: [
+      'Use “Support” for order issues, refunds, and general questions.',
+      'Share order id and a short description to get quicker help.',
+      'If notifications are enabled, you’ll receive important alerts in the account area.',
+    ],
+  },
+  {
+    icon: MapPin,
+    title: 'Service Availability',
+    points: [
+      'Availability varies by city/area and partner store coverage.',
+      'Product stock and pricing may vary by location and time.',
+    ],
+  },
+]
+
 function AboutSite() {
   const [remoteContent, setRemoteContent] = useState('')
 
@@ -21,80 +97,6 @@ function AboutSite() {
     }
     load()
   }, [])
-
-  const defaultSections = [
-    {
-      icon: Info,
-      title: 'About JDLX MOBILE',
-      points: [
-        'Premium mobile commerce platform for daily essentials.',
-        'Designed for fast discovery, reliable stock, and smooth checkout.',
-        'Single account experience across shopping, tracking, wallet, and support.',
-      ],
-    },
-    {
-      icon: Clock,
-      title: 'How It Works',
-      points: [
-        'Browse products and add to cart.',
-        'Choose delivery mode (quick/scheduled) where available.',
-        'Place order, track in real-time, and get updates in your account.',
-      ],
-    },
-    {
-      icon: Truck,
-      title: 'Delivery & Service',
-      points: [
-        'Delivery time depends on location, store availability, and demand.',
-        'Order updates show in “My Orders” and tracking page.',
-        'For address issues, update your saved addresses before ordering.',
-      ],
-    },
-    {
-      icon: CreditCard,
-      title: 'Payments',
-      points: [
-        'Secure payment flow for a smoother checkout.',
-        'Wallet (if enabled) can be used for faster repeat orders.',
-        'Payment status is reflected in order history.',
-      ],
-    },
-    {
-      icon: RefreshCcw,
-      title: 'Returns & Refunds',
-      points: [
-        'Item eligibility depends on product type and order status.',
-        'Report issues quickly from Support with order details.',
-        'Refunds are provided as in-app wallet balance. Product replacements or original source refunds may be processed if possible.',
-      ],
-    },
-    {
-      icon: Shield,
-      title: 'Security & Privacy',
-      points: [
-        'Your account is protected via token-based login sessions.',
-        'We recommend using a strong password/sign-in method and logging out on shared devices.',
-        'We store only the necessary details to fulfill orders and support requests.',
-      ],
-    },
-    {
-      icon: Headphones,
-      title: 'Help & Support',
-      points: [
-        'Use “Support” for order issues, refunds, and general questions.',
-        'Share order id and a short description to get quicker help.',
-        'If notifications are enabled, you’ll receive important alerts in the account area.',
-      ],
-    },
-    {
-      icon: MapPin,
-      title: 'Service Availability',
-      points: [
-        'Availability varies by city/area and partner store coverage.',
-        'Product stock and pricing may vary by location and time.',
-      ],
-    },
-  ]
 
   const sections = useMemo(() => {
     const text = (remoteContent || '').trim()

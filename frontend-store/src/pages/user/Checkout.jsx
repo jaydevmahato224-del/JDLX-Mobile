@@ -129,7 +129,7 @@ function Checkout() {
                 }
             })
             .catch(e => console.error('Failed to load availability:', e));
-    }, []);
+    }, [syncCartWithInventory]);
 
     useEffect(() => {
         if (subtotal > 0 && user) {

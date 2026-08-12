@@ -196,7 +196,7 @@ function RouteChangeTracker() {
     startLoading()
     const timer = setTimeout(stopLoading, 300)
     return () => { clearTimeout(timer); stopLoading(); }
-  }, [location.pathname, location.search])
+  }, [location.pathname, location.search, startLoading, stopLoading])
 
   return null
 }

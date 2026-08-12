@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
 import toast from 'react-hot-toast';
@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 const PushNotificationManager = () => {
   const { token, user } = useStore();
 
-  const handlePushRegistration = async () => {
+  const handlePushRegistration = useCallback(async () => {
     try {
       // Firebase (vendor-firebase chunk) is now lazy-loaded: it was previously
       // statically imported, which put ~44 kB into the initial page load even
@@ -31,13 +31,13 @@ const PushNotificationManager = () => {
     } catch (error) {
       console.error('Error registering push token:', error);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (token && user) {
       handlePushRegistration();
     }
-  }, [token, user]);
+  }, [token, user, handlePushRegistration]);
 
   useEffect(() => {
     let active = true;

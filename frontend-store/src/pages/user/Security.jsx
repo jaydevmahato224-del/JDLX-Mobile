@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
@@ -13,11 +13,13 @@ function Security() {
         if (!user) { navigate('/login'); }
     }, [user, navigate]);
 
-    const fetch = async () => {
+    // Named fetchData (not `fetch`) so the browser's global fetch API is not
+    // shadowed — a local `fetch` would recursively call itself and overflow.
+    const fetchData = useCallback(async () => {
         const res = await fetch(`${API_BASE_URL}/user/login-history`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) setHistory(await res.json());
-    };
-    useEffect(() => { fetch(); }, []);
+    }, [token]);
+    useEffect(() => { fetchData(); }, [fetchData]);
 
     return (
         <div className="container-standard py-6">

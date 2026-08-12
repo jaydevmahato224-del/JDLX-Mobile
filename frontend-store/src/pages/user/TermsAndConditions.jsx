@@ -3,6 +3,63 @@ import { Link } from 'react-router-dom'
 import { FileText, Shield, Truck, CreditCard, RefreshCcw, AlertTriangle, ChevronRight } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 
+// Module-level constant so the useMemo below has a stable dependency
+// (kept outside the component so it isn't recreated on every render).
+const defaultSections = [
+  {
+    icon: FileText,
+    title: 'Terms Acceptance',
+    points: [
+      'By using JDLX MOBILE, you agree to these Terms & Conditions.',
+      'If you do not agree, please stop using the service.',
+    ],
+  },
+  {
+    icon: Shield,
+    title: 'Account & Security',
+    points: [
+      'Keep your login details confidential and use secure devices.',
+      'You are responsible for activity under your account.',
+      'We may suspend accounts for misuse, fraud, or policy violations.',
+    ],
+  },
+  {
+    icon: Truck,
+    title: 'Orders, Delivery & Availability',
+    points: [
+      'Product availability and prices may change based on stock and location.',
+      'Delivery times are estimates and can vary due to demand and operational conditions.',
+      'Please ensure your address and contact details are correct before placing an order.',
+    ],
+  },
+  {
+    icon: CreditCard,
+    title: 'Payments & Charges',
+    points: [
+      'Applicable platform fees, delivery fees, and taxes (if any) may apply at checkout.',
+      'Payment status is reflected in your order history.',
+      'Any failed/partial payments may result in order cancellation or delays.',
+    ],
+  },
+  {
+    icon: RefreshCcw,
+    title: 'Cancellations, Returns & Refunds',
+    points: [
+      'Cancellation eligibility depends on order status and fulfillment stage.',
+      'Return/refund eligibility depends on product type and issue reported.',
+      'Refunds are provided as in-app wallet balance. Product replacements or original source refunds may be processed if possible.',
+    ],
+  },
+  {
+    icon: AlertTriangle,
+    title: 'Limitations',
+    points: [
+      'We are not liable for delays due to force majeure or events beyond our control.',
+      'Service features may change, pause, or discontinue as we improve the platform.',
+    ],
+  },
+]
+
 function TermsAndConditions() {
   const [remoteContent, setRemoteContent] = useState('')
 
@@ -21,61 +78,6 @@ function TermsAndConditions() {
     }
     load()
   }, [])
-
-  const defaultSections = [
-    {
-      icon: FileText,
-      title: 'Terms Acceptance',
-      points: [
-        'By using JDLX MOBILE, you agree to these Terms & Conditions.',
-        'If you do not agree, please stop using the service.',
-      ],
-    },
-    {
-      icon: Shield,
-      title: 'Account & Security',
-      points: [
-        'Keep your login details confidential and use secure devices.',
-        'You are responsible for activity under your account.',
-        'We may suspend accounts for misuse, fraud, or policy violations.',
-      ],
-    },
-    {
-      icon: Truck,
-      title: 'Orders, Delivery & Availability',
-      points: [
-        'Product availability and prices may change based on stock and location.',
-        'Delivery times are estimates and can vary due to demand and operational conditions.',
-        'Please ensure your address and contact details are correct before placing an order.',
-      ],
-    },
-    {
-      icon: CreditCard,
-      title: 'Payments & Charges',
-      points: [
-        'Applicable platform fees, delivery fees, and taxes (if any) may apply at checkout.',
-        'Payment status is reflected in your order history.',
-        'Any failed/partial payments may result in order cancellation or delays.',
-      ],
-    },
-    {
-      icon: RefreshCcw,
-      title: 'Cancellations, Returns & Refunds',
-      points: [
-        'Cancellation eligibility depends on order status and fulfillment stage.',
-        'Return/refund eligibility depends on product type and issue reported.',
-        'Refunds are provided as in-app wallet balance. Product replacements or original source refunds may be processed if possible.',
-      ],
-    },
-    {
-      icon: AlertTriangle,
-      title: 'Limitations',
-      points: [
-        'We are not liable for delays due to force majeure or events beyond our control.',
-        'Service features may change, pause, or discontinue as we improve the platform.',
-      ],
-    },
-  ]
 
   const sections = useMemo(() => {
     const text = (remoteContent || '').trim()

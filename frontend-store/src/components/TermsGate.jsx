@@ -22,8 +22,11 @@ function TermsGate() {
   const [scrolledToBottom, setScrolledToBottom] = useState(false)
 
   useEffect(() => {
+    // Read the freshest user from the store instead of the subscribed `user`
+    // so the effect only re-runs when the user id changes (user?.id dep below).
+    const currentUser = useStore.getState().user
     const activeToken = token || localStorage.getItem('token');
-    if (!user || !activeToken || activeToken === 'null' || activeToken === 'undefined') {
+    if (!currentUser || !activeToken || activeToken === 'null' || activeToken === 'undefined') {
       setOpen(false)
       return
     }
@@ -42,7 +45,7 @@ function TermsGate() {
         setRequiredVersion(version)
         setTermsContent(settingsJson?.data?.terms_and_conditions_content || '')
 
-        let freshAcceptedVersion = Number(user?.terms_accepted_version || 0)
+        let freshAcceptedVersion = Number(currentUser?.terms_accepted_version || 0)
 
         if (profileRes.ok && profileJson) {
           setUser(profileJson, token)

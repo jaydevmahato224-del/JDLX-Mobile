@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
@@ -34,7 +34,7 @@ function Addresses() {
         }
     }, [user, navigate]);
 
-    const fetchAddresses = async () => {
+    const fetchAddresses = useCallback(async () => {
         setLoading(true);
         try {
             const res = await fetch(`${API_BASE_URL}/user/addresses`, { 
@@ -46,9 +46,9 @@ function Addresses() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]);
 
-    useEffect(() => { fetchAddresses(); }, []);
+    useEffect(() => { fetchAddresses(); }, [fetchAddresses]);
 
     const handleSave = async e => {
         if (e) e.preventDefault();

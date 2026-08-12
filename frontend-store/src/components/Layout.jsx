@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { User, ChevronLeft, Heart as HeartIcon, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
@@ -28,6 +28,30 @@ function Layout({ children }) {
   const [, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
   const [, setLoadingSettings] = useState(true)
   const [walletBalance, setWalletBalance] = useState(0)
+
+  // Floating back button visibility: hide while scrolling down, slide back in
+  // with the reverse animation as soon as the user scrolls up again (and always
+  // visible while at the top of the page).
+  const [backButtonVisible, setBackButtonVisible] = useState(true)
+  const lastScrollYRef = useRef(0)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY
+      const delta = currentY - lastScrollYRef.current
+      lastScrollYRef.current = currentY
+      if (Math.abs(delta) < 4) return
+      if (currentY <= 4) {
+        setBackButtonVisible(true)
+      } else if (delta > 0) {
+        setBackButtonVisible(false)
+      } else {
+        setBackButtonVisible(true)
+      }
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     const fetchWallet = async () => {
@@ -72,22 +96,10 @@ function Layout({ children }) {
 
         <header className="transition-all duration-500">
           <div className="container-standard flex h-[var(--app-header-height)] items-center gap-2 md:gap-4">
-            {/* Left: back button (non-home) + main branding.
-                The wordmark collapses to the logo on sub-pages below `sm` so
-                branding can never crowd the right-side actions (wishlist /
-                wallet / bell / account). It smoothly expands again once there
-                is room. (Left logo + Standard/clock badge removed earlier.) */}
+            {/* Left: main branding — always fully visible on every page. The
+                back button now floats over the page below the header, so it
+                never steals header space from the brand. */}
             <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
-              {hasBackButton && (
-                <button
-                  onClick={() => navigate(-1)}
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all active:scale-90 group -ml-2 animate-in fade-in slide-in-from-left-2 duration-300"
-                  aria-label="Go back"
-                >
-                  <ChevronLeft className="h-6 w-6 text-[var(--color-on-surface)] group-hover:-translate-x-0.5 transition-transform" />
-                </button>
-              )}
-
               <Link to="/" className="group flex min-w-0 items-center gap-2 md:gap-3 transition-all" aria-label="JDLX Mobile home">
                 <img 
                   src="/logo192.png" 
@@ -95,14 +107,14 @@ function Layout({ children }) {
                   className="h-8 w-8 md:h-10 md:w-10 shrink-0 object-contain transition-transform duration-500 group-hover:scale-110" 
                   fetchPriority="high"
                 />
-                {/* Brand wordmark — width-capped + truncating so it can never
-                    reach the right-side icons, and collapses to logo-only on
-                    sub-pages where space is tight. */}
-                <div className={`flex min-w-0 flex-col items-start leading-none overflow-hidden whitespace-nowrap transition-all duration-500 ${hasBackButton ? 'max-w-0 opacity-0 sm:max-w-[300px] sm:opacity-100' : 'max-w-[300px] opacity-100'}`}>
+                {/* Brand wordmark — always visible. The back button now floats
+                    over the page, so it never steals header space from the
+                    branding on sub-pages. */}
+                <div className="flex min-w-0 max-w-[300px] flex-col items-start leading-none overflow-hidden whitespace-nowrap transition-all duration-500">
                   <div className="truncate text-base md:text-2xl font-black tracking-tighter transition-all duration-500 group-hover:tracking-normal">
                     <span className="text-[var(--color-on-surface)]">JDLX</span> <span className="text-primary">MOBILE</span>
                   </div>
-                  <div className={`truncate text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5 ${hasBackButton ? 'hidden' : 'hidden min-[420px]:block'}`}>
+                  <div className="hidden min-[420px]:block truncate text-[9px] font-bold tracking-[0.3em] text-[var(--color-on-surface-variant)] uppercase mt-0.5">
                     Premium Mobile Store
                   </div>
                 </div>
@@ -154,6 +166,24 @@ function Layout({ children }) {
           </div>
         </header>
       </div>
+
+      {/* Floating Back Button — sits over the page below the header, fades and
+          slides away on scroll down, and returns with the opposite animation
+          on scroll up. Only rendered on sub-pages (never on the home page). */}
+      {hasBackButton && (
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+          className={`fixed left-4 z-40 grid h-11 w-11 place-items-center rounded-2xl border border-[var(--color-surface-high)] bg-[var(--color-surface-white)]/95 text-[var(--color-on-surface)] shadow-lg shadow-black/5 backdrop-blur-md transition-all duration-300 ease-out hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 active:scale-90 ${
+            backButtonVisible
+              ? 'translate-y-0 scale-100 opacity-100'
+              : 'pointer-events-none -translate-y-4 scale-95 opacity-0'
+          }`}
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + var(--app-header-height) + 12px)' }}
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+      )}
 
       <main className="container-standard py-8 pb-28 md:pb-8">
         {children}

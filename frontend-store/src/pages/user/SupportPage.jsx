@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
@@ -32,15 +32,7 @@ function SupportPage() {
     const [tickets, setTickets] = useState([]);
     const [loadingTickets, setLoadingTickets] = useState(true);
 
-    useEffect(() => {
-        if (!user) {
-            navigate('/login');
-            return;
-        }
-        fetchTickets();
-    }, [user, navigate, token]);
-
-    const fetchTickets = async () => {
+    const fetchTickets = useCallback(async () => {
         setLoadingTickets(true);
         try {
             const res = await fetch(`${API_BASE_URL}/support/tickets`, {
@@ -55,7 +47,15 @@ function SupportPage() {
         } finally {
             setLoadingTickets(false);
         }
-    };
+    }, [token]);
+
+    useEffect(() => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        fetchTickets();
+    }, [user, navigate, fetchTickets]);
 
     const handleCreateTicket = async (e) => {
         e.preventDefault();

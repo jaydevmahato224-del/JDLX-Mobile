@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
@@ -14,11 +14,13 @@ function Payments() {
         if (!user) { navigate('/login'); }
     }, [user, navigate]);
 
-    const fetch = async () => {
+    // Named fetchData (not `fetch`) so the browser's global fetch API is not
+    // shadowed — a local `fetch` would recursively call itself and overflow.
+    const fetchData = useCallback(async () => {
         const res = await fetch(`${API_BASE_URL}/user/payments`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) setMethods(await res.json());
-    };
-    useEffect(() => { fetch(); }, []);
+    }, [token]);
+    useEffect(() => { fetchData(); }, [fetchData]);
 
     const add = async e => {
         e.preventDefault();
@@ -29,7 +31,7 @@ function Payments() {
         });
         if (res.ok) {
             setForm({ method_type: '', token: '', last4: '' });
-            fetch();
+            fetchData();
         }
     };
 
@@ -39,7 +41,7 @@ function Payments() {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ id })
         });
-        fetch();
+        fetchData();
     };
 
     return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
@@ -31,19 +31,7 @@ function TicketDetailPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    useEffect(() => {
-        if (!user) {
-            navigate('/login');
-            return;
-        }
-        fetchTicketDetails();
-    }, [ticketId, user, navigate, token]);
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [data?.messages]);
-
-    const fetchTicketDetails = async () => {
+    const fetchTicketDetails = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/support/tickets/${ticketId}`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -61,7 +49,19 @@ function TicketDetailPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [ticketId, token, navigate]);
+
+    useEffect(() => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        fetchTicketDetails();
+    }, [user, navigate, fetchTicketDetails]);
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [data?.messages]);
 
     const handleReply = async (e) => {
         e.preventDefault();

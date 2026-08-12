@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Star, ThumbsUp, CheckCircle2, MessageSquare, AlertCircle, Send, X, Camera, Plus, Trash2 } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../config'
 import { useStore } from '../store/useStore'
@@ -17,11 +17,7 @@ export default function ProductReviews({ productId }) {
     const [comment, setComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        fetchReviews();
-    }, [productId, token]);
-
-    const fetchReviews = async () => {
+    const fetchReviews = useCallback(async () => {
         try {
             setLoading(true);
             const res = await fetch(`${API_BASE_URL}/review/product/${productId}`, {
@@ -37,7 +33,11 @@ export default function ProductReviews({ productId }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [productId, token]);
+
+    useEffect(() => {
+        fetchReviews();
+    }, [fetchReviews]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

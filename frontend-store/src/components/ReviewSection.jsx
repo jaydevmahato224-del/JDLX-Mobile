@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Star, MessageSquare, ShieldCheck, User, Send } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
@@ -14,7 +14,7 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
     const token = useStore(state => state.token);
     const user = useStore(state => state.user);
 
-    const fetchReviews = async () => {
+    const fetchReviews = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/review/product/${productId}`);
             const data = await res.json();
@@ -24,11 +24,11 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
         } catch (error) {
             console.error('Failed to fetch reviews:', error);
         }
-    };
+    }, [productId]);
 
     useEffect(() => {
         fetchReviews();
-    }, [productId]);
+    }, [fetchReviews]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

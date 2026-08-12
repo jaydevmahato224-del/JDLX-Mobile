@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
@@ -15,13 +15,13 @@ function Notifications() {
         if(!user){navigate('/login');}
     },[user,navigate]);
 
-    const fetchNotes = async () => {
+    const fetchNotes = useCallback(async () => {
         const activeToken = token || localStorage.getItem('token');
         if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
         const res = await window.fetch(`${API_BASE_URL}/user/notifications`, { headers: { Authorization: `Bearer ${activeToken}` } });
         if (res.ok) setNotes(await res.json());
-    };
-    useEffect(() => { fetchNotes(); }, []);
+    }, [token]);
+    useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
     const markAll = async () => {
         await window.fetch(`${API_BASE_URL}/user/notifications`, {

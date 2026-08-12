@@ -40,7 +40,7 @@ const WalletPage = () => {
         
         <div className="relative z-10">
           <p className="text-white/80 text-sm font-black uppercase tracking-[0.2em] mb-4">Total Balance</p>
-          <h2 className="text-6xl font-black mb-6 tracking-tighter">₹{wallet.balance.toFixed(2)}</h2>
+          <h2 className="text-6xl font-black mb-6 tracking-tighter text-white">₹{wallet.balance.toFixed(2)}</h2>
           <div className="inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full backdrop-blur-md border border-white/30">
             <ShoppingBag size={14} />
             <span className="text-xs font-bold">Used at checkout automatically</span>

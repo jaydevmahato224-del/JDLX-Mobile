@@ -22,7 +22,12 @@ function Login() {
     const handleGoogleLogin = () => {
         const origin = API_BASE_URL.replace(/\/api\/?$/, '');
         const frontendUrl = encodeURIComponent(window.location.origin);
-        window.location.href = `${origin}/login/google?flow=user&frontend_url=${frontendUrl}`;
+        // Carry the referral code (from a shared ?ref= link, or one already
+        // captured earlier) into the Google OAuth flow so the backend can
+        // apply it to the new account right after signup.
+        const refCode = new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('jdlx_ref_code') || '';
+        const refQuery = refCode ? `&ref=${encodeURIComponent(refCode)}` : '';
+        window.location.href = `${origin}/login/google?flow=user&frontend_url=${frontendUrl}${refQuery}`;
     };
 
     return (

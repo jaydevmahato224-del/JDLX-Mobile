@@ -92,10 +92,17 @@
   --color-nav-active: #ffffff;
 }
 
-/* Typography Refinements */
-h1, h2, h3, h4, h5, h6 {
-  @apply font-black tracking-tight text-[var(--color-on-surface)];
-  font-family: 'Manrope', sans-serif;
+/* Typography Refinements
+   IMPORTANT: These element-level defaults MUST live in @layer base. Tailwind v4
+   uses native cascade layers (@layer theme, base, components, utilities), and any
+   rule written OUTSIDE a layer always beats layered utilities — which silently
+   disabled text-white / text-4xl / etc. on every heading (dark headings on dark
+   heroes rendered invisible). Inside @layer base, utilities win as intended. */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-black tracking-tight text-[var(--color-on-surface)];
+    font-family: 'Manrope', sans-serif;
+  }
 }
 
 .text-gradient {
@@ -221,14 +228,16 @@ body::before {
 /* ------------------------------------------------------------------------------
    3. TYPOGRAPHY
    ------------------------------------------------------------------------------ */
-:where(h1, h2, h3, h4) { 
-  font-family: 'Manrope', sans-serif; 
-  font-weight: 800; 
-  color: var(--color-on-surface); 
-  letter-spacing: -0.02em;
+@layer base {
+  :where(h1, h2, h3, h4) { 
+    font-family: 'Manrope', sans-serif; 
+    font-weight: 800; 
+    color: var(--color-on-surface); 
+    letter-spacing: -0.02em;
+  }
+  :where(h1) { font-size: clamp(28px, 5vw, 40px); }
+  :where(p) { line-height: 1.6; color: var(--color-on-surface-variant); }
 }
-:where(h1) { font-size: clamp(28px, 5vw, 40px); }
-:where(p) { line-height: 1.6; color: var(--color-on-surface-variant); }
 
 .ui-h1 { @apply text-3xl font-black tracking-tighter sm:text-4xl md:text-5xl; }
 .ui-label { @apply text-[10px] font-black uppercase tracking-[0.25em] text-[var(--color-on-surface-variant)]; }

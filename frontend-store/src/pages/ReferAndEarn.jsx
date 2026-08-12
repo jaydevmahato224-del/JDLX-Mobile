@@ -51,7 +51,7 @@ const ReferAndEarn = () => {
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-4">
             Limited Time Offer
           </div>
-          <h1 className="text-4xl font-black tracking-tight mb-2">Refer & Earn 🎉</h1>
+          <h1 className="text-4xl font-black tracking-tight mb-2 text-white">Refer & Earn 🎉</h1>
           <p className="text-indigo-200 font-medium">Invite friends, earn ₹10 instantly + ₹40 after their first order</p>
         </div>
         <Gift className="absolute bottom-4 right-4 text-white/5 w-24 h-24 rotate-12" />

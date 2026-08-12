@@ -125,7 +125,7 @@ export default function ReferralSuccessPopup({ open, onClose, amount = 10 }) {
               </div>
             </div>
 
-            <h3 className="mt-4 text-xl font-black tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
+            <h3 className="mt-4 text-xl font-black tracking-tight text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
               Bonus Credited! 🎉
             </h3>
             <p className="mt-1 text-[13px] font-bold text-zinc-400">

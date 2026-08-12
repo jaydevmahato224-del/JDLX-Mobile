@@ -133,7 +133,7 @@ function TermsGate() {
                     <ShieldCheck size={24} className="text-emerald-400" />
                 </div>
                 <div>
-                    <h3 className="text-2xl font-black tracking-tight">Terms Required</h3>
+                    <h3 className="text-2xl font-black tracking-tight text-white">Terms Required</h3>
                     <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Update v{requiredVersion}.0</p>
                 </div>
             </div>

@@ -370,12 +370,12 @@ function Profile() {
                                     value={inputCode}
                                     onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                                     placeholder="e.g. JDAX7K2P" 
-                                    className="flex-1 bg-white border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-all uppercase tracking-widest"
+                                    className="min-w-0 flex-1 bg-white border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-all uppercase tracking-widest"
                                 />
                                 <button 
                                     type="submit"
                                     disabled={isApplying || !inputCode.trim()}
-                                    className="px-6 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+                                    className="shrink-0 whitespace-nowrap px-6 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
                                 >
                                     {isApplying ? '...' : 'Apply'}
                                 </button>
@@ -435,7 +435,7 @@ function Profile() {
                             <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/10 border border-primary/20 animate-bounce">
                                 <Download className="w-8 h-8" />
                             </div>
-                            <h3 className="text-xl font-black mt-4 tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
+                            <h3 className="text-xl font-black mt-4 tracking-tight text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
                             <p className="text-[13px] text-slate-400 mt-2 font-medium leading-relaxed">
                                 Install the digital concierge app on your device screen for full performance, instant checkout, and order tracking.
                             </p>

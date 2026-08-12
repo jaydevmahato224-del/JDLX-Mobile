@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request, g, current_app
 from functools import wraps
+import os
 import jwt
 
 from jwt_config import get_jwt_secret
@@ -77,8 +78,14 @@ def my_referral_code():
 
     conn.close()
     
-    # Base URL for referral (placeholder - usually handled by frontend)
-    referral_url = f"https://jdlx-mobile.vercel.app/signup?ref={code}"
+    # Referral share link — must land on a REAL storefront route that reads the
+    # `ref` param (/login reads ?ref= and carries it into the Google OAuth flow;
+    # the old /signup path does not exist in the SPA and silently dropped the
+    # code, so shared links never credited anyone).
+    frontend_base = os.environ.get("FRONTEND_BASE_URL", "").strip('"').strip("'").rstrip('/')
+    if not frontend_base or 'localhost' in frontend_base or '127.0.0.1' in frontend_base:
+        frontend_base = "https://jdlx-mobile.vercel.app"
+    referral_url = f"{frontend_base}/login?ref={code}"
     
     return jsonify({
         'code': code,

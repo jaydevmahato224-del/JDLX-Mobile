@@ -38,11 +38,11 @@ const WalletCheckout = ({ onApply, totalAmount }) => {
   return (
     <div className={`bg-white rounded-3xl p-6 border-2 transition-all duration-300 ${isApplied ? 'border-[#F5A623] bg-orange-50/30' : 'border-slate-100'}`}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isApplied ? 'bg-[#F5A623] text-white shadow-lg shadow-orange-200' : 'bg-slate-50 text-slate-400'}`}>
+        <div className="flex items-center gap-4 min-w-0">
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors shrink-0 ${isApplied ? 'bg-[#F5A623] text-white shadow-lg shadow-orange-200' : 'bg-slate-50 text-slate-400'}`}>
             <Wallet size={24} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-black text-slate-800 tracking-tight">Wallet Balance</p>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">₹{balance.toFixed(2)} available</p>
           </div>
@@ -50,7 +50,7 @@ const WalletCheckout = ({ onApply, totalAmount }) => {
         
         <button 
           onClick={toggleApply}
-          className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+          className={`shrink-0 whitespace-nowrap px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
             isApplied 
             ? 'bg-[#F5A623] text-white shadow-md' 
             : 'bg-slate-900 text-white hover:bg-slate-800'

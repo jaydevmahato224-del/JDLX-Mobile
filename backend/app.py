@@ -1208,13 +1208,17 @@ def login_google():
         frontend_url = FRONTEND_BASE_URL
 
     # Encode both flow and frontend_url into the state parameter
+    # The referral code (if the user arrived via a shared ?ref= link) is carried
+    # in the state so it survives the Google round-trip and can be applied to
+    # the new account right after signup.
+    ref_code_state = request.args.get('ref', '').strip()[:16]
     state_payload = f"{flow}|{frontend_url}"
     
     from urllib.parse import urlencode
     # Include CSRF nonce for OAuth state validation
     csrf_nonce = secrets.token_urlsafe(16)
     session['oauth_csrf_nonce'] = csrf_nonce
-    state_payload = f"{state_payload}|{csrf_nonce}"
+    state_payload = f"{state_payload}|{ref_code_state}|{csrf_nonce}"
     params = {
         'client_id': GOOGLE_CLIENT_ID,
         'redirect_uri': GOOGLE_REDIRECT_URI,
@@ -1367,10 +1371,17 @@ def admin_google_callback():
 def google_callback():
     """General Google OAuth callback; dispatches based on state-encoded flow."""
     state_payload = request.args.get('state', '')
+    ref_code_state = ''
     if '|' in state_payload:
         parts = state_payload.split('|')
         flow = parts[0]
         frontend_url = parts[1] if len(parts) > 1 else FRONTEND_BASE_URL
+        # The referral code rides in position 2 (old states only had
+        # flow|frontend_url|nonce, so this stays backward compatible).
+        # Only a code shaped like our JD-prefixed referral codes is accepted,
+        # so a stray CSRF nonce from an old state can never be treated as one.
+        if len(parts) > 2 and parts[2].startswith('JD') and len(parts[2]) <= 16:
+            ref_code_state = parts[2]
     else:
         flow = 'user'
         frontend_url = state_payload if state_payload.startswith('http') else FRONTEND_BASE_URL
@@ -1437,7 +1448,16 @@ def google_callback():
 
         # 3. Process Login
         user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
-        
+
+        # Apply referral code carried through the OAuth state (from a shared
+        # ?ref= link). Safe no-op when the code is invalid/already used.
+        if ref_code_state:
+            try:
+                from utils.referral import apply_referral_code
+                apply_referral_code(user_data['id'], ref_code_state)
+            except Exception:
+                pass  # never break login flow
+
         # Store in session as a backup (though we're moving towards stateless)
         session['oauth_user_id'] = user_data['id']
         session['oauth_email'] = user_data['email']

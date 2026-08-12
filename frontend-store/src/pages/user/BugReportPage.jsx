@@ -289,7 +289,7 @@ function BugReportPage() {
                                 <ShieldCheck size={20} />
                                 <span className="text-xs font-black uppercase tracking-widest">Automatic Diagnostic</span>
                             </div>
-                            <h3 className="text-xl font-black">This info is automatically captured</h3>
+                            <h3 className="text-xl font-black text-white">This info is automatically captured</h3>
                             <p className="text-slate-400 text-sm mt-1">Our tech team uses this to debug the reported issue.</p>
                         </div>
                     </div>

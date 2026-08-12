@@ -246,7 +246,7 @@ const PWAInstallBanner = () => {
                 <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-lg border border-slate-100/10 animate-bounce p-3">
                   <img src="/logo192.png" alt="JDLX Logo" className="w-full h-full object-contain" />
                 </div>
-                <h3 className="text-xl font-black mt-4 tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
+                <h3 className="text-xl font-black mt-4 tracking-tight text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>Download JDLX Mobile</h3>
                 <p className="text-[13px] text-slate-400 mt-2 font-medium leading-relaxed">
                   Install the digital concierge app on your device screen for full performance, instant checkout, and order tracking.
                 </p>

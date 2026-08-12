@@ -62,7 +62,7 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
               <LinkIcon size={20} className="text-primary" />
             </div>
             <div>
-              <h3 className="text-xl font-black tracking-tight">Share Product</h3>
+              <h3 className="text-xl font-black tracking-tight text-white">Share Product</h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Premium Selection</p>
             </div>
           </div>

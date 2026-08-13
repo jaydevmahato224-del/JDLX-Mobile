@@ -409,6 +409,8 @@ def init_db():
         ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"),
         ('delivery_latitude', 'REAL'),
         ('delivery_longitude', 'REAL'),
+        # delivery_type default is legacy (quick delivery is retired system-wide;
+        # checkout always writes 'scheduled'). Kept for existing-row compatibility.
         ('delivery_type', "TEXT DEFAULT 'quick'"),
         ('delivery_partner_id', 'INTEGER'),
         ('store_id', 'INTEGER'),
@@ -800,6 +802,16 @@ def init_db():
     # already credited to BOTH users for this referral (old rows won't have it
     # until the backfill migration credits them).
     ensure_columns('referrals', [('instant_bonus_given', 'INTEGER DEFAULT 0')])
+    # reward lifecycle: the order-triggered payout is NOT paid on delivery
+    # anymore. On DELIVERED the referral is ARMEND (reward_armed=1) with a
+    # reward_due_at = delivery time + return/cancellation/exchange window, and
+    # the remainder is paid only once that window has passed AND the order is
+    # still valid (no pending/approved refund). reward_paid prevents double pay.
+    ensure_columns('referrals', [
+        ('reward_armed', 'INTEGER DEFAULT 0'),
+        ('reward_due_at', 'TIMESTAMP'),
+        ('reward_paid', 'INTEGER DEFAULT 0'),
+    ])
     # Guard against duplicate referral records (one per referred user) so the
     # instant bonus can never be credited twice.
     try:

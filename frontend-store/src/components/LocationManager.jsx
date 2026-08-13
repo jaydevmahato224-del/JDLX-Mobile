@@ -2,13 +2,14 @@ import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
 
 const LocationManager = () => {
-  const { setDeliveryMode, setNearestStoreId, setIsCheckingLocation } = useStore()
+  const { setNearestStoreId, setIsCheckingLocation } = useStore()
 
   useEffect(() => {
-    setDeliveryMode('scheduled')
+    // (setDeliveryMode removed — quick delivery is retired; all orders use
+    // standard scheduled fulfillment.)
     setNearestStoreId(null)
     setIsCheckingLocation(false)
-  }, [setDeliveryMode, setNearestStoreId, setIsCheckingLocation])
+  }, [setNearestStoreId, setIsCheckingLocation])
 
   return null
 }

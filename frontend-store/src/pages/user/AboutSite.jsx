@@ -20,8 +20,8 @@ const defaultSections = [
     title: 'How It Works',
     points: [
       'Browse products and add to cart.',
-      'Choose delivery mode (quick/scheduled) where available.',
-      'Place order, track in real-time, and get updates in your account.',
+      'Choose your delivery address and place the order.',
+      'Track your order in real-time and get updates in your account.',
     ],
   },
   {

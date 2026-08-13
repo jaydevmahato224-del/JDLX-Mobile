@@ -138,17 +138,8 @@ const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId =
                                                 >
                                                     {order.assignment_status}
                                                 </span>
-                                                {order.delivery_type && (
-                                                    <span
-                                                        className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                                                            order.delivery_type === 'quick' 
-                                                            ? 'border-amber-400/20 bg-amber-400/10 text-amber-400' 
-                                                            : 'border-blue-400/20 bg-blue-400/10 text-blue-400'
-                                                        }`}
-                                                    >
-                                                        {order.delivery_type}
-                                                    </span>
-                                                )}
+                                                {/* (delivery-type badge removed — quick delivery is
+                                                    retired; every order uses scheduled fulfillment.) */}
                                             </div>
 
                                             {order.product_names || order.products ? (

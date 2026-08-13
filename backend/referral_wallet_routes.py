@@ -51,7 +51,17 @@ def wallet_balance():
 def my_referral_code():
     user_id = g.user_id
     code = get_or_create_referral_code(user_id)
-    
+
+    # Opportunistic settle: if this user's order-triggered reward window has
+    # already passed (and the qualifying order is still valid), pay it now so
+    # the stats below reflect the freshly-credited reward without waiting for
+    # the 30-minute scheduler sweep.
+    try:
+        from utils.referral import process_due_referral_rewards
+        process_due_referral_rewards(user_id=user_id)
+    except Exception:
+        pass  # never break the referral page
+
     # Get stats
     conn = get_db()
     cursor = conn.cursor()
@@ -120,51 +130,56 @@ def apply_code():
 def apply_code_from_profile():
     user_id = g.user_id
     data = request.get_json()
-    code = data.get('code')
+    # Normalize input so lowercase/whitespace codes still match (the generated
+    # codes are always uppercase, e.g. JD + 6 chars).
+    code = (data.get('code') or '').strip().upper()
     
     if not code:
-        return jsonify({'message': 'Referral code is required.'}), 400
+        return jsonify({'message': 'Referral code is required.', 'attempts': 0}), 400
 
     conn = get_db()
     cursor = conn.cursor()
     
     try:
         # 1. Check referral_attempts table
-        cursor.execute("SELECT attempts FROM referral_attempts WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT attempts, blocked_at FROM referral_attempts WHERE user_id = ?", (user_id,))
         att_row = cursor.fetchone()
         attempts = att_row['attempts'] if att_row else 0
         
         if attempts >= 3:
-            return jsonify({'message': 'Too many invalid attempts. Referral code entry disabled.'}), 403
+            return jsonify({'message': 'Too many invalid attempts. Referral code entry disabled.', 'attempts': attempts}), 403
 
         # 2. Check user has 0 orders
         cursor.execute("SELECT COUNT(*) FROM orders WHERE user_id = ?", (user_id,))
         order_count = cursor.fetchone()[0]
         if order_count > 0:
-            return jsonify({'message': 'Cannot apply code after placing orders'}), 400
+            return jsonify({'message': 'Cannot apply code after placing orders', 'attempts': attempts}), 400
 
         # 3. Check user not already referred
         cursor.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
         if cursor.fetchone():
-            return jsonify({'message': 'Already used a referral code'}), 400
+            return jsonify({'message': 'Already used a referral code', 'attempts': attempts}), 400
 
         # 4. Check code exists
         cursor.execute("SELECT id FROM users WHERE referral_code = ?", (code,))
         ref_user_row = cursor.fetchone()
         if not ref_user_row:
-            # Increment attempts on failure
+            # Increment attempts on failure (brute-force protection) and stamp
+            # blocked_at the moment the user reaches the 3-attempt limit so the
+            # block is traceable.
+            new_attempts = attempts + 1
             if att_row:
-                cursor.execute("UPDATE referral_attempts SET attempts = attempts + 1 WHERE user_id = ?", (user_id,))
+                cursor.execute("UPDATE referral_attempts SET attempts = ?, blocked_at = CASE WHEN ? >= 3 THEN CURRENT_TIMESTAMP ELSE blocked_at END WHERE user_id = ?", (new_attempts, new_attempts, user_id))
             else:
-                cursor.execute("INSERT INTO referral_attempts (user_id, attempts) VALUES (?, 1)", (user_id,))
+                cursor.execute("INSERT INTO referral_attempts (user_id, attempts, blocked_at) VALUES (?, ?, CASE WHEN ? >= 3 THEN CURRENT_TIMESTAMP ELSE NULL END)", (user_id, new_attempts, new_attempts))
             conn.commit()
-            return jsonify({'message': 'Invalid referral code'}), 400
+            return jsonify({'message': 'Invalid referral code', 'attempts': new_attempts}), 400
             
         referrer_id = ref_user_row['id']
 
         # 5. Check not self-referral
         if referrer_id == user_id:
-            return jsonify({'message': 'Cannot use your own referral code'}), 400
+            return jsonify({'message': 'Cannot use your own referral code', 'attempts': attempts}), 400
 
         # 6. Call existing apply_referral_code()
         # We've already done most checks, but calling this to maintain consistency and record the entry
@@ -176,7 +191,7 @@ def apply_code_from_profile():
                 'message': 'Code applied! ₹10 instantly credited to your wallet. ₹20 more after your first order of ₹199+'
             })
         else:
-            return jsonify({'message': message}), 400
+            return jsonify({'message': message, 'attempts': attempts}), 400
 
     except Exception as e:
         print(f"Error in apply_code_from_profile: {e}")
@@ -232,11 +247,18 @@ def apply_wallet_to_order():
 def admin_referrals():
     conn = get_db()
     cursor = conn.cursor()
+    # Enriched: both users' emails, the reward lifecycle flags and the
+    # qualifying order amount/status so admins can audit every referral.
     cursor.execute('''
-        SELECT r.*, u1.name as referrer_name, u2.name as referred_name 
+        SELECT r.*,
+               u1.name as referrer_name, u1.email as referrer_email,
+               u2.name as referred_name, u2.email as referred_email,
+               o.total_amount as qualifying_order_amount,
+               o.order_status as qualifying_order_status
         FROM referrals r
         JOIN users u1 ON r.referrer_id = u1.id
         JOIN users u2 ON r.referred_id = u2.id
+        LEFT JOIN orders o ON o.id = r.qualifying_order_id
         ORDER BY r.created_at DESC
     ''')
     rows = cursor.fetchall()
@@ -247,6 +269,34 @@ def admin_referrals():
     conn.close()
     
     return jsonify(referrals)
+
+@referral_wallet_bp.route('/api/admin/referral-rewards', methods=['GET'])
+@token_required
+@require_admin()
+def admin_referral_rewards():
+    """Full ledger of every referral-related wallet credit: which user received
+    how much, when, and why (instant signup bonus vs order-triggered reward).
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT wt.id, wt.user_id, wt.amount, wt.type, wt.reason,
+                   wt.reference_id, wt.created_at,
+                   u.name, u.email
+            FROM wallet_transactions wt
+            JOIN users u ON u.id = wt.user_id
+            WHERE wt.reason LIKE 'Referral%'
+            ORDER BY wt.created_at DESC, wt.id DESC
+            LIMIT 300
+        ''')
+        rows = cursor.fetchall()
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        print(f"Error in admin_referral_rewards: {e}")
+        return jsonify({'message': 'Internal server error'}), 500
+    finally:
+        conn.close()
 
 @referral_wallet_bp.route('/api/admin/wallet-stats', methods=['GET'])
 @token_required

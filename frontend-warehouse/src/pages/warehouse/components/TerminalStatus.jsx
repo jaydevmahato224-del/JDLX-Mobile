@@ -1,7 +1,9 @@
 import { CloudRain, MapPin, ShieldCheck, Zap, AlertTriangle, X as CloseIcon, Check } from 'lucide-react'
 import { useState } from 'react'
 
-const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStatus, updatingStatus, quickModeEnabled, onToggleQuickMode, compact = false }) => {
+// (quickModeEnabled / onToggleQuickMode props removed — quick delivery is
+// retired; terminals only manage standard operations status.)
+const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStatus, updatingStatus, compact = false }) => {
     const [showConfirm, setShowConfirm] = useState(false)
     const isOpen = operationsStatus === 'open'
 
@@ -85,36 +87,8 @@ const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStat
                     <span className={`h-2.5 w-2.5 rounded-full ${isOpen ? 'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]' : 'bg-rose-400 shadow-[0_0_15px_rgba(251,113,133,0.5)]'} animate-pulse`} />
                 </div>
 
-                {/* Quick Mode Toggle - Only visible when terminal is online */}
-                {isOpen && (
-                    <div className="flex items-center justify-between warehouse-subtle-card px-6 py-5 hover:bg-white/[0.02] transition-colors animate-in fade-in slide-in-from-top-4 duration-500">
-                        <div className="flex items-center gap-4">
-                            <div className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-all ${
-                                quickModeEnabled ? 'border-amber-400/20 bg-amber-400/10 text-amber-400' : 'border-slate-700/50 bg-slate-800/30 text-slate-500'
-                            }`}>
-                                <Zap size={18} className={quickModeEnabled ? "fill-amber-400/20" : ""} />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Hyperlocal</p>
-                                <p className="text-sm font-bold text-white tracking-tight">Quick Mode</p>
-                            </div>
-                        </div>
-                        
-                        <button
-                            onClick={() => onToggleQuickMode(!quickModeEnabled)}
-                            disabled={updatingStatus}
-                            className={`group relative inline-flex h-6 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 focus:outline-none ${
-                                quickModeEnabled ? 'bg-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'bg-slate-700'
-                            } ${updatingStatus ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-all duration-300 ease-spring ${
-                                    quickModeEnabled ? 'translate-x-7' : 'translate-x-1'
-                                }`}
-                            />
-                        </button>
-                    </div>
-                )}
+                {/* (Quick Mode toggle removed — quick delivery is retired;
+                    terminals only manage the standard operations status.) */}
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">

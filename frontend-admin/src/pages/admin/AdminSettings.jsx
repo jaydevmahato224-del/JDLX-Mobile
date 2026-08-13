@@ -18,9 +18,9 @@ export default function AdminSettings() {
     pwa_banner_title: 'Install JDLX Mobile',
     pwa_banner_description: 'Get the full premium experience on your home screen.',
     scheduled_delivery_time: 'Tomorrow by 11:00 AM',
-    quick_delivery_max_distance: '5',
     scheduled_delivery_note: 'Reliable fulfillment from our central warehouse.',
-    quick_delivery_note: 'Hyperlocal dispatch from the active dark store.',
+    // (quick_delivery_* settings removed — quick delivery is retired; every
+    // order uses standard scheduled fulfillment.)
     platform_fee: '7',
     free_delivery_threshold: '499',
     delivery_fee: '49',
@@ -512,15 +512,8 @@ export default function AdminSettings() {
               </div>
 
               <div className="grid gap-8 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Delivery Radius Limit (KM)</label>
-                  <input
-                    type="number"
-                    value={settings.quick_delivery_max_distance || ''}
-                    onChange={(e) => handleChange('quick_delivery_max_distance', e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-purple-500 transition-all"
-                  />
-                </div>
+                {/* (Quick Delivery Radius Limit removed — quick delivery is
+                    retired; every order uses standard scheduled fulfillment.) */}
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-400">Fixed Platform Fee (₹)</label>
                   <input
@@ -774,14 +767,14 @@ export default function AdminSettings() {
                     <label className="text-xs font-black uppercase tracking-widest text-slate-400">About Us Content</label>
                     <button 
                       onClick={() => handleChange('about_us_content', `# About JDLX MOBILE
-- Hyperlocal quick commerce platform for daily essentials.
+- Premium mobile commerce platform for daily essentials.
 - Designed for fast discovery, reliable stock, and smooth checkout.
 - Single account experience across shopping, tracking, wallet, and support.
 
 # How It Works
 - Browse products and add to cart.
-- Choose delivery mode (quick/scheduled) where available.
-- Place order, track in real-time, and get updates in your account.
+- Choose your delivery address and place the order.
+- Track your order in real-time and get updates in your account.
 
 # Delivery & Service
 - Delivery time depends on location, store availability, and demand.
@@ -820,7 +813,7 @@ export default function AdminSettings() {
                     <button 
                       onClick={() => handleChange('terms_and_conditions_content', `# JDLX Terms of Service
 - By using JDLX MOBILE, you agree to our Terms & Conditions.
-- We provide hyperlocal quick commerce and scheduled delivery services.
+- We provide scheduled delivery services for all orders.
 - Accuracy of delivery location is your responsibility.
 
 # Orders & Payments

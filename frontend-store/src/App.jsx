@@ -71,15 +71,35 @@ window.fetch = async (...args) => {
       const init = args[1] || {};
       const headers = init.headers;
       let hadAuthHeader = false;
+      let authHeaderValue = null;
       if (headers) {
         if (typeof headers.get === 'function') {
           hadAuthHeader = !!headers.get('Authorization');
+          authHeaderValue = headers.get('Authorization');
         } else if (typeof headers === 'object') {
           hadAuthHeader = Object.keys(headers).some(k => k.toLowerCase() === 'authorization' && headers[k]);
+          const hdrKey = Object.keys(headers).find(k => k.toLowerCase() === 'authorization');
+          authHeaderValue = hdrKey ? headers[hdrKey] : null;
         }
       }
-      if (hadAuthHeader) {
-        useStore.getState().logout();
+      if (hadAuthHeader && authHeaderValue) {
+        // Confirm the token is GENUINELY invalid before wiping the session.
+        // A single endpoint can return 401 for unrelated reasons (OTP flow,
+        // permission checks, account state) while the token itself is still
+        // valid — logging out on every 401 caused the recurring random
+        // "auto-logouts" on all devices. Ask the backend's verify-token
+        // endpoint; only logout when it agrees the token is bad.
+        try {
+          const verifyRes = await _originalFetch(`${API_BASE_URL}/auth/verify-token`, {
+            headers: { 'Authorization': authHeaderValue }
+          });
+          if (verifyRes.status === 401) {
+            useStore.getState().logout();
+          }
+        } catch {
+          // Network hiccup while verifying — never wipe a possibly-valid
+          // session because a background request failed.
+        }
       }
     }
 

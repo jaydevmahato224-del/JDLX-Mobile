@@ -97,22 +97,8 @@ export default function WarehouseProfile() {
         }
     };
 
-    const handleToggleQuickMode = async (enabled) => {
-        if (!warehouseToken) return;
-
-        setUpdatingTerminal(true);
-        setActionError('');
-        try {
-            await apiClient.patch('/warehouse/settings', { quick_mode_enabled: enabled ? 1 : 0 });
-            const updatedUser = { ...user, quick_mode_enabled: enabled ? 1 : 0 };
-            setWarehouseUser(updatedUser, warehouseToken);
-        } catch (err) {
-            console.error('Failed to update quick mode status:', err);
-            setActionError(err.message);
-        } finally {
-            setUpdatingTerminal(false);
-        }
-    };
+    // (handleToggleQuickMode removed — quick delivery is retired; terminals
+    // only manage the standard operations status.)
 
     const profileKycStatus = (user?.profile_kyc_status || 'verified').toLowerCase();
     const isProfilePending = profileKycStatus === 'pending';
@@ -193,8 +179,6 @@ export default function WarehouseProfile() {
                             pincode={user?.pincode}
                             onToggleStatus={handleUpdateOperationsStatus}
                             updatingStatus={updatingTerminal}
-                            quickModeEnabled={!!user?.quick_mode_enabled}
-                            onToggleQuickMode={handleToggleQuickMode}
                             compact
                         />
                         {actionError ? (

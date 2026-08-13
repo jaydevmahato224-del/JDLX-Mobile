@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, Copy, Gift, Users, Trophy, ChevronRight } from 'lucide-react';
+import { Share2, Copy, CheckCircle2, Gift, Users, Trophy, ChevronRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
@@ -7,6 +7,7 @@ import { useStore } from '../store/useStore';
 const ReferAndEarn = () => {
   const [refData, setRefData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [copiedCode, setCopiedCode] = useState(false);
   const token = useStore(state => state.token);
 
   useEffect(() => {
@@ -32,6 +33,13 @@ const ReferAndEarn = () => {
   const copyToClipboard = (text, message) => {
     navigator.clipboard.writeText(text);
     toast.success(message || 'Copied to clipboard!');
+  };
+
+  // Copy referral code with inline success feedback on the button itself.
+  const copyCode = () => {
+    copyToClipboard(refData?.code || '', 'Code copied!');
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const shareOnWhatsApp = () => {
@@ -60,15 +68,24 @@ const ReferAndEarn = () => {
       {/* Referral Code Card */}
       <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 text-center">
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Your Unique Referral Code</p>
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl px-8 py-4 font-black text-3xl tracking-widest text-[#1B2341] select-all">
+        <div className="flex flex-col sm:flex-row items-stretch justify-center gap-3 mb-8">
+          <div className="flex items-center justify-center min-w-0 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl px-8 py-4 font-black text-2xl sm:text-3xl tracking-widest text-[#1B2341] select-all">
             {refData?.code || '------'}
           </div>
           <button 
-            onClick={() => copyToClipboard(refData?.code, 'Code copied!')}
-            className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-slate-200"
+            onClick={copyCode}
+            className={`group inline-flex items-center justify-center gap-2 px-6 rounded-2xl font-black text-sm transition-all duration-200 active:scale-95 shadow-lg ${
+              copiedCode
+                ? 'bg-emerald-500 text-white shadow-emerald-200'
+                : 'bg-slate-900 text-white shadow-slate-300 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5'
+            }`}
           >
-            <Copy size={20} />
+            {copiedCode ? (
+              <CheckCircle2 size={20} className="shrink-0" />
+            ) : (
+              <Copy size={20} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            )}
+            <span className="whitespace-nowrap">{copiedCode ? 'Copied!' : 'Copy Code'}</span>
           </button>
         </div>
 
@@ -82,8 +99,9 @@ const ReferAndEarn = () => {
           </button>
           <button 
             onClick={() => copyToClipboard(refData?.referral_url, 'Link copied!')}
-            className="flex items-center justify-center gap-3 bg-slate-100 text-slate-700 font-black py-4 rounded-2xl hover:bg-slate-200 transition-all"
+            className="group flex items-center justify-center gap-3 bg-slate-100 text-slate-700 font-black py-4 rounded-2xl hover:bg-slate-200 transition-all"
           >
+            <Copy size={18} className="transition-transform duration-200 group-hover:scale-110" />
             Copy Referral Link
           </button>
         </div>

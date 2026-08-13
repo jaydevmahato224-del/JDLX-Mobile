@@ -9,4 +9,5 @@ jdlx.db
 *.log
 *.lock
 static/uploads/
+.jwt_secret
 

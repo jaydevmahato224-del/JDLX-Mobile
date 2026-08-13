@@ -52,13 +52,8 @@ function MyOrders() {
                                     <div className="text-sm font-bold text-gray-800">₹{order.total_amount}</div>
                                 </div>
                                 <div className="flex gap-2 items-center">
-                                    {order.delivery_type && (
-                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${
-                                            'bg-blue-100 text-blue-700 border border-blue-200'
-                                        }`}>
-                                            {order.delivery_type === 'quick' ? 'scheduled' : order.delivery_type}
-                                        </span>
-                                    )}
+                                    {/* (delivery-type badge removed — quick delivery is retired;
+                                        all orders use standard scheduled fulfillment.) */}
                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                                         order.shipment_status === 'DELIVERED' || order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
                                         ['IN_TRANSIT', 'SHIPPED', 'In Transit'].includes(order.shipment_status) ? 'bg-orange-100 text-orange-700' :

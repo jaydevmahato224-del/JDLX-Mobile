@@ -24,7 +24,8 @@ const WarehouseOrders = () => {
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [filterStatus, setFilterStatus] = useState('all')
-    const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('all')
+    // (deliveryTypeFilter removed — quick delivery is retired; every order
+    // uses standard scheduled fulfillment.)
     const [updatingId, setUpdatingId] = useState(null)
     const [notification, setNotification] = useState(null)
 
@@ -89,9 +90,8 @@ const WarehouseOrders = () => {
             order.items?.toLowerCase().includes(searchQuery.toLowerCase())
         
         const matchesStatus = filterStatus === 'all' || order.assignment_status === filterStatus
-        const matchesType = deliveryTypeFilter === 'all' || order.delivery_type === deliveryTypeFilter
         
-        return matchesSearch && matchesStatus && matchesType
+        return matchesSearch && matchesStatus
     })
 
     const getStatusColor = (status) => {
@@ -186,25 +186,8 @@ const WarehouseOrders = () => {
                 </div>
                 
                 <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
-                    <div className="h-8 w-px bg-white/10 mx-2 hidden md:block" />
-                    <div className="flex items-center gap-2">
-                        {['all', 'quick', 'scheduled'].map(type => (
-                            <button
-                                key={type}
-                                onClick={() => setDeliveryTypeFilter(type)}
-                                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${
-                                    deliveryTypeFilter === type 
-                                    ? 'bg-primary text-slate-950 border-primary shadow-lg shadow-primary/20' 
-                                    : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/10'
-                                }`}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="h-8 w-px bg-white/10 mx-2 hidden md:block" />
-                    
+                    {/* (delivery-type filter removed — quick delivery is retired;
+                        every order uses standard scheduled fulfillment.) */}
                     <div className="flex items-center gap-2">
                         {['all', 'assigned', 'accepted', 'packing', 'packed', 'dispatched', 'cancelled'].map(status => (
                             <button
@@ -243,13 +226,6 @@ const WarehouseOrders = () => {
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-black text-white">#ORD-{order.order_id}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${
-                                                    order.delivery_type === 'quick' 
-                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                                    : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                                }`}>
-                                                    {order.delivery_type === 'quick' ? '⚡ Quick' : '🗓️ Scheduled'}
-                                                </span>
                                             </div>
                                             <div className="flex items-center gap-2 text-slate-500">
                                                 <MapPin size={12} />

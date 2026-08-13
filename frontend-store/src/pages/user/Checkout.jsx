@@ -179,7 +179,10 @@ function Checkout() {
     const showPriorityBadge = availability?.priority_dispatch_enabled !== false;
     const codAlertText = availability?.cod_alert_text || 'Save more with prepaid orders! FREE delivery on orders above ₹499.';
 
-    const isShiprocket = availability ? !availability.quick_mode_enabled : true;
+    // Quick delivery is retired system-wide: every order uses standard
+    // Shiprocket fulfillment, so this is always true (previously derived from
+    // the now-removed availability.quick_mode_enabled flag).
+    const isShiprocket = true;
     const codEnabledShiprocket = availability ? availability.cod_enabled_shiprocket === true : false;
 
     // Delivery Charge Calculation

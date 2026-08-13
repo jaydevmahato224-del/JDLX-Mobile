@@ -1,5 +1,5 @@
 # ==============================================================================
-# JDLX Hyperlocal Quick Commerce - Backend API
+# JDLX Mobile - Backend API
 # ==============================================================================
 
 # --- Standard Library Imports ---
@@ -20,6 +20,7 @@ from urllib.parse import quote
 
 # --- Environment Configuration ---
 from dotenv import load_dotenv
+from jwt_config import get_jwt_secret
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
@@ -436,6 +437,18 @@ def run_weekly_full_backup():
         logger.error(f"Weekly full backup failed: {str(e)}")
 
 
+def run_due_referral_rewards():
+    """Periodic sweep: pays referral rewards whose return/exchange/cancellation
+    window has passed and whose qualifying order is still valid."""
+    try:
+        from utils.referral import process_due_referral_rewards
+        paid = process_due_referral_rewards()
+        if paid:
+            logger.info(f"Referral reward sweep: paid {paid} reward(s).")
+    except Exception as e:
+        logger.error(f"Referral reward sweep failed: {str(e)}")
+
+
 should_start_scheduler = (
     (os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug)
     and _try_acquire_scheduler_lock()
@@ -443,6 +456,7 @@ should_start_scheduler = (
 if should_start_scheduler and not scheduler.running:
     scheduler.add_job(run_daily_database_backup, 'cron', hour=2, minute=0, id='daily_db_backup', replace_existing=True)
     scheduler.add_job(run_weekly_full_backup, 'cron', day_of_week='sun', hour=3, minute=0, id='weekly_full_backup', replace_existing=True)
+    scheduler.add_job(run_due_referral_rewards, 'interval', minutes=30, id='referral_reward_sweep', replace_existing=True)
     scheduler.start()
 
 
@@ -584,12 +598,15 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-SECRET_KEY = os.environ.get("JWT_SECRET")
-if not SECRET_KEY:
-    # Auto-generate a strong secret per process (safe for dev, but sessions won't persist across restarts)
-    SECRET_KEY = secrets.token_hex(32)
-    logger.warning("JWT_SECRET not found in environment! Generated ephemeral secret. Set JWT_SECRET for production.")
+# Centralized, restart-stable JWT secret. Uses JWT_SECRET env var when set;
+# otherwise falls back to a persisted backend/.jwt_secret file (generated once
+# and reused), so backend restarts/deploys NEVER rotate the secret and do not
+# log every storefront user out of every device. See jwt_config.get_jwt_secret.
+SECRET_KEY = get_jwt_secret()
 app.secret_key = SECRET_KEY
+# Keep the resolved secret in app config too, so auth/role_guard.py (which
+# checks app.config first) verifies tokens with the exact same secret.
+app.config["JWT_SECRET"] = SECRET_KEY
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
@@ -1030,7 +1047,7 @@ def index():
     """Base endpoint with API meta-information."""
     return jsonify({
         "status": "operational",
-        "message": "JDLX Hyperlocal Quick Commerce Backend API",
+        "message": "JDLX Mobile Backend API",
         "version": "v4.2.0",
         "documentation": "/api/docs"
     }), 200
@@ -1380,7 +1397,8 @@ def google_callback():
         # flow|frontend_url|nonce, so this stays backward compatible).
         # Only a code shaped like our JD-prefixed referral codes is accepted,
         # so a stray CSRF nonce from an old state can never be treated as one.
-        if len(parts) > 2 and parts[2].startswith('JD') and len(parts[2]) <= 16:
+        # Case-insensitive: apply_referral_code() normalizes to uppercase.
+        if len(parts) > 2 and parts[2].upper().startswith('JD') and len(parts[2]) <= 16:
             ref_code_state = parts[2]
     else:
         flow = 'user'
@@ -3383,8 +3401,8 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     Confirms an order and decrements the inventory stock safely.
     Ensures this is only done once per order to prevent double-decrement bugs.
     """
-    # 1. Fetch current order status. Customer checkout currently uses global catalog stock;
-    # warehouse-specific quick delivery is disabled for now.
+    # 1. Fetch current order status. Customer checkout uses global catalog stock and
+    # standard fulfillment only.
     cursor.execute("SELECT order_status, dark_store_id FROM orders WHERE id = ?", (order_id,))
     order = cursor.fetchone()
     if not order:
@@ -3524,8 +3542,7 @@ def checkout():
 
     user_lat = data.get('latitude', 28.6139)  # Default to Delhi
     user_lng = data.get('longitude', 77.2090)
-    # Quick/warehouse-specific delivery is disabled for now. Customer checkout uses
-    # global catalog stock and standard fulfillment only.
+    # Customer checkout uses global catalog stock and standard fulfillment only.
     delivery_type = 'scheduled'
 
 
@@ -6476,7 +6493,7 @@ def admin_get_inventory():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        # Quick delivery is disabled for now; admin inventory reflects global catalog stock.
+        # Admin inventory reflects global catalog stock.
         cursor.execute("""
             SELECT 
                 p.id, 
@@ -7407,13 +7424,15 @@ def update_refund_status(request_id):
             cursor.execute("UPDATE orders SET order_status = 'DELIVERED' WHERE id = ?", (rr['order_id'],))
             notification_service.notify_user_internal(rr['user_id'], "Refund Rejected", f"Your refund request for order #{rr['order_id']} has been rejected.", "SYSTEM")
             
-            # Referral reward check (additive)
+            # Referral reward check (additive). The refund was REJECTED, so the
+            # user's return/exchange window is closed for this order — settle
+            # the reward immediately instead of waiting for the window sweep.
             try:
                 cursor.execute("SELECT total_amount FROM orders WHERE id = ?", (rr['order_id'],))
                 order_row = cursor.fetchone()
                 order_amount = order_row['total_amount'] if order_row else 0
                 from utils.referral import process_referral_reward
-                process_referral_reward(rr['order_id'], rr['user_id'], order_amount)
+                process_referral_reward(rr['order_id'], rr['user_id'], order_amount, settle_now=True)
             except Exception:
                 pass  # never break order flow
 
@@ -7707,10 +7726,9 @@ def warehouse_availability():
             "ordering_enabled": True,
             "can_order": True,
             "weather_status": "clear",
-            "message": "Delivering in 10–20 mins",
+            "message": "Standard delivery available",
             "store_name": store["name"],
             "store_id": store["id"],
-            "quick_mode_enabled": False,
             "platform_fee": safe_float(settings.get('platform_fee'), 7),
             "free_delivery_enabled": settings.get('free_delivery_enabled', 'true').lower() == 'true',
             "free_delivery_threshold": safe_float(settings.get('free_delivery_threshold'), 499),
@@ -7725,9 +7743,7 @@ def warehouse_availability():
             "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
             "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true',
             "scheduled_delivery_time": settings.get('scheduled_delivery_time', 'Tomorrow'),
-            "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.'),
-            "quick_delivery_max_distance": 0,
-            "quick_delivery_note": "Quick delivery is temporarily unavailable."
+            "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.')
         }, "Availability checked")
     except Exception as e:
         return success_response({

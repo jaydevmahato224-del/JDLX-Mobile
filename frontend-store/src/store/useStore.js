@@ -395,12 +395,9 @@ export const useStore = create((set, get) => ({
     setIsSearching: (val) => set({ isSearching: val }),
     
     // Delivery & Location Logic
-    deliveryMode: 'scheduled',
+    // (deliveryMode / setDeliveryMode removed — quick delivery is retired;
+    // all orders use standard scheduled fulfillment.)
     userLocation: safeParse('userLocation'), // { lat, lng, address }
-    setDeliveryMode: () => {
-        localStorage.setItem('deliveryMode', 'scheduled');
-        set({ deliveryMode: 'scheduled' });
-    },
     setUserLocation: (location) => {
         if (location) {
             localStorage.setItem('userLocation', JSON.stringify(location));

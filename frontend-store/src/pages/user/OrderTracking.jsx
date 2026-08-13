@@ -123,7 +123,9 @@ function OrderTracking() {
 
     useEffect(() => {
         const fetchShipmentTracking = async () => {
-            if (!order || order.delivery_type === 'quick') return;
+            // (delivery_type === 'quick' gate removed — quick delivery is
+            // retired, so every order uses standard shipment tracking.)
+            if (!order) return;
             setShipmentLoading(true);
             try {
                 const token = localStorage.getItem('token');

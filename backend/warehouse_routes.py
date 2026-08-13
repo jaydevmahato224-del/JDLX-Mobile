@@ -639,7 +639,6 @@ def warehouse_login_google_callback():
             "operations_status": wh["operations_status"],
             "weather_status": wh["weather_status"],
             "service_radius_km": wh["service_radius_km"],
-            "quick_mode_enabled": wh["quick_mode_enabled"],
             "profile_kyc_status": wh["profile_kyc_status"],
         }
         
@@ -764,7 +763,6 @@ def warehouse_auth_google():
                 "operations_status": wh["operations_status"],
                 "weather_status": wh["weather_status"],
                 "service_radius_km": wh["service_radius_km"],
-                "quick_mode_enabled": wh["quick_mode_enabled"],
                 "profile_kyc_status": wh["profile_kyc_status"],
             },
         }), 200
@@ -949,7 +947,6 @@ def partner_auth_google_callback():
                 "operations_status": wh["operations_status"],
                 "weather_status": wh["weather_status"],
                 "service_radius_km": wh["service_radius_km"],
-                "quick_mode_enabled": wh["quick_mode_enabled"],
                 "profile_kyc_status": wh["profile_kyc_status"],
             }
             encoded_user = quote(json.dumps(user_obj))
@@ -989,7 +986,7 @@ def warehouse_availability():
         # Prefer a warehouse whose linked dark_store is also active
         wh = conn.execute(
             """
-            SELECT w.operations_status, w.weather_status, w.service_radius_km, w.quick_mode_enabled,
+            SELECT w.operations_status, w.weather_status, w.service_radius_km,
                    ds.active AS store_active, ds.pincode
             FROM warehouses w
             LEFT JOIN dark_stores ds ON w.warehouse_name = ds.name
@@ -1028,7 +1025,6 @@ def warehouse_availability():
         ops_status = (wh["operations_status"] or "closed").lower().strip()
         is_open = ops_status == "open"
         weather = (wh["weather_status"] or "clear").lower().strip()
-        quick_mode = False
         radius = wh["service_radius_km"] or 4.0
 
         # Build human-readable message
@@ -1047,8 +1043,6 @@ def warehouse_availability():
             "can_order": is_open,
             "operations_status": ops_status,
             "weather_status": weather,
-            "quick_mode_enabled": quick_mode,
-            "quick_delivery_max_distance": 0,
             "service_radius_km": radius,
             "active_products": product_count,
             "message": msg,
@@ -1294,7 +1288,6 @@ def warehouse_session():
             "operations_status": wh["operations_status"],
             "weather_status": wh["weather_status"],
             "service_radius_km": wh["service_radius_km"],
-            "quick_mode_enabled": wh["quick_mode_enabled"],
             "profile_kyc_status": wh["profile_kyc_status"],
         }
         
@@ -1486,7 +1479,7 @@ def warehouse_dashboard():
 
         # Current warehouse settings
         wh_settings = conn.execute(
-            "SELECT operations_status, weather_status, quick_mode_enabled FROM warehouses WHERE id = ?", 
+            "SELECT operations_status, weather_status FROM warehouses WHERE id = ?", 
             (wh_id,)
         ).fetchone()
 
@@ -2948,7 +2941,7 @@ def warehouse_settings():
     data = request.get_json(silent=True) or {}
     print(f"[DEBUG] warehouse_settings: wh_id={wh_id}, data={data}")
 
-    allowed = {"operations_status", "weather_status", "service_radius_km", "quick_mode_enabled"}
+    allowed = {"operations_status", "weather_status", "service_radius_km"}
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         print(f"[DEBUG] warehouse_settings: No valid fields to update in {data}")
@@ -2964,24 +2957,23 @@ def warehouse_settings():
             f"UPDATE warehouses SET {set_clause} WHERE id = ?", values
         )
 
-        # Sync with dark_stores and warehouse_partners if operations_status or quick_mode_enabled was changed
-        if "operations_status" in updates or "quick_mode_enabled" in updates:
+        # Sync with dark_stores and warehouse_partners if operations_status was changed
+        if "operations_status" in updates:
             # Find dark_store and warehouse_partner by name (as per current mapping)
-            wh_info = conn.execute("SELECT warehouse_name, operations_status, quick_mode_enabled FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
+            wh_info = conn.execute("SELECT warehouse_name, operations_status FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
             if wh_info:
                 new_op_status = wh_info["operations_status"]
                 is_active = 1 if new_op_status == "open" else 0
-                is_quick_enabled = wh_info["quick_mode_enabled"]
-                
+
                 # Sync with dark_stores (used for Admin/Orders)
                 conn.execute(
-                    "UPDATE dark_stores SET active = ?, quick_mode_enabled = ? WHERE name = ?",
-                    (is_active, is_quick_enabled, wh_info["warehouse_name"])
+                    "UPDATE dark_stores SET active = ? WHERE name = ?",
+                    (is_active, wh_info["warehouse_name"])
                 )
                 # Sync with warehouse_partners (used for Storefront Availability)
                 conn.execute(
-                    "UPDATE warehouse_partners SET operations_status = ?, quick_mode_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE warehouse_name = ?",
-                    (new_op_status, is_quick_enabled, wh_info["warehouse_name"])
+                    "UPDATE warehouse_partners SET operations_status = ?, updated_at = CURRENT_TIMESTAMP WHERE warehouse_name = ?",
+                    (new_op_status, wh_info["warehouse_name"])
                 )
 
         conn.commit()

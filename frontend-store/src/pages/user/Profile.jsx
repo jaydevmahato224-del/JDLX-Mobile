@@ -96,8 +96,13 @@ function Profile() {
                 setShowReferralPopup(true);
             } else {
                 setReferralError(data.message || 'Failed to apply code');
-                // Increment local attempts to potentially block UI immediately
-                setReferralInfo(prev => ({ ...prev, attempts: prev.attempts + 1 }));
+                // Sync attempts from the backend's authoritative count (the
+                // server is the single source of truth for the 3-attempt
+                // limit), so the UI never double-counts a failed attempt.
+                setReferralInfo(prev => ({
+                    ...prev,
+                    attempts: typeof data.attempts === 'number' ? data.attempts : prev.attempts,
+                }));
             }
         } catch {
             setReferralError('Connection error. Please try again.');

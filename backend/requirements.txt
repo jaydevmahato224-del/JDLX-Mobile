@@ -15,4 +15,4 @@ pdfplumber
 Pillow
 psutil
 libsql-experimental
-firebase-admin
+pywebpush

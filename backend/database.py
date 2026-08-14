@@ -1001,6 +1001,22 @@ def init_db():
     )''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON user_push_tokens(user_id)")
 
+    # --- Web Push (VAPID) Subscriptions ---
+    # Pure Web Push (no Firebase): each browser subscription is identified by
+    # its unique endpoint URL; the p256dh/auth keys are needed to encrypt the
+    # payload when the backend sends the notification (pywebpush).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS web_push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT UNIQUE NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_web_push_user ON web_push_subscriptions(user_id)")
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_audit_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,

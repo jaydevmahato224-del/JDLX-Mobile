@@ -226,7 +226,7 @@ def apply_automatic():
 @offer_bp.route('/api/offers/record-usage', methods=['POST'])
 @token_required
 def record_usage():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     try:
         offer_id = int(data.get('offer_id'))
         order_id = int(data.get('order_id'))

@@ -33,7 +33,7 @@ def generate_ticket_number(conn):
 @token_required
 def create_ticket():
     user_id = request.user.get('user_id')
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     subject = data.get('subject')
     message = data.get('message')
 
@@ -132,7 +132,7 @@ def get_ticket_details(ticket_id):
 @token_required
 def reply_to_ticket(ticket_id):
     user_id = request.user.get('user_id')
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     message = data.get('message')
 
     if not message:

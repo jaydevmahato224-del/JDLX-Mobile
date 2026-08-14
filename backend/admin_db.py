@@ -538,7 +538,7 @@ def admin_get_bug_reports():
 @require_admin()
 def admin_update_bug_report(report_id):
     """Updates status and developer notes for a bug report."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     status = data.get('status')
     developer_notes = data.get('developer_notes')
     

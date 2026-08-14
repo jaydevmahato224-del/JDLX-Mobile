@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -16,39 +17,58 @@ except ImportError:
     import sqlite3
     DATABASE_PATH = os.path.join(BASE_DIR, 'jdlx.db')
 
-# Initialize Firebase Admin
+# --- Pure Web Push (VAPID) — no Firebase required ---
+# Generate a keypair once and keep it stable across deploys:
+#   npx web-push generate-vapid-keys
+# Then set in backend/.env:
+#   VAPID_PRIVATE_KEY=<base64url private key>
+#   VAPID_SUBJECT=mailto:admin@your-domain.com
+# The matching PUBLIC key goes in frontend-store/.env as VITE_VAPID_PUBLIC_KEY.
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@jdlxmobile.in").strip()
+
 try:
-    import firebase_admin
-    from firebase_admin import credentials, messaging
-    # Service account can be provided three ways (first match wins):
-    #  1. FIREBASE_SERVICE_ACCOUNT_JSON env var containing the RAW JSON
-    #     (easiest on Render/Vercel — paste the downloaded service account file
-    #     contents directly into the env var, no file needed on the server).
-    #  2. FIREBASE_SERVICE_ACCOUNT_JSON env var pointing at a JSON file path.
-    #  3. A local backend/firebase-service-account.json file.
-    service_account_env = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
-    if service_account_env and os.path.exists(service_account_env):
-        cred = credentials.Certificate(service_account_env)
-        firebase_admin.initialize_app(cred)
-        FIREBASE_ENABLED = True
-    elif service_account_env and service_account_env.strip().lstrip().startswith('{'):
-        import json as _json
-        cred = credentials.Certificate(_json.loads(service_account_env))
-        firebase_admin.initialize_app(cred)
-        FIREBASE_ENABLED = True
-    elif os.path.exists(os.path.join(BASE_DIR, 'firebase-service-account.json')):
-        cred = credentials.Certificate(os.path.join(BASE_DIR, 'firebase-service-account.json'))
-        firebase_admin.initialize_app(cred)
-        FIREBASE_ENABLED = True
-    else:
-        print("[FIREBASE WARNING] FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON or file path) not found. Push notifications will be simulated.")
-        FIREBASE_ENABLED = False
+    from pywebpush import webpush as _pywebpush, WebPushException
+    _HAS_PYWEBPUSH = True
 except ImportError:
-    print("[FIREBASE WARNING] firebase_admin module not installed. Push notifications will be simulated.")
-    FIREBASE_ENABLED = False
-except Exception as e:
-    print(f"[FIREBASE ERROR] Failed to initialize: {e}")
-    FIREBASE_ENABLED = False
+    _HAS_PYWEBPUSH = False
+
+VAPID_ENABLED = bool(_HAS_PYWEBPUSH and VAPID_PRIVATE_KEY)
+if not VAPID_ENABLED:
+    print("[PUSH WARNING] VAPID_PRIVATE_KEY not set (or pywebpush missing). Push notifications will be simulated.")
+
+
+def _send_web_push(subscription_row, title, message, url="/"):
+    """Sends one VAPID web push to a subscription. Returns 'sent' | 'gone' | 'failed'."""
+    if not VAPID_ENABLED:
+        return "failed"
+    try:
+        _pywebpush(
+            subscription_info={
+                "endpoint": subscription_row["endpoint"],
+                "keys": {
+                    "p256dh": subscription_row["p256dh"],
+                    "auth": subscription_row["auth"],
+                },
+            },
+            data=json.dumps({"title": title, "body": message, "url": url}),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": VAPID_SUBJECT},
+            timeout=15,
+        )
+        return "sent"
+    except WebPushException as e:
+        # 410/404 = the browser unsubscribed / endpoint is dead → clean it up.
+        status = getattr(e, "response", None)
+        code = getattr(status, "status_code", None)
+        if code in (404, 410):
+            return "gone"
+        print(f"[PUSH ERROR] webpush failed (HTTP {code}): {e}")
+        return "failed"
+    except Exception as e:
+        print(f"[PUSH ERROR] webpush exception: {e}")
+        return "failed"
+
 
 class NotificationService:
     def __init__(self):
@@ -61,9 +81,9 @@ class NotificationService:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def notify_user_internal(self, user_id, title, message, type='SYSTEM'):
+    def notify_user_internal(self, user_id, title, message, type='SYSTEM', url="/"):
         """
-        Persists a notification to the database and sends a push alert via FCM.
+        Persists a notification to the database and sends a VAPID web push.
         """
         try:
             print(f"[NOTIFY DEBUG] Attempting to notify User {user_id}: {title}")
@@ -75,42 +95,45 @@ class NotificationService:
             ''', (user_id, title, message, type))
             conn.commit()
 
-            # Fetch FCM tokens for this user
-            cursor.execute("SELECT fcm_token FROM user_push_tokens WHERE user_id = ?", (user_id,))
-            tokens = [row['fcm_token'] for row in cursor.fetchall()]
+            # Fetch web push (VAPID) subscriptions for this user
+            cursor.execute(
+                "SELECT endpoint, p256dh, auth FROM web_push_subscriptions WHERE user_id = ?",
+                (user_id,),
+            )
+            subs = cursor.fetchall()
             conn.close()
-            
-            if tokens and FIREBASE_ENABLED:
-                self.send_push_notification(tokens, title, message)
+
+            sent = 0
+            if subs and VAPID_ENABLED:
+                for sub in subs:
+                    result = _send_web_push(sub, title, message, url)
+                    if result == "sent":
+                        sent += 1
+                    elif result == "gone":
+                        try:
+                            conn2 = self._get_db()
+                            cur2 = conn2.cursor()
+                            cur2.execute("DELETE FROM web_push_subscriptions WHERE endpoint = ?", (sub["endpoint"],))
+                            conn2.commit()
+                            conn2.close()
+                        except Exception as e:
+                            print(f"[PUSH ERROR] failed to remove dead subscription: {e}")
+                print(f"[PUSH SUCCESS] Sent {sent}/{len(subs)} web pushes to User {user_id}.")
             else:
-                # Simulate FCM Push Alert if not enabled or no tokens
-                print(f"[FCM PUSH SIMULATED] To User {user_id}: {title} (Tokens: {len(tokens)})")
-            
+                print(f"[PUSH SIMULATED] To User {user_id}: {title} (subscriptions: {len(subs)}, vapid: {VAPID_ENABLED})")
+
             return True
         except Exception as e:
             print(f"[NOTIFY ERROR] Failed to insert/send notification for User {user_id}: {e}")
             return False
 
     def send_push_notification(self, tokens, title, message):
-        """Sends FCM push notifications to a list of tokens."""
-        if not tokens or not FIREBASE_ENABLED:
+        """Kept for backward compatibility — tokens here are legacy FCM tokens,
+        which are no longer delivered (Firebase removed). In-app notifications
+        still work; web push uses notify_user_internal()."""
+        if not tokens:
             return
-
-        message_obj = messaging.MulticastMessage(
-            notification=messaging.Notification(
-                title=title,
-                body=message,
-            ),
-            tokens=tokens,
-        )
-        try:
-            response = messaging.send_multicast(message_obj)
-            print(f"[FCM PUSH SUCCESS] Sent {response.success_count} messages. {response.failure_count} failed.")
-            # Optional: handle invalid tokens (clean up database)
-            if response.failure_count > 0:
-                pass # Logic to remove invalid tokens could go here
-        except Exception as e:
-            print(f"[FCM PUSH ERROR] {e}")
+        print(f"[PUSH INFO] Ignoring {len(tokens)} legacy FCM token(s) — VAPID web push is used instead.")
 
     def send_order_notification(self, user_id, order_id, status):
         """
@@ -123,9 +146,9 @@ class NotificationService:
             'OUT_FOR_DELIVERY': 'order_out_delivery_app',
             'DELIVERED': 'order_delivered_app',
         }
-        
+
         tpl_key = status_tpl_map.get(status)
-        
+
         if tpl_key:
             try:
                 conn = self._get_db()
@@ -133,11 +156,11 @@ class NotificationService:
                 cursor.execute("SELECT title, message, is_active FROM notification_templates WHERE template_key = ?", (tpl_key,))
                 tpl = cursor.fetchone()
                 conn.close()
-                
+
                 if tpl and tpl['is_active']:
                     title = tpl['title'].format(order_id=order_id)
                     message = tpl['message'].format(order_id=order_id)
-                    return self.notify_user_internal(user_id, title, message, 'ORDER')
+                    return self.notify_user_internal(user_id, title, message, 'ORDER', url=f"/order-tracking/{order_id}")
             except Exception as e:
                 print(f"Error fetching template for {status}: {e}")
 
@@ -151,14 +174,15 @@ class NotificationService:
             'PENDING_PAYMENT': f"Complete your payment for order #{order_id} to confirm.",
             'CANCELLED': f"Your order #{order_id} has been cancelled."
         }
-        
+
         msg = messages.get(status, f"Update on your order #{order_id}")
-        return self.notify_user_internal(user_id, "Order Update", msg, 'ORDER')
+        return self.notify_user_internal(user_id, "Order Update", msg, 'ORDER', url=f"/order-tracking/{order_id}")
 
     def send_offer_notification(self, user_id, title, message):
         """
         Sends promotional offers.
         """
         return self.notify_user_internal(user_id, title, message, 'OFFER')
+
 
 notification_service = NotificationService()

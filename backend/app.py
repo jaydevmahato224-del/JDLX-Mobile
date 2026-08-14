@@ -1608,7 +1608,7 @@ def get_system_settings():
 @require_super_admin()
 def update_system_settings():
     """Updates system settings (Super Admin only)."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -1693,7 +1693,7 @@ def get_banners():
 @require_admin()
 def update_banner():
     """Adds or updates a banner (Admin only)."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     title = data.get('title')
     if not title:
         return error_response("Title is required", 400)
@@ -1784,7 +1784,7 @@ def list_admin_users():
 @require_super_admin()
 def create_admin_user():
     """Promotes a user to an administrative role."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
     role = normalize_role(data.get('role'))
 
@@ -1836,7 +1836,7 @@ def create_admin_user():
 @require_super_admin()
 def remove_admin_user():
     """Revokes administrative access from a user."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     admin_id = data.get('admin_id')
     email = (data.get('email') or '').strip().lower()
 
@@ -1912,7 +1912,7 @@ def list_admins_v2():
 @require_permission("manage_admins")
 def create_admin_v2():
     """Promotes a user to an admin role (name, email, role)."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
     name = (data.get('name') or '').strip()
     role = normalize_role(data.get('role'))
@@ -1961,7 +1961,7 @@ def create_admin_v2():
 @require_permission("manage_admins")
 def update_admin_v2(admin_id):
     """Updates an admin's display name and/or role (admin_id = admins.id)."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     role = normalize_role(data.get('role'))
     if role not in ADMIN_ROLES:
@@ -2007,7 +2007,7 @@ def update_admin_v2(admin_id):
 @require_permission("manage_admins")
 def update_admin_status_v2(admin_id):
     """Enables / disables an admin account. Disabled admins cannot log in."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     status = (data.get('status') or '').strip().lower()
     if status not in ('active', 'disabled'):
         return error_response("status must be 'active' or 'disabled'", 400)
@@ -2288,7 +2288,7 @@ def list_admin_permissions():
 @require_permission("manage_admins")
 def assign_admin_permission():
     """Assigns a new granular permission to an administrator."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     admin_user_id = data.get('admin_id')
     permission = (data.get('permission') or '').strip()
     if not admin_user_id or not permission:
@@ -2322,7 +2322,7 @@ def assign_admin_permission():
 @require_permission("manage_admins")
 def remove_admin_permission():
     """Removes a granular permission from an administrator."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     admin_user_id = data.get('admin_id')
     permission = (data.get('permission') or '').strip()
     if not admin_user_id or not permission:
@@ -2596,7 +2596,7 @@ def update_server_cart():
 @app.route('/api/products/<int:product_id>/notify', methods=['POST'])
 @limiter.limit("5 per minute")
 def register_product_notification(product_id):
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
     user_id = data.get('user_id') # Optional
     
@@ -2724,7 +2724,7 @@ def get_brands():
 @require_permission("manage_products")
 def create_brand():
     """Creates a new brand."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     name = data.get('name', '').strip()
     if not name:
         return error_response("Brand name is required", 400)
@@ -4279,7 +4279,7 @@ def user_profile():
         except Exception as e:
             return error_response(str(e), 500)
     else:
-        data = request.form.to_dict() if request.form else request.json or {}
+        data = request.form.to_dict() if request.form else request.get_json(silent=True) or {}
         name = data.get('name')
         phone = data.get('phone')
         gender = data.get('gender')
@@ -4384,7 +4384,7 @@ def accept_terms():
 def manage_addresses():
     """CRUD operations for user delivery addresses."""
     user_id = request.user['user_id']
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -4452,7 +4452,7 @@ def manage_addresses():
 def user_wishlist():
     """Manages the user's product wishlist."""
     user_id = request.user['user_id']
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -4513,7 +4513,6 @@ def user_wallet():
 def user_notifications():
     """Retrieves or marks notifications as read for the user."""
     user_id = request.user['user_id']
-    data = request.json or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -4523,6 +4522,7 @@ def user_notifications():
             conn.close()
             return jsonify(notes)
         else:
+            data = request.get_json(silent=True) or {}
             nid = data.get('id')
             if nid:
                 cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", (nid, user_id))
@@ -4540,7 +4540,6 @@ def user_notifications():
 def user_support():
     """Retrieves support tickets or creates a new one."""
     user_id = request.user['user_id']
-    data = request.json or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -4550,6 +4549,7 @@ def user_support():
             conn.close()
             return jsonify(tickets)
         else:
+            data = request.get_json(silent=True) or {}
             subject = data.get('subject')
             message = data.get('message')
             if not subject or not message:
@@ -4586,7 +4586,7 @@ def user_login_history():
 def user_payments():
     """Manages saved payment methods for the user."""
     user_id = request.user['user_id']
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -4858,7 +4858,7 @@ def send_bulk_notices():
 @require_permission("manage_admins")
 def admin_in_app_broadcast():
     """Creates an in-app notification for all users (admin broadcast)."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     title = (data.get('title') or '').strip()
     message = (data.get('message') or '').strip()
     ntype = (data.get('type') or 'SYSTEM').strip() or 'SYSTEM'
@@ -5801,7 +5801,7 @@ def admin_get_device_models():
 @require_admin()
 @require_permission("manage_products")
 def admin_add_device_model():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     if not name:
         return error_response("Device model name is required", 400)
@@ -5831,7 +5831,7 @@ def admin_add_device_model():
 @require_admin()
 @require_permission("manage_products")
 def admin_update_device_model(model_id):
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     allowed_fields = ['name', 'brand', 'type', 'status']
     updates = []
     params = []
@@ -7006,14 +7006,53 @@ def read_all_notifications():
 @app.route('/api/notifications/register-token', methods=['POST'])
 @token_required
 def register_push_token():
-    """Registers an FCM token for push notifications."""
-    data = request.json
-    user_id = request.user['user_id']
-    token = data.get('token')
-    device_type = data.get('device_type', 'web')
+    """
+    Registers a push target for notifications.
 
+    Two formats are accepted:
+      * Web Push (pure VAPID, no Firebase): pass the full PushSubscription JSON
+        as `subscription` = { endpoint, keys: { p256dh, auth } }. Stored in
+        web_push_subscriptions and delivered via pywebpush.
+      * Legacy FCM token: pass `token` (kept for backwards compatibility).
+    """
+    data = request.get_json(silent=True) or {}
+    user_id = request.user['user_id']
+    device_type = data.get('device_type', 'web')
+    subscription = data.get('subscription') or {}
+    endpoint = (subscription.get('endpoint') or '').strip()
+    keys = subscription.get('keys') or {}
+
+    # Web Push subscription path
+    if endpoint:
+        p256dh = (keys.get('p256dh') or '').strip()
+        auth = (keys.get('auth') or '').strip()
+        if not p256dh or not auth:
+            return error_response("subscription.keys.p256dh and subscription.keys.auth are required", 400)
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            # Owner-guarded upsert: a subscription can only be (re)claimed by
+            # the user who already owns it (prevents hijacking someone's push).
+            cursor.execute('''
+                INSERT INTO web_push_subscriptions (user_id, endpoint, p256dh, auth)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(endpoint) DO UPDATE SET
+                    user_id = excluded.user_id,
+                    p256dh = excluded.p256dh,
+                    auth = excluded.auth,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE web_push_subscriptions.user_id = excluded.user_id
+            ''', (user_id, endpoint, p256dh, auth))
+            conn.commit()
+            conn.close()
+            return success_response(None, "Push subscription registered successfully")
+        except Exception as e:
+            return error_response(str(e), 500)
+
+    # Legacy FCM token path
+    token = data.get('token')
     if not token:
-        return error_response("Token is required", 400)
+        return error_response("subscription or token is required", 400)
 
     try:
         conn = get_db()
@@ -7297,7 +7336,7 @@ def cancel_order(order_id):
             conn.close()
             return error_response(f"Cannot cancel order in {order['status']} status", 400)
 
-        data = request.json or {}
+        data = request.get_json(silent=True) or {}
         reason = data.get('reason', 'Cancelled by User')
         cursor.execute("UPDATE orders SET order_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, cancellation_reason = ? WHERE id = ?", (reason, order_id))
         cursor.execute("UPDATE warehouse_order_assignments SET assignment_status = 'CANCELLED' WHERE order_id = ?", (order_id,))
@@ -7519,7 +7558,7 @@ def delete_address(address_id):
 def create_admin_backup():
     """Triggers a manual database or system-wide backup."""
     try:
-        mode = (request.json or {}).get("mode", "full")
+        mode = (request.get_json(silent=True) or {}).get("mode", "full")
         if mode == "database":
             result = {"database_backup": backup_database()}
         else:
@@ -7588,7 +7627,7 @@ def get_recovery_backups():
 @require_super_admin()
 def verify_recovery_backup():
     """Verifies the integrity of a specific backup before restoration."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     backup_path = (data.get("path") or "").strip()
     if not backup_path:
         return error_response("Backup path is required", 400)
@@ -7604,7 +7643,7 @@ def verify_recovery_backup():
 @require_super_admin()
 def restore_recovery_database():
     """Restores the system database from a selected backup."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     backup_path = (data.get("path") or "").strip()
     if not backup_path:
         return error_response("Backup path is required", 400)
@@ -7623,7 +7662,7 @@ def restore_recovery_database():
 @require_super_admin()
 def restore_recovery_files():
     """Restores system files from a selected backup."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     backup_path = (data.get("path") or "").strip()
     if not backup_path:
         return error_response("Backup path is required", 400)
@@ -7642,7 +7681,7 @@ def restore_recovery_files():
 @require_super_admin()
 def restore_recovery_full_system():
     """Performs a full system restoration (database + files)."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     db_backup = (data.get("database_path") or "").strip()
     file_backup = (data.get("file_path") or "").strip()
     if not db_backup or not file_backup:

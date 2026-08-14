@@ -20,14 +20,28 @@ except ImportError:
 try:
     import firebase_admin
     from firebase_admin import credentials, messaging
-    # Look for service account in environment or local file
-    service_account_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON") or os.path.join(BASE_DIR, 'firebase-service-account.json')
-    if os.path.exists(service_account_path):
-        cred = credentials.Certificate(service_account_path)
+    # Service account can be provided three ways (first match wins):
+    #  1. FIREBASE_SERVICE_ACCOUNT_JSON env var containing the RAW JSON
+    #     (easiest on Render/Vercel — paste the downloaded service account file
+    #     contents directly into the env var, no file needed on the server).
+    #  2. FIREBASE_SERVICE_ACCOUNT_JSON env var pointing at a JSON file path.
+    #  3. A local backend/firebase-service-account.json file.
+    service_account_env = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if service_account_env and os.path.exists(service_account_env):
+        cred = credentials.Certificate(service_account_env)
+        firebase_admin.initialize_app(cred)
+        FIREBASE_ENABLED = True
+    elif service_account_env and service_account_env.strip().lstrip().startswith('{'):
+        import json as _json
+        cred = credentials.Certificate(_json.loads(service_account_env))
+        firebase_admin.initialize_app(cred)
+        FIREBASE_ENABLED = True
+    elif os.path.exists(os.path.join(BASE_DIR, 'firebase-service-account.json')):
+        cred = credentials.Certificate(os.path.join(BASE_DIR, 'firebase-service-account.json'))
         firebase_admin.initialize_app(cred)
         FIREBASE_ENABLED = True
     else:
-        print("[FIREBASE WARNING] Service account file not found. Push notifications will be simulated.")
+        print("[FIREBASE WARNING] FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON or file path) not found. Push notifications will be simulated.")
         FIREBASE_ENABLED = False
 except ImportError:
     print("[FIREBASE WARNING] firebase_admin module not installed. Push notifications will be simulated.")

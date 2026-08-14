@@ -12,6 +12,9 @@ const PushNotificationManager = () => {
       // statically imported, which put ~44 kB into the initial page load even
       // though push notifications are only used once a user logs in.
       const { requestForToken } = await import('../firebase');
+      // requestForToken only acts when real Firebase credentials are configured
+      // (VITE_FIREBASE_* in .env) — otherwise it no-ops and in-app notifications
+      // keep working exactly as before.
       const fcmToken = await requestForToken();
       if (fcmToken) {
         console.log('FCM Token:', fcmToken);

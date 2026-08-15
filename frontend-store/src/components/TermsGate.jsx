@@ -126,7 +126,7 @@ function TermsGate() {
       <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-500" />
       
       {/* Premium Modal */}
-      <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-lg bg-[var(--color-surface-card)] rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
         <div className="bg-slate-900 p-8 text-white relative">
             <div className="flex items-center gap-4 mb-2">
                 <div className="p-3 bg-white/10 rounded-2xl">
@@ -139,9 +139,9 @@ function TermsGate() {
             </div>
         </div>
 
-        <div id="terms-scroll-container" className="p-8 max-h-[50vh] overflow-y-auto no-scrollbar bg-slate-50" onScroll={handleScroll}>
+        <div id="terms-scroll-container" className="p-8 max-h-[50vh] overflow-y-auto no-scrollbar bg-[var(--color-surface-low)]" onScroll={handleScroll}>
             <div className="space-y-6">
-                <p className="text-[13px] font-bold text-slate-500 leading-relaxed italic">
+                <p className="text-[13px] font-bold text-[var(--color-on-surface-variant)] leading-relaxed italic">
                     We've updated our Terms of Service. Please review the key points below before continuing.
                 </p>
                 
@@ -168,7 +168,7 @@ function TermsGate() {
                       
                       if (isHeading) {
                         return (
-                          <h4 key={i} className="text-[11px] font-black uppercase tracking-widest text-slate-900 pt-2">
+                          <h4 key={i} className="text-[11px] font-black uppercase tracking-widest text-[var(--color-on-surface)] pt-2">
                             {cleanText}
                           </h4>
                         );
@@ -176,8 +176,8 @@ function TermsGate() {
                       
                       return (
                         <div key={i} className="flex items-start gap-3">
-                          <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" />
-                          <p className="text-sm font-bold text-slate-700 leading-relaxed">{cleanText}</p>
+                          <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-surface-highest)]" />
+                          <p className="text-sm font-bold text-[var(--color-on-surface)] leading-relaxed">{cleanText}</p>
                         </div>
                       );
                     })}
@@ -190,9 +190,9 @@ function TermsGate() {
             )}
         </div>
 
-        <div className="p-8 bg-white border-t border-slate-100">
+        <div className="p-8 bg-[var(--color-surface-card)] border-t border-[var(--color-surface-high)]">
             {err && (
-              <div className="mb-4 p-4 rounded-2xl bg-red-50 border border-red-100 flex items-center gap-3 text-red-600">
+              <div className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400">
                 <AlertCircle size={16} />
                 <span className="text-xs font-bold">{err}</span>
               </div>
@@ -202,7 +202,7 @@ function TermsGate() {
                 onClick={accept}
                 disabled={submitting || !scrolledToBottom}
                 className={`w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-widest transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3
-                    ${(submitting || !scrolledToBottom) ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20'}
+                    ${(submitting || !scrolledToBottom) ? 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] cursor-not-allowed shadow-none' : 'bg-[var(--color-on-surface)] text-[var(--color-surface-card)] hover:opacity-90 shadow-black/10'}
                 `}
             >
                 {submitting ? 'Updating...' : !scrolledToBottom ? 'Scroll to Read' : (
@@ -212,7 +212,7 @@ function TermsGate() {
                     </>
                 )}
             </button>
-            <p className="mt-4 text-[10px] text-center font-bold text-slate-400 uppercase tracking-tight">
+            <p className="mt-4 text-[10px] text-center font-bold text-[var(--color-on-surface-variant)] uppercase tracking-tight">
                 {!scrolledToBottom ? 'Please scroll to the bottom to enable acceptance' : 'Terms reviewed. You may now proceed.'}
             </p>
         </div>

@@ -55,7 +55,7 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
       />
       
       {/* Modal Content */}
-      <div className="relative w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-500">
+      <div className="relative w-full max-w-md bg-[var(--color-surface-card)] rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-500">
         <div className="bg-slate-900 p-6 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/10 rounded-xl">
@@ -88,7 +88,7 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
                 <div className={`${option.color} w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:shadow-xl group-active:scale-90 transition-all duration-500 cubic-bezier-[0.34,1.56,0.64,1]`}>
                   <option.icon size={24} className="group-hover:scale-110 transition-transform duration-300" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 text-center">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[var(--color-on-surface-variant)] text-center">
                   {option.name}
                 </span>
               </a>
@@ -96,8 +96,8 @@ const ShareModal = ({ isOpen, onClose, product, url }) => {
           </div>
         </div>
 
-        <div className="p-6 bg-slate-50 border-t border-slate-100 text-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+        <div className="p-6 bg-[var(--color-surface-low)] border-t border-[var(--color-surface-high)] text-center">
+          <p className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">
             JDLX Luxury Experience
           </p>
         </div>

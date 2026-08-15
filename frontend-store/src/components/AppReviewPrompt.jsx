@@ -77,18 +77,18 @@ export default function AppReviewPrompt({ show, onDismiss }) {
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 pb-[80px] backdrop-blur-sm">
-            <div className="relative w-[90%] max-w-[400px] max-h-[calc(100vh-160px)] overflow-y-auto rounded-[24px] bg-white p-6 shadow-2xl animate-in slide-in-from-bottom duration-500">
+            <div className="relative w-[90%] max-w-[400px] max-h-[calc(100vh-160px)] overflow-y-auto rounded-[24px] bg-[var(--color-surface-card)] p-6 shadow-2xl animate-in slide-in-from-bottom duration-500">
                 <button 
                     onClick={onDismiss}
-                    className="absolute right-4 top-4 rounded-full p-2 text-gray-400 hover:bg-gray-100 transition-colors"
+                    className="absolute right-4 top-4 rounded-full p-2 text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] transition-colors"
                 >
                     <X size={24} />
                 </button>
 
                 <div className="flex flex-col items-center text-center">
                     <img src="/logo192.png" alt="JDLX Logo" className="mb-4 h-16 w-16 object-contain" />
-                    <h2 className="mb-2 text-2xl font-bold text-gray-900">Enjoying JDLX Mobile?</h2>
-                    <p className="mb-6 text-gray-600">Your review helps other shoppers discover us</p>
+                    <h2 className="mb-2 text-2xl font-bold text-[var(--color-on-surface)]">Enjoying JDLX Mobile?</h2>
+                    <p className="mb-6 text-[var(--color-on-surface-variant)]">Your review helps other shoppers discover us</p>
 
                     <div className="mb-6 flex gap-2">
                         {[1, 2, 3, 4, 5].map((star) => (
@@ -112,7 +112,7 @@ export default function AppReviewPrompt({ show, onDismiss }) {
                             value={reviewText}
                             onChange={(e) => setReviewText(e.target.value)}
                             placeholder="Tell us more... (optional)"
-                            className="mb-6 w-full rounded-xl border border-gray-200 p-4 text-gray-700 focus:border-[#F5A623] focus:outline-none focus:ring-1 focus:ring-[#F5A623] transition-all"
+                            className="mb-6 w-full rounded-xl border border-[var(--color-surface-high)] p-4 text-[var(--color-on-surface)] focus:border-[#F5A623] focus:outline-none focus:ring-1 focus:ring-[#F5A623] transition-all placeholder:text-[var(--color-on-surface-variant)]"
                             rows={3}
                         />
                     )}
@@ -120,10 +120,10 @@ export default function AppReviewPrompt({ show, onDismiss }) {
                     <button
                         onClick={handleSubmit}
                         disabled={isSubmitting || rating === 0}
-                        className={`mb-4 w-full rounded-full py-4 text-lg font-bold text-white transition-all active:scale-[0.98] ${
+                        className={`mb-4 w-full rounded-full py-4 text-lg font-bold transition-all active:scale-[0.98] ${
                             rating === 0 
-                            ? 'bg-gray-300 cursor-not-allowed' 
-                            : 'bg-black hover:bg-gray-800 shadow-lg'
+                            ? 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] cursor-not-allowed' 
+                            : 'bg-[var(--color-on-surface)] text-[var(--color-surface-card)] hover:opacity-90 shadow-lg'
                         }`}
                     >
                         {isSubmitting ? 'Submitting...' : (rating >= 4 ? 'Submit & Rate on Google' : 'Submit Feedback')}
@@ -131,7 +131,7 @@ export default function AppReviewPrompt({ show, onDismiss }) {
 
                     <button
                         onClick={handleMaybeLater}
-                        className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        className="text-sm font-medium text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] transition-colors"
                     >
                         Maybe later
                     </button>

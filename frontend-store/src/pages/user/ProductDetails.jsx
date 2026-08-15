@@ -353,7 +353,7 @@ export default function ProductDetails() {
             </div>
             <h1 className="text-3xl font-black tracking-tighter md:text-5xl leading-[1.1] mb-2">{product.name}</h1>
             <p className="ui-label mb-6">{product.category || 'Premium Accessory'}</p>
-            <div className="mt-6 flex items-baseline gap-4 p-6 rounded-[2.5rem] bg-slate-50 border border-slate-100 shadow-inner">
+            <div className="mt-6 flex items-baseline gap-4 p-6 rounded-[2.5rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] shadow-inner">
               <div className="flex flex-col"><span className="ui-label opacity-40 mb-1">Current Price</span><div className="text-4xl md:text-5xl font-black tracking-tighter">₹{product.price}</div></div>
               {product.mrp > product.price && <div className="flex flex-col"><span className="ui-label text-red-400 opacity-100 mb-1">MRP</span><div className="text-xl md:text-2xl opacity-30 line-through font-bold">₹{product.mrp}</div></div>}
               <div className="ml-auto"><div className="inline-flex items-center gap-2 rounded-2xl bg-[#00E676] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white shadow-lg animate-pulse"><BadgePercent size={16} /> Best Deal</div></div>
@@ -362,8 +362,8 @@ export default function ProductDetails() {
               <h3 className="ui-label text-slate-400">Description</h3>
               <p className="text-[16px] md:text-lg font-bold opacity-70 leading-relaxed">{product.description || 'Premium daily essential from the JDLX collection.'}</p>
             </div>
-            <div className="mt-8 overflow-hidden rounded-[2.5rem] border border-slate-100 bg-slate-50">
-              <div className="flex items-center justify-between bg-white px-6 py-5 border-b border-slate-100">
+            <div className="mt-8 overflow-hidden rounded-[2.5rem] border border-[var(--color-surface-high)] bg-[var(--color-surface-low)]">
+              <div className="flex items-center justify-between bg-[var(--color-surface-card)] px-6 py-5 border-b border-[var(--color-surface-high)]">
                 <div className="flex items-center gap-3"><div className="rounded-2xl bg-emerald-500/10 p-2.5 text-emerald-600"><Undo2 size={20} /></div><div><h4 className="text-[12px] font-black uppercase tracking-[0.1em]">Return Policy</h4><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Verified</p></div></div>
                 <button onClick={() => setShowPolicyModal(true)} className="rounded-full bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-lg active:scale-95 transition-all">View Details</button>
               </div>
@@ -438,10 +438,10 @@ export default function ProductDetails() {
       {showPolicyModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowPolicyModal(false)} />
-          <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="relative w-full max-w-lg bg-[var(--color-surface-card)] rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
             <div className="bg-slate-900 p-8 text-white relative"><button onClick={() => setShowPolicyModal(false)} className="absolute top-6 right-6 p-2 rounded-full bg-white/10"><X size={20} /></button><div className="flex items-center gap-4"><div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck size={24} className="text-emerald-400" /></div><div><h3 className="text-2xl font-black tracking-tight">Protection</h3><p className="ui-label text-slate-400">Verified by JDLX</p></div></div></div>
-            <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar bg-white"><div className="space-y-4">{(product.final_return_policy || '7 Days Return Policy').split('\n').filter(p => p.trim()).map((p, i) => (<div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100"><div className="w-2 h-2 rounded-full bg-slate-900 mt-1.5 shrink-0" /><p className="text-[13px] font-bold text-slate-700 leading-relaxed">{p.replace(/\*\*/g, '').replace(/^\s*[*-]\s*/, '').trim()}</p></div>))}</div></div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100"><button onClick={() => setShowPolicyModal(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Got it</button></div>
+            <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar bg-[var(--color-surface-card)]"><div className="space-y-4">{(product.final_return_policy || '7 Days Return Policy').split('\n').filter(p => p.trim()).map((p, i) => (<div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]"><div className="w-2 h-2 rounded-full bg-[var(--color-on-surface)] mt-1.5 shrink-0" /><p className="text-[13px] font-bold text-[var(--color-on-surface)] leading-relaxed">{p.replace(/\*\*/g, '').replace(/^\s*[*-]\s*/, '').trim()}</p></div>))}</div></div>
+            <div className="p-6 bg-[var(--color-surface-low)] border-t border-[var(--color-surface-high)]"><button onClick={() => setShowPolicyModal(false)} className="w-full py-4 bg-[var(--color-on-surface)] text-[var(--color-surface-card)] rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Got it</button></div>
           </div>
         </div>
       )}

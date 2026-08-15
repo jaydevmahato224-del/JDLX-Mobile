@@ -125,7 +125,7 @@ function Coupons() {
                     {offers.map((offer, index) => (
                         <div
                             key={offer.id}
-                            className="relative overflow-hidden rounded-[28px] border border-slate-100 bg-white shadow-lg hover:shadow-xl transition-all duration-500 hover:-translate-y-1 group"
+                            className="relative overflow-hidden rounded-[28px] border border-[var(--color-surface-high)] bg-[var(--color-surface-card)] shadow-lg hover:shadow-xl transition-all duration-500 hover:-translate-y-1 group"
                         >
                             {/* Colored accent strip */}
                             <div className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${getOfferGradient(index)}`} />
@@ -188,7 +188,7 @@ function Coupons() {
                                             className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl border-2 border-dashed transition-all active:scale-95 ${
                                                 copiedId === offer.id 
                                                     ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                                                    : 'border-slate-200 bg-white text-slate-700 hover:border-primary hover:bg-primary/5'
+                                                    : 'border-[var(--color-surface-high)] bg-[var(--color-surface-card)] text-[var(--color-on-surface)] hover:border-primary hover:bg-primary/5'
                                             }`}
                                         >
                                             {copiedId === offer.id ? (

@@ -24,7 +24,7 @@ function Notifications() {
                 const { getPushPermission, isPushConfigured } = await import('../../push');
                 if (!isPushConfigured()) { setPushState('unsupported'); return; }
                 setPushState(getPushPermission());
-            } catch (e) {
+            } catch {
                 setPushState('unsupported');
             }
         })();

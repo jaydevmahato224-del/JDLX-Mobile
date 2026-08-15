@@ -261,7 +261,7 @@ function RefundRequestPage() {
                         {orderDropdownOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setOrderDropdownOpen(false)} />
-                                <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
                                     {orders.map(order => (
                                         <button
                                             key={order.id}
@@ -333,7 +333,7 @@ function RefundRequestPage() {
                             {requestTypeDropdownOpen && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setRequestTypeDropdownOpen(false)} />
-                                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
                                         {[
                                             "Refund only",
                                             "Return and Refund",
@@ -384,7 +384,7 @@ function RefundRequestPage() {
                             {reasonDropdownOpen && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setReasonDropdownOpen(false)} />
-                                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
                                         {[
                                             "Item damaged on arrival",
                                             "Wrong item delivered",

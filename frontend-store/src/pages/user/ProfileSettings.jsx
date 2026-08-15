@@ -128,7 +128,7 @@ function ProfileSettings() {
                     <button
                         type="button"
                         onClick={() => setGenderDropdownOpen(!genderDropdownOpen)}
-                        className="w-full h-12 rounded-xl bg-white border border-gray-200 px-4 text-sm font-semibold text-slate-800 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-slate-50/50"
+                        className="w-full h-12 rounded-xl bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] px-4 text-sm font-semibold text-[var(--color-on-surface)] flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-[var(--color-surface-low)]"
                     >
                         <span className={form.gender ? 'text-slate-800' : 'text-slate-400'}>
                             {form.gender ? form.gender.charAt(0).toUpperCase() + form.gender.slice(1) : "Select Gender"}
@@ -139,7 +139,7 @@ function ProfileSettings() {
                     {genderDropdownOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setGenderDropdownOpen(false)} />
-                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
                                 {[
                                     { value: 'male', label: 'Male' },
                                     { value: 'female', label: 'Female' },

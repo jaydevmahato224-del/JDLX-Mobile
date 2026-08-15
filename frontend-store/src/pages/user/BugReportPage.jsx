@@ -161,7 +161,7 @@ function BugReportPage() {
                         <button
                             type="button"
                             onClick={() => setPageLocationDropdownOpen(!pageLocationDropdownOpen)}
-                            className="w-full h-14 rounded-2xl bg-gray-50 px-6 text-sm font-bold text-gray-900 border-2 border-transparent focus:border-primary/20 focus:bg-white transition-all outline-none flex items-center justify-between"
+                            className="w-full h-14 rounded-2xl bg-[var(--color-surface-low)] px-6 text-sm font-bold text-[var(--color-on-surface)] border-2 border-transparent focus:border-primary/20 focus:bg-[var(--color-surface-card)] transition-all outline-none flex items-center justify-between"
                         >
                             <span className={form.page_location ? 'text-gray-900' : 'text-gray-400'}>
                                 {form.page_location || "Select Page..."}
@@ -172,7 +172,7 @@ function BugReportPage() {
                         {pageLocationDropdownOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setPageLocationDropdownOpen(false)} />
-                                <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-white border border-gray-100 rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
+                                <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
                                     {[
                                         "Home page",
                                         "Product listing",
@@ -236,7 +236,7 @@ function BugReportPage() {
                             placeholder="What happened? What did you expect and what actually occurred?"
                             value={form.description}
                             onChange={e => setForm({ ...form, description: e.target.value })}
-                            className="w-full min-h-[150px] rounded-2xl bg-gray-50 p-6 text-sm font-bold text-gray-900 border-2 border-transparent focus:border-primary/20 focus:bg-white transition-all outline-none resize-none"
+                            className="w-full min-h-[150px] rounded-2xl bg-[var(--color-surface-low)] p-6 text-sm font-bold text-[var(--color-on-surface)] border-2 border-transparent focus:border-primary/20 focus:bg-[var(--color-surface-card)] transition-all outline-none resize-none"
                         />
                         <p className={`text-[10px] font-bold ${form.description.length < 20 ? 'text-gray-400' : 'text-green-500'}`}>
                             Minimum 20 characters required ({form.description.length}/20)
@@ -250,7 +250,7 @@ function BugReportPage() {
                             placeholder="1. Went here... 2. Did this... 3. This error appeared..."
                             value={form.steps_to_reproduce}
                             onChange={e => setForm({ ...form, steps_to_reproduce: e.target.value })}
-                            className="w-full min-h-[120px] rounded-2xl bg-gray-50 p-6 text-sm font-bold text-gray-900 border-2 border-transparent focus:border-primary/20 focus:bg-white transition-all outline-none resize-none"
+                            className="w-full min-h-[120px] rounded-2xl bg-[var(--color-surface-low)] p-6 text-sm font-bold text-[var(--color-on-surface)] border-2 border-transparent focus:border-primary/20 focus:bg-[var(--color-surface-card)] transition-all outline-none resize-none"
                         />
                     </div>
 

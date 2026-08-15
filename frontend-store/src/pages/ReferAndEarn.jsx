@@ -66,7 +66,7 @@ const ReferAndEarn = () => {
       </div>
 
       {/* Referral Code Card */}
-      <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 text-center">
+      <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-8 shadow-sm border border-[var(--color-surface-high)] text-center">
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Your Unique Referral Code</p>
         <div className="flex flex-col sm:flex-row items-stretch justify-center gap-3 mb-8">
           <div className="flex items-center justify-center min-w-0 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl px-8 py-4 font-black text-2xl sm:text-3xl tracking-widest text-[#1B2341] select-all">
@@ -108,7 +108,7 @@ const ReferAndEarn = () => {
       </div>
 
       {/* How it works */}
-      <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
+      <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-8 shadow-sm border border-[var(--color-surface-high)]">
         <h3 className="text-xl font-black text-slate-800 mb-6">How it works</h3>
         <div className="space-y-6">
           <div className="flex gap-4">
@@ -137,17 +137,17 @@ const ReferAndEarn = () => {
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-sm text-center">
+        <div className="bg-[var(--color-surface-card)] rounded-[1.5rem] p-5 border border-[var(--color-surface-high)] shadow-sm text-center">
           <Users size={20} className="mx-auto text-slate-400 mb-2" />
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Referrals</p>
           <p className="text-xl font-black text-slate-800">{refData?.stats?.total || 0}</p>
         </div>
-        <div className="bg-white rounded-[1.5rem] p-5 border border-slate-100 shadow-sm text-center">
+        <div className="bg-[var(--color-surface-card)] rounded-[1.5rem] p-5 border border-[var(--color-surface-high)] shadow-sm text-center">
           <Trophy size={20} className="mx-auto text-[#F5A623] mb-2" />
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Successful</p>
           <p className="text-xl font-black text-slate-800">{refData?.stats?.completed || 0}</p>
         </div>
-        <div className="bg-white rounded-[1.5rem] p-5 border border-[#F5A623]/20 bg-gradient-to-br from-white to-[#F5A623]/5 shadow-sm text-center">
+        <div className="bg-[var(--color-surface-card)] rounded-[1.5rem] p-5 border border-[#F5A623]/20 bg-gradient-to-br from-[var(--color-surface-card)] to-[#F5A623]/5 shadow-sm text-center">
           <Gift size={20} className="mx-auto text-[#F5A623] mb-2" />
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Earned</p>
           <p className="text-xl font-black text-[#F5A623]">₹{refData?.stats?.earnings || 0}</p>

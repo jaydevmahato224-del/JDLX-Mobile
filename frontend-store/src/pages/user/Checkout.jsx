@@ -574,9 +574,9 @@ function Checkout() {
                                         <span>Add ₹{amountToFree.toLocaleString()} more for FREE delivery 🚚</span>
                                     )}
                                 </p>
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{Math.round(progressPercent)}%</span>
+                                <span className="text-[10px] font-black text-[var(--color-on-surface-variant)] uppercase tracking-widest">{Math.round(progressPercent)}%</span>
                             </div>
-                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                            <div className="w-full h-3 bg-[var(--color-surface-container)] rounded-full overflow-hidden border border-[var(--color-surface-high)]/50">
                                 <div 
                                     className={`h-full transition-all duration-1000 ease-out rounded-full ${subtotal >= freeThreshold ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-primary'}`}
                                     style={{ width: `${progressPercent}%` }}
@@ -615,10 +615,10 @@ function Checkout() {
                                             }));
                                             setCoords({ latitude: addr.latitude, longitude: addr.longitude });
                                         }}
-                                        className={`p-4 rounded-[20px] border-2 transition-all cursor-pointer flex items-center justify-between gap-4 ${selectedAddressId === addr.id ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/5' : 'border-slate-100 bg-slate-50/50 hover:bg-white'}`}
+                                        className={`p-4 rounded-[20px] border-2 transition-all cursor-pointer flex items-center justify-between gap-4 ${selectedAddressId === addr.id ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/5' : 'border-[var(--color-surface-high)] bg-[var(--color-surface-low)]/50 hover:bg-[var(--color-surface-low)]'}`}
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className={`p-2.5 rounded-xl ${selectedAddressId === addr.id ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                            <div className={`p-2.5 rounded-xl ${selectedAddressId === addr.id ? 'bg-primary text-white' : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)]'}`}>
                                                 <MapPin size={16} />
                                             </div>
                                             <div className="flex flex-col">
@@ -631,8 +631,8 @@ function Checkout() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="p-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
-                                <p className="text-sm text-slate-400 font-medium">No saved addresses yet.</p>
+                            <div className="p-8 text-center bg-[var(--color-surface-low)] rounded-2xl border-2 border-dashed border-[var(--color-surface-high)]">
+                                <p className="text-sm text-[var(--color-on-surface-variant)] font-medium">No saved addresses yet.</p>
                             </div>
                         )}
 
@@ -646,7 +646,7 @@ function Checkout() {
                                     onChange={handleChange}
                                     required
                                     pattern="[0-9]{10}"
-                                    className="bg-white border-2 border-slate-100 rounded-[18px] px-5 py-4 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[15px] font-black tracking-tight transition-all"
+                                    className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-5 py-4 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[15px] font-black tracking-tight transition-all"
                                     placeholder="10-digit Mobile Number"
                                 />
                             </div>
@@ -664,7 +664,7 @@ function Checkout() {
                                                 value={formData.flatNo}
                                                 onChange={handleChange}
                                                 required
-                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[14px] font-black tracking-tight transition-all"
                                                 placeholder="e.g. 202, 2nd Floor"
                                             />
                                         </div>
@@ -676,7 +676,7 @@ function Checkout() {
                                                 value={formData.area}
                                                 onChange={handleChange}
                                                 required
-                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[14px] font-black tracking-tight transition-all"
                                                 placeholder="e.g. Rohini Sec 15"
                                             />
                                         </div>
@@ -690,7 +690,7 @@ function Checkout() {
                                                 name="landmark"
                                                 value={formData.landmark}
                                                 onChange={handleChange}
-                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[14px] font-black tracking-tight transition-all"
                                                 placeholder="e.g. Near Metro Station"
                                             />
                                         </div>
@@ -703,7 +703,7 @@ function Checkout() {
                                                 onChange={handleChange}
                                                 required
                                                 maxLength="6"
-                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[14px] font-black tracking-tight transition-all"
                                                 placeholder="6-digit Pincode"
                                             />
                                             {pincodeMessage && (
@@ -726,7 +726,7 @@ function Checkout() {
                                                 value={formData.city}
                                                 onChange={handleChange}
                                                 required
-                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[14px] font-black tracking-tight transition-all"
                                                 placeholder="City"
                                             />
                                         </div>
@@ -738,7 +738,7 @@ function Checkout() {
                                                 value={formData.state}
                                                 onChange={handleChange}
                                                 required
-                                                className="bg-white border-2 border-slate-100 rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-slate-900 text-[14px] font-black tracking-tight transition-all"
+                                                className="bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-[18px] px-4 py-3.5 shadow-sm focus:outline-none focus:border-primary w-full text-[var(--color-on-surface)] text-[14px] font-black tracking-tight transition-all"
                                                 placeholder="State"
                                             />
                                         </div>
@@ -758,13 +758,13 @@ function Checkout() {
                             {/* Prepaid Card */}
                             <div 
                                 onClick={() => setPaymentMethod('PREPAID')}
-                                className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer overflow-hidden group ${paymentMethod === 'PREPAID' ? 'border-primary bg-primary/[0.03] shadow-lg ring-4 ring-primary/5' : 'border-slate-100 bg-white hover:border-primary/30'}`}
+                                className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer overflow-hidden group ${paymentMethod === 'PREPAID' ? 'border-primary bg-primary/[0.03] shadow-lg ring-4 ring-primary/5' : 'border-[var(--color-surface-high)] bg-[var(--color-surface-card)] hover:border-primary/30'}`}
                             >
                                 {paymentMethod === 'PREPAID' && showPrepaidRecommendation && (
                                     <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest animate-in slide-in-from-right">Recommended</div>
                                 )}
                                 <div className="flex flex-col gap-3">
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'PREPAID' ? 'bg-primary text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'PREPAID' ? 'bg-primary text-white shadow-lg' : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)]'}`}>
                                         <CreditCard size={24} />
                                     </div>
                                     <div>
@@ -774,7 +774,7 @@ function Checkout() {
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`absolute bottom-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'PREPAID' ? 'border-primary bg-primary scale-110' : 'border-slate-200'}`}>
+                                <div className={`absolute bottom-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'PREPAID' ? 'border-primary bg-primary scale-110' : 'border-[var(--color-surface-high)]'}`}>
                                     {paymentMethod === 'PREPAID' && <CheckCircle2 size={14} className="text-white" />}
                                 </div>
                             </div>
@@ -783,10 +783,10 @@ function Checkout() {
                             {codEnabled && (!isShiprocket || codEnabledShiprocket) && (
                                 <div 
                                     onClick={() => !isCodDisabledByAmount && setPaymentMethod('COD')}
-                                    className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer group ${isCodDisabledByAmount ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${paymentMethod === 'COD' ? 'border-amber-500 bg-amber-500/[0.03] shadow-lg ring-4 ring-amber-500/5' : 'border-slate-100 bg-white hover:border-amber-500/30'}`}
+                                    className={`relative p-5 rounded-[24px] border-2 transition-all cursor-pointer group ${isCodDisabledByAmount ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${paymentMethod === 'COD' ? 'border-amber-500 bg-amber-500/[0.03] shadow-lg ring-4 ring-amber-500/5' : 'border-[var(--color-surface-high)] bg-[var(--color-surface-card)] hover:border-amber-500/30'}`}
                                 >
                                     <div className="flex flex-col gap-3">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'COD' ? 'bg-amber-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'COD' ? 'bg-amber-500 text-white shadow-lg' : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)]'}`}>
                                             <Truck size={24} />
                                         </div>
                                         <div>
@@ -800,7 +800,7 @@ function Checkout() {
                                             </p>
                                         </div>
                                     </div>
-                                    <div className={`absolute bottom-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'COD' ? 'border-amber-500 bg-amber-500 scale-110' : 'border-slate-200'}`}>
+                                    <div className={`absolute bottom-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'COD' ? 'border-amber-500 bg-amber-500 scale-110' : 'border-[var(--color-surface-high)]'}`}>
                                         {paymentMethod === 'COD' && <CheckCircle2 size={14} className="text-white" />}
                                     </div>
                                 </div>
@@ -809,11 +809,11 @@ function Checkout() {
 
                         {/* Prepaid Benefits Message */}
                         {paymentMethod === 'PREPAID' && (
-                            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex gap-3 animate-in slide-in-from-top-4 duration-500">
+                            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex gap-3 animate-in slide-in-from-top-4 duration-500">
                                 <Zap className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                                 <div className="space-y-1">
-                                    <p className="text-[13px] font-black text-emerald-800">{showPriorityBadge ? 'Priority Dispatch Active' : 'Prepaid Benefits Active'}</p>
-                                    <p className="text-[11px] font-medium text-emerald-600 leading-relaxed">
+                                    <p className="text-[13px] font-black text-emerald-500">{showPriorityBadge ? 'Priority Dispatch Active' : 'Prepaid Benefits Active'}</p>
+                                    <p className="text-[11px] font-medium text-emerald-500 leading-relaxed">
                                         Prepaid orders are processed 2x faster and qualify for {isFreeDeliveryEnabled && subtotal >= freeThreshold ? <span className="font-bold">FREE Delivery</span> : `₹${prepaidFee} lower delivery charge`}.
                                     </p>
                                 </div>
@@ -830,10 +830,10 @@ function Checkout() {
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Choose Prepaid for:</p>
+                                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Choose Prepaid for:</p>
                                         <ul className="space-y-1.5">
                                             {[isFreeDeliveryEnabled ? `FREE delivery above ₹${freeThreshold}` : 'Faster processing', 'Lower delivery fees', 'Priority dispatch'].map((item, i) => (
-                                                <li key={i} className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
+                                                <li key={i} className="flex items-center gap-1.5 text-[11px] font-black text-[var(--color-on-surface-variant)]">
                                                     <CheckCircle2 size={12} className="text-emerald-500" /> {item}
                                                 </li>
                                             ))}
@@ -843,7 +843,7 @@ function Checkout() {
                                         <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">COD Orders include:</p>
                                         <ul className="space-y-1.5">
                                             {[`₹${codFee} delivery fee`, ...(codAdvance > 0 ? [`₹${codAdvance} advance payment`] : [])].map((item, i) => (
-                                                <li key={i} className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
+                                                <li key={i} className="flex items-center gap-1.5 text-[11px] font-black text-[var(--color-on-surface-variant)]">
                                                     <Info size={12} className="text-amber-500" /> {item}
                                                 </li>
                                             ))}
@@ -851,7 +851,7 @@ function Checkout() {
                                     </div>
                                 </div>
                                 <div className="pt-2 border-t border-amber-200/50">
-                                    <p className="text-[11px] font-black text-amber-800 text-center">
+                                    <p className="text-[11px] font-black text-amber-500 text-center">
                                         {codAdvance > 0
                                             ? `₹${codAdvance} advance payment is required to confirm Cash on Delivery orders.`
                                             : 'No advance required — pay the full amount when your order arrives.'}
@@ -865,11 +865,11 @@ function Checkout() {
                 {/* Right Column: Order Summary */}
                 <div className="lg:col-span-5 w-full sticky top-24">
                     <div className="glass-card p-6 shadow-2xl border-none space-y-6">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                        <div className="flex items-center justify-between border-b border-[var(--color-surface-high)] pb-4">
                             <h3 className="text-lg font-black text-[var(--color-on-surface)] flex items-center gap-2" style={{ fontFamily: 'Manrope, sans-serif' }}>
                                 <ShoppingBag className="w-5 h-5 text-primary" /> Order Summary
                             </h3>
-                            <span className="text-[11px] font-black bg-slate-100 px-3 py-1 rounded-full uppercase tracking-widest text-slate-500">{cart.length} Items</span>
+                            <span className="text-[11px] font-black bg-[var(--color-surface-container)] px-3 py-1 rounded-full uppercase tracking-widest text-[var(--color-on-surface-variant)]">{cart.length} Items</span>
                         </div>
 
                         {/* Cart Items List */}
@@ -877,28 +877,28 @@ function Checkout() {
                             {cart.map(item => (
                                 <div key={item.id} className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-slate-50 rounded-xl flex-shrink-0 border border-slate-100 p-1">
+                                        <div className="w-10 h-10 bg-[var(--color-surface-low)] rounded-xl flex-shrink-0 border border-[var(--color-surface-high)] p-1">
                                             <img src={item.image_url || 'https://placehold.co/100'} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain" />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-[13px] font-black text-slate-900 truncate max-w-[120px] sm:max-w-[200px]">{item.name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{Number(item.qty || 1)} x ₹{Number(item.price || 0)}</p>
+                                            <p className="text-[13px] font-black text-[var(--color-on-surface)] truncate max-w-[120px] sm:max-w-[200px]">{item.name}</p>
+                                            <p className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-tighter">{Number(item.qty || 1)} x ₹{Number(item.price || 0)}</p>
                                         </div>
                                     </div>
-                                    <div className="text-[13px] font-black text-slate-900">₹{(Number(item.price || 0) * Number(item.qty || 1)).toLocaleString()}</div>
+                                    <div className="text-[13px] font-black text-[var(--color-on-surface)]">₹{(Number(item.price || 0) * Number(item.qty || 1)).toLocaleString()}</div>
                                 </div>
                             ))}
                         </div>
 
                         {/* Coupon Input */}
-                        <div className="pt-4 border-t border-slate-100">
+                        <div className="pt-4 border-t border-[var(--color-surface-high)]">
                             {appliedOffer && appliedOffer.code ? (
-                                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-between">
+                                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <BadgePercent className="text-emerald-500 w-5 h-5" />
                                         <div>
-                                            <p className="text-sm font-black text-emerald-800 tracking-tight">{appliedOffer.code}</p>
-                                            <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">{appliedOffer.title || 'Coupon Applied'}</p>
+                                            <p className="text-sm font-black text-emerald-500 tracking-tight">{appliedOffer.code}</p>
+                                            <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">{appliedOffer.title || 'Coupon Applied'}</p>
                                         </div>
                                     </div>
                                     <button 
@@ -983,7 +983,7 @@ function Checkout() {
                                 {deliveryCharge === 0 ? (
                                     <span className="text-emerald-500 uppercase tracking-widest text-xs font-black">Free</span>
                                 ) : (
-                                    <span className="text-slate-900">₹{deliveryCharge}</span>
+                                    <span className="text-[var(--color-on-surface)]">₹{deliveryCharge}</span>
                                 )}
                             </div>
 
@@ -1001,7 +1001,7 @@ function Checkout() {
 
                             {/* Final Total */}
                             <div className="flex justify-between items-center pt-4 border-t-2 border-dashed border-slate-100">
-                                <span className="text-lg font-black text-slate-900" style={{ fontFamily: 'Manrope, sans-serif' }}>Final Total</span>
+                                <span className="text-lg font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Final Total</span>
                                 <span className="text-2xl font-black text-primary tracking-tighter" style={{ fontFamily: 'Manrope, sans-serif' }}>
                                     ₹{finalTotal.toLocaleString()}
                                 </span>
@@ -1012,7 +1012,7 @@ function Checkout() {
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in zoom-in">
                                     {codAdvance > 0 ? (
                                         <>
-                                            <div className="flex justify-between text-[13px] font-black text-slate-900">
+                                            <div className="flex justify-between text-[13px] font-black text-[var(--color-on-surface)]">
                                                 <span className="flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Pay Now (Advance)</span>
                                                 <span className="text-primary font-black">₹{payNowAmount.toLocaleString()}</span>
                                             </div>
@@ -1047,7 +1047,7 @@ function Checkout() {
                                 </div>
                             ) : null}
 
-                            <div className="fixed bottom-0 left-0 w-full bg-white p-4 shadow-[0_-8px_30px_rgb(0,0,0,0.12)] z-[100] lg:relative lg:p-0 lg:shadow-none lg:z-auto lg:mt-2">
+                            <div className="fixed bottom-0 left-0 w-full bg-[var(--color-surface-card)] p-4 shadow-[0_-8px_30px_rgb(0,0,0,0.12)] z-[100] lg:relative lg:p-0 lg:shadow-none lg:z-auto lg:mt-2">
                                 <button
                                     type="submit"
                                     disabled={!user || isProcessing}

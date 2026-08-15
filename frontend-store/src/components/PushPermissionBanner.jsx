@@ -88,7 +88,7 @@ const PushPermissionBanner = () => {
         // Browsers block re-prompting after a previous "Block" — guide the
         // user to the site-settings toggle instead of a dead button.
         toast(
-          (t) => (
+          () => (
             <span className="flex items-center gap-2">
               <Settings size={16} />
               <span>Notifications are blocked. Allow them from browser site settings.</span>

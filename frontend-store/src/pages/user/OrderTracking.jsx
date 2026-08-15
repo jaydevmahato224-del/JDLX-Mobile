@@ -315,7 +315,7 @@ function OrderTracking() {
                                 return (
                                     <div key={stage.id} className="flex gap-4 items-start relative z-10">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${isCurrent ? 'bg-primary text-white scale-110 shadow-lg ring-4 ring-primary/20' :
-                                            isCompleted ? 'bg-green-500 text-white' : 'bg-white text-gray-300 border-2 border-gray-50'
+                                            isCompleted ? 'bg-green-500 text-white' : 'bg-[var(--color-surface-card)] text-[var(--color-on-surface-variant)] border-2 border-[var(--color-surface-high)]'
                                             }`}>
                                             <Icon className="w-5 h-5" />
                                         </div>
@@ -577,7 +577,7 @@ function OrderTracking() {
                                         <button
                                             type="button"
                                             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                            className="w-full h-12 rounded-xl bg-white border border-red-100 px-4 text-xs font-bold text-slate-800 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all hover:bg-slate-50/50"
+                                            className="w-full h-12 rounded-xl bg-[var(--color-surface-card)] border border-red-500/20 px-4 text-xs font-bold text-[var(--color-on-surface)] flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all hover:bg-[var(--color-surface-low)]"
                                         >
                                             <span className={cancelReason ? 'text-slate-800' : 'text-slate-400'}>
                                                 {cancelReason || "Select cancellation reason..."}
@@ -628,7 +628,7 @@ function OrderTracking() {
                                                 required
                                                 placeholder="Please tell us why you are cancelling..."
                                                 rows="3"
-                                                className="w-full p-4 rounded-xl bg-white border border-red-100 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all resize-none"
+                                                className="w-full p-4 rounded-xl bg-[var(--color-surface-card)] border border-red-500/20 text-xs font-bold text-[var(--color-on-surface)] focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all resize-none"
                                             />
                                         </div>
                                     )}
@@ -760,7 +760,7 @@ function OrderTracking() {
                 </div>
             )}
 
-            <Link to="/" className="w-full py-4 bg-white text-gray-600 font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition-all border border-gray-100">
+            <Link to="/" className="w-full py-4 bg-[var(--color-surface-card)] text-[var(--color-on-surface-variant)] font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition-all border border-[var(--color-surface-high)]">
                 Back to Shopping
             </Link>
         </div>

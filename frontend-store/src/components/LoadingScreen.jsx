@@ -41,7 +41,7 @@ const LoadingScreen = () => {
   return (
     <div 
       className="fixed inset-0 flex items-center justify-center z-[9999]"
-      style={{ backgroundColor: '#FFF8E7' }}
+      style={{ backgroundColor: 'var(--color-surface)' }}
     >
       {/* Keyframes for animations */}
       <style>
@@ -66,8 +66,8 @@ const LoadingScreen = () => {
 
       {/* Main Loading Card */}
       <div 
-        className="bg-white rounded-[24px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col items-center justify-between p-8"
-        style={{ width: '280px', height: '320px', border: '1px solid rgba(0,0,0,0.03)' }}
+        className="bg-[var(--color-surface-card)] rounded-[24px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col items-center justify-between p-8"
+        style={{ width: '280px', height: '320px', border: '1px solid var(--color-surface-high)' }}
       >
         {/* Logo Section */}
         <div className="relative flex items-center justify-center" style={{ width: '80px', height: '80px' }}>
@@ -104,13 +104,13 @@ const LoadingScreen = () => {
         <div className="flex items-baseline justify-center">
           <span 
             className="font-black text-[26px] tracking-tight"
-            style={{ color: '#1B2341' }}
+            style={{ color: 'var(--color-on-surface)' }}
           >
             JDLX
           </span>
           <span 
             className="font-bold text-[13px] tracking-[0.18em] ml-2"
-            style={{ color: '#888' }}
+            style={{ color: 'var(--color-on-surface-variant)' }}
           >
             MOBILE
           </span>
@@ -124,7 +124,7 @@ const LoadingScreen = () => {
           <p 
             className="text-[13px] font-medium text-center truncate px-2 transition-opacity duration-300 ease-in-out"
             style={{ 
-              color: '#666', 
+              color: 'var(--color-on-surface-variant)', 
               opacity: isVisible ? 1 : 0,
               maxWidth: '220px'
             }}
@@ -136,7 +136,7 @@ const LoadingScreen = () => {
         {/* Progress Bar Section */}
         <div className="flex flex-col items-center w-full">
           <div 
-            className="bg-[#e5e7eb] rounded-full overflow-hidden relative"
+            className="bg-[var(--color-surface-high)] rounded-full overflow-hidden relative"
             style={{ width: '160px', height: '3px' }}
           >
             <div 

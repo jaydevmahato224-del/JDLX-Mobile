@@ -169,7 +169,7 @@ function TicketDetailPage() {
                                 {/* Bubble */}
                                 <div className={`p-4 rounded-2xl text-sm font-medium shadow-sm border ${
                                     isAdmin 
-                                    ? 'bg-white border-gray-100 rounded-tl-none text-gray-800' 
+                                    ? 'bg-[var(--color-surface-card)] border-[var(--color-surface-high)] rounded-tl-none text-[var(--color-on-surface)]' 
                                     : 'bg-primary border-primary/10 rounded-tr-none text-white'
                                 }`}>
                                     {msg.message}
@@ -206,7 +206,7 @@ function TicketDetailPage() {
                             placeholder="Type your reply here..."
                             value={reply}
                             onChange={(e) => setReply(e.target.value)}
-                            className="w-full h-24 rounded-3xl bg-white border border-gray-100 p-5 pr-16 text-sm font-bold text-gray-800 shadow-xl focus:ring-4 focus:ring-primary/10 focus:border-primary/20 outline-none transition-all resize-none"
+                            className="w-full h-24 rounded-3xl bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] p-5 pr-16 text-sm font-bold text-[var(--color-on-surface)] shadow-xl focus:ring-4 focus:ring-primary/10 focus:border-primary/20 outline-none transition-all resize-none"
                         />
                         <button
                             type="submit"

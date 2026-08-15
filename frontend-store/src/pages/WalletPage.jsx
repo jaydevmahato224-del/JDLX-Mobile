@@ -56,7 +56,7 @@ const WalletPage = () => {
         </div>
 
         {wallet.transactions.length === 0 ? (
-          <div className="bg-white rounded-[2rem] p-12 text-center border border-dashed border-slate-200">
+          <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-12 text-center border border-dashed border-[var(--color-surface-high)]">
             <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Clock size={32} />
             </div>
@@ -64,7 +64,7 @@ const WalletPage = () => {
             <p className="text-slate-300 text-xs mt-1">Your rewards and spends will appear here</p>
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100">
+          <div className="bg-[var(--color-surface-card)] rounded-[2rem] overflow-hidden shadow-sm border border-[var(--color-surface-high)]">
             {wallet.transactions.map((tx, idx) => (
               <div 
                 key={idx} 

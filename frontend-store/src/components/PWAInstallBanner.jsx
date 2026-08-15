@@ -137,7 +137,7 @@ const PWAInstallBanner = () => {
           <div className="pwa-install-card">
             {/* Glass visuals live on an inner layer so backdrop-filter never
                 sits on the animated element. */}
-            <div className="overflow-hidden rounded-[28px] border border-white/70 bg-white/85 backdrop-blur-xl shadow-[0_24px_48px_-16px_rgba(0,0,0,0.18)] ring-1 ring-slate-200/40">
+            <div className="overflow-hidden rounded-[28px] border border-[var(--color-surface-high)] bg-[var(--color-surface-card)]/90 backdrop-blur-xl shadow-[0_24px_48px_-16px_rgba(0,0,0,0.18)] ring-1 ring-[var(--color-surface-high)]/40">
               <div className="flex items-center gap-2.5 p-2.5 pl-3 pr-2.5">
                 {/* Cute animated 2D doll mascot */}
                 <div className="doll-wrap relative h-[62px] w-[62px] shrink-0">
@@ -200,10 +200,10 @@ const PWAInstallBanner = () => {
 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-[14px] font-black tracking-tight text-slate-900">
+                  <h3 className="truncate text-[14px] font-black tracking-tight text-[var(--color-on-surface)]">
                     {config.title}
                   </h3>
-                  <p className="mt-0.5 line-clamp-2 text-[11.5px] font-bold leading-snug text-slate-500">
+                  <p className="mt-0.5 line-clamp-2 text-[11.5px] font-bold leading-snug text-[var(--color-on-surface-variant)]">
                     {config.description}
                   </p>
                 </div>
@@ -211,7 +211,7 @@ const PWAInstallBanner = () => {
                 {/* Install CTA */}
                 <button
                   onClick={isPreview ? () => toast.error('This is a preview. In a real scenario, this would open the install prompt.') : handleInstallClickWithFallback}
-                  className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-slate-900 px-3.5 py-2.5 text-[11px] font-black uppercase tracking-wide text-white shadow-lg shadow-slate-900/20 transition-all hover:bg-slate-800 active:scale-95"
+                  className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-[var(--color-on-surface)] px-3.5 py-2.5 text-[11px] font-black uppercase tracking-wide text-[var(--color-surface-card)] shadow-lg shadow-black/20 transition-all hover:opacity-90 active:scale-95"
                 >
                   <Download size={14} />
                   Install

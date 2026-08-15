@@ -375,7 +375,7 @@ function Profile() {
                                     value={inputCode}
                                     onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                                     placeholder="e.g. JDAX7K2P" 
-                                    className="min-w-0 flex-1 bg-white border-2 border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-all uppercase tracking-widest"
+                                    className="min-w-0 flex-1 bg-[var(--color-surface-card)] border-2 border-[var(--color-surface-high)] rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-all uppercase tracking-widest"
                                 />
                                 <button 
                                     type="submit"

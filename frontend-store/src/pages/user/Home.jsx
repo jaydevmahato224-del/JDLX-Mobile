@@ -571,9 +571,9 @@ export default function Home() {
            )}
            
            {wishlistCount > 0 && (
-             <Link to="/profile/wishlist" className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100 transition-all group">
+             <Link to="/profile/wishlist" className="flex items-center gap-2.5 px-4 py-2.5 bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] rounded-2xl hover:bg-[var(--color-surface-container)] transition-all group">
                 <HeartIcon size={14} className="text-red-500 group-hover:scale-110 transition-transform" fill="currentColor" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">{wishlistCount} Saved</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-on-surface-variant)]">{wishlistCount} Saved</span>
              </Link>
            )}
 
@@ -705,7 +705,7 @@ export default function Home() {
                 <div
                   key={offer.id}
                   onClick={() => trackEvent('click', 'offer_card', offer.title)}
-                  className="snap-center flex-shrink-0 w-[280px] md:w-[320px] rounded-[24px] bg-white border border-slate-100 shadow-lg overflow-hidden hover:shadow-xl transition-all duration-500 hover:-translate-y-1"
+                  className="snap-center flex-shrink-0 w-[280px] md:w-[320px] rounded-[24px] bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] shadow-lg overflow-hidden hover:shadow-xl transition-all duration-500 hover:-translate-y-1"
                 >
                   {/* Gradient Accent */}
                   <div className={`h-1.5 bg-gradient-to-r ${grad}`} />
@@ -714,7 +714,7 @@ export default function Home() {
                     {/* Title + Type */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight truncate">{offer.title}</h3>
+                        <h3 className="text-base font-black text-[var(--color-on-surface)] tracking-tight leading-tight truncate">{offer.title}</h3>
                         {offer.description && (
                           <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{offer.description}</p>
                         )}
@@ -725,10 +725,10 @@ export default function Home() {
                     </div>
 
                     {/* Discount */}
-                    <div className="flex items-center gap-4 py-3 px-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-4 py-3 px-4 bg-[var(--color-surface-low)] rounded-xl border border-[var(--color-surface-high)]">
                       <div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Discount</p>
-                        <p className="text-xl font-black text-slate-900 tracking-tighter">
+                        <p className="text-[9px] font-black text-[var(--color-on-surface-variant)] uppercase tracking-widest">Discount</p>
+                        <p className="text-xl font-black text-[var(--color-on-surface)] tracking-tighter">
                           {offer.discount_type === 'percentage' ? `${offer.discount_value}%` : `₹${offer.discount_value}`}
                           <span className="text-xs ml-1 text-primary font-black">OFF</span>
                         </p>

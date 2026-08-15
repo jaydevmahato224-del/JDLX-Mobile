@@ -126,6 +126,13 @@ window.fetch = async (...args) => {
 
     return response;
   } catch (error) {
+    // An aborted request is intentional (component cleanup, React StrictMode
+    // double-mount) — not a real failure. Skip the noisy log and never count
+    // it toward the global error screen threshold.
+    if (error && error.name === 'AbortError') {
+      throw error;
+    }
+
     console.error("Fetch Error:", error);
 
     // ONLY trigger global error screens for our backend API failures
@@ -301,6 +308,7 @@ function AnalyticsWrapper({ children }) {
 }
 
 function App() {
+  const theme = useStore((state) => state.theme)
   const token = useStore((state) => state.token)
   const fetchCart = useStore((state) => state.fetchCart)
   const fetchWishlist = useStore((state) => state.fetchWishlist)
@@ -381,10 +389,14 @@ function App() {
   }, [splashFinished, dataReady])
 
   if (showSplash) {
-    return <SplashScreen onFinish={handleSplashFinish} dataReady={dataReady} />
+    // Theme class lives at the app root (not just Layout) so full-screen
+    // overlays rendered outside Layout — SplashScreen, LoadingScreen, global
+    // error screens — also pick up dark-mode colors.
+    return <div className={theme}><SplashScreen onFinish={handleSplashFinish} dataReady={dataReady} /></div>
   }
 
   return (
+    <div className={theme}>
     <ErrorBoundary>
       <UnderConstructionOverlay />
       <GlobalErrorOverlay />
@@ -456,6 +468,7 @@ function App() {
         </AnalyticsWrapper>
       </Router>
     </ErrorBoundary>
+    </div>
   )
 }
 

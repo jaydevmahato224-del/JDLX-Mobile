@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 // ─── Network Error Screen (Cartoonish) ────────────────────────────────────────
 export const NetworkErrorScreen = () => {
     return (
-        <div className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+        <div className="fixed inset-0 z-[9999] bg-[var(--color-surface)] flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
             <div className="relative w-64 h-64 mb-8">
                 <svg viewBox="0 0 200 200" className="w-full h-full">
                     <style>
@@ -56,8 +56,8 @@ export const NetworkErrorScreen = () => {
                 </svg>
             </div>
 
-            <h1 className="text-3xl font-black text-[#1a2332] mb-2">No Internet Connection</h1>
-            <p className="text-slate-500 mb-8 max-w-xs">Check your WiFi or mobile data and try again</p>
+            <h1 className="text-3xl font-black text-[var(--color-on-surface)] mb-2">No Internet Connection</h1>
+            <p className="text-[var(--color-on-surface-variant)] mb-8 max-w-xs">Check your WiFi or mobile data and try again</p>
 
             <button 
                 onClick={() => window.location.reload()}
@@ -76,36 +76,36 @@ export const ServerErrorScreen = () => {
     const { clearGlobalError } = useStore();
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[9999] bg-[var(--color-surface)] flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-300">
             {/* Logo */}
             <div className="mb-12">
                 <div className="flex flex-col items-center gap-4">
                     <img src="/logo192.png" alt="JDLX Mobile" className="w-16 h-16 object-contain" />
-                    <div className="text-2xl font-black tracking-tighter text-[#1a2332]">
+                    <div className="text-2xl font-black tracking-tighter text-[var(--color-on-surface)]">
                         JDLX MOBILE
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-slate-200 border border-slate-100 max-w-md w-full">
-                <div className="w-20 h-20 bg-rose-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <div className="bg-[var(--color-surface-card)] p-10 rounded-[2.5rem] shadow-2xl shadow-black/10 border border-[var(--color-surface-high)] max-w-md w-full">
+                <div className="w-20 h-20 bg-rose-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
                     <Server size={40} className="text-rose-500" />
                 </div>
 
-                <h1 className="text-2xl font-bold text-[#1a2332] mb-3">We're experiencing technical difficulties</h1>
-                <p className="text-slate-500 text-sm mb-8">
+                <h1 className="text-2xl font-bold text-[var(--color-on-surface)] mb-3">We're experiencing technical difficulties</h1>
+                <p className="text-[var(--color-on-surface-variant)] text-sm mb-8">
                     This is on our end, not yours. Our team has been notified and is working on a fix.
                 </p>
 
                 <div className="flex flex-col gap-3 mb-8">
-                    <div className="flex items-center justify-center gap-2 py-2 px-4 bg-slate-50 rounded-full text-slate-600 text-xs font-bold">
+                    <div className="flex items-center justify-center gap-2 py-2 px-4 bg-[var(--color-surface-low)] rounded-full text-[var(--color-on-surface-variant)] text-xs font-bold">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                         </span>
                         🔧 Our engineers are on it
                     </div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <div className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">
                         Usually resolved within a few minutes
                     </div>
                 </div>
@@ -113,19 +113,19 @@ export const ServerErrorScreen = () => {
                 <div className="grid grid-cols-1 gap-3">
                     <button 
                         onClick={() => window.location.reload()}
-                        className="w-full py-4 bg-[#1a2332] text-white font-bold rounded-2xl hover:bg-[#2a3a52] transition-colors"
+                        className="w-full py-4 bg-[var(--color-on-surface)] text-[var(--color-surface-card)] font-bold rounded-2xl hover:opacity-90 transition-colors"
                     >
                         Try Again
                     </button>
                     <button 
                         onClick={() => setShowReportModal(true)}
-                        className="w-full py-4 bg-white text-[#1a2332] font-bold rounded-2xl border-2 border-slate-100 hover:bg-slate-50 transition-colors"
+                        className="w-full py-4 bg-[var(--color-surface-card)] text-[var(--color-on-surface)] font-bold rounded-2xl border-2 border-[var(--color-surface-high)] hover:bg-[var(--color-surface-low)] transition-colors"
                     >
                         Report This Issue
                     </button>
                     <button 
                         onClick={() => clearGlobalError()}
-                        className="w-full py-3 text-slate-400 text-sm font-bold hover:text-slate-600 transition-colors"
+                        className="w-full py-3 text-[var(--color-on-surface-variant)] text-sm font-bold hover:text-[var(--color-on-surface)] transition-colors"
                     >
                         Continue Anyway →
                     </button>
@@ -181,12 +181,12 @@ const ReportModal = ({ onClose }) => {
     if (isSuccess) {
         return (
             <div className="fixed inset-0 z-[10000] bg-[#1a2332]/80 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2rem] p-10 max-w-sm w-full text-center animate-in zoom-in-95">
-                    <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-10 max-w-sm w-full text-center animate-in zoom-in-95">
+                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle2 size={40} className="text-green-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-[#1a2332] mb-2">Report Sent!</h2>
-                    <p className="text-slate-500 text-sm">Thank you for helping us improve.</p>
+                    <h2 className="text-2xl font-bold text-[var(--color-on-surface)] mb-2">Report Sent!</h2>
+                    <p className="text-[var(--color-on-surface-variant)] text-sm">Thank you for helping us improve.</p>
                 </div>
             </div>
         );
@@ -194,48 +194,48 @@ const ReportModal = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 z-[10000] bg-[#1a2332]/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden animate-in slide-in-from-bottom-10">
-                <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-[#1a2332]">Report an Issue</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                        <X size={20} className="text-slate-400" />
+            <div className="bg-[var(--color-surface-card)] rounded-[2rem] w-full max-w-lg overflow-hidden animate-in slide-in-from-bottom-10">
+                <div className="p-6 border-b border-[var(--color-surface-high)] flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-[var(--color-on-surface)]">Report an Issue</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-[var(--color-surface-low)] rounded-full transition-colors">
+                        <X size={20} className="text-[var(--color-on-surface-variant)]" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-8 space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Error Type</label>
-                            <div className="p-3 bg-slate-50 rounded-xl text-xs font-medium text-slate-600 border border-slate-100">
+                            <label className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Error Type</label>
+                            <div className="p-3 bg-[var(--color-surface-low)] rounded-xl text-xs font-medium text-[var(--color-on-surface-variant)] border border-[var(--color-surface-high)]">
                                 API Connection Failed
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Page</label>
-                            <div className="p-3 bg-slate-50 rounded-xl text-xs font-medium text-slate-600 border border-slate-100 truncate">
+                            <label className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Page</label>
+                            <div className="p-3 bg-[var(--color-surface-low)] rounded-xl text-xs font-medium text-[var(--color-on-surface-variant)] border border-[var(--color-surface-high)] truncate">
                                 {window.location.pathname}
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Timestamp</label>
-                            <div className="p-3 bg-slate-50 rounded-xl text-xs font-medium text-slate-600 border border-slate-100 truncate">
+                            <label className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Timestamp</label>
+                            <div className="p-3 bg-[var(--color-surface-low)] rounded-xl text-xs font-medium text-[var(--color-on-surface-variant)] border border-[var(--color-surface-high)] truncate">
                                 {new Date().toLocaleTimeString()}
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">User ID</label>
-                            <div className="p-3 bg-slate-50 rounded-xl text-xs font-medium text-slate-600 border border-slate-100">
+                            <label className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">User ID</label>
+                            <div className="p-3 bg-[var(--color-surface-low)] rounded-xl text-xs font-medium text-[var(--color-on-surface-variant)] border border-[var(--color-surface-high)]">
                                 {user?.id || "Guest"}
                             </div>
                         </div>
                     </div>
 
                     <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Describe what you were doing</label>
+                        <label className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-widest">Describe what you were doing</label>
                         <textarea 
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-[#F5C518] focus:bg-white outline-none transition-all text-sm min-h-[120px]"
+                            className="w-full p-4 bg-[var(--color-surface-low)] rounded-2xl border-2 border-transparent focus:border-[#F5C518] focus:bg-[var(--color-surface-card)] outline-none transition-all text-sm min-h-[120px] text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)]"
                             placeholder="Optional: Tell us more about how this happened..."
                         />
                     </div>
@@ -257,17 +257,17 @@ const ReportModal = ({ onClose }) => {
 // ─── Client Error Screen (Fallthrough) ────────────────────────────────────────
 export const ClientErrorScreen = () => {
     return (
-        <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
-            <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+        <div className="fixed inset-0 z-[9999] bg-[var(--color-surface)] flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+            <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <AlertTriangle size={40} className="text-amber-500" />
             </div>
-            <h1 className="text-2xl font-bold text-[#1a2332] mb-3">Something went wrong</h1>
-            <p className="text-slate-500 text-sm mb-8">
+            <h1 className="text-2xl font-bold text-[var(--color-on-surface)] mb-3">Something went wrong</h1>
+            <p className="text-[var(--color-on-surface-variant)] text-sm mb-8">
                 An unexpected error occurred. Please try refreshing the page.
             </p>
             <button 
                 onClick={() => window.location.reload()}
-                className="px-10 py-4 bg-[#1a2332] text-white font-bold rounded-2xl hover:bg-[#2a3a52] transition-colors"
+                className="px-10 py-4 bg-[var(--color-on-surface)] text-[var(--color-surface-card)] font-bold rounded-2xl hover:opacity-90 transition-colors"
             >
                 Refresh Page
             </button>

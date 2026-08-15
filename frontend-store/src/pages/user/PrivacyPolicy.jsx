@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Shield, Eye, Database, Lock, UserCheck, Globe, ChevronRight } from 'lucide-react'
+import { Shield, Eye, Database, Lock, UserCheck, Globe, Bell, ChevronRight } from 'lucide-react'
 
 function PrivacyPolicy() {
   const sections = useMemo(() => [
@@ -50,6 +50,16 @@ function PrivacyPolicy() {
         'JSON Web Tokens (JWT): User sessions are protected with industry-standard JWT encryption to prevent session hijacking.',
         'Secure Database (Turso): All account records and order details are stored in highly secure database environments.',
         'Audit Controls: Multi-factor validation for admin operations and automatic triggers to record administrative modifications.',
+      ],
+    },
+    {
+      icon: Bell,
+      title: 'Notifications & Push Permissions',
+      points: [
+        'On your first visit, we may ask for your device\'s notification permission so you can receive real-time updates — order status changes, delivery tracking alerts, wallet transactions, and promotional offers — even when the app is closed.',
+        'Notification permission is entirely optional and under your control. Choosing not to allow notifications does not affect your ability to shop, place orders, track deliveries, or use any other feature of the platform.',
+        'You can change or revoke notification permission at any time from your browser or device settings (for example, Site settings → Notifications → Allow/Block).',
+        'We only send notifications relevant to your orders, deliveries, wallet, and offers. We never send spam, and notification data is never sold or shared with third parties.',
       ],
     },
     {
@@ -110,7 +120,7 @@ function PrivacyPolicy() {
 
       <div className="glass-card p-5 border border-[var(--color-surface-high)]">
         <div className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] opacity-70 leading-relaxed">
-          Last Updated: June 2026. This policy reflects JDLX Mobile's commitment to secure data processing and absolute user transparency. For specific regulatory requests, please submit a Support ticket.
+          Last Updated: August 2026. This policy reflects JDLX Mobile's commitment to secure data processing and absolute user transparency. For specific regulatory requests, please submit a Support ticket.
         </div>
       </div>
     </div>

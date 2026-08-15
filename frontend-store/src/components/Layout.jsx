@@ -4,6 +4,7 @@ import { User, ChevronLeft, Heart as HeartIcon, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { API_BASE_URL } from '../config'
 import NotificationBell from './NotificationBell'
+import PushPermissionBanner from './PushPermissionBanner'
 import LiquidBottomNav from './LiquidBottomNav'
 import PWAInstallBanner from './PWAInstallBanner'
 import LocationManager from './LocationManager'
@@ -165,6 +166,11 @@ function Layout({ children }) {
             </div>
           </div>
         </header>
+
+        {/* Push-permission banner — shows in the header whenever notification
+            permission is off/denied, with an Allow button that re-triggers the
+            native permission popup. Auto-hides once permission is granted. */}
+        <PushPermissionBanner />
       </div>
 
       {/* Floating Back Button — sits over the page below the header, fades and

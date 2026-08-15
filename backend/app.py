@@ -4857,11 +4857,14 @@ def send_bulk_notices():
 @require_admin()
 @require_permission("manage_admins")
 def admin_in_app_broadcast():
-    """Creates an in-app notification for all users (admin broadcast)."""
+    """Creates an in-app notification for all users (admin broadcast) and
+    delivers a VAPID web push to every user who opted in for push."""
     data = request.get_json(silent=True) or {}
     title = (data.get('title') or '').strip()
     message = (data.get('message') or '').strip()
     ntype = (data.get('type') or 'SYSTEM').strip() or 'SYSTEM'
+    # Admins can choose whether the broadcast also reaches phones (default ON).
+    send_push = data.get('send_push', True) not in (False, 'false', '0', 0)
 
     if not title or not message:
         return error_response("Title and message are required", 400)
@@ -4882,6 +4885,21 @@ def admin_in_app_broadcast():
         )
         conn.commit()
         conn.close()
+
+        # Deliver phone (VAPID web) push to every subscribed user in the
+        # background so the API responds instantly. Only users who opted in
+        # via the browser get a push — the in-app rows above cover everyone.
+        if send_push:
+            try:
+                from notifications.notification_service import notification_service
+                from threading import Thread
+                Thread(
+                    target=notification_service.send_broadcast_web_push,
+                    args=(title, message, ntype),
+                    daemon=True,
+                ).start()
+            except Exception as push_err:
+                logger.error(f"Failed to start push broadcast: {push_err}")
 
         return success_response(
             {"count": len(user_ids)},

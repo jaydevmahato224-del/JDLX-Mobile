@@ -63,10 +63,10 @@ def _send_web_push(subscription_row, title, message, url="/"):
         code = getattr(status, "status_code", None)
         if code in (404, 410):
             return "gone"
-        print(f"[PUSH ERROR] webpush failed (HTTP {code}): {e}")
+        print(f"[PUSH ERROR] webpush failed (HTTP {code}): {e}", flush=True)
         return "failed"
     except Exception as e:
-        print(f"[PUSH ERROR] webpush exception: {e}")
+        print(f"[PUSH ERROR] webpush exception: {e}", flush=True)
         return "failed"
 
 
@@ -118,14 +118,63 @@ class NotificationService:
                             conn2.close()
                         except Exception as e:
                             print(f"[PUSH ERROR] failed to remove dead subscription: {e}")
-                print(f"[PUSH SUCCESS] Sent {sent}/{len(subs)} web pushes to User {user_id}.")
+                print(f"[PUSH SUCCESS] Sent {sent}/{len(subs)} web pushes to User {user_id}.", flush=True)
             else:
-                print(f"[PUSH SIMULATED] To User {user_id}: {title} (subscriptions: {len(subs)}, vapid: {VAPID_ENABLED})")
+                print(f"[PUSH SIMULATED] To User {user_id}: {title} (subscriptions: {len(subs)}, vapid: {VAPID_ENABLED})", flush=True)
 
             return True
         except Exception as e:
             print(f"[NOTIFY ERROR] Failed to insert/send notification for User {user_id}: {e}")
             return False
+
+    def send_broadcast_web_push(self, title, message, type='SYSTEM', url="/"):
+        """
+        Sends a VAPID web push to EVERY subscribed user without creating in-app
+        rows (the admin broadcast creates those separately for all users).
+        Only users who opted in via the browser receive a push.
+        """
+        if not VAPID_ENABLED:
+            print(f"[PUSH SIMULATED] Broadcast '{title}' — VAPID not configured.", flush=True)
+            return
+        try:
+            conn = self._get_db()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT user_id, endpoint, p256dh, auth FROM web_push_subscriptions"
+            )
+            subs = cursor.fetchall()
+            conn.close()
+        except Exception as e:
+            print(f"[PUSH ERROR] broadcast: failed to fetch subscriptions: {e}", flush=True)
+            return
+
+        if not subs:
+            print(f"[PUSH INFO] Broadcast '{title}' — no users have push enabled yet.", flush=True)
+            return
+
+        sent = 0
+        gone = []
+        for sub in subs:
+            result = _send_web_push(sub, title, message, url)
+            if result == "sent":
+                sent += 1
+            elif result == "gone":
+                gone.append(sub["endpoint"])
+
+        if gone:
+            try:
+                conn = self._get_db()
+                cur = conn.cursor()
+                for ep in gone:
+                    cur.execute(
+                        "DELETE FROM web_push_subscriptions WHERE endpoint = ?", (ep,)
+                    )
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"[PUSH ERROR] broadcast: failed to remove dead subscriptions: {e}", flush=True)
+
+        print(f"[PUSH SUCCESS] Broadcast '{title}' sent {sent}/{len(subs)} web pushes.", flush=True)
 
     def send_push_notification(self, tokens, title, message):
         """Kept for backward compatibility — tokens here are legacy FCM tokens,

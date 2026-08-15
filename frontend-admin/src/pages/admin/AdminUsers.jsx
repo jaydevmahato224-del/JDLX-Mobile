@@ -38,6 +38,7 @@ const AdminUsers = () => {
     const [inAppMessage, setInAppMessage] = useState('');
     const [sendingInApp, setSendingInApp] = useState(false);
     const [inAppStatus, setInAppStatus] = useState(null);
+    const [inAppSendPush, setInAppSendPush] = useState(true);
     
     // Mail History State
     const [mailHistory, setMailHistory] = useState([]);
@@ -245,7 +246,7 @@ const AdminUsers = () => {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ title: inAppTitle, message: inAppMessage, type: 'SYSTEM' })
+                body: JSON.stringify({ title: inAppTitle, message: inAppMessage, type: 'SYSTEM', send_push: inAppSendPush })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to send in-app notification');
@@ -655,7 +656,7 @@ const AdminUsers = () => {
                             <div className="bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden">
                                 <div className="bg-emerald-600 p-6 text-white">
                                     <h2 className="text-xl font-bold flex items-center gap-2"><Bell className="w-5 h-5" /> In-App Notification</h2>
-                                    <p className="text-emerald-100 text-xs mt-1">Creates an in-app notification for every user (shows in Store → Alerts).</p>
+                                    <p className="text-emerald-100 text-xs mt-1">Creates an in-app notification for every user (shows in Store → Alerts) and delivers a phone push to users who enabled notifications.</p>
                                 </div>
                                 <form onSubmit={handleSendInAppBroadcast} className="p-8 space-y-6">
                                     <div className="space-y-2">
@@ -680,6 +681,18 @@ const AdminUsers = () => {
                                             required
                                         />
                                     </div>
+
+                                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={inAppSendPush}
+                                            onChange={(e) => setInAppSendPush(e.target.checked)}
+                                            className="mt-0.5 w-4 h-4 accent-emerald-600"
+                                        />
+                                        <span className="text-xs font-bold text-gray-500 leading-relaxed">
+                                            Also deliver as phone push notification (reaches users who enabled notifications, even when the app is closed).
+                                        </span>
+                                    </label>
 
                                     <button
                                         type="submit"

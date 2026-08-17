@@ -1057,6 +1057,10 @@ def init_db():
         banner_image TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
+    # warehouse_id: NULL = platform-wide offer (admin-created); set = offer
+    # created by that warehouse partner (multi-vendor). Discount evaluation
+    # only applies warehouse offers to carts containing that warehouse's stock.
+    ensure_columns('offers', [('warehouse_id', 'INTEGER')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS offer_usage (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -3832,7 +3832,19 @@ def checkout():
                         if cursor.fetchone()[0] >= int(offer['per_user_limit']):
                             offer_ok = False
                     if offer_ok:
-                        discount_applied = float(calculate_discount(offer, total_amount, product_ids) or 0)
+                        # Pass per-item (DB-verified) prices so multi-vendor offers
+                        # discount ONLY their own products' value — identical base
+                        # to what the customer saw at checkout.
+                        checkout_items = [
+                            {
+                                'product_id': int(item.get('id')),
+                                'price': float(item.get('price') or 0),
+                                'quantity': int(item.get('qty') or item.get('quantity') or 1),
+                            }
+                            for item in items
+                            if item.get('id')
+                        ]
+                        discount_applied = float(calculate_discount(offer, total_amount, product_ids, items=checkout_items) or 0)
             except Exception:
                 pass  # offers table missing or malformed data - treat as no discount
         wallet_amount = max(0, float(data.get('wallet_amount', 0) or 0))

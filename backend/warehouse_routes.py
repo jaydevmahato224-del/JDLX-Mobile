@@ -4820,3 +4820,336 @@ def exchange_billing_order():
     finally:
         conn.close()
 
+
+
+# ==============================================================================
+# OFFERS & PROMOTIONS (multi-vendor, warehouse-scoped)
+# ==============================================================================
+# Warehouse partners manage promotions for THEIR OWN products only. Every offer
+# created here is stamped with the partner's warehouse_id; platform-wide offers
+# (warehouse_id NULL) stay owned by the admin panel. Discount evaluation in
+# offer_routes.calculate_discount only applies warehouse offers to carts that
+# actually contain products stocked by that warehouse.
+
+def _validate_warehouse_offer_targets(wh_id, applicable_on, applicable_ids):
+    """Validates and cleans target ids for a warehouse offer.
+
+    Partners may only attach their OWN inventory products (multi-vendor
+    isolation); category targets must exist. Returns (cleaned_ids, error).
+    """
+    applicable_ids = [str(x) for x in (applicable_ids or [])]
+    if applicable_on == 'product' and not applicable_ids:
+        return [], "Select at least one product from your inventory"
+    if applicable_on == 'category' and not applicable_ids:
+        return [], "Select at least one category"
+    if applicable_on not in ('product', 'category'):
+        return [], None
+
+    conn = get_db()
+    try:
+        placeholders = ','.join('?' * len(applicable_ids))
+        if applicable_on == 'product':
+            rows = conn.execute(
+                f"SELECT product_id FROM warehouse_inventory "
+                f"WHERE (warehouse_id = ? OR warehouse_partner_id = ?) "
+                f"AND product_id IN ({placeholders})",
+                [wh_id, wh_id] + applicable_ids
+            ).fetchall()
+            valid = {str(r['product_id']) for r in rows}
+            cleaned = [x for x in applicable_ids if x in valid]
+            if not cleaned:
+                return [], "Select at least one product from your inventory"
+            return cleaned, None
+        rows = conn.execute(
+            f"SELECT id FROM categories WHERE id IN ({placeholders})",
+            applicable_ids
+        ).fetchall()
+        valid = {str(r['id']) for r in rows}
+        cleaned = [x for x in applicable_ids if x in valid]
+        if not cleaned:
+            return [], "Select at least one valid category"
+        return cleaned, None
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/offers", methods=["GET"])
+@require_warehouse_auth
+def warehouse_get_offers():
+    """List all offers created by the current warehouse partner."""
+    wh_id = request.warehouse_payload.get("warehouse_id")
+    if not wh_id:
+        return error_response("Warehouse ID missing from token", 400)
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM offers WHERE warehouse_id = ? ORDER BY created_at DESC",
+            (wh_id,),
+        ).fetchall()
+        offers = [dict(r) for r in rows]
+        for offer in offers:
+            if offer.get('applicable_ids'):
+                try:
+                    offer['applicable_ids'] = json.loads(offer['applicable_ids'])
+                except Exception:
+                    offer['applicable_ids'] = []
+        return success_response(offers, "Warehouse offers retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/offers", methods=["POST"])
+@require_warehouse_auth
+def warehouse_create_offer():
+    """Create an offer scoped to the current warehouse partner."""
+    wh_id = request.warehouse_payload.get("warehouse_id")
+    if not wh_id:
+        return error_response("Warehouse ID missing from token", 400)
+    data = request.get_json(silent=True) or {}
+
+    title = (data.get("title") or "").strip()
+    if not title:
+        return error_response("Offer title is required", 400)
+    offer_type = data.get("offer_type", "automatic")
+    if offer_type not in ("coupon", "automatic", "seasonal", "daily"):
+        offer_type = "automatic"
+    discount_type = data.get("discount_type", "percentage")
+    if discount_type not in ("percentage", "flat"):
+        discount_type = "percentage"
+    try:
+        discount_value = float(data.get("discount_value", 0))
+    except (TypeError, ValueError):
+        discount_value = 0
+    if discount_value <= 0:
+        return error_response("Discount value must be greater than 0", 400)
+
+    coupon_code = None
+    if offer_type == "coupon":
+        coupon_code = (data.get("coupon_code") or "").strip().upper()
+        if not coupon_code:
+            return error_response("coupon_code is required for coupon offers", 400)
+
+    applicable_on = data.get("applicable_on", "all")
+    if applicable_on not in ("all", "category", "product"):
+        applicable_on = "all"
+    # Category-wise offers stay admin-managed (multi-vendor: partners may only
+    # target their own products or their whole store).
+    if applicable_on == "category":
+        return error_response("Category-wise offers are managed from the admin panel only", 400)
+    applicable_ids, err = _validate_warehouse_offer_targets(wh_id, applicable_on, data.get("applicable_ids") or [])
+    if err:
+        return error_response(err, 400)
+    applicable_ids_json = json.dumps([int(x) for x in applicable_ids]) if applicable_ids else None
+
+    min_order = safe_float(data.get("min_order_amount"), 0)
+    max_discount = safe_float(data.get("max_discount_amount"), 0) or None
+    usage_limit = None
+    try:
+        if data.get("usage_limit") not in (None, ""):
+            usage_limit = int(data.get("usage_limit"))
+    except (TypeError, ValueError):
+        usage_limit = None
+    try:
+        per_user_limit = int(data.get("per_user_limit") or 1)
+    except (TypeError, ValueError):
+        per_user_limit = 1
+
+    conn = get_db()
+    try:
+        if coupon_code:
+            existing = conn.execute("SELECT id FROM offers WHERE coupon_code = ?", (coupon_code,)).fetchone()
+            if existing:
+                return error_response("Coupon code already exists", 409)
+        cursor = conn.execute(
+            """INSERT INTO offers (
+                title, description, offer_type, discount_type, discount_value,
+                min_order_amount, max_discount_amount, target_type, applicable_on,
+                applicable_ids, coupon_code, usage_limit, usage_count, per_user_limit,
+                start_date, end_date, is_active, banner_image, warehouse_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'all', ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)""",
+            (
+                title, data.get("description"), offer_type, discount_type, discount_value,
+                min_order, max_discount, applicable_on,
+                applicable_ids_json, coupon_code, usage_limit, per_user_limit,
+                data.get("start_date"), data.get("end_date"),
+                1 if data.get("is_active", True) else 0,
+                data.get("banner_image"), wh_id,
+            ),
+        )
+        conn.commit()
+        return success_response({"id": cursor.lastrowid}, "Offer created successfully", 201)
+    except Exception as e:
+        conn.rollback()
+        return error_response(str(e), 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/offers/<int:offer_id>", methods=["PUT"])
+@require_warehouse_auth
+def warehouse_update_offer(offer_id):
+    """Update one of the current partner's own offers."""
+    wh_id = request.warehouse_payload.get("warehouse_id")
+    if not wh_id:
+        return error_response("Warehouse ID missing from token", 400)
+    data = request.get_json(silent=True) or {}
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM offers WHERE id = ? AND warehouse_id = ?",
+            (offer_id, wh_id),
+        ).fetchone()
+        if not row:
+            return error_response("Offer not found", 404)
+        existing = dict(row)
+
+        # Category-wise offers are admin-managed. Existing category offers may
+        # keep their scope (so status toggles/edits keep working), but partners
+        # can never switch an offer to category scope.
+        if data.get("applicable_on") == "category" and existing.get("applicable_on") != "category":
+            return error_response("Category-wise offers are managed from the admin panel only", 400)
+
+        title = (data.get("title") or "").strip() or existing["title"]
+        offer_type = data.get("offer_type", existing["offer_type"])
+        if offer_type not in ("coupon", "automatic", "seasonal", "daily"):
+            offer_type = existing["offer_type"]
+        discount_type = data.get("discount_type", existing["discount_type"])
+        if discount_type not in ("percentage", "flat"):
+            discount_type = existing["discount_type"]
+        try:
+            discount_value = float(data.get("discount_value", existing["discount_value"]))
+        except (TypeError, ValueError):
+            discount_value = existing["discount_value"]
+        if discount_value <= 0:
+            return error_response("Discount value must be greater than 0", 400)
+
+        coupon_code = None
+        if offer_type == "coupon":
+            coupon_code = (data.get("coupon_code") or "").strip().upper() or (existing.get("coupon_code") or "").strip().upper()
+            if not coupon_code:
+                return error_response("coupon_code is required for coupon offers", 400)
+
+        applicable_on = data.get("applicable_on", existing["applicable_on"]) or "all"
+        if applicable_on not in ("all", "category", "product"):
+            applicable_on = existing["applicable_on"]
+        applicable_ids = data.get("applicable_ids")
+        if applicable_ids is None:
+            try:
+                applicable_ids = json.loads(existing.get("applicable_ids") or "[]")
+            except Exception:
+                applicable_ids = []
+        applicable_ids, err = _validate_warehouse_offer_targets(wh_id, applicable_on, applicable_ids)
+        if err:
+            return error_response(err, 400)
+        applicable_ids_json = json.dumps([int(x) for x in applicable_ids]) if applicable_ids else None
+
+        min_order = safe_float(data.get("min_order_amount"), existing["min_order_amount"] or 0)
+        max_discount = safe_float(data.get("max_discount_amount"), existing.get("max_discount_amount") or 0) or None
+        usage_limit = existing.get("usage_limit")
+        try:
+            if data.get("usage_limit") not in (None, ""):
+                usage_limit = int(data.get("usage_limit"))
+        except (TypeError, ValueError):
+            usage_limit = existing.get("usage_limit")
+        try:
+            per_user_limit = int(data.get("per_user_limit") or existing.get("per_user_limit") or 1)
+        except (TypeError, ValueError):
+            per_user_limit = existing.get("per_user_limit") or 1
+
+        if coupon_code and coupon_code != (existing.get("coupon_code") or "").strip().upper():
+            dup = conn.execute("SELECT id FROM offers WHERE coupon_code = ? AND id != ?", (coupon_code, offer_id)).fetchone()
+            if dup:
+                return error_response("Coupon code already exists", 409)
+
+        conn.execute(
+            """UPDATE offers SET
+                title = ?, description = ?, offer_type = ?, discount_type = ?, discount_value = ?,
+                min_order_amount = ?, max_discount_amount = ?, applicable_on = ?,
+                applicable_ids = ?, coupon_code = ?, usage_limit = ?, per_user_limit = ?,
+                start_date = ?, end_date = ?, is_active = ?, banner_image = ?
+            WHERE id = ? AND warehouse_id = ?""",
+            (
+                title, data.get("description"), offer_type, discount_type, discount_value,
+                min_order, max_discount, applicable_on,
+                applicable_ids_json, coupon_code, usage_limit, per_user_limit,
+                data.get("start_date"), data.get("end_date"),
+                1 if data.get("is_active", True) else 0,
+                data.get("banner_image"), offer_id, wh_id,
+            ),
+        )
+        conn.commit()
+        return success_response(None, "Offer updated successfully")
+    except Exception as e:
+        conn.rollback()
+        return error_response(str(e), 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/offers/<int:offer_id>", methods=["DELETE"])
+@require_warehouse_auth
+def warehouse_delete_offer(offer_id):
+    """Delete one of the current partner's own offers."""
+    wh_id = request.warehouse_payload.get("warehouse_id")
+    if not wh_id:
+        return error_response("Warehouse ID missing from token", 400)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM offers WHERE id = ? AND warehouse_id = ?",
+            (offer_id, wh_id),
+        ).fetchone()
+        if not row:
+            return error_response("Offer not found", 404)
+        conn.execute("DELETE FROM offer_usage WHERE offer_id = ?", (offer_id,))
+        conn.execute("DELETE FROM offers WHERE id = ?", (offer_id,))
+        conn.commit()
+        return success_response(None, "Offer deleted successfully")
+    except Exception as e:
+        conn.rollback()
+        return error_response(str(e), 500)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/offers/products", methods=["GET"])
+@require_warehouse_auth
+def warehouse_offer_products():
+    """List the current partner's inventory products for offer targeting."""
+    wh_id = request.warehouse_payload.get("warehouse_id")
+    if not wh_id:
+        return error_response("Warehouse ID missing from token", 400)
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT p.id, p.name, p.price, p.category_id, COALESCE(c.name, p.category) as category, p.images
+               FROM warehouse_inventory wi
+               JOIN products p ON p.id = wi.product_id
+               LEFT JOIN categories c ON p.category_id = c.id
+               WHERE wi.warehouse_id = ?
+                 AND p.status = 'available'
+                 AND p.lifecycle_state IN ('live', 'coming_soon')
+               GROUP BY p.id
+               ORDER BY p.name ASC""",
+            (wh_id,),
+        ).fetchall()
+        products = []
+        for r in rows:
+            item = dict(r)
+            item["image"] = None
+            if item.get("images"):
+                try:
+                    imgs = json.loads(item["images"])
+                    if isinstance(imgs, list) and imgs:
+                        item["image"] = imgs[0]
+                except Exception:
+                    item["image"] = None
+            products.append(item)
+        return success_response(products, "Warehouse products retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+    finally:
+        conn.close()

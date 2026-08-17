@@ -617,7 +617,7 @@ export const useStore = create((set, get) => ({
         }
         return [];
     },
-    applyAutomaticOffers: async (cartTotal, productIds) => {
+    applyAutomaticOffers: async (cartTotal, productIds, items) => {
         const state = get();
         if (!state.token || cartTotal <= 0) return null;
         try {
@@ -627,7 +627,7 @@ export const useStore = create((set, get) => ({
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${state.token}`
                 },
-                body: JSON.stringify({ cart_total: cartTotal, product_ids: productIds })
+                body: JSON.stringify({ cart_total: cartTotal, product_ids: productIds, items: items || [] })
             });
             const json = await res.json();
             if (res.ok && json.data && json.data.applied_offer) {
@@ -644,7 +644,7 @@ export const useStore = create((set, get) => ({
         }
         return null;
     },
-    applyCoupon: async (code, cartTotal, productIds) => {
+    applyCoupon: async (code, cartTotal, productIds, items) => {
         const state = get();
         if (!state.token) {
             return { valid: false, message: 'Please login to apply coupons' };
@@ -656,7 +656,7 @@ export const useStore = create((set, get) => ({
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${state.token}`
                 },
-                body: JSON.stringify({ coupon_code: code, cart_total: cartTotal, product_ids: productIds })
+                body: JSON.stringify({ coupon_code: code, cart_total: cartTotal, product_ids: productIds, items: items || [] })
             });
             const json = await res.json();
             if (res.ok && json.data && json.data.valid) {

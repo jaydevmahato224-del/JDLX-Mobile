@@ -58,26 +58,144 @@ def get_offer_banners():
     conn.close()
     return success_response(banners, "Offer banners retrieved successfully")
 
-def calculate_discount(offer, cart_total, product_ids):
+def _eligible_subtotal(offer, items, cart_total, conn):
+    """Returns the subtotal of the cart items an offer legitimately covers.
+
+    When per-item prices are supplied (``items``), percentage/flat discounts
+    are computed against ONLY the eligible items' value — multi-vendor
+    fairness: Store A's offer never discounts Store B's products. When items
+    are absent (legacy callers) the whole ``cart_total`` is used, preserving
+    the previous behavior.
+
+    ``items`` shape: [{product_id, price, quantity}] (price = unit price).
+    """
+    if not items:
+        return cart_total
+
+    product_subtotals = {}
+    for item in items:
+        try:
+            pid = str(int(item.get('product_id')))
+        except (TypeError, ValueError):
+            continue
+        try:
+            qty = int(item.get('quantity') or 1)
+        except (TypeError, ValueError):
+            qty = 1
+        try:
+            price = float(item.get('price') or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        product_subtotals[pid] = product_subtotals.get(pid, 0.0) + (price * qty)
+
+    if not product_subtotals:
+        return cart_total
+
+    eligible_ids = set(product_subtotals.keys())
+
+    if offer.get('warehouse_id'):
+        if not eligible_ids:
+            return 0.0
+        placeholders = ','.join('?' * len(eligible_ids))
+        rows = conn.execute(
+            f"SELECT product_id FROM warehouse_inventory "
+            f"WHERE (warehouse_id = ? OR warehouse_partner_id = ?) "
+            f"AND product_id IN ({placeholders})",
+            [offer['warehouse_id'], offer['warehouse_id']] + list(eligible_ids),
+        ).fetchall()
+        eligible_ids = {str(r['product_id']) for r in rows}
+
     if offer['applicable_on'] == 'product':
-        applicable_ids = json.loads(offer.get('applicable_ids') or '[]')
-        # Simple implementation: If any product in cart matches, apply discount to whole cart total (subtotal)
-        # For stricter product-specific, we'd need item prices, but prompt says "apply on subtotal only"
-        has_applicable = any(str(pid) in [str(x) for x in applicable_ids] for pid in product_ids)
-        if not has_applicable:
+        applicable_ids = {str(x) for x in json.loads(offer.get('applicable_ids') or '[]')}
+        eligible_ids &= applicable_ids
+    elif offer['applicable_on'] == 'category':
+        applicable_ids = {str(x) for x in json.loads(offer.get('applicable_ids') or '[]')}
+        if applicable_ids:
+            if not eligible_ids:
+                return 0.0
+            placeholders = ','.join('?' * len(eligible_ids))
+            rows = conn.execute(
+                f"SELECT id, category_id FROM products WHERE id IN ({placeholders})",
+                list(eligible_ids),
+            ).fetchall()
+            category_by_product = {str(r['id']): str(r['category_id']) for r in rows}
+            eligible_ids = {pid for pid in eligible_ids if category_by_product.get(pid) in applicable_ids}
+
+    if not eligible_ids:
+        return 0.0
+
+    return sum(subtotal for pid, subtotal in product_subtotals.items() if pid in eligible_ids)
+
+
+def calculate_discount(offer, cart_total, product_ids, conn=None, items=None):
+    """Computes the discount an offer grants on a cart.
+
+    Multi-vendor scoping (additive, existing logic untouched):
+      - Warehouse offers (``warehouse_id`` set) only apply to carts that
+        contain at least one product stocked by that warehouse.
+      - Product/category offers only discount the value of the eligible items
+        (``items`` with per-item prices), never other stores' products.
+      - Category offers (``applicable_on == 'category'``) only apply when the
+        cart contains products belonging to one of the targeted categories
+        (this was previously accepted but never filtered).
+    """
+    close_conn = conn is None
+    if conn is None:
+        conn = get_db()
+    try:
+        product_ids = [str(pid) for pid in (product_ids or [])]
+
+        if offer.get('warehouse_id'):
+            if not product_ids:
+                return 0
+            placeholders = ','.join('?' * len(product_ids))
+            rows = conn.execute(
+                f"SELECT product_id FROM warehouse_inventory "
+                f"WHERE (warehouse_id = ? OR warehouse_partner_id = ?) "
+                f"AND product_id IN ({placeholders})",
+                [offer['warehouse_id'], offer['warehouse_id']] + product_ids
+            ).fetchall()
+            warehouse_product_ids = {str(row['product_id']) for row in rows}
+            if not any(pid in warehouse_product_ids for pid in product_ids):
+                return 0
+
+        if offer['applicable_on'] == 'product':
+            applicable_ids = json.loads(offer.get('applicable_ids') or '[]')
+            # Eligibility gate: at least one cart product must be targeted.
+            has_applicable = any(str(pid) in [str(x) for x in applicable_ids] for pid in product_ids)
+            if not has_applicable:
+                return 0
+        elif offer['applicable_on'] == 'category':
+            applicable_ids = json.loads(offer.get('applicable_ids') or '[]')
+            if applicable_ids and product_ids:
+                placeholders = ','.join('?' * len(product_ids))
+                rows = conn.execute(
+                    f"SELECT id, category_id FROM products WHERE id IN ({placeholders})",
+                    product_ids
+                ).fetchall()
+                cart_category_ids = {str(row['category_id']) for row in rows}
+                if not any(str(cid) in cart_category_ids for cid in applicable_ids):
+                    return 0
+
+        # Discount base: the value of ONLY the eligible items (fair multi-vendor).
+        base = _eligible_subtotal(offer, items, cart_total, conn)
+        if base <= 0:
             return 0
-            
+    finally:
+        if close_conn:
+            conn.close()
+
     # Calculate amount
     discount = 0
     if offer['discount_type'] == 'percentage':
-        discount = (cart_total * offer['discount_value']) / 100
+        discount = (base * offer['discount_value']) / 100
     elif offer['discount_type'] == 'flat':
         discount = offer['discount_value']
         
     if offer['max_discount_amount'] and discount > offer['max_discount_amount']:
         discount = offer['max_discount_amount']
         
-    return min(discount, cart_total)
+    return min(discount, base)
 
 @offer_bp.route('/api/offers/validate-coupon', methods=['POST'])
 @token_required
@@ -87,6 +205,7 @@ def validate_coupon():
     cart_total = float(data.get('cart_total', 0))
     user_id = (request.user or {}).get('user_id')
     product_ids = data.get('product_ids', [])
+    items = data.get('items')  # [{product_id, price, quantity}] — for fair multi-vendor discount base
     
     if not coupon_code:
         return error_response("Coupon code is required")
@@ -145,7 +264,7 @@ def validate_coupon():
         conn.close()
         return error_response("You have already used this coupon maximum allowed times")
         
-    discount = calculate_discount(offer, cart_total, product_ids)
+    discount = calculate_discount(offer, cart_total, product_ids, conn, items)
     
     if discount == 0:
         conn.close()
@@ -167,6 +286,7 @@ def apply_automatic():
     cart_total = float(data.get('cart_total', 0))
     user_id = (request.user or {}).get('user_id')
     product_ids = data.get('product_ids', [])
+    items = data.get('items')  # [{product_id, price, quantity}] — for fair multi-vendor discount base
     
     conn = get_db()
     cursor = conn.cursor()
@@ -198,7 +318,7 @@ def apply_automatic():
         if offer['per_user_limit'] and user_usage >= offer['per_user_limit']:
             continue
             
-        discount = calculate_discount(offer, cart_total, product_ids)
+        discount = calculate_discount(offer, cart_total, product_ids, conn, items)
         if discount > 0:
             offer_data = {
                 "offer_id": offer['id'],
@@ -289,10 +409,17 @@ def record_usage():
         return error_response("Order has no items", 400)
     product_ids = []
     cart_total = 0.0
+    order_items = []
     for row in item_rows:
         product_ids.append(row['product_id'])
-        cart_total += float(row['price']) * int(row['quantity'])
-    computed = calculate_discount(offer, cart_total, product_ids) or 0
+        item_total = float(row['price']) * int(row['quantity'])
+        cart_total += item_total
+        order_items.append({
+            'product_id': row['product_id'],
+            'price': float(row['price']),
+            'quantity': int(row['quantity']),
+        })
+    computed = calculate_discount(offer, cart_total, product_ids, conn, order_items) or 0
     discount_applied = round(min(float(computed), float(order_row['total_amount'] or 0)), 2)
     if discount_applied <= 0:
         conn.close()

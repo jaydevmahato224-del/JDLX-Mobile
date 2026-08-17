@@ -55,6 +55,14 @@ function Checkout() {
 
     const productIds = useMemo(() => cart.map(item => item.id), [cart]);
 
+    // Per-item prices so multi-vendor offers only discount their own products
+    // (Store A's offer never discounts Store B's items).
+    const cartItems = useMemo(() => cart.map(item => ({
+        product_id: item.id,
+        price: Number(item.price || 0),
+        quantity: Number(item.qty || 1)
+    })), [cart]);
+
     // Offers & Discounts
     const appliedOffer = useStore(state => state.appliedOffer);
     const applyAutomaticOffers = useStore(state => state.applyAutomaticOffers);
@@ -133,16 +141,16 @@ function Checkout() {
 
     useEffect(() => {
         if (subtotal > 0 && user) {
-            applyAutomaticOffers(subtotal, productIds);
+            applyAutomaticOffers(subtotal, productIds, cartItems);
         } else {
             removeOffer();
         }
-    }, [subtotal, user, productIds, applyAutomaticOffers, removeOffer]);
+    }, [subtotal, user, productIds, cartItems, applyAutomaticOffers, removeOffer]);
 
     const handleApplyCoupon = async () => {
         if (!couponCode.trim()) return;
         setCouponLoading(true);
-        const res = await applyCoupon(couponCode, subtotal, productIds);
+        const res = await applyCoupon(couponCode, subtotal, productIds, cartItems);
         if (res.valid) {
             toast.success(`Coupon applied: ₹${res.discount_amount} off`);
         } else {

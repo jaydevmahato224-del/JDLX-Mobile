@@ -69,15 +69,15 @@ const ReferAndEarn = () => {
       <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-8 shadow-sm border border-[var(--color-surface-high)] text-center">
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Your Unique Referral Code</p>
         <div className="flex flex-col sm:flex-row items-stretch justify-center gap-3 mb-8">
-          <div className="flex items-center justify-center min-w-0 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl px-8 py-4 font-black text-2xl sm:text-3xl tracking-widest text-[#1B2341] select-all">
+          <div className="flex items-center justify-center min-w-0 bg-[var(--color-surface-low)] border-2 border-dashed border-[var(--color-surface-high)] rounded-2xl px-8 py-4 font-black text-2xl sm:text-3xl tracking-widest text-[var(--color-on-surface)] select-all">
             {refData?.code || '------'}
           </div>
           <button 
             onClick={copyCode}
-            className={`group inline-flex items-center justify-center gap-2 px-6 rounded-2xl font-black text-sm transition-all duration-200 active:scale-95 shadow-lg ${
+            className={`group inline-flex items-center justify-center gap-2 px-6 rounded-2xl font-black text-sm transition-all duration-200 active:scale-95 ${
               copiedCode
-                ? 'bg-emerald-500 text-white shadow-emerald-200'
-                : 'bg-slate-900 text-white shadow-slate-300 hover:bg-slate-800 hover:shadow-xl hover:-translate-y-0.5'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-[var(--color-on-surface)] text-[var(--color-surface-card)] hover:opacity-90 hover:-translate-y-0.5'
             }`}
           >
             {copiedCode ? (
@@ -92,14 +92,14 @@ const ReferAndEarn = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button 
             onClick={shareOnWhatsApp}
-            className="flex items-center justify-center gap-3 bg-[#25D366] text-white font-black py-4 rounded-2xl hover:brightness-105 transition-all shadow-lg shadow-green-100"
+            className="flex items-center justify-center gap-3 bg-[#25D366] text-white font-black py-4 rounded-2xl hover:brightness-105 transition-all"
           >
             <Share2 size={20} />
             Share on WhatsApp
           </button>
           <button 
             onClick={() => copyToClipboard(refData?.referral_url, 'Link copied!')}
-            className="group flex items-center justify-center gap-3 bg-slate-100 text-slate-700 font-black py-4 rounded-2xl hover:bg-slate-200 transition-all"
+            className="group flex items-center justify-center gap-3 bg-[var(--color-surface-low)] text-[var(--color-on-surface)] font-black py-4 rounded-2xl hover:bg-[var(--color-surface-high)] transition-all"
           >
             <Copy size={18} className="transition-transform duration-200 group-hover:scale-110" />
             Copy Referral Link
@@ -109,27 +109,27 @@ const ReferAndEarn = () => {
 
       {/* How it works */}
       <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-8 shadow-sm border border-[var(--color-surface-high)]">
-        <h3 className="text-xl font-black text-slate-800 mb-6">How it works</h3>
+        <h3 className="text-xl font-black text-[var(--color-on-surface)] mb-6">How it works</h3>
         <div className="space-y-6">
           <div className="flex gap-4">
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 font-black">1</div>
+            <div className="w-10 h-10 bg-indigo-500/15 text-indigo-400 rounded-xl flex items-center justify-center shrink-0 font-black">1</div>
             <div>
-              <p className="font-bold text-slate-800">Share your referral link</p>
-              <p className="text-slate-500 text-sm">Send your unique link to friends and family.</p>
+              <p className="font-bold text-[var(--color-on-surface)]">Share your referral link</p>
+              <p className="text-[var(--color-on-surface-variant)] text-sm">Send your unique link to friends and family.</p>
             </div>
           </div>
           <div className="flex gap-4">
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 font-black">2</div>
+            <div className="w-10 h-10 bg-indigo-500/15 text-indigo-400 rounded-xl flex items-center justify-center shrink-0 font-black">2</div>
             <div>
-              <p className="font-bold text-slate-800">Friend applies your code</p>
-              <p className="text-slate-500 text-sm">You both get ₹10 in your wallets the moment they apply it.</p>
+              <p className="font-bold text-[var(--color-on-surface)]">Friend applies your code</p>
+              <p className="text-[var(--color-on-surface-variant)] text-sm">You both get ₹10 in your wallets the moment they apply it.</p>
             </div>
           </div>
           <div className="flex gap-4">
             <div className="w-10 h-10 bg-[#F5A623]/10 text-[#F5A623] rounded-xl flex items-center justify-center shrink-0 font-black">3</div>
             <div>
-              <p className="font-bold text-slate-800">Get Rewarded</p>
-              <p className="text-slate-500 text-sm">After their first order of ₹199+, you get ₹40 more and they get ₹20 more (₹50 & ₹30 total).</p>
+              <p className="font-bold text-[var(--color-on-surface)]">Get Rewarded</p>
+              <p className="text-[var(--color-on-surface-variant)] text-sm">After their first order of ₹199+, you get ₹40 more and they get ₹20 more (₹50 & ₹30 total).</p>
             </div>
           </div>
         </div>
@@ -140,12 +140,12 @@ const ReferAndEarn = () => {
         <div className="bg-[var(--color-surface-card)] rounded-[1.5rem] p-5 border border-[var(--color-surface-high)] shadow-sm text-center">
           <Users size={20} className="mx-auto text-slate-400 mb-2" />
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Referrals</p>
-          <p className="text-xl font-black text-slate-800">{refData?.stats?.total || 0}</p>
+          <p className="text-xl font-black text-[var(--color-on-surface)]">{refData?.stats?.total || 0}</p>
         </div>
         <div className="bg-[var(--color-surface-card)] rounded-[1.5rem] p-5 border border-[var(--color-surface-high)] shadow-sm text-center">
           <Trophy size={20} className="mx-auto text-[#F5A623] mb-2" />
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Successful</p>
-          <p className="text-xl font-black text-slate-800">{refData?.stats?.completed || 0}</p>
+          <p className="text-xl font-black text-[var(--color-on-surface)]">{refData?.stats?.completed || 0}</p>
         </div>
         <div className="bg-[var(--color-surface-card)] rounded-[1.5rem] p-5 border border-[#F5A623]/20 bg-gradient-to-br from-[var(--color-surface-card)] to-[#F5A623]/5 shadow-sm text-center">
           <Gift size={20} className="mx-auto text-[#F5A623] mb-2" />

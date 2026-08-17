@@ -13,6 +13,8 @@ import { useStore } from '../store/useStore';
  */
 export function usePWAInstall() {
   const installPrompt = useStore((state) => state.pwaInstallPrompt);
+  const promptUsed = useStore((state) => state.pwaInstallPromptUsed);
+  const markPwaInstallPromptUsed = useStore((state) => state.markPwaInstallPromptUsed);
   const clearPwaInstallPrompt = useStore((state) => state.clearPwaInstallPrompt);
   
   const [isInstalled, setIsInstalled] = useState(() => {
@@ -40,13 +42,28 @@ export function usePWAInstall() {
   const handleInstallClick = async () => {
     if (!installPrompt) return false;
 
+    // A captured beforeinstallprompt event can only drive the native prompt
+    // ONCE. The banner and the Profile "Download App" button share the same
+    // store-level event, so usage is tracked globally: calling prompt() a
+    // second time on an already-used event silently no-ops and Chrome's
+    // "Installing…" state never resolves. Bail out and let the caller fall
+    // back to the step-by-step guide instead of hanging forever.
+    if (promptUsed) {
+      clearPwaInstallPrompt();
+      return false;
+    }
+
     try {
-      // prompt() must run inside a user gesture and can only be invoked ONCE
-      // per captured beforeinstallprompt event. After the user dismisses it or
-      // the event is reused, calling prompt() again silently does nothing — so
-      // always clear the stale prompt and let the UI fall back to the guide.
+      markPwaInstallPromptUsed();
       installPrompt.prompt();
-      const { outcome } = await installPrompt.userChoice;
+      // Guard against the prompt never resolving (e.g. installability changed
+      // after the event was captured, or the browser swallowed the prompt):
+      // timeout and fall back to the guide rather than leaving the user stuck
+      // on an infinite "Installing…".
+      const { outcome } = await Promise.race([
+        installPrompt.userChoice,
+        new Promise((resolve) => setTimeout(() => resolve({ outcome: 'timeout' }), 5000)),
+      ]);
       console.log(`User response to install prompt: ${outcome}`);
       
       if (outcome === 'accepted') {
@@ -54,7 +71,7 @@ export function usePWAInstall() {
         return true;
       }
 
-      // User dismissed the native prompt — it cannot be re-shown.
+      // User dismissed the native prompt, or it timed out — it cannot be re-shown.
       clearPwaInstallPrompt();
       return false;
     } catch (err) {

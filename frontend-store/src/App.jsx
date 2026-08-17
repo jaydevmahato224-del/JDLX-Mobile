@@ -397,9 +397,13 @@ function App() {
 
   return (
     <div className={theme}>
+    {/* Global overlays live OUTSIDE the ErrorBoundary: when a render error is
+        caught, ErrorBoundary renders null (blanking the app), so the error
+        screen must not be inside it or it would vanish too — leaving a white
+        page with no fallback UI. */}
+    <GlobalErrorOverlay />
     <ErrorBoundary>
       <UnderConstructionOverlay />
-      <GlobalErrorOverlay />
       <PWAInstalledCelebration />
       <AppReviewPrompt show={showPrompt} reason={promptReason} onDismiss={dismissPrompt} />
       <PushNotificationManager />

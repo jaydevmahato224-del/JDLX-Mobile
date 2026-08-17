@@ -590,9 +590,16 @@ export const useStore = create((set, get) => ({
     },
 
     // PWA Install Prompt State
+    // pwaInstallPromptUsed is a GLOBAL guard: a captured beforeinstallprompt
+    // event can only drive the native prompt ONCE. Banner and Profile both
+    // share this event, so usage is tracked in the store (not per-component)
+    // to keep the second click from calling prompt() again on the same event
+    // and hanging on an infinite "Installing…" state.
     pwaInstallPrompt: null,
-    setPwaInstallPrompt: (prompt) => set({ pwaInstallPrompt: prompt }),
-    clearPwaInstallPrompt: () => set({ pwaInstallPrompt: null }),
+    pwaInstallPromptUsed: false,
+    setPwaInstallPrompt: (prompt) => set({ pwaInstallPrompt: prompt, pwaInstallPromptUsed: false }),
+    markPwaInstallPromptUsed: () => set({ pwaInstallPromptUsed: true }),
+    clearPwaInstallPrompt: () => set({ pwaInstallPrompt: null, pwaInstallPromptUsed: false }),
 
     // Offers & Discounts
     activeOffers: [],

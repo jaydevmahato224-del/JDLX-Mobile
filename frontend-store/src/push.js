@@ -34,13 +34,19 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 /**
- * Registers the push service worker (public/push-sw.js). Explicit registration
- * is more reliable than assuming a default path.
+ * Ensures the service worker that handles pushes is registered.
+ *
+ * The push handlers live in the MAIN PWA service worker (public/sw.js), which
+ * is already registered by main.jsx on load. Registering a separate worker
+ * (push-sw.js) at the same scope "/" would REPLACE sw.js — and without a
+ * fetch handler it would break PWA installability and offline caching. This
+ * explicit registration just guarantees sw.js is active (idempotent when
+ * main.jsx already registered it).
  */
 async function ensureServiceWorker() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register('/push-sw.js');
+    return await navigator.serviceWorker.register('/sw.js');
   } catch (err) {
     console.warn('Failed to register push service worker:', err);
     return null;

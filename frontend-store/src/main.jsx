@@ -7,6 +7,7 @@ import { initFrameRateDetection } from './hooks/useFrameRate'
 import { initPerformanceManager } from './utils/performanceManager'
 import initAppShellBehavior from './utils/appShell'
 import { useStore } from './store/useStore'
+import { API_BASE_URL } from './config'
 
 // Initialize 60/90/120fps display rate detection and runtime performance optimizations
 initFrameRateDetection();
@@ -28,10 +29,47 @@ window.addEventListener('beforeinstallprompt', (e) => {
   console.log('PWA Install Prompt Captured in main.jsx');
 });
 
+// App-install tracking: records the logged-in user as "app installed" so the
+// admin panel can email users who installed the app and later uninstalled
+// (push can no longer reach them, but email still can).
+const APP_INSTALLED_FLAG = 'jdlx_app_installed';
+
+async function reportAppInstalled() {
+  const { token } = useStore.getState();
+  if (!token) return; // flushed automatically once the user logs in
+  try {
+    await fetch(`${API_BASE_URL}/user/app-installed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    localStorage.removeItem(APP_INSTALLED_FLAG);
+  } catch (err) {
+    // Keep the flag so a later visit retries the report.
+    console.log('App install report failed (will retry later):', err);
+  }
+}
+
 window.addEventListener('appinstalled', () => {
   useStore.getState().clearPwaInstallPrompt();
-  console.log('App Installed');
+  localStorage.setItem(APP_INSTALLED_FLAG, '1');
+  reportAppInstalled();
 });
+
+// Flush a pending install report when the user logs in (they may have installed
+// the app while logged out, or the earlier report failed).
+useStore.subscribe((state, prev) => {
+  if (state.token && !prev.token && localStorage.getItem(APP_INSTALLED_FLAG)) {
+    reportAppInstalled();
+  }
+});
+// Also catch the case where the token already exists at page load (page refresh
+// right after installing while logged in).
+if (typeof window !== 'undefined' && useStore.getState().token && localStorage.getItem(APP_INSTALLED_FLAG)) {
+  reportAppInstalled();
+}
 
 // Register Service Worker
 if ('serviceWorker' in navigator) {

@@ -5153,3 +5153,163 @@ def warehouse_offer_products():
         return error_response(str(e), 500)
     finally:
         conn.close()
+
+
+# =============================================================================
+# Vendor Earnings & Payouts (settlement engine — backend/settlement.py)
+# Amazon-style model: customer pays the platform; after the return window the
+# warehouse wallet is credited (product value - commission). Delivery fee and
+# platform fees are platform revenue and never part of settlements.
+# =============================================================================
+
+@warehouse_bp.route("/api/warehouse/earnings", methods=["GET"])
+@require_warehouse_session_auth
+def warehouse_earnings():
+    """Earnings dashboard for the current warehouse: wallet balance, lifetime
+    earnings, pending settlements, payout history and recent settlements."""
+    try:
+        from settlement import get_commission_rate
+        warehouse_id = _get_current_warehouse_id()
+        if not warehouse_id:
+            return error_response("Warehouse not identified", 401)
+        conn = get_db()
+        cursor = conn.cursor()
+        commission_rate = get_commission_rate(conn=conn)
+        cursor.execute(
+            "INSERT OR IGNORE INTO vendor_wallets (warehouse_id, balance, lifetime_earnings) VALUES (?, 0, 0)",
+            (warehouse_id,),
+        )
+        conn.commit()
+        wallet = cursor.execute(
+            "SELECT * FROM vendor_wallets WHERE warehouse_id = ?", (warehouse_id,)
+        ).fetchone()
+        pending = cursor.execute(
+            "SELECT COALESCE(SUM(net_amount), 0) as amount, COUNT(*) as count "
+            "FROM vendor_settlements WHERE warehouse_id = ? AND status = 'pending'",
+            (warehouse_id,),
+        ).fetchone()
+        settled = cursor.execute(
+            "SELECT COALESCE(SUM(net_amount), 0) as amount, COUNT(*) as count "
+            "FROM vendor_settlements WHERE warehouse_id = ? AND status = 'settled'",
+            (warehouse_id,),
+        ).fetchone()
+        payouts = cursor.execute(
+            "SELECT * FROM vendor_payouts WHERE warehouse_id = ? ORDER BY created_at DESC LIMIT 10",
+            (warehouse_id,),
+        ).fetchall()
+        recent = cursor.execute(
+            """SELECT vs.*, o.order_number, o.order_status, o.created_at as order_created_at
+               FROM vendor_settlements vs
+               LEFT JOIN orders o ON o.id = vs.order_id
+               WHERE vs.warehouse_id = ?
+               ORDER BY vs.created_at DESC LIMIT 15""",
+            (warehouse_id,),
+        ).fetchall()
+        conn.close()
+        return success_response({
+            "commission_rate": commission_rate,
+            "wallet": dict(wallet) if wallet else {"balance": 0, "lifetime_earnings": 0},
+            "pending": {
+                "amount": round(float(pending["amount"] or 0), 2),
+                "count": int(pending["count"] or 0),
+            },
+            "settled": {
+                "amount": round(float(settled["amount"] or 0), 2),
+                "count": int(settled["count"] or 0),
+            },
+            "payouts": [dict(r) for r in payouts],
+            "recent_settlements": [dict(r) for r in recent],
+        }, "Earnings retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@warehouse_bp.route("/api/warehouse/earnings/settlements", methods=["GET"])
+@require_warehouse_session_auth
+def warehouse_earnings_settlements():
+    """Paginated settlement records for the current warehouse."""
+    try:
+        warehouse_id = _get_current_warehouse_id()
+        if not warehouse_id:
+            return error_response("Warehouse not identified", 401)
+        status = request.args.get("status")
+        page = max(request.args.get("page", type=int) or 1, 1)
+        per_page = min(request.args.get("per_page", type=int) or 20, 100)
+        offset = (page - 1) * per_page
+        conn = get_db()
+        cursor = conn.cursor()
+
+        count_query = (
+            "SELECT COUNT(*) as n FROM vendor_settlements vs WHERE vs.warehouse_id = ?"
+        )
+        params = [warehouse_id]
+        if status:
+            count_query += " AND vs.status = ?"
+            params.append(status)
+        total = cursor.execute(count_query, params).fetchone()["n"]
+
+        query = (
+            """SELECT vs.*, o.order_number, o.order_status, o.created_at as order_created_at
+               FROM vendor_settlements vs
+               LEFT JOIN orders o ON o.id = vs.order_id
+               WHERE vs.warehouse_id = ?"""
+        )
+        query_params = [warehouse_id]
+        if status:
+            query += " AND vs.status = ?"
+            query_params.append(status)
+        query += " ORDER BY vs.created_at DESC LIMIT ? OFFSET ?"
+        query_params += [per_page, offset]
+        rows = cursor.execute(query, query_params).fetchall()
+        conn.close()
+        return success_response({
+            "settlements": [dict(r) for r in rows],
+            "total": int(total or 0),
+            "page": page,
+            "per_page": per_page,
+        }, "Settlements retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@warehouse_bp.route("/api/warehouse/earnings/payouts", methods=["GET"])
+@require_warehouse_session_auth
+def warehouse_earnings_payouts():
+    """Payout (withdrawal) history for the current warehouse."""
+    try:
+        warehouse_id = _get_current_warehouse_id()
+        if not warehouse_id:
+            return error_response("Warehouse not identified", 401)
+        conn = get_db()
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT * FROM vendor_payouts WHERE warehouse_id = ? ORDER BY created_at DESC LIMIT 100",
+            (warehouse_id,),
+        ).fetchall()
+        conn.close()
+        return success_response([dict(r) for r in rows], "Payouts retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@warehouse_bp.route("/api/warehouse/earnings/withdraw", methods=["POST"])
+@require_warehouse_owner
+def warehouse_earnings_withdraw():
+    """Owner-only: requests a payout from the wallet balance (amount is held
+    until the admin approves/rejects the request)."""
+    try:
+        from settlement import request_vendor_payout
+        data = request.get_json(silent=True) or {}
+        warehouse_id = _get_current_warehouse_id()
+        if not warehouse_id:
+            return error_response("Warehouse not identified", 401)
+        try:
+            amount = float(data.get("amount") or 0)
+        except (TypeError, ValueError):
+            return error_response("Invalid amount", 400)
+        ok, message = request_vendor_payout(warehouse_id, amount)
+        if not ok:
+            return error_response(message, 400)
+        return success_response(None, message)
+    except Exception as e:
+        return error_response(str(e), 500)

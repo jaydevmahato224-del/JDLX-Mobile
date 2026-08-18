@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus } from 'lucide-react'
+import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL } from '../config'
@@ -136,6 +136,7 @@ export default function WarehouseLayout() {
         { path: '/warehouse/offers', icon: BadgePercent, label: 'Offers & Promos' },
         { path: '/warehouse/procurement', icon: Truck, label: 'Material Purchase' },
         { path: '/warehouse/inventory', icon: Package, label: 'Inventory' },
+        { path: '/warehouse/earnings', icon: Wallet, label: 'Earnings' },
         { path: '/warehouse/analytics', icon: Activity, label: 'Analytics' },
         { 
             path: '/warehouse/manage-riders',

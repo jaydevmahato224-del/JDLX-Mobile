@@ -93,6 +93,7 @@ const AdminRecovery = lazy(() => import('./pages/admin/AdminRecovery'))
 const AdminIntelligence = lazy(() => import('./pages/admin/AdminIntelligence'))
 const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'))
 const AdminOffers = lazy(() => import('./pages/admin/AdminOffers'))
+const AdminVendorPayouts = lazy(() => import('./pages/admin/AdminVendorPayouts'))
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
 const AdminWarehouseApplications = lazy(() => import('./pages/admin/AdminWarehouseApplications'))
 const AdminDeliveryApplications = lazy(() => import('./pages/admin/AdminDeliveryApplications'))
@@ -226,6 +227,11 @@ function App() {
             <Route path="offers" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
                 <AdminOffers />
+              </AdminRoute>
+            } />
+            <Route path="vendor-payouts" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+                <AdminVendorPayouts />
               </AdminRoute>
             } />
             <Route path="orders" element={

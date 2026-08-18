@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Bell, Mail, Edit, Save, X, AlertCircle, Info, CheckCircle2 } from 'lucide-react'
+import { Bell, Mail, Edit, Save, X, AlertCircle, Info, CheckCircle2, Send, Smartphone, Users } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 
@@ -10,10 +10,65 @@ export default function AdminNotifications() {
     const [editingTemplate, setEditingTemplate] = useState(null);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    // Broadcast composer state (in-app + push, and email)
+    const [broadcast, setBroadcast] = useState({ title: '', message: '', type: 'SYSTEM', send_push: true });
+    const [emailBroadcast, setEmailBroadcast] = useState({ subject: '', message: '', app_installed_only: false });
+    const [sendingInApp, setSendingInApp] = useState(false);
+    const [sendingEmail, setSendingEmail] = useState(false);
 
     useEffect(() => {
         fetchTemplates();
     }, []);
+
+    const sendInAppBroadcast = async (e) => {
+        e.preventDefault();
+        if (!broadcast.title || !broadcast.message) {
+            setMessage({ type: 'error', text: 'Title and message are required' });
+            return;
+        }
+        setSendingInApp(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/admin/notifications/in-app-broadcast`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(broadcast),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.message || 'Broadcast failed');
+            setMessage({ type: 'success', text: data.message || 'Broadcast sent!' });
+            setBroadcast({ title: '', message: '', type: 'SYSTEM', send_push: true });
+            setTimeout(() => setMessage(null), 4000);
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message });
+        } finally {
+            setSendingInApp(false);
+        }
+    };
+
+    const sendEmailBroadcast = async (e) => {
+        e.preventDefault();
+        if (!emailBroadcast.subject || !emailBroadcast.message) {
+            setMessage({ type: 'error', text: 'Subject and message are required' });
+            return;
+        }
+        setSendingEmail(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/admin/notifications/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(emailBroadcast),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.message || 'Email broadcast failed');
+            setMessage({ type: 'success', text: data.message || 'Email broadcast started!' });
+            setEmailBroadcast({ subject: '', message: '', app_installed_only: false });
+            setTimeout(() => setMessage(null), 4000);
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message });
+        } finally {
+            setSendingEmail(false);
+        }
+    };
 
     const fetchTemplates = async () => {
         try {
@@ -53,7 +108,7 @@ export default function AdminNotifications() {
                 const data = await res.json();
                 setMessage({ type: 'error', text: data.error || 'Update failed' });
             }
-        } catch (error) {
+        } catch {
             setMessage({ type: 'error', text: 'Connection error' });
         } finally {
             setSaving(false);
@@ -95,6 +150,144 @@ export default function AdminNotifications() {
                     <span className="font-bold">{message.text}</span>
                 </div>
             )}
+
+            {/* Send broadcast to users */}
+            <section className="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-200 shadow-sm">
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-3 mb-2">
+                    <Send className="w-6 h-6 text-primary" />
+                    Send Notification to Users
+                </h2>
+                <p className="text-sm text-slate-500 font-medium mb-6">
+                    Broadcast an in-app notification (optionally to phones via web push) to all users, or send an email
+                    to everyone — including users who installed the app and later uninstalled, who can no longer be
+                    reached by push.
+                </p>
+                <div className="grid gap-6 lg:grid-cols-2">
+                    {/* In-app + push broadcast */}
+                    <form onSubmit={sendInAppBroadcast} className="space-y-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-100">
+                        <h3 className="font-black text-slate-800 flex items-center gap-2">
+                            <Smartphone className="w-4 h-4 text-purple-600" /> In-App + Push Broadcast
+                        </h3>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Title</label>
+                            <input
+                                type="text"
+                                value={broadcast.title}
+                                onChange={(e) => setBroadcast({ ...broadcast, title: e.target.value })}
+                                placeholder="e.g. Flash Sale is Live!"
+                                className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:border-primary outline-none font-bold text-slate-700 transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Message</label>
+                            <textarea
+                                value={broadcast.message}
+                                onChange={(e) => setBroadcast({ ...broadcast, message: e.target.value })}
+                                rows="3"
+                                placeholder="Notification text…"
+                                className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:border-primary outline-none font-bold text-slate-700 transition-all resize-none"
+                            />
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="space-y-2 flex-1">
+                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Type</label>
+                                <select
+                                    value={broadcast.type}
+                                    onChange={(e) => setBroadcast({ ...broadcast, type: e.target.value })}
+                                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white outline-none font-bold text-slate-700 transition-all"
+                                >
+                                    <option value="SYSTEM">System</option>
+                                    <option value="PROMO">Promo</option>
+                                    <option value="ORDER">Order</option>
+                                    <option value="ALERT">Alert</option>
+                                </select>
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer mt-5">
+                                <input
+                                    type="checkbox"
+                                    checked={broadcast.send_push}
+                                    onChange={(e) => setBroadcast({ ...broadcast, send_push: e.target.checked })}
+                                    className="w-4 h-4 accent-primary"
+                                />
+                                <span className="text-xs font-bold text-slate-600">Also send to phones (push)</span>
+                            </label>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={sendingInApp}
+                            className="w-full py-3.5 rounded-2xl bg-purple-600 text-white font-black hover:bg-purple-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {sendingInApp ? 'Sending…' : <><Send className="w-4 h-4" /> Send to All Users</>}
+                        </button>
+                    </form>
+
+                    {/* Email broadcast */}
+                    <form onSubmit={sendEmailBroadcast} className="space-y-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-100">
+                        <h3 className="font-black text-slate-800 flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-blue-600" /> Email Broadcast
+                        </h3>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Email Subject</label>
+                            <input
+                                type="text"
+                                value={emailBroadcast.subject}
+                                onChange={(e) => setEmailBroadcast({ ...emailBroadcast, subject: e.target.value })}
+                                placeholder="e.g. Big News from JDLX!"
+                                className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:border-primary outline-none font-bold text-slate-700 transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Message (HTML allowed)</label>
+                            <textarea
+                                value={emailBroadcast.message}
+                                onChange={(e) => setEmailBroadcast({ ...emailBroadcast, message: e.target.value })}
+                                rows="3"
+                                placeholder="Your announcement…"
+                                className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:border-primary outline-none font-bold text-slate-700 transition-all resize-none"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Recipients</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setEmailBroadcast({ ...emailBroadcast, app_installed_only: false })}
+                                    className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-black transition-all border ${
+                                        !emailBroadcast.app_installed_only
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
+                                    }`}
+                                >
+                                    All Users
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEmailBroadcast({ ...emailBroadcast, app_installed_only: true })}
+                                    className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-black transition-all border ${
+                                        emailBroadcast.app_installed_only
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
+                                    }`}
+                                >
+                                    App-Installed Users
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-slate-400 leading-relaxed">
+                                <Users className="inline w-3 h-3 mr-1" />
+                                “App-Installed Users” emails only those who installed the app (and may have uninstalled) —
+                                push can’t reach them, email can. This list grows as users install the app.
+                            </p>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={sendingEmail}
+                            className="w-full py-3.5 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {sendingEmail ? 'Sending…' : <><Send className="w-4 h-4" /> Send Email</>}
+                        </button>
+                    </form>
+                </div>
+            </section>
 
             {loading ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

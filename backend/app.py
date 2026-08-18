@@ -449,6 +449,19 @@ def run_due_referral_rewards():
         logger.error(f"Referral reward sweep failed: {str(e)}")
 
 
+def run_vendor_settlement_sweep_job():
+    """Periodic sweep: arms vendor settlements for DELIVERED orders and credits
+    warehouse wallets once the return/exchange/cancellation window has passed
+    and the order is still valid (no refund hold). See backend/settlement.py."""
+    try:
+        from settlement import run_vendor_settlement_sweep
+        armed, settled, voided = run_vendor_settlement_sweep()
+        if armed or settled or voided:
+            logger.info(f"Vendor settlement sweep: armed={armed} settled={settled} voided={voided}")
+    except Exception as e:
+        logger.error(f"Vendor settlement sweep failed: {str(e)}")
+
+
 should_start_scheduler = (
     (os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug)
     and _try_acquire_scheduler_lock()
@@ -457,6 +470,7 @@ if should_start_scheduler and not scheduler.running:
     scheduler.add_job(run_daily_database_backup, 'cron', hour=2, minute=0, id='daily_db_backup', replace_existing=True)
     scheduler.add_job(run_weekly_full_backup, 'cron', day_of_week='sun', hour=3, minute=0, id='weekly_full_backup', replace_existing=True)
     scheduler.add_job(run_due_referral_rewards, 'interval', minutes=30, id='referral_reward_sweep', replace_existing=True)
+    scheduler.add_job(run_vendor_settlement_sweep_job, 'interval', minutes=30, id='vendor_settlement_sweep', replace_existing=True)
     scheduler.start()
 
 
@@ -1667,6 +1681,209 @@ def update_system_settings():
             request.user.get('user_id'),
         )
         return success_response(None, "Settings updated successfully")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+# --- Vendor (warehouse) Settlements & Payouts ---
+# Amazon-style: customer pays the platform; warehouses are settled after the
+# return window minus commission (backend/settlement.py). These endpoints give
+# admins the platform-side view: commission earned, per-warehouse wallets,
+# settlement records and payout-request approvals.
+
+@app.route('/api/admin/vendor/overview', methods=['GET'])
+@token_required
+@require_admin()
+def admin_vendor_overview():
+    """Platform-side settlement overview: commission rate, totals, per-warehouse
+    wallet/earnings and payout request summaries."""
+    try:
+        from settlement import get_commission_rate, get_settlement_window_days
+        conn = get_db()
+        cursor = conn.cursor()
+        commission_rate = get_commission_rate(conn=conn)
+        window_days = get_settlement_window_days(conn=conn)
+
+        totals = cursor.execute('''
+            SELECT
+                COALESCE(SUM(CASE WHEN status = 'settled' THEN net_amount END), 0) as settled_amount,
+                COALESCE(SUM(CASE WHEN status = 'settled' THEN commission_amount END), 0) as commission_earned,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN net_amount END), 0) as pending_amount,
+                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
+                COUNT(CASE WHEN status = 'settled' THEN 1 END) as settled_count,
+                COUNT(CASE WHEN status = 'void' THEN 1 END) as voided_count
+            FROM vendor_settlements
+        ''').fetchone()
+
+        warehouses = cursor.execute('''
+            SELECT
+                w.id, w.warehouse_name, w.email, w.owner_name,
+                COALESCE(vw.balance, 0) as wallet_balance,
+                COALESCE(vw.lifetime_earnings, 0) as lifetime_earnings,
+                (SELECT COUNT(*) FROM vendor_settlements vs WHERE vs.warehouse_id = w.id AND vs.status = 'pending') as pending_settlements,
+                (SELECT COALESCE(SUM(vs.net_amount), 0) FROM vendor_settlements vs WHERE vs.warehouse_id = w.id AND vs.status = 'pending') as pending_settlements_amount,
+                (SELECT COALESCE(SUM(vs.net_amount), 0) FROM vendor_settlements vs WHERE vs.warehouse_id = w.id AND vs.status = 'settled') as settled_amount
+            FROM warehouses w
+            LEFT JOIN vendor_wallets vw ON vw.warehouse_id = w.id
+            WHERE w.account_status = 'active'
+            ORDER BY w.warehouse_name ASC
+        ''').fetchall()
+
+        payout_rows = cursor.execute('''
+            SELECT vp.*, w.warehouse_name, w.email
+            FROM vendor_payouts vp
+            JOIN warehouses w ON w.id = vp.warehouse_id
+            ORDER BY vp.created_at DESC
+            LIMIT 20
+        ''').fetchall()
+
+        conn.close()
+        return success_response({
+            'commission_rate': commission_rate,
+            'settlement_window_days': window_days,
+            'totals': {
+                'settled_amount': round(float(totals['settled_amount']), 2),
+                'commission_earned': round(float(totals['commission_earned']), 2),
+                'pending_amount': round(float(totals['pending_amount']), 2),
+                'pending_count': int(totals['pending_count'] or 0),
+                'settled_count': int(totals['settled_count'] or 0),
+                'voided_count': int(totals['voided_count'] or 0),
+            },
+            'warehouses': [dict(r) for r in warehouses],
+            'recent_payouts': [dict(r) for r in payout_rows],
+        }, "Vendor settlement overview")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/vendor/settlements', methods=['GET'])
+@token_required
+@require_admin()
+def admin_vendor_settlements():
+    """Settlement records with optional warehouse_id / status filters."""
+    try:
+        warehouse_id = request.args.get('warehouse_id', type=int)
+        status = request.args.get('status')
+        limit = min(request.args.get('limit', type=int) or 100, 500)
+        conn = get_db()
+        cursor = conn.cursor()
+        query = '''
+            SELECT vs.*, w.warehouse_name, o.order_number, o.total_amount as order_total,
+                   o.order_status, o.created_at as order_created_at
+            FROM vendor_settlements vs
+            JOIN warehouses w ON w.id = vs.warehouse_id
+            LEFT JOIN orders o ON o.id = vs.order_id
+            WHERE 1=1
+        '''
+        params = []
+        if warehouse_id:
+            query += " AND vs.warehouse_id = ?"
+            params.append(warehouse_id)
+        if status:
+            query += " AND vs.status = ?"
+            params.append(status)
+        query += " ORDER BY vs.created_at DESC LIMIT ?"
+        params.append(limit)
+        rows = cursor.execute(query, params).fetchall()
+        conn.close()
+        return success_response([dict(r) for r in rows], "Settlements retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/vendor/payouts', methods=['GET'])
+@token_required
+@require_admin()
+def admin_vendor_payouts():
+    """Payout requests with optional status filter."""
+    try:
+        status = request.args.get('status')
+        conn = get_db()
+        cursor = conn.cursor()
+        query = '''
+            SELECT vp.*, w.warehouse_name, w.email, w.owner_name, w.phone
+            FROM vendor_payouts vp
+            JOIN warehouses w ON w.id = vp.warehouse_id
+            WHERE 1=1
+        '''
+        params = []
+        if status:
+            query += " AND vp.status = ?"
+            params.append(status)
+        query += " ORDER BY vp.created_at DESC LIMIT 200"
+        rows = cursor.execute(query, params).fetchall()
+        conn.close()
+        return success_response([dict(r) for r in rows], "Payouts retrieved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/vendor/payouts/<int:payout_id>/approve', methods=['POST'])
+@token_required
+@require_admin()
+def admin_vendor_payout_approve(payout_id):
+    """Marks a payout request as paid (admin has transferred the money)."""
+    try:
+        from settlement import process_vendor_payout
+        data = request.get_json(silent=True) or {}
+        ok, message = process_vendor_payout(payout_id, 'paid', data.get('admin_note'))
+        if not ok:
+            return error_response(message, 400)
+        try:
+            log_admin_action(request.user.get('user_id'), "vendor_payout_approved", "vendor", payout_id)
+        except Exception:
+            pass
+        return success_response(None, message)
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/vendor/payouts/<int:payout_id>/reject', methods=['POST'])
+@token_required
+@require_admin()
+def admin_vendor_payout_reject(payout_id):
+    """Rejects a payout request and refunds the held amount to the wallet."""
+    try:
+        from settlement import process_vendor_payout
+        data = request.get_json(silent=True) or {}
+        ok, message = process_vendor_payout(payout_id, 'rejected', data.get('admin_note'))
+        if not ok:
+            return error_response(message, 400)
+        try:
+            log_admin_action(request.user.get('user_id'), "vendor_payout_rejected", "vendor", payout_id)
+        except Exception:
+            pass
+        return success_response(None, message)
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
+@app.route('/api/admin/vendor/commission', methods=['POST'])
+@token_required
+@require_super_admin()
+def admin_vendor_set_commission():
+    """Updates the uniform platform commission rate for warehouse settlements."""
+    data = request.get_json(silent=True) or {}
+    try:
+        rate = float(data.get('commission_rate') or 0)
+    except (TypeError, ValueError):
+        return error_response("Invalid commission rate", 400)
+    if rate < 0 or rate > 100:
+        return error_response("Commission rate must be between 0 and 100", 400)
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO system_settings (key, value) VALUES ('vendor_commission_rate', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (str(rate),),
+        )
+        conn.commit()
+        conn.close()
+        try:
+            log_admin_action(request.user.get('user_id'), "vendor_commission_updated", "system", None)
+        except Exception:
+            pass
+        return success_response(None, f"Commission rate set to {rate}%")
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -4822,14 +5039,40 @@ def send_manual_user_email(user_id):
     except Exception as e:
         return error_response(str(e), 500)
 
+@app.route('/api/user/app-installed', methods=['POST'])
+@token_required
+@limiter.limit("5 per hour")
+def user_app_installed():
+    """Records that the logged-in user installed the app (PWA added to home
+    screen). When a user later uninstalls, push can no longer reach them —
+    email still can, so admins can target app-installed users specifically.
+    Idempotent: the original install timestamp is kept on repeated reports."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET app_installed = 1, app_installed_at = COALESCE(app_installed_at, CURRENT_TIMESTAMP) WHERE id = ?",
+            (request.user['user_id'],),
+        )
+        conn.commit()
+        conn.close()
+        return success_response(None, "App install recorded")
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
 @app.route('/api/admin/notifications/bulk', methods=['POST'])
 @token_required
 @require_admin()
 @require_permission("manage_admins")
 def send_bulk_notices():
-    """Sends a bulk email notification to all registered users."""
-    subject = request.json.get('subject')
-    message = request.json.get('message')
+    """Sends a bulk email notification to all registered users (or only users
+    who installed the app, when app_installed_only is set — those users can no
+    longer be reached by push after uninstalling, so email is the fallback)."""
+    data = request.get_json(silent=True) or {}
+    subject = data.get('subject')
+    message = data.get('message')
+    app_installed_only = data.get('app_installed_only', False) in (True, 'true', '1', 1)
     
     if not subject or not message:
         return error_response("Subject and message are required", 400)
@@ -4837,12 +5080,17 @@ def send_bulk_notices():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT email FROM users WHERE email IS NOT NULL")
+        if app_installed_only:
+            cursor.execute("SELECT email FROM users WHERE email IS NOT NULL AND app_installed = 1")
+            recipient_type = 'bulk_app_installed'
+        else:
+            cursor.execute("SELECT email FROM users WHERE email IS NOT NULL")
+            recipient_type = 'bulk'
         user_emails = [row['email'] for row in cursor.fetchall()]
         conn.close()
         
         if not user_emails:
-            return error_response("No users found", 404)
+            return error_response("No matching users found", 404)
             
         try:
             conn = get_db()
@@ -4850,7 +5098,7 @@ def send_bulk_notices():
             cursor.execute('''
                 INSERT INTO mail_history (admin_id, recipient_type, recipient_count, subject, message)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (request.user.get('user_id'), 'bulk', len(user_emails), subject, message))
+            ''', (request.user.get('user_id'), recipient_type, len(user_emails), subject, message))
             conn.commit()
             conn.close()
         except Exception as db_err:
@@ -4859,7 +5107,8 @@ def send_bulk_notices():
         from threading import Thread
         Thread(target=send_bulk_notification_email, args=(user_emails, subject, message)).start()
         
-        return success_response(None, f"Bulk notification process started for {len(user_emails)} users")
+        target_label = "app-installed users" if app_installed_only else "users"
+        return success_response(None, f"Bulk notification process started for {len(user_emails)} {target_label}")
     except Exception as e:
         return error_response(str(e), 500)
 

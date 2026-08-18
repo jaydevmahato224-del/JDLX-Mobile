@@ -215,7 +215,7 @@ def init_db():
 
     # --- Core Tables ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, google_id TEXT UNIQUE NOT NULL, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, profile_image TEXT, role TEXT NOT NULL DEFAULT 'user', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    ensure_columns('users', [('phone', 'TEXT'), ('gender', 'TEXT'), ('date_of_birth', 'TEXT'), ('about', 'TEXT'), ('terms_accepted_version', 'INTEGER DEFAULT 0'), ('terms_accepted_at', 'TIMESTAMP'), ('email_verified', 'INTEGER DEFAULT 0'), ('phone_verified', 'INTEGER DEFAULT 0'), ('account_status', "TEXT DEFAULT 'active'"), ('cod_restricted', 'INTEGER DEFAULT 0'), ('min_token_iat', 'INTEGER DEFAULT 0'), ('last_login', 'TIMESTAMP')])
+    ensure_columns('users', [('phone', 'TEXT'), ('gender', 'TEXT'), ('date_of_birth', 'TEXT'), ('about', 'TEXT'), ('terms_accepted_version', 'INTEGER DEFAULT 0'), ('terms_accepted_at', 'TIMESTAMP'), ('email_verified', 'INTEGER DEFAULT 0'), ('phone_verified', 'INTEGER DEFAULT 0'), ('account_status', "TEXT DEFAULT 'active'"), ('cod_restricted', 'INTEGER DEFAULT 0'), ('min_token_iat', 'INTEGER DEFAULT 0'), ('last_login', 'TIMESTAMP'), ('app_installed', 'INTEGER DEFAULT 0'), ('app_installed_at', 'TIMESTAMP')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, icon TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     ensure_columns('categories', [('important_note', 'TEXT'), ('return_policy', "TEXT DEFAULT '7 Days Return Policy'"), ('device_customization_enabled', 'INTEGER DEFAULT 0')])
@@ -601,6 +601,60 @@ def init_db():
         FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
     )''')
 
+    # --- Vendor (warehouse) settlements & payouts ---
+    # Amazon-style model: customer pays the platform in full; after the return/
+    # exchange/cancellation window closes, each warehouse gets credited its share
+    # of the product value minus platform commission (system_settings
+    # 'vendor_commission_rate', default 3%). Delivery fee, platform fee and
+    # fitting charges are platform revenue and are never part of a settlement.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS vendor_wallets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL UNIQUE,
+        balance REAL DEFAULT 0,
+        lifetime_earnings REAL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS vendor_settlements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        warehouse_id INTEGER NOT NULL,
+        item_total REAL DEFAULT 0,
+        discount_share REAL DEFAULT 0,
+        commission_rate REAL DEFAULT 3,
+        commission_amount REAL DEFAULT 0,
+        tax_deducted REAL DEFAULT 0,
+        net_amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        settlement_due_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        settled_at TIMESTAMP,
+        UNIQUE(order_id, warehouse_id),
+        FOREIGN KEY(order_id) REFERENCES orders(id),
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_settlements_status ON vendor_settlements(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_settlements_wh ON vendor_settlements(warehouse_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_settlements_order ON vendor_settlements(order_id)")
+    # Settlement sweep hot-path: pending rows whose return window has passed.
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_settlements_due ON vendor_settlements(status, settlement_due_at)")
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS vendor_payouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        status TEXT DEFAULT 'requested',
+        admin_note TEXT,
+        processed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_payouts_wh ON vendor_payouts(warehouse_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_payouts_status ON vendor_payouts(status)")
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_addresses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -757,6 +811,15 @@ def init_db():
         status TEXT,
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
+    # mail_history is written with admin_id/recipient_type/recipient_count/message
+    # by the admin mail endpoints; older DBs predate those columns, so ensure them
+    # here (previously those inserts silently failed and only logged an error).
+    ensure_columns('mail_history', [
+        ('admin_id', 'INTEGER'),
+        ('recipient_type', 'TEXT'),
+        ('recipient_count', 'INTEGER'),
+        ('message', 'TEXT'),
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS restock_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1146,6 +1209,12 @@ def init_db():
     # Session duration (hours) for regular store users before auto-logout.
     # Default 8760h = 365 days -> users stay logged in. Admin can change this.
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('user_session_duration_hours', '8760')")
+    # Vendor (warehouse) settlement engine: uniform platform commission % applied
+    # to every warehouse settlement (delivery fees are never part of settlements).
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('vendor_commission_rate', '3')")
+    # Settlement window (days) — mirrors the return policy. Falls back to
+    # referral_reward_window_days, then 7 (the refund flow's default window).
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('vendor_settlement_window_days', '7')")
 
     conn.commit()
     conn.close()

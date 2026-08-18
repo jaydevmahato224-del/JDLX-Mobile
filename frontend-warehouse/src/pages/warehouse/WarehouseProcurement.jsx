@@ -161,14 +161,18 @@ const CategoryModal = ({
     const [selectedCategory, setSelectedCategory] = useState('');
     const [newCategory, setNewCategory] = useState('');
     const [isAddingNew, setIsAddingNew] = useState(false);
+    const [wasShown, setWasShown] = useState(show);
 
-    useEffect(() => {
+    // Reset the form every time the modal opens (adjust state during render —
+    // the React-sanctioned equivalent of the old setState-in-effect reset).
+    if (show !== wasShown) {
+        setWasShown(show);
         if (show) {
             setSelectedCategory('');
             setNewCategory('');
             setIsAddingNew(false);
         }
-    }, [show]);
+    }
 
     if (!show || !product) return null;
 
@@ -420,7 +424,7 @@ const WarehouseProcurement = () => {
             } else {
                 showNotification(result.message, 'error')
             }
-        } catch (err) {
+        } catch {
             showNotification('Failed to save vendor', 'error')
         } finally {
             setSubmitting(false)
@@ -469,7 +473,7 @@ const WarehouseProcurement = () => {
             } else {
                 showNotification(result.message || 'Failed to scan document', 'error')
             }
-        } catch (err) {
+        } catch {
             showNotification('Scan service unavailable', 'error')
         } finally {
             setIsScanning(false)
@@ -503,7 +507,7 @@ const WarehouseProcurement = () => {
             } else {
                 showNotification('Failed to update category', 'error');
             }
-        } catch (err) {
+        } catch {
             showNotification('Server error', 'error');
         } finally {
             setSubmitting(false);
@@ -899,7 +903,7 @@ const WarehouseProcurement = () => {
                                                                         const src = img.startsWith('http') ? img : `${API_BASE_URL}/uploads/${img}`;
                                                                         return <img src={src} alt="" className="w-full h-full object-cover" />;
                                                                     }
-                                                                } catch (e) {}
+                                                                } catch { /* invalid JSON — fall back to raw image */ }
                                                                 return <img src={`${API_BASE_URL}/uploads/${imgData}`} alt="" className="w-full h-full object-cover" />;
                                                             })()}
                                                         </div>
@@ -942,7 +946,7 @@ const WarehouseProcurement = () => {
                                                                                             const src = img.startsWith('http') ? img : `${API_BASE_URL}/uploads/${img}`;
                                                                                             return <img src={src} alt="" className="w-full h-full object-cover" />;
                                                                                         }
-                                                                                    } catch (e) {}
+                                                                                    } catch { /* invalid JSON — fall back to raw image */ }
                                                                                     return <img src={`${API_BASE_URL}/uploads/${imgData}`} alt="" className="w-full h-full object-cover" />;
                                                                                 })()}
                                                                             </div>

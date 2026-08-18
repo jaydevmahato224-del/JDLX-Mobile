@@ -44,6 +44,7 @@ function AdminIntelligence() {
 
     useEffect(() => {
         fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [storeFilter])
 
     const getRiskColor = (risk) => {

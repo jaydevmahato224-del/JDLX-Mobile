@@ -62,7 +62,7 @@ function AdminComplaints() {
             } else {
                 toast.error(data.message || "Failed to update complaint");
             }
-        } catch (err) {
+        } catch {
             toast.error("Network error");
         } finally {
             setUpdateLoading(false);

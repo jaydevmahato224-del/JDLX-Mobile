@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { MapPin, Navigation, X, Check, Search, Save } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 
@@ -47,7 +47,7 @@ function AddressPicker({ onSelect, onClose }) {
                 })
             });
             if (res.ok) {
-                const data = await res.json();
+                await res.json();
                 onSelect({ address: addressText, latitude: location.lat, longitude: location.lng });
                 onClose();
             }

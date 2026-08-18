@@ -156,7 +156,7 @@ function WarehouseRequest() {
             const requestUser = JSON.parse(decodeURIComponent(oauthUser))
             setWarehouseRequestUser(requestUser, oauthToken)
             navigate('/warehouse/request', { replace: true })
-        } catch (e) {
+        } catch {
             setError('Google verification failed. Please try again.')
         }
     }, [navigate, params, setWarehouseRequestUser])

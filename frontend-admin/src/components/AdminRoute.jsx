@@ -20,7 +20,13 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
   const role = (user?.role || 'user').toLowerCase()
 
   const [verifying, setVerifying] = useState(false)
-  const [verified, setVerified] = useState(false)
+  // If we verified this session within the last interval, we're already good
+  // (module-level cache survives route changes) — computed lazily at mount so
+  // the effect never needs to set this synchronously.
+  const [verified, setVerified] = useState(() => {
+    const now = Date.now()
+    return now - _lastVerifiedAt < VERIFY_INTERVAL_MS
+  })
 
   useEffect(() => {
     if (!token) return
@@ -33,19 +39,19 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
     // Server-side verification (debounced — only every 5 minutes)
     const now = Date.now()
     if (now - _lastVerifiedAt < VERIFY_INTERVAL_MS) {
-      setVerified(true)
       return
     }
 
     let cancelled = false
-    setVerifying(true)
 
     // Use the original fetch to avoid the global interceptor triggering logout loops
-    const originalFetch = window.__originalFetch || window.fetch
-    originalFetch(`${API_BASE_URL}/auth/verify-token`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
+    const verifyWithServer = async () => {
+      setVerifying(true)
+      const originalFetch = window.__originalFetch || window.fetch
+      try {
+        const res = await originalFetch(`${API_BASE_URL}/auth/verify-token`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
         if (cancelled) return
         if (res.status === 401) {
           useStore.getState().setReauthenticating(true)
@@ -55,14 +61,14 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
           _lastVerifiedAt = Date.now()
           setVerified(true)
         }
-      })
-      .catch(() => {
+      } catch {
         // Network error — allow access with client-side validation only
         if (!cancelled) setVerified(true)
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setVerifying(false)
-      })
+      }
+    }
+    verifyWithServer()
 
     return () => { cancelled = true }
   }, [token, adminLogout, validateAdminSession])

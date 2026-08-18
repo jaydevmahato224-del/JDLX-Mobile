@@ -6942,15 +6942,17 @@ def admin_get_inventory():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        # Admin inventory reflects global catalog stock.
-        cursor.execute("""
+        # Admin inventory reflects global catalog stock. For variant products the
+        # effective stock is the sum of their active variants (same as storefront).
+        cursor.execute(
+            """
             SELECT 
                 p.id, 
                 p.name as product_name, 
                 p.price, 
                 p.category,
                 CAST(p.id AS TEXT) as sku,
-                p.stock as stock, 
+                CASE WHEN p.has_variants = 1 THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv3 WHERE pv3.product_id = p.id AND pv3.status = 'active') ELSE p.stock END as stock, 
                 COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as reserved_stock,
                 COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND user_id IS NOT NULL), 0) as user_reserved,
                 COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND session_id IS NOT NULL AND user_id IS NULL), 0) as guest_reserved,
@@ -6984,11 +6986,27 @@ def admin_get_inventory_stats():
         
         cursor.execute("SELECT COUNT(*) as total FROM products")
         total = cursor.fetchone()['total']
-        
-        cursor.execute("SELECT COUNT(*) as low_stock FROM products WHERE stock <= low_stock_threshold AND stock > 0")
+
+        # Effective stock = summed active variant stock for variant products,
+        # otherwise the plain products.stock column. Keeps admin stats consistent
+        # with what the storefront and warehouse panels actually see.
+        cursor.execute("""
+            SELECT COUNT(*) as low_stock FROM products
+            WHERE CASE WHEN has_variants = 1
+                  THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv3 WHERE pv3.product_id = products.id AND pv3.status = 'active')
+                  ELSE stock END <= low_stock_threshold
+              AND CASE WHEN has_variants = 1
+                  THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv3 WHERE pv3.product_id = products.id AND pv3.status = 'active')
+                  ELSE stock END > 0
+        """)
         low_stock = cursor.fetchone()['low_stock']
-        
-        cursor.execute("SELECT COUNT(*) as out_of_stock FROM products WHERE stock <= 0")
+
+        cursor.execute("""
+            SELECT COUNT(*) as out_of_stock FROM products
+            WHERE CASE WHEN has_variants = 1
+                  THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv3 WHERE pv3.product_id = products.id AND pv3.status = 'active')
+                  ELSE stock END <= 0
+        """)
         out_of_stock = cursor.fetchone()['out_of_stock']
         
         conn.close()
@@ -7087,6 +7105,12 @@ def admin_delete_product(product_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
+        # Cascade cleanup: variant rows, option groups and any warehouse
+        # inventory lines belong to this product and would otherwise orphan
+        # (breaking warehouse panels and leaving stale cart references).
+        cursor.execute("DELETE FROM product_variants WHERE product_id=?", (product_id,))
+        cursor.execute("DELETE FROM product_variant_options WHERE product_id=?", (product_id,))
+        cursor.execute("DELETE FROM warehouse_inventory WHERE product_id=?", (product_id,))
         cursor.execute("DELETE FROM products WHERE id=?", (product_id,))
         conn.commit()
         conn.close()

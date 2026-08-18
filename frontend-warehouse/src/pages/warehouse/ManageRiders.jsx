@@ -1,5 +1,6 @@
 import { Truck, FileText, UserCheck, CreditCard, ChevronRight, LayoutGrid } from 'lucide-react'
 import { Link } from 'react-router-dom'
+// eslint-disable-next-line no-unused-vars -- motion is used below as motion.div (JSX member expression)
 import { motion } from 'framer-motion'
 
 const ManageRiders = () => {

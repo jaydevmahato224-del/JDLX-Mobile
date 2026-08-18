@@ -10,7 +10,16 @@ import './BlurImage.css'
 function BlurImage({ src, alt, className = '', containerClassName = '', onLoad, ...props }) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [prevSrc, setPrevSrc] = useState(src)
   const imgRef = useRef(null)
+
+  // Adjust state during render: whenever the image source changes, reset the
+  // loaded/error flags so the blur-up placeholder shows again.
+  if (prevSrc !== src) {
+    setPrevSrc(src)
+    setIsLoaded(false)
+    setHasError(false)
+  }
 
   // Generate placeholder color based on image URL
   const generatePlaceholderColor = () => {
@@ -28,10 +37,6 @@ function BlurImage({ src, alt, className = '', containerClassName = '', onLoad, 
   useEffect(() => {
     const img = imgRef.current
     if (!img) return
-
-    // Reset state when src changes
-    setIsLoaded(false)
-    setHasError(false)
 
     // Handle image load
     const handleLoad = () => {

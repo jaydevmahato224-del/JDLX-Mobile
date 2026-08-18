@@ -46,7 +46,7 @@ function AdminRecovery() {
           if (firstFile) setSelectedFile(firstFile.relative_path)
         }
       }
-    } catch (e) {
+    } catch {
       setError('Failed to load recovery backups')
       setItems([])
     } finally {
@@ -56,6 +56,7 @@ function AdminRecovery() {
 
   useEffect(() => {
     loadBackups()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
   }, [token, isSuperAdmin])
 
   const verifyBackup = async (path) => {
@@ -79,7 +80,7 @@ function AdminRecovery() {
         return
       }
       setVerifyResult(data)
-    } catch (e) {
+    } catch {
       alert('Verification failed')
     }
   }
@@ -106,7 +107,7 @@ function AdminRecovery() {
       }
       alert('Database restore completed')
       loadBackups()
-    } catch (e) {
+    } catch {
       alert('Database restore failed')
     }
   }
@@ -133,7 +134,7 @@ function AdminRecovery() {
       }
       alert('File restore completed')
       loadBackups()
-    } catch (e) {
+    } catch {
       alert('File restore failed')
     }
   }
@@ -163,7 +164,7 @@ function AdminRecovery() {
       }
       alert('Full restore completed')
       loadBackups()
-    } catch (e) {
+    } catch {
       alert('Full restore failed')
     }
   }

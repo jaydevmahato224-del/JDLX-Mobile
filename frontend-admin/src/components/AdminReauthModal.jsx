@@ -48,7 +48,7 @@ const AdminReauthModal = () => {
             } else {
                 toast.error(data.error || 'Failed to send OTP');
             }
-        } catch (err) {
+        } catch {
             toast.error('Network error. Try again.');
         } finally {
             setRequesting(false);
@@ -81,7 +81,7 @@ const AdminReauthModal = () => {
             } else {
                 toast.error(data.error || 'Invalid OTP');
             }
-        } catch (err) {
+        } catch {
             toast.error('Verification failed. Try again.');
         } finally {
             setLoading(false);

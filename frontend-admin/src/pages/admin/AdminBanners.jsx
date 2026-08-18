@@ -41,7 +41,7 @@ export default function AdminBanners() {
           setForm(json.data[0]) // Edit the first one by default
         }
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to load banners')
     } finally {
       setLoading(false)
@@ -78,7 +78,7 @@ export default function AdminBanners() {
       } else {
         toast.error(json.message || 'Upload failed', { id: loadingToast })
       }
-    } catch (err) {
+    } catch {
       toast.error('Network error during upload', { id: loadingToast })
     }
   }
@@ -98,7 +98,7 @@ export default function AdminBanners() {
         fetchBanners()
         if (form.id === id) resetForm()
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete banner')
     }
   }
@@ -122,7 +122,7 @@ export default function AdminBanners() {
       } else {
         toast.error(json.message || 'Update failed')
       }
-    } catch (err) {
+    } catch {
       toast.error('Network error')
     } finally {
       setSaving(false)

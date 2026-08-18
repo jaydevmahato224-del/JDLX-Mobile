@@ -586,7 +586,28 @@ const WarehouseInventory = () => {
                             purchase_count: analytics.purchase_count || 0,
                             wishlist_count: analytics.wishlist_count || 0,
                             conversion_rate: analytics.conversion_rate || 0
-                        } : prev.analytics
+                        } : prev.analytics,
+                        // Load the product's variant set + option groups so the
+                        // warehouse can edit them. Per-variant stock/price come
+                        // from THIS warehouse's inventory lines (not the global
+                        // product_variants totals) to stay multi-warehouse-safe.
+                        has_variants: data.data?.has_variants || (Array.isArray(data.data?.variants) && data.data.variants.length > 0) || prev.has_variants,
+                        variant_options: (Array.isArray(data.data?.variant_options) ? data.data.variant_options : []).map(o => ({
+                            option_name: o.option_name || '',
+                            option_values: Array.isArray(o.option_values) ? o.option_values : []
+                        })),
+                        variants: (Array.isArray(data.data?.variants) ? data.data.variants : []).map(v => {
+                            const line = inventory.find(i => i.variant_id && String(i.variant_id) === String(v.id));
+                            return {
+                                id: v.id,
+                                name: v.name || '',
+                                sku: v.sku || '',
+                                price: line?.selling_price != null ? line.selling_price : (v.price ?? ''),
+                                mrp: line?.mrp != null ? line.mrp : (v.mrp ?? ''),
+                                stock_quantity: line ? (line.stock_quantity || 0) : (v.stock || 0),
+                                options: v.options || {}
+                            };
+                        })
                     }));
                 }
             } catch (err) {

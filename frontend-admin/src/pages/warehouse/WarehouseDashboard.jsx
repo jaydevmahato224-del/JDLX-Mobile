@@ -47,7 +47,6 @@ const NAV_ITEMS = [
 const WarehouseDashboard = () => {
     const navigate = useNavigate()
     const { warehouseUser, warehouseToken, warehouseLogout } = useStore()
-    const [sidebarOpen, setSidebarOpen] = useState(false)
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState(EMPTY_DASHBOARD)
     const [actionError, setActionError] = useState('')

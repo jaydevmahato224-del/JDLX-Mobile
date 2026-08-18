@@ -8,7 +8,7 @@ class ErrorBoundary extends Component {
         super(props);
         this.state = { hasError: false };
     }
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError() {
         return { hasError: true };
     }
     componentDidCatch(error, errorInfo) {
@@ -106,6 +106,7 @@ function DarkStoresContent() {
 
     useEffect(() => {
         fetchStores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, []);
 
     const showMessage = (text, type = 'success') => {

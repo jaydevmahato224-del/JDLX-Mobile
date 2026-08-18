@@ -4,12 +4,18 @@ import { useLoadingStore } from '../store/useLoadingStore';
 const TopLoader = () => {
     const isLoading = useLoadingStore((state) => state.isLoading);
     const [progress, setProgress] = useState(0);
+    const [prevLoading, setPrevLoading] = useState(isLoading);
+
+    // React-sanctioned "adjust state during render": jump the bar to 10% the
+    // moment a load starts and complete it to 100% the moment it finishes.
+    if (prevLoading !== isLoading) {
+        setPrevLoading(isLoading);
+        setProgress(isLoading ? 10 : 100);
+    }
 
     useEffect(() => {
-        let interval;
         if (isLoading) {
-            setProgress(10); // Initial jump
-            interval = setInterval(() => {
+            const interval = setInterval(() => {
                 setProgress((prev) => {
                     // Slowly trickle up to 90%
                     if (prev >= 90) return prev;
@@ -17,14 +23,11 @@ const TopLoader = () => {
                     return Math.min(prev + increment, 90);
                 });
             }, 300);
-        } else {
-            // Complete the progress bar fast
-            setProgress(100);
-            const timeout = setTimeout(() => setProgress(0), 400); // Hide after animation
-            return () => clearTimeout(timeout);
+            return () => clearInterval(interval);
         }
-
-        return () => clearInterval(interval);
+        // Complete the progress bar fast, then hide after animation
+        const timeout = setTimeout(() => setProgress(0), 400);
+        return () => clearTimeout(timeout);
     }, [isLoading]);
 
     if (progress === 0) return null;

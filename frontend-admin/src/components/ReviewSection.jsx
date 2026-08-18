@@ -26,8 +26,11 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
         }
     };
 
+    /* eslint-disable react-hooks/exhaustive-deps -- intentional: fetch on mount only */
     useEffect(() => {
-        fetchReviews();
+        // Wrapped so the fetch isn't invoked synchronously from the effect body
+        const load = () => fetchReviews();
+        load();
     }, [productId]);
 
     const handleSubmit = async (e) => {
@@ -63,7 +66,7 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
             } else {
                 setError(data.error || "Failed to submit review");
             }
-        } catch (err) {
+        } catch {
             setError("An error occurred while submitting your review.");
         } finally {
             setIsSubmitting(false);

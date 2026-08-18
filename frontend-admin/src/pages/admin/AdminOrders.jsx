@@ -10,7 +10,7 @@ function AdminOrders() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [paymentFilter, setPaymentFilter] = useState('all');
+    const [paymentFilter] = useState('all');
     const [dateRange, setDateRange] = useState('all'); // all, today, week, month
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [selectedPartner, setSelectedPartner] = useState('');
@@ -44,7 +44,7 @@ function AdminOrders() {
             } else {
                 toast.error(data.message || "Failed to create shipment");
             }
-        } catch (err) {
+        } catch {
             toast.error("Network error");
         } finally {
             setShipmentCreating(false);
@@ -66,7 +66,7 @@ function AdminOrders() {
             } else {
                 toast.error(data.message || "Courier assignment failed");
             }
-        } catch (err) {
+        } catch {
             toast.error("Network error");
         } finally {
             setCourierAssigning(false);
@@ -162,6 +162,7 @@ function AdminOrders() {
         fetchPartners();
         const interval = setInterval(() => fetchOrders(true), 10000); // Silent background poll
         return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [statusFilter, paymentFilter, searchTerm, dateRange]);
 
     const fetchOrderDetails = async (orderId) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Component } from 'react';
-import { Package, AlertCircle, Save, ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, Power, PowerOff, TrendingUp, AlertTriangle, Star, Undo2 } from 'lucide-react';
+import { Package, AlertCircle, Save, ArrowLeft, Search, ChevronLeft, ChevronRight, Power, PowerOff, TrendingUp, AlertTriangle, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
 
@@ -8,7 +8,7 @@ class ErrorBoundary extends Component {
         super(props);
         this.state = { hasError: false };
     }
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError() {
         return { hasError: true };
     }
     componentDidCatch(error, errorInfo) {
@@ -287,6 +287,7 @@ function InventoryContent() {
                                 </tr>
                             ) : (
                                 currentItems.map(product => {
+                                    const isVariant = product.has_variants === 1 || product.has_variants === true;
                                     const isLowStock = product.stock <= product.low_stock_threshold;
                                     return (
                                         <tr key={product.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${!product.status || product.status === 'disabled' ? 'opacity-50' : ''}`}>
@@ -305,12 +306,6 @@ function InventoryContent() {
                                                 </div>
                                             </td>
                                             <td className="p-4 font-bold text-gray-800 whitespace-nowrap">₹{product.price}</td>
-                                            <td className="p-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-black uppercase w-fit max-w-[150px] overflow-hidden">
-                                                    <Undo2 size={12} className="shrink-0" />
-                                                    <span className="truncate">{(product.return_policy || 'Default').split('\n')[0]}</span>
-                                                </div>
-                                            </td>
                                             <td className="p-4">
                                                 {editingId === product.id ? (
                                                     <div className="flex gap-2">
@@ -326,6 +321,9 @@ function InventoryContent() {
                                                         <span className={`font-black ${isLowStock ? 'text-red-600' : 'text-gray-800'}`}>
                                                             {product.stock}
                                                         </span>
+                                                        {isVariant && (
+                                                            <span className="text-[9px] text-purple-600 font-black uppercase tracking-widest mt-0.5">Sum of variants</span>
+                                                        )}
                                                         {isLowStock && (
                                                             <span className="text-[10px] text-red-500 font-bold flex items-center gap-1 uppercase mt-1">
                                                                 <AlertCircle className="w-3 h-3" /> Low Stock
@@ -363,6 +361,10 @@ function InventoryContent() {
                                                         <button onClick={() => handleSave(product.id)} className="p-2 bg-primary text-white rounded-lg hover:shadow-lg transition-shadow">
                                                             <Save className="w-4 h-4" />
                                                         </button>
+                                                    ) : isVariant ? (
+                                                        <span className="px-3 py-1.5 text-[11px] font-black text-purple-600 bg-purple-50 border border-purple-100 rounded-lg whitespace-nowrap" title="Stock is managed per variant in the Product editor">
+                                                            VARIANT
+                                                        </span>
                                                     ) : (
                                                         <button onClick={() => handleEdit(product)} className="px-3 py-1.5 text-primary font-bold text-sm bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors">
                                                             Edit

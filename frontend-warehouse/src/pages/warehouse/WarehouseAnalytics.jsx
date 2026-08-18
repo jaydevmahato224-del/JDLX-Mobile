@@ -32,7 +32,7 @@ const WarehouseAnalytics = () => {
     const { warehouseToken, warehouseLogout } = useStore()
     const [loading, setLoading] = useState(true)
     const [analytics, setAnalytics] = useState(null)
-    const [error, setError] = useState('')
+    const [, setError] = useState('')
 
     const fetchAnalytics = useCallback(async () => {
         if (!warehouseToken) return

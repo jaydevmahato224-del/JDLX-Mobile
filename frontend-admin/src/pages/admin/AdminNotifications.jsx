@@ -18,6 +18,7 @@ export default function AdminNotifications() {
 
     useEffect(() => {
         fetchTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, []);
 
     const sendInAppBroadcast = async (e) => {

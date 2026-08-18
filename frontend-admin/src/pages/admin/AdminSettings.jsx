@@ -93,6 +93,7 @@ export default function AdminSettings() {
   useEffect(() => {
     fetchSettings()
     fetchPincodeRules()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
   }, [])
 
   const fetchSettings = async () => {
@@ -106,7 +107,7 @@ export default function AdminSettings() {
           ...json.data
         }))
       }
-    } catch (err) {
+    } catch {
       alert('Failed to load settings')
     } finally {
       setLoading(false)
@@ -143,7 +144,7 @@ export default function AdminSettings() {
         setNewPincode({ pincode: '', cod_allowed: 'false' })
         fetchPincodeRules()
       }
-    } catch (err) {
+    } catch {
       alert('Error adding pincode rule')
     }
   }
@@ -155,7 +156,7 @@ export default function AdminSettings() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) fetchPincodeRules()
-    } catch (err) {
+    } catch {
       alert('Error deleting pincode rule')
     }
   }
@@ -177,7 +178,7 @@ export default function AdminSettings() {
       } else {
         alert(json.error || 'Failed to save settings')
       }
-    } catch (err) {
+    } catch {
       alert('Error saving settings')
     } finally {
       setSaving(false)

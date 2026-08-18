@@ -6,14 +6,14 @@ import toast from 'react-hot-toast';
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
     const [analytics, setAnalytics] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [, setLoading] = useState(true);
+    const [, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
 
     // Pagination
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
+    const [, setPage] = useState(1);
+    const [, setHasMore] = useState(true);
 
     // Selected User Modal & Email
     const [selectedUser, setSelectedUser] = useState(null);
@@ -83,6 +83,7 @@ const AdminUsers = () => {
             fetchUsers(1, false);
         }, 500);
         return () => clearTimeout(debounce);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [searchTerm, statusFilter]);
 
     const handleAction = async (userId, action, reason = '') => {
@@ -167,7 +168,7 @@ const AdminUsers = () => {
                 const data = await res.json();
                 toast.error(data.error || 'Failed to logout from all devices');
             }
-        } catch (err) {
+        } catch {
             toast.error('Network error');
         } finally {
             setActionLoading(null);
@@ -505,7 +506,7 @@ const AdminUsers = () => {
                                                                 if (res.ok) {
                                                                     setSelectedUser(prev => ({ ...prev, cod_restricted: !prev.cod_restricted }));
                                                                 }
-                                                            } catch (e) {
+                                                            } catch {
                                                                 alert('Failed to update COD restriction');
                                                             } finally {
                                                                 setUpdatingStatus(false);

@@ -24,12 +24,21 @@ def check_inventory_availability(cursor, warehouse_id, cart_items):
     total_items = len(cart_items)
     
     for item in cart_items:
-        cursor.execute("""
-            SELECT 
-                wi.stock_quantity - wi.reserved_stock as physical_available
-            FROM warehouse_inventory wi
-            WHERE wi.warehouse_id = ? AND wi.product_id = ?
-        """, (warehouse_id, item['id']))
+        variant_id = item.get('variant_id')
+        if variant_id:
+            cursor.execute("""
+                SELECT 
+                    wi.stock_quantity - wi.reserved_stock as physical_available
+                FROM warehouse_inventory wi
+                WHERE wi.warehouse_id = ? AND wi.product_id = ? AND wi.variant_id = ?
+            """, (warehouse_id, item['id'], variant_id))
+        else:
+            cursor.execute("""
+                SELECT 
+                    wi.stock_quantity - wi.reserved_stock as physical_available
+                FROM warehouse_inventory wi
+                WHERE wi.warehouse_id = ? AND wi.product_id = ?
+            """, (warehouse_id, item['id']))
         row = cursor.fetchone()
         available = row['physical_available'] if row else 0
         

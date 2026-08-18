@@ -26,7 +26,7 @@ function AdminShipments() {
             } else {
                 toast.error(data.message || "Failed to load shipments");
             }
-        } catch (err) {
+        } catch {
             toast.error("Network error while loading shipments");
         } finally {
             setLoading(false);
@@ -35,6 +35,7 @@ function AdminShipments() {
 
     useEffect(() => {
         fetchShipments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [statusFilter]);
 
     const filteredShipments = shipments.filter(s => 

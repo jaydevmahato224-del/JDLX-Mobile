@@ -40,7 +40,7 @@ function AdminAuditLogs() {
         setAdmins(data.admins || [])
         setActionTypes(data.action_types || [])
       }
-    } catch (e) {
+    } catch {
       setError('Failed to load audit logs')
       setLogs([])
     } finally {
@@ -50,6 +50,7 @@ function AdminAuditLogs() {
 
   useEffect(() => {
     fetchLogs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
   }, [token])
 
   const applyFilters = (e) => {
@@ -70,7 +71,7 @@ function AdminAuditLogs() {
         return
       }
       fetchLogs()
-    } catch (e) {
+    } catch {
       alert('Failed to clear logs')
     }
   }

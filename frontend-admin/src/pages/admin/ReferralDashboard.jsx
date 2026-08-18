@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../../config';
 const ReferralDashboard = () => {
   const [referrals, setReferrals] = useState([]);
   const [rewards, setRewards] = useState([]);
-  const [stats, setStats] = useState({ total_liability: 0, active_wallets: 0, total_credits: 0, total_debits: 0 });
+  const [, setStats] = useState({ total_liability: 0, active_wallets: 0, total_credits: 0, total_debits: 0 });
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
 

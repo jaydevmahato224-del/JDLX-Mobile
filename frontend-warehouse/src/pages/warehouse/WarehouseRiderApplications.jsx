@@ -16,8 +16,6 @@ import {
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
-import { apiClient } from '../../utils/apiClient'
-import { useAlertStore } from '../../store/useAlertStore'
 
 const WarehouseRiderApplications = () => {
     const navigate = useNavigate()

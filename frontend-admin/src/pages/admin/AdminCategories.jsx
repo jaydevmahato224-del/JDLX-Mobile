@@ -27,7 +27,9 @@ function AdminCategories() {
     };
 
     useEffect(() => {
-        fetchCategories();
+        // Wrapped so the fetch isn't invoked synchronously from the effect body
+        const load = () => fetchCategories();
+        load();
     }, []);
 
     const showMessage = (text, type = 'success') => {

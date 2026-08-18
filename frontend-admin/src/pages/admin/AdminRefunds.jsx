@@ -26,6 +26,7 @@ function AdminRefunds() {
 
     useEffect(() => {
         fetchRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [token]);
 
     const handleAction = async (requestId, status) => {

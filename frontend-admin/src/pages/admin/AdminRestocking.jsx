@@ -9,8 +9,8 @@ function AdminRestocking() {
     const [alerts, setAlerts] = useState([]);
     const [requests, setRequests] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [aiForecasts, setAiForecasts] = useState({});
+    const [, setLoading] = useState(true);
+    const [aiForecasts] = useState({});
 
     // OCR & Upload State
     const [uploading, setUploading] = useState(false);

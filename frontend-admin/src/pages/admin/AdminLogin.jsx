@@ -6,33 +6,33 @@ import adminLogo from '../../assets/admin-logo.svg'
 
 function AdminLogin() {
     const navigate = useNavigate();
-    const setUser = useStore(state => state.setUser);
     const adminUser = useStore(state => state.adminUser);
-    const [errorMessage, setErrorMessage] = useState(null);
-
-    useEffect(() => {
+    // Parse OAuth error query params once at mount — they never change during
+    // the page's lifetime, so a lazy initializer replaces the effect cleanly.
+    const [errorMessage] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         const error = params.get('error');
         const details = params.get('details');
         const reason = params.get('reason');
         if (reason === 'session_expired') {
-            setErrorMessage("Your session has expired. Please sign in again.");
+            return "Your session has expired. Please sign in again.";
         }
         if (error) {
             console.error('OAuth Error:', error, details);
             if (error === 'not_authorized' || error === 'unauthorized') {
-                setErrorMessage("You are not authorized to access the admin panel.");
+                return "You are not authorized to access the admin panel.";
             } else if (error === 'oauth_failed') {
-                setErrorMessage("Google Sign-In failed. Session mismatch or cookie issue. Try incognito mode.");
+                return "Google Sign-In failed. Session mismatch or cookie issue. Try incognito mode.";
             } else if (error === 'csrf_validation_failed') {
-                setErrorMessage("Security validation failed. Please try signing in again.");
+                return "Security validation failed. Please try signing in again.";
             } else if (error === 'account_locked') {
-                setErrorMessage("Account temporarily locked due to too many failed attempts. Try again later.");
+                return "Account temporarily locked due to too many failed attempts. Try again later.";
             } else {
-                setErrorMessage(`Login failed: ${error} ${details ? '(' + details + ')' : ''}`);
+                return `Login failed: ${error} ${details ? '(' + details + ')' : ''}`;
             }
         }
-    }, []);
+        return null;
+    });
 
     // Auto-redirect if already logged in as admin
     useEffect(() => {

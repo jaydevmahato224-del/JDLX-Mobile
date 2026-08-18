@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars -- motion is used below as motion.div (JSX member expression)
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckCircle2, AlertCircle, Info, X, AlertTriangle } from 'lucide-react'
 import { useAlertStore } from '../store/useAlertStore'

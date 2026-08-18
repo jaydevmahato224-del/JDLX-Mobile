@@ -3,7 +3,7 @@
  * Implements intelligent product loading with prefetching and batching
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { API_BASE_URL } from '../config'
 import productCache from '../utils/productCache'
 

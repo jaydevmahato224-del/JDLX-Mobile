@@ -54,7 +54,7 @@ const AdminDatabase = () => {
       } else {
         toast.error(result.message || 'Failed to fetch tables');
       }
-    } catch (error) {
+    } catch {
       toast.error('Network error while fetching tables');
     } finally {
       setLoading(false);
@@ -75,7 +75,7 @@ const AdminDatabase = () => {
       } else {
         toast.error(result.message || 'Failed to fetch table data');
       }
-    } catch (error) {
+    } catch {
       toast.error('Network error while fetching table data');
     } finally {
       setLoading(false);
@@ -111,7 +111,7 @@ const AdminDatabase = () => {
       } else {
         toast.error(result.message || 'Update failed');
       }
-    } catch (error) {
+    } catch {
       toast.error('Network error during update');
     }
   };
@@ -131,7 +131,7 @@ const AdminDatabase = () => {
       } else {
         toast.error(result.message || 'Delete failed');
       }
-    } catch (error) {
+    } catch {
       toast.error('Network error during deletion');
     }
   };
@@ -155,7 +155,7 @@ const AdminDatabase = () => {
       } else {
         toast.error(result.message || 'Insertion failed');
       }
-    } catch (error) {
+    } catch {
       toast.error('Network error during insertion');
     }
   };
@@ -180,7 +180,7 @@ const AdminDatabase = () => {
         setQueryResult({ error: result.message });
         toast.error(result.message || 'Query failed');
       }
-    } catch (error) {
+    } catch {
       toast.error('Network error during query execution');
     } finally {
       setLoading(false);

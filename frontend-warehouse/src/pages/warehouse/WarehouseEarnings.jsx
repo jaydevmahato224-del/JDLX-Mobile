@@ -114,9 +114,10 @@ const WarehouseEarnings = () => {
     useEffect(() => {
         if (!warehouseToken) return
         setLoading(true)
-        Promise.all([fetchSummary(), fetchSettlements(1, ''), fetchPayouts()])
+        Promise.all([fetchSummary(), fetchPayouts()])
             .finally(() => setLoading(false))
-    }, [warehouseToken, fetchSummary, fetchSettlements, fetchPayouts])
+        // Settlements are loaded by the filter effect below (runs once on mount).
+    }, [warehouseToken, fetchSummary, fetchPayouts])
 
     useEffect(() => {
         if (!warehouseToken) return

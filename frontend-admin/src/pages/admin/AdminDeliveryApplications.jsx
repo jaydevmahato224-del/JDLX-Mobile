@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom'
 function AdminDeliveryApplications() {
     const [applications, setApplications] = useState([])
     const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+    const [, setError] = useState(null)
     const [filter, setFilter] = useState('pending_admin')
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedApp, setSelectedApp] = useState(null)
@@ -65,6 +65,7 @@ function AdminDeliveryApplications() {
 
     useEffect(() => {
         fetchApplications()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [filter])
 
     const handleAction = async (appId, status) => {

@@ -6,18 +6,17 @@ const BRIDGE_URL = 'http://localhost:9999/api';
 
 const AdminServerControl = () => {
     const [services, setServices] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
-    const [error, setError] = useState(null);
+    const [, setError] = useState(null);
     const navigate = useNavigate();
     
     // OTP & Session State
     const [showOTP, setShowOTP] = useState(true);
     const [otp, setOtp] = useState('');
     const [otpStep, setOtpStep] = useState('request');
-    const [pendingAction, setPendingAction] = useState(null);
     const [isVerified, setIsVerified] = useState(false);
-    const [sessionExpiry, setSessionExpiry] = useState(0);
+    const [, setSessionExpiry] = useState(0);
     
     // Timers
     const [resendTimer, setResendTimer] = useState(0);
@@ -74,7 +73,7 @@ const AdminServerControl = () => {
             setError(null);
             setIsVerified(true);
             setShowOTP(false);
-        } catch (err) {
+        } catch {
             setError('System Bridge is offline.');
         } finally {
             setLoading(false);
@@ -94,7 +93,7 @@ const AdminServerControl = () => {
                 alert(data.error || 'Failed');
                 if (data.next_resend_seconds) startResendTimer(data.next_resend_seconds);
             }
-        } catch (err) {
+        } catch {
             alert('Bridge error');
         } finally {
             setLoading(false);
@@ -118,7 +117,7 @@ const AdminServerControl = () => {
             } else {
                 alert(data.error || 'Invalid OTP');
             }
-        } catch (err) {
+        } catch {
             alert('Verification error');
         } finally {
             setLoading(false);
@@ -135,7 +134,7 @@ const AdminServerControl = () => {
                 return;
             }
             setTimeout(fetchStatus, 2000);
-        } catch (err) {
+        } catch {
             alert(`Failed to ${action} ${key}`);
         } finally {
             setActionLoading(prev => ({ ...prev, [key]: false }));

@@ -11,24 +11,24 @@ function NotificationBell() {
     const token = useStore(state => state.token);
     const user = useStore(state => state.user);
 
-    const fetchNotifications = async () => {
-        if (!token) return;
-        try {
-            const res = await fetch(`${API_BASE_URL}/notifications`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const result = await res.json();
-            if (res.ok) {
-                const data = Array.isArray(result) ? result : (result.data || []);
-                setNotifications(data);
-                setUnreadCount(data.filter(n => !n.read_status).length);
-            }
-        } catch (error) {
-            console.error('Failed to fetch notifications:', error);
-        }
-    };
-
     useEffect(() => {
+        const fetchNotifications = async () => {
+            if (!token) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/notifications`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    const data = Array.isArray(result) ? result : (result.data || []);
+                    setNotifications(data);
+                    setUnreadCount(data.filter(n => !n.read_status).length);
+                }
+            } catch (error) {
+                console.error('Failed to fetch notifications:', error);
+            }
+        };
+
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
         return () => clearInterval(interval);

@@ -35,7 +35,7 @@ function AdminActivityLogs() {
         setAdmins(data.admins || [])
         setActions(data.actions || [])
       }
-    } catch (e) {
+    } catch {
       setError('Failed to load activity logs')
       setLogs([])
     } finally {
@@ -45,6 +45,7 @@ function AdminActivityLogs() {
 
   useEffect(() => {
     fetchLogs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
   }, [token])
 
   const applyFilters = (e) => {

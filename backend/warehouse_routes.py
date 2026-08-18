@@ -2083,6 +2083,9 @@ def warehouse_get_inventory():
                       p.price as global_price,
                       p.offline_price as offline_price,
                       wi.status,
+                      wi.variant_id,
+                      pv.name as variant_name, pv.options as variant_options, pv.price as variant_price,
+                      p.has_variants,
                       p.id as product_id, c.name as category, p.category_id, p.sub_category, p.images,
                       p.description, p.delivery_time, p.units_per_pack, p.material_type,
                       p.weight, p.dimensions, p.is_fragile, p.is_temp_sensitive,
@@ -2094,13 +2097,24 @@ def warehouse_get_inventory():
                       ROUND(COALESCE((SELECT AVG(rating) FROM product_reviews WHERE product_id = p.id), 0), 1) as average_rating
                FROM warehouse_inventory wi
                LEFT JOIN products p ON p.id = wi.product_id
+               LEFT JOIN product_variants pv ON pv.id = wi.variant_id
                LEFT JOIN categories c ON p.category_id = c.id
                WHERE wi.warehouse_id = ?
                ORDER BY wi.id DESC""",
             (wh_id,),
         ).fetchall()
-        
-        result = [dict(r) for r in rows]
+        # Parse variant option JSON for the UI (mirrors the storefront cart parsing).
+        result = []
+        for r in rows:
+            r_dict = dict(r)
+            if r_dict.get('variant_options'):
+                try:
+                    r_dict['variant_options'] = json.loads(r_dict['variant_options'])
+                except Exception:
+                    r_dict['variant_options'] = {}
+            else:
+                r_dict['variant_options'] = {}
+            result.append(r_dict)
         current_app.logger.info(f"Inventory found: {len(result)} items for warehouse {wh_id}")
         return jsonify(result), 200
     except Exception as e:
@@ -2617,6 +2631,114 @@ def warehouse_patch_inventory(item_id):
                     json.dumps(disco.get('search_synonyms', []))
                 )
             )
+
+        # Handle Variants & Option Groups if provided (warehouse product editor).
+        # Full-replace semantics matching the admin panel: existing variants keep
+        # their id, removed rows are deleted, new rows are inserted. This only
+        # runs when the client sends a full editor payload ("variants" key), so
+        # minimal forms that merely toggle has_variants can never wipe data.
+        if "variants" in data or "variant_options" in data:
+            product_id = inv["product_id"]
+            product_name_row = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()
+            product_name = product_name_row["name"] if product_name_row else "Product"
+            has_variants = bool(data.get("has_variants", True))
+            if not has_variants:
+                conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+                conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
+                conn.execute("UPDATE products SET has_variants = 0, is_parent = 0 WHERE id = ?", (product_id,))
+            else:
+                # Sync option groups: delete + re-insert (ids not referenced elsewhere).
+                conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
+                variant_options_data = data.get("variant_options") or []
+                for idx, opt in enumerate(variant_options_data):
+                    opt_name = (opt.get("option_name") or "").strip()
+                    if not opt_name:
+                        continue
+                    opt_values = opt.get("option_values") or []
+                    if isinstance(opt_values, str):
+                        try:
+                            opt_values = json.loads(opt_values)
+                        except Exception:
+                            opt_values = [opt_values]
+                    conn.execute(
+                        "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
+                        (product_id, opt_name, json.dumps([str(x).strip() for x in opt_values if str(x).strip()]), idx)
+                    )
+
+                if "variants" in data:
+                    variants_data = data.get("variants") or []
+                    existing_ids = set()
+                    for v in variants_data:
+                        v_id = v.get("id")
+                        v_name = (v.get("name") or "").strip() or f"{product_name} - Variant"
+                        v_sku = (v.get("sku") or "").strip() or None
+                        v_barcode = (v.get("barcode") or "").strip() or None
+                        v_price = v.get("price")
+                        v_mrp = v.get("mrp")
+                        v_stock = int(v.get("stock_quantity") if v.get("stock_quantity") is not None else v.get("stock") or 0)
+                        v_images = v.get("images")
+                        if isinstance(v_images, list):
+                            v_images = json.dumps(v_images)
+                        v_options = v.get("options") or {}
+                        if isinstance(v_options, str):
+                            try:
+                                v_options = json.loads(v_options)
+                            except Exception:
+                                v_options = {}
+
+                        if v_id and str(v_id).isdigit():
+                            existing_ids.add(int(v_id))
+                            set_parts = ["name = ?", "sku = ?", "price = ?", "barcode = ?", "options = ?", "mrp = ?"]
+                            set_params = [v_name, v_sku, v_price, v_barcode, json.dumps(v_options), v_mrp]
+                            if v_images:
+                                set_parts.append("images = ?")
+                                set_params.append(v_images)
+                            set_params.extend([int(v_id), product_id])
+                            conn.execute(
+                                f"UPDATE product_variants SET {', '.join(set_parts)} WHERE id = ? AND product_id = ?",
+                                set_params
+                            )
+                            # Keep THIS warehouse's inventory line (price/mrp/stock) in sync
+                            # with the edited variant so the storefront sees the change.
+                            line = conn.execute(
+                                "SELECT id, reserved_stock FROM warehouse_inventory WHERE variant_id = ? AND warehouse_id = ?",
+                                (int(v_id), wh_id)
+                            ).fetchone()
+                            if line:
+                                new_avail = max(0, v_stock - (line["reserved_stock"] or 0))
+                                conn.execute(
+                                    "UPDATE warehouse_inventory SET selling_price = ?, mrp = ?, stock_quantity = ?, available_stock = ? WHERE id = ?",
+                                    (v_price or 0, v_mrp or 0, v_stock, new_avail, line["id"])
+                                )
+                        else:
+                            cur = conn.execute(
+                                """INSERT INTO product_variants
+                                   (product_id, name, sku, price, stock, barcode, images, options, mrp)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
+                            )
+                            new_vid = cur.lastrowid
+                            conn.execute(
+                                """INSERT INTO warehouse_inventory
+                                   (warehouse_id, warehouse_partner_id, product_id, variant_id, product_name, sku, stock_quantity, available_stock,
+                                    low_stock_threshold, selling_price, mrp, status)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+                                (wh_id, wh_id, product_id, new_vid, v_name, v_sku, v_stock, v_stock, 2, v_price or 0, v_mrp or 0)
+                            )
+                            conn.execute("UPDATE product_variants SET stock = ? WHERE id = ?", (v_stock, new_vid))
+
+                    # Delete variants the client no longer sent (and this warehouse's lines).
+                    for row in conn.execute("SELECT id FROM product_variants WHERE product_id = ?", (product_id,)).fetchall():
+                        if row["id"] not in existing_ids:
+                            conn.execute("DELETE FROM warehouse_inventory WHERE variant_id = ? AND warehouse_id = ?", (row["id"], wh_id))
+                            conn.execute("DELETE FROM product_variants WHERE id = ?", (row["id"],))
+
+                conn.execute("UPDATE products SET has_variants = 1, is_parent = 1 WHERE id = ?", (product_id,))
+        elif "has_variants" in data:
+            # Flag-only update from a minimal form — never touches variant rows.
+            product_id = inv["product_id"]
+            flag = 1 if data.get("has_variants") else 0
+            conn.execute("UPDATE products SET has_variants = ?, is_parent = ? WHERE id = ?", (flag, flag, product_id))
 
         # Update inventory fields if any
         # Remove fields that belong to global product metadata from inventory updates
@@ -4078,6 +4200,7 @@ def _validate_billing_items(cur, vendor_id, items):
     validated = []
     for item in items:
         product_id = item.get("product_id") or item.get("id")
+        variant_id = item.get("variant_id")
         try:
             qty = int(item.get("quantity") or item.get("qty") or 1)
         except (TypeError, ValueError):
@@ -4100,10 +4223,27 @@ def _validate_billing_items(cur, vendor_id, items):
         if not p_row:
             raise ValueError(f"Product #{product_id} not found")
 
-        wi_row = cur.execute(
-            "SELECT stock_quantity, available_stock FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
-            (vendor_id, product_id),
-        ).fetchone()
+        # Variant-aware: if a variant_id is provided, check variant stock/price.
+        v_row = None
+        if variant_id:
+            v_row = cur.execute(
+                "SELECT id, name, price, stock FROM product_variants WHERE id = ? AND product_id = ?",
+                (variant_id, product_id),
+            ).fetchone()
+            if not v_row:
+                raise ValueError(f"Variant #{variant_id} not found for product #{product_id}")
+
+        # Check warehouse inventory (variant-aware if variant_id present).
+        if variant_id:
+            wi_row = cur.execute(
+                "SELECT stock_quantity, available_stock FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?",
+                (vendor_id, product_id, variant_id),
+            ).fetchone()
+        else:
+            wi_row = cur.execute(
+                "SELECT stock_quantity, available_stock FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
+                (vendor_id, product_id),
+            ).fetchone()
 
         # available_stock may be NULL for some warehouses (the products
         # listing mirrors this with COALESCE) — never compare None < qty.
@@ -4112,17 +4252,21 @@ def _validate_billing_items(cur, vendor_id, items):
             if avail_stock is None:
                 avail_stock = wi_row["stock_quantity"]
             if avail_stock is None:
-                avail_stock = p_row["stock"]
+                avail_stock = (v_row["stock"] if v_row else p_row["stock"])
         else:
-            avail_stock = p_row["stock"]
+            avail_stock = (v_row["stock"] if v_row else p_row["stock"])
         if avail_stock < qty:
+            display_name = (v_row["name"] if v_row else p_row["name"])
             raise ValueError(
-                f"Insufficient stock for '{p_row['name']}'. Available: {avail_stock}, Requested: {qty}"
+                f"Insufficient stock for '{display_name}'. Available: {avail_stock}, Requested: {qty}"
             )
 
-        try:
-            item_price = float(p_row["offline_price"]) if p_row["offline_price"] else float(p_row["price"])
-        except (TypeError, ValueError):
+        # Price: variant price > offline price > base price
+        if v_row and v_row["price"] is not None:
+            item_price = float(v_row["price"])
+        elif p_row["offline_price"]:
+            item_price = float(p_row["offline_price"])
+        else:
             item_price = float(p_row["price"])
         # Only the non-damaged units are charged. Damaged units still leave
         # stock (they're unusable) but contribute ₹0 to the bill.
@@ -4130,7 +4274,8 @@ def _validate_billing_items(cur, vendor_id, items):
         subtotal += item_total
         validated.append({
             "product_id": product_id,
-            "name": p_row["name"],
+            "variant_id": variant_id,
+            "name": (v_row["name"] if v_row else p_row["name"]),
             "qty": qty,          # total units taken from stock
             "billed_qty": billed_qty,
             "damage_qty": damage_qty,
@@ -4161,35 +4306,82 @@ def _insert_offline_order(cur, *, order_number, user_id, vendor_id, agent_id,
     return cur.lastrowid
 
 
-def _decrement_billing_stock(cur, vendor_id, product_id, qty):
-    """Atomically decrements global + warehouse inventory stock."""
-    cur.execute(
-        "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
-        (qty, product_id, qty),
-    )
-    cur.execute(
-        """
-        UPDATE warehouse_inventory
-        SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
-            available_stock = CASE WHEN COALESCE(available_stock, 0) >= ? THEN available_stock - ? ELSE 0 END
-        WHERE warehouse_id = ? AND product_id = ?
-        """,
-        (qty, qty, qty, qty, vendor_id, product_id),
-    )
+def _decrement_billing_stock(cur, vendor_id, product_id, qty, variant_id=None):
+    """Atomically decrements global + warehouse inventory stock.
+
+    When *variant_id* is provided, also decrements the variant row in
+    product_variants and scopes the warehouse_inventory decrement to that
+    specific variant.
+    """
+    if variant_id:
+        cur.execute(
+            "UPDATE product_variants SET stock = stock - ? WHERE id = ? AND product_id = ? AND stock >= ?",
+            (qty, variant_id, product_id, qty),
+        )
+        # Always keep products.stock in sync (sum-of-variants source of truth).
+        cur.execute(
+            "UPDATE products SET stock = CASE WHEN stock >= ? THEN stock - ? ELSE 0 END WHERE id = ?",
+            (qty, qty, product_id),
+        )
+        cur.execute(
+            """
+            UPDATE warehouse_inventory
+            SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
+                available_stock = CASE WHEN COALESCE(available_stock, 0) >= ? THEN available_stock - ? ELSE 0 END
+            WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
+            """,
+            (qty, qty, qty, qty, vendor_id, product_id, variant_id),
+        )
+    else:
+        cur.execute(
+            "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
+            (qty, product_id, qty),
+        )
+        cur.execute(
+            """
+            UPDATE warehouse_inventory
+            SET stock_quantity = CASE WHEN stock_quantity >= ? THEN stock_quantity - ? ELSE 0 END,
+                available_stock = CASE WHEN COALESCE(available_stock, 0) >= ? THEN available_stock - ? ELSE 0 END
+            WHERE warehouse_id = ? AND product_id = ?
+            """,
+            (qty, qty, qty, qty, vendor_id, product_id),
+        )
 
 
-def _restock_billing_item(cur, vendor_id, product_id, qty):
-    """Restocks global + warehouse inventory after a return/cancel/exchange."""
+def _restock_billing_item(cur, vendor_id, product_id, qty, variant_id=None):
+    """Restocks global + warehouse inventory after a return/cancel/exchange.
+
+    When *variant_id* is provided, also restores the variant row in
+    product_variants and scopes the warehouse_inventory restore to that
+    specific variant.
+    """
+    if variant_id:
+        cur.execute(
+            "UPDATE product_variants SET stock = stock + ? WHERE id = ? AND product_id = ?",
+            (qty, variant_id, product_id),
+        )
+    # Always restore products.stock too.
     cur.execute("UPDATE products SET stock = stock + ? WHERE id = ?", (qty, product_id))
-    cur.execute(
-        """
-        UPDATE warehouse_inventory
-        SET stock_quantity = COALESCE(stock_quantity, 0) + ?,
-            available_stock = COALESCE(available_stock, 0) + ?
-        WHERE warehouse_id = ? AND product_id = ?
-        """,
-        (qty, qty, vendor_id, product_id),
-    )
+    if variant_id:
+        cur.execute(
+            """
+            UPDATE warehouse_inventory
+            SET stock_quantity = COALESCE(stock_quantity, 0) + ?,
+                available_stock = COALESCE(available_stock, 0) + ?
+            WHERE warehouse_id = ? AND product_id = ? AND variant_id = ?
+            """,
+            (qty, qty, vendor_id, product_id, variant_id),
+        )
+    else:
+        cur.execute(
+            """
+            UPDATE warehouse_inventory
+            SET stock_quantity = COALESCE(stock_quantity, 0) + ?,
+                available_stock = COALESCE(available_stock, 0) + ?
+            WHERE warehouse_id = ? AND product_id = ?
+            """,
+            (qty, qty, vendor_id, product_id),
+        )
 
 
 # Counter-sale (offline POS) bills can only be returned / exchanged / cancelled
@@ -4377,14 +4569,14 @@ def generate_billing_order():
         for item in validated_items:
             cur.execute(
                 """
-                INSERT INTO order_items (order_id, product_id, product_name, quantity, price, subtotal,
+                INSERT INTO order_items (order_id, product_id, product_name, variant_id, quantity, price, subtotal,
                                          damage_qty, damage_comment, damage_image_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (order_id, item["product_id"], item["name"], item["billed_qty"], item["price"], item["subtotal"],
+                (order_id, item["product_id"], item["name"], item.get("variant_id"), item["billed_qty"], item["price"], item["subtotal"],
                  item["damage_qty"], item["damage_comment"], item["damage_image_url"])
             )
-            _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"])
+            _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"], item.get("variant_id"))
 
         conn.commit()
 
@@ -4597,7 +4789,7 @@ def return_billing_order():
                 return error_response(
                     f"Return qty exceeds purchased qty for '{oi['product_name']}'", 400
                 )
-            _restock_billing_item(cur, vendor_id, oi["product_id"], qty)
+            _restock_billing_item(cur, vendor_id, oi["product_id"], qty, oi["variant_id"])
             cur.execute(
                 "UPDATE order_items SET returned_qty = COALESCE(returned_qty, 0) + ? WHERE id = ?",
                 (qty, item_id),
@@ -4668,7 +4860,7 @@ def cancel_billing_order():
             )
 
         items = cur.execute(
-            "SELECT id, product_id, quantity, price, COALESCE(returned_qty, 0) AS returned_qty FROM order_items WHERE order_id = ?",
+            "SELECT id, product_id, variant_id, quantity, price, COALESCE(returned_qty, 0) AS returned_qty FROM order_items WHERE order_id = ?",
             (order_id,),
         ).fetchall()
         refund_amount = 0.0
@@ -4676,7 +4868,7 @@ def cancel_billing_order():
             remaining = int(oi["quantity"]) - int(oi["returned_qty"] or 0)
             if remaining <= 0:
                 continue
-            _restock_billing_item(cur, vendor_id, oi["product_id"], remaining)
+            _restock_billing_item(cur, vendor_id, oi["product_id"], remaining, oi["variant_id"])
             cur.execute(
                 "UPDATE order_items SET returned_qty = quantity WHERE id = ?",
                 (oi["id"],),
@@ -4769,7 +4961,7 @@ def exchange_billing_order():
                 return error_response(
                     f"Return qty exceeds purchased qty for '{oi['product_name']}'", 400
                 )
-            _restock_billing_item(cur, vendor_id, oi["product_id"], qty)
+            _restock_billing_item(cur, vendor_id, oi["product_id"], qty, oi["variant_id"])
             cur.execute(
                 "UPDATE order_items SET returned_qty = COALESCE(returned_qty, 0) + ? WHERE id = ?",
                 (qty, item_id),
@@ -5195,13 +5387,14 @@ def warehouse_earnings():
     """Earnings dashboard for the current warehouse: wallet balance, lifetime
     earnings, pending settlements, payout history and recent settlements."""
     try:
-        from settlement import get_commission_rate
+        from settlement import get_commission_rate, get_settlement_window_days
         warehouse_id = _get_current_warehouse_id()
         if not warehouse_id:
             return error_response("Warehouse not identified", 401)
         conn = get_db()
         cursor = conn.cursor()
         commission_rate = get_commission_rate(conn=conn)
+        window_days = get_settlement_window_days(conn=conn)
         cursor.execute(
             "INSERT OR IGNORE INTO vendor_wallets (warehouse_id, balance, lifetime_earnings) VALUES (?, 0, 0)",
             (warehouse_id,),
@@ -5235,6 +5428,7 @@ def warehouse_earnings():
         conn.close()
         return success_response({
             "commission_rate": commission_rate,
+            "settlement_window_days": window_days,
             "wallet": dict(wallet) if wallet else {"balance": 0, "lifetime_earnings": 0},
             "pending": {
                 "amount": round(float(pending["amount"] or 0), 2),

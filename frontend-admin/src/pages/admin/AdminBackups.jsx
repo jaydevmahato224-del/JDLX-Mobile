@@ -28,7 +28,7 @@ function AdminBackups() {
       } else {
         setItems(data.items || [])
       }
-    } catch (e) {
+    } catch {
       setError('Failed to load backups')
       setItems([])
     } finally {
@@ -38,6 +38,7 @@ function AdminBackups() {
 
   useEffect(() => {
     loadBackups()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
   }, [token, isSuperAdmin])
 
   const triggerBackup = async (mode = 'full') => {
@@ -56,7 +57,7 @@ function AdminBackups() {
         return
       }
       await loadBackups()
-    } catch (e) {
+    } catch {
       alert('Failed to create backup')
     }
   }
@@ -82,7 +83,7 @@ function AdminBackups() {
       link.click()
       link.remove()
       URL.revokeObjectURL(objectUrl)
-    } catch (e) {
+    } catch {
       alert('Failed to download backup')
     }
   }

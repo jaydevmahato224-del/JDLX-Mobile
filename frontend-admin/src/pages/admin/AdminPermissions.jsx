@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ArrowLeft, KeyRound, Plus, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
@@ -13,7 +13,7 @@ function AdminPermissions() {
   const [newPermission, setNewPermission] = useState('manage_products')
   const [message, setMessage] = useState('')
 
-  const fetchAdmins = async () => {
+  const fetchAdmins = useCallback(async () => {
     const res = await fetch(`${API_BASE_URL}/admin/list`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -26,9 +26,9 @@ function AdminPermissions() {
     } else {
       setMessage(data.error || 'Failed to load admins')
     }
-  }
+  }, [token, selectedAdminId])
 
-  const fetchPermissions = async (adminId) => {
+  const fetchPermissions = useCallback(async (adminId) => {
     if (!adminId) return
     const res = await fetch(`${API_BASE_URL}/admin/permissions?admin_id=${adminId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -44,17 +44,21 @@ function AdminPermissions() {
     } else {
       setMessage(data.error || 'Failed to load permissions')
     }
-  }
-
-  useEffect(() => {
-    if (!token) return
-    fetchAdmins()
   }, [token])
 
   useEffect(() => {
+    if (!token) return
+    // Wrapped so the fetch isn't invoked synchronously from the effect body
+    const load = () => fetchAdmins()
+    load()
+  }, [token, fetchAdmins])
+
+  useEffect(() => {
     if (!token || !selectedAdminId) return
-    fetchPermissions(selectedAdminId)
-  }, [selectedAdminId, token])
+    // Wrapped so the fetch isn't invoked synchronously from the effect body
+    const load = () => fetchPermissions(selectedAdminId)
+    load()
+  }, [selectedAdminId, token, fetchPermissions])
 
   const assignPermission = async () => {
     const res = await fetch(`${API_BASE_URL}/admin/permissions`, {

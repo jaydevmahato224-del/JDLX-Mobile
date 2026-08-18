@@ -6,16 +6,17 @@ const STORAGE_KEY = 'jdlx_warehouse_seen_release_update'
 
 export default function ReleaseUpdateModal() {
     const release = WAREHOUSE_RELEASE_UPDATES
-    const [open, setOpen] = useState(false)
-
-    useEffect(() => {
+    // Read the seen-flag once at mount (release is a static config module, so
+    // this lazy initializer is equivalent to the old effect that read it on
+    // every release.id change).
+    const [open, setOpen] = useState(() => {
         try {
             const seenReleaseId = localStorage.getItem(STORAGE_KEY)
-            setOpen(Boolean(release?.id) && seenReleaseId !== release.id)
-        } catch (error) {
-            setOpen(Boolean(release?.id))
+            return Boolean(release?.id) && seenReleaseId !== release.id
+        } catch {
+            return Boolean(release?.id)
         }
-    }, [release?.id])
+    })
 
     useEffect(() => {
         if (!open) return

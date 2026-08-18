@@ -165,6 +165,7 @@ function AdminWarehouseApplications() {
         }
     }
 
+    /* eslint-disable react-hooks/exhaustive-deps -- intentional: fetch on mount only */
     useEffect(() => {
         fetchApplications()
     }, [adminToken])
@@ -209,6 +210,7 @@ function AdminWarehouseApplications() {
         }
     }
 
+    /* eslint-disable react-hooks/exhaustive-deps -- intentional: fetch on mount only */
     useEffect(() => {
         if (selectedId) {
             fetchStats(selectedId)
@@ -252,6 +254,7 @@ function AdminWarehouseApplications() {
 
     const selectedApplication = filteredApplications.find((application) => application.id === selectedId) || null
 
+    /* eslint-disable react-hooks/exhaustive-deps -- intentional: fetch on mount only */
     useEffect(() => {
         if (!selectedApplication) {
             return

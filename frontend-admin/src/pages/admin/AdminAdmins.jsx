@@ -43,7 +43,7 @@ function AdminAdmins() {
       } else {
         setAdmins(data)
       }
-    } catch (e) {
+    } catch {
       setError('Failed to load admins')
       setAdmins([])
     } finally {
@@ -53,6 +53,7 @@ function AdminAdmins() {
 
   useEffect(() => {
     fetchAdmins()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
   }, [token])
 
   // ADD ADMIN
@@ -73,7 +74,7 @@ function AdminAdmins() {
         setForm({ name: '', email: '', role: 'admin' })
         fetchAdmins()
       }
-    } catch (e) {
+    } catch {
       alert('Failed to create admin')
     } finally {
       setIsSubmitting(false)
@@ -98,7 +99,7 @@ function AdminAdmins() {
         setShowEditModal(false)
         fetchAdmins()
       }
-    } catch (e) {
+    } catch {
       alert('Failed to update admin')
     } finally {
       setIsSubmitting(false)
@@ -121,7 +122,7 @@ function AdminAdmins() {
       } else {
         fetchAdmins()
       }
-    } catch (e) {
+    } catch {
       alert('Failed to change status')
     }
   }
@@ -142,7 +143,7 @@ function AdminAdmins() {
         setShowDeleteConfirm(false)
         fetchAdmins()
       }
-    } catch (e) {
+    } catch {
       alert('Failed to delete admin')
     } finally {
       setIsSubmitting(false)

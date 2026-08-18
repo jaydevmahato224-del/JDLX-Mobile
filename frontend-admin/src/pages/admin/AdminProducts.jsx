@@ -439,114 +439,17 @@ function AdminProducts() {
 
                             {/* Variants & Options Editor */}
                             {formData.has_variants && (
-                                <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                                    {/* Option Groups */}
-                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Option Groups</h3>
-                                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">e.g. Size (S, M, L) or Color (Red, Blue)</p>
-                                            </div>
-                                            <button type="button" onClick={addVariantGroup} className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">
-                                                <Plus size={14} /> Add Group
-                                            </button>
-                                        </div>
-                                        {formData.variant_options.length === 0 && (
-                                            <p className="text-[11px] font-bold text-slate-400 text-center py-3">No option groups yet — add one to structure the picker.</p>
-                                        )}
-                                        {formData.variant_options.map((group, gi) => (
-                                            <div key={gi} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-3 items-center bg-white border border-slate-100 rounded-xl p-3">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Option name (e.g. Size)"
-                                                    className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
-                                                    value={group.option_name}
-                                                    onChange={e => updateVariantGroup(gi, { option_name: e.target.value })}
-                                                />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Values, comma separated (e.g. S, M, L)"
-                                                    className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
-                                                    value={Array.isArray(group.option_values) ? group.option_values.join(', ') : group.option_values}
-                                                    onChange={e => updateVariantGroup(gi, { option_values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) })}
-                                                />
-                                                <button type="button" onClick={() => removeVariantGroup(gi)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Variant Rows */}
-                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Variants</h3>
-                                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">One row per combination — price, MRP, stock and SKU can differ</p>
-                                            </div>
-                                            <button type="button" onClick={addVariantRow} className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">
-                                                <Plus size={14} /> Add Variant
-                                            </button>
-                                        </div>
-                                        <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
-                                            <table className="w-full text-left border-collapse min-w-[640px]">
-                                                <thead>
-                                                    <tr className="border-b border-slate-100 bg-gray-50">
-                                                        {formData.variant_options.map((g) => (
-                                                            <th key={g.option_name || 'g'} className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">{g.option_name || 'Option'}</th>
-                                                        ))}
-                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">SKU</th>
-                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Price</th>
-                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">MRP</th>
-                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
-                                                        <th className="p-3"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {formData.variants.map((variant, vi) => (
-                                                        <tr key={variant.id || `new-${vi}`}>
-                                                            {formData.variant_options.map((g) => {
-                                                                const current = (variant.options || {})[g.option_name];
-                                                                return (
-                                                                    <td key={g.option_name || 'g'} className="p-2">
-                                                                        <select
-                                                                            className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
-                                                                            value={current || ''}
-                                                                            onChange={e => updateVariantOption(vi, g.option_name, e.target.value)}
-                                                                        >
-                                                                            <option value="">Select</option>
-                                                                            {(g.option_values || []).map(v => <option key={v} value={v}>{v}</option>)}
-                                                                        </select>
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                            <td className="p-2">
-                                                                <input type="text" placeholder="SKU" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.sku || ''} onChange={e => updateVariantRow(vi, { sku: e.target.value })} />
-                                                            </td>
-                                                            <td className="p-2">
-                                                                <input type="number" placeholder="Price" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.price ?? ''} onChange={e => updateVariantRow(vi, { price: e.target.value })} />
-                                                            </td>
-                                                            <td className="p-2">
-                                                                <input type="number" placeholder="MRP" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.mrp ?? ''} onChange={e => updateVariantRow(vi, { mrp: e.target.value })} />
-                                                            </td>
-                                                            <td className="p-2">
-                                                                <input type="number" min="0" placeholder="0" className="w-20 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.stock ?? 0} onChange={e => updateVariantRow(vi, { stock: parseInt(e.target.value) || 0 })} />
-                                                            </td>
-                                                            <td className="p-2 text-right">
-                                                                <button type="button" onClick={() => removeVariantRow(vi)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
-                                                                    <Trash2 size={14} />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                            {formData.variants.length === 0 && (
-                                                <p className="text-[11px] font-bold text-slate-400 text-center py-4">No variants yet — add one to start configuring combinations.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
+                                <VariantsEditor
+                                    groups={formData.variant_options}
+                                    variants={formData.variants}
+                                    onAddGroup={addVariantGroup}
+                                    onUpdateGroup={updateVariantGroup}
+                                    onRemoveGroup={removeVariantGroup}
+                                    onAddVariant={addVariantRow}
+                                    onUpdateVariant={updateVariantRow}
+                                    onUpdateVariantOption={updateVariantOption}
+                                    onRemoveVariant={removeVariantRow}
+                                />
                             )}
 
                             <div className="flex gap-4 pt-4">
@@ -568,6 +471,125 @@ function AdminProducts() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+/*
+ * Variants & Options editor — a self-contained form used inside the product
+ * modal. Builds option groups (Size -> [S, M, L]) and one row per variant
+ * combination (option values, SKU, price, MRP, stock). All mutations flow up
+ * through the callbacks so the parent owns the form state.
+ */
+function VariantsEditor({ groups, variants, onAddGroup, onUpdateGroup, onRemoveGroup, onAddVariant, onUpdateVariant, onUpdateVariantOption, onRemoveVariant }) {
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* Option Groups */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Option Groups</h3>
+                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">e.g. Size (S, M, L) or Color (Red, Blue)</p>
+                    </div>
+                    <button type="button" onClick={onAddGroup} className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">
+                        <Plus size={14} /> Add Group
+                    </button>
+                </div>
+                {groups.length === 0 && (
+                    <p className="text-[11px] font-bold text-slate-400 text-center py-3">No option groups yet — add one to structure the picker.</p>
+                )}
+                {groups.map((group, gi) => (
+                    <div key={gi} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-3 items-center bg-white border border-slate-100 rounded-xl p-3">
+                        <input
+                            type="text"
+                            placeholder="Option name (e.g. Size)"
+                            className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
+                            value={group.option_name}
+                            onChange={e => onUpdateGroup(gi, { option_name: e.target.value })}
+                        />
+                        <input
+                            type="text"
+                            placeholder="Values, comma separated (e.g. S, M, L)"
+                            className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
+                            value={Array.isArray(group.option_values) ? group.option_values.join(', ') : group.option_values}
+                            onChange={e => onUpdateGroup(gi, { option_values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) })}
+                        />
+                        <button type="button" onClick={() => onRemoveGroup(gi)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            {/* Variant Rows */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Variants</h3>
+                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">One row per combination — price, MRP, stock and SKU can differ</p>
+                    </div>
+                    <button type="button" onClick={onAddVariant} className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">
+                        <Plus size={14} /> Add Variant
+                    </button>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
+                    <table className="w-full text-left border-collapse min-w-[640px]">
+                        <thead>
+                            <tr className="border-b border-slate-100 bg-gray-50">
+                                {groups.map((g) => (
+                                    <th key={g.option_name || 'g'} className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">{g.option_name || 'Option'}</th>
+                                ))}
+                                <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">SKU</th>
+                                <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Price</th>
+                                <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">MRP</th>
+                                <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
+                                <th className="p-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {variants.map((variant, vi) => (
+                                <tr key={variant.id || `new-${vi}`}>
+                                    {groups.map((g) => {
+                                        const current = (variant.options || {})[g.option_name];
+                                        return (
+                                            <td key={g.option_name || 'g'} className="p-2">
+                                                <select
+                                                    className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
+                                                    value={current || ''}
+                                                    onChange={e => onUpdateVariantOption(vi, g.option_name, e.target.value)}
+                                                >
+                                                    <option value="">Select</option>
+                                                    {(g.option_values || []).map(v => <option key={v} value={v}>{v}</option>)}
+                                                </select>
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="p-2">
+                                        <input type="text" placeholder="SKU" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.sku || ''} onChange={e => onUpdateVariant(vi, { sku: e.target.value })} />
+                                    </td>
+                                    <td className="p-2">
+                                        <input type="number" placeholder="Price" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.price ?? ''} onChange={e => onUpdateVariant(vi, { price: e.target.value })} />
+                                    </td>
+                                    <td className="p-2">
+                                        <input type="number" placeholder="MRP" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.mrp ?? ''} onChange={e => onUpdateVariant(vi, { mrp: e.target.value })} />
+                                    </td>
+                                    <td className="p-2">
+                                        <input type="number" min="0" placeholder="0" className="w-20 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.stock ?? 0} onChange={e => onUpdateVariant(vi, { stock: parseInt(e.target.value) || 0 })} />
+                                    </td>
+                                    <td className="p-2 text-right">
+                                        <button type="button" onClick={() => onRemoveVariant(vi)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {variants.length === 0 && (
+                        <p className="text-[11px] font-bold text-slate-400 text-center py-4">No variants yet — add one to start configuring combinations.</p>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

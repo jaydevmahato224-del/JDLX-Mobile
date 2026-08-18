@@ -36,6 +36,7 @@ export default function AdminOffers() {
         if (adminToken) {
             fetchOffers()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, [adminToken])
 
     const fetchOffers = async () => {
@@ -47,7 +48,7 @@ export default function AdminOffers() {
             })
             const json = await res.json()
             if (res.ok) setOffers(json.data)
-        } catch (e) {
+        } catch {
             toast.error("Failed to fetch offers")
         } finally {
             setLoading(false)
@@ -67,7 +68,7 @@ export default function AdminOffers() {
             if (typeof payload.applicable_ids === 'string' && payload.applicable_ids.trim()) {
                 try {
                     payload.applicable_ids = JSON.parse(payload.applicable_ids)
-                } catch (e) {
+                } catch {
                     // If not valid JSON, treat as comma separated
                     payload.applicable_ids = payload.applicable_ids.split(',').map(x => x.trim())
                 }
@@ -128,7 +129,7 @@ export default function AdminOffers() {
                 toast.success("Offer deleted")
                 fetchOffers()
             }
-        } catch (e) {
+        } catch {
             toast.error("Delete failed")
         }
     }
@@ -147,7 +148,7 @@ export default function AdminOffers() {
                 toast.success(`Offer ${offer.is_active ? 'disabled' : 'enabled'}`)
                 fetchOffers()
             }
-        } catch (e) {
+        } catch {
             toast.error("Status update failed")
         }
     }

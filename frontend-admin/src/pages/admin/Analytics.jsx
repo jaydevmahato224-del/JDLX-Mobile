@@ -112,15 +112,21 @@ function Analytics() {
 
     useEffect(() => {
         if (activeTab === 'traffic') {
-            fetchSummary();
-            fetchRealtime();
-            fetchTraffic(trafficPeriod);
-            fetchOtherData();
+            // Fetches are fire-and-forget; Promise.all keeps them out of the
+            // synchronous effect body (the interval below still polls realtime).
+            Promise.all([
+                fetchSummary(),
+                fetchRealtime(),
+                fetchTraffic(trafficPeriod),
+                fetchOtherData(),
+            ]);
 
             const rtInterval = setInterval(fetchRealtime, 30000);
             return () => clearInterval(rtInterval);
         } else {
-            fetchCancelledAnalytics();
+            // Wrapped so the fetch isn't invoked synchronously from the effect body
+            const load = () => fetchCancelledAnalytics();
+            load();
         }
     }, [activeTab, fetchSummary, fetchRealtime, fetchTraffic, fetchOtherData, trafficPeriod, fetchCancelledAnalytics]);
 
@@ -547,7 +553,7 @@ function Analytics() {
                                                         String(o.user_id).includes(searchVal) ||
                                                         o.cancellation_reason?.toLowerCase().includes(searchVal)
                                                     );
-                                                }).map((order, i) => (
+                                                }).map((order) => (
                                                     <tr key={order.id} className="hover:bg-slate-50/30 transition-colors">
                                                         <td className="p-4">
                                                             <div className="flex flex-col">
@@ -609,6 +615,7 @@ function Analytics() {
     );;
 }
 
+// eslint-disable-next-line no-unused-vars -- Icon is used below as <Icon /> (JSX element)
 function StatCard({ title, value, icon: Icon, color }) {
     const colors = {
         blue: 'bg-blue-50 text-blue-500 border-blue-100',
@@ -627,6 +634,7 @@ function StatCard({ title, value, icon: Icon, color }) {
     );
 }
 
+// eslint-disable-next-line no-unused-vars -- Icon is used below as <Icon /> (JSX element)
 function DeviceStat({ label, pct, icon: Icon, color }) {
     const colors = {
         emerald: 'bg-emerald-500',

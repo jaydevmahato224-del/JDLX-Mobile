@@ -27,6 +27,7 @@ const CARDS = [
     },
 ]
 
+// eslint-disable-next-line no-unused-vars -- Icon is used below as <Icon /> (JSX element)
 const StatCard = ({ icon: Icon, label, value, accentClass }) => (
     <article className="warehouse-subtle-card p-6">
         <div className="flex items-start justify-between gap-4">

@@ -94,6 +94,12 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)  // NEW: never reverts
 
   // ── Internal refs ─────────────────────────────────────────────────────────
+  // hasLoadedOnceRef mirrors the state so that fetchProductsData doesn't need
+  // hasLoadedOnce in its useCallback dependency array. Keeping it in deps
+  // caused the callback to be recreated on every first-load, which cascaded
+  // into loadInitialProducts → useEffect re-fire → a second (unnecessary)
+  // fetch that could race-abort and wipe the product list via setProducts([]).
+  const hasLoadedOnceRef = useRef(false)
   const isFetchingRef = useRef(false)
   const prefetchedPagesRef = useRef(new Set())
   const categoryRef = useRef(null)
@@ -171,7 +177,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
           setLoading(false)
         } else {
           // Pure initial or category-switch load
-          if (!hasLoadedOnce) {
+          if (!hasLoadedOnceRef.current) {
             setInitialLoading(true)
           } else {
             setPageRefreshing(true)
@@ -241,6 +247,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
             setIsEmpty(nextBatch.length === 0)
 
             // Mark as successfully loaded at least once
+            hasLoadedOnceRef.current = true
             setHasLoadedOnce(true)
             success = true
             return nextBatch
@@ -280,7 +287,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
         clearTimeout(wakingUpTimerId)
         if (mountedRef.current) {
           setIsWakingUp(false)
-          if (replace && !hasLoadedOnce) {
+          if (replace && !hasLoadedOnceRef.current) {
             // Anti-flicker: hold skeleton for at least MIN_SKELETON_MS
             clearInitialLoadingAfterDelay(fetchStart)
           } else {
@@ -293,7 +300,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
         isFetchingRef.current = false
       }
     },
-    [buildProductsUrl, pageSize, hasLoadedOnce, clearInitialLoadingAfterDelay]
+    [buildProductsUrl, pageSize, clearInitialLoadingAfterDelay]
   )
 
   // ── Prefetch ──────────────────────────────────────────────────────────────

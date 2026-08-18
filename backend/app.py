@@ -2647,7 +2647,8 @@ def get_cart():
         if user_id:
             cursor.execute("""
                 SELECT c.*, p.name, p.price as base_price, p.images as base_images, p.category, p.stock as base_stock,
-                       pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock
+                       pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock,
+                       pv.options as variant_options
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
                 LEFT JOIN product_variants pv ON c.variant_id = pv.id
@@ -2656,7 +2657,8 @@ def get_cart():
         else:
             cursor.execute("""
                 SELECT c.*, p.name, p.price as base_price, p.images as base_images, p.category, p.stock as base_stock,
-                       pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock
+                       pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock,
+                       pv.options as variant_options
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
                 LEFT JOIN product_variants pv ON c.variant_id = pv.id
@@ -2671,6 +2673,14 @@ def get_cart():
                 item['price'] = item['variant_price'] if item['variant_price'] is not None else item['base_price']
                 img_val = item['variant_images'] or item['base_images']
                 item['stock'] = item['variant_stock'] if item['variant_stock'] is not None else item['base_stock']
+                # Parse the option map so the UI can show e.g. "Size: M · Color: Red"
+                if item.get('variant_options'):
+                    try:
+                        item['variant_options'] = json.loads(item['variant_options'])
+                    except Exception:
+                        item['variant_options'] = {}
+                else:
+                    item['variant_options'] = {}
             else:
                 item['price'] = item['base_price']
                 img_val = item['base_images']
@@ -3046,8 +3056,11 @@ def get_products():
         
         if store_id:
             query = '''
-                SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
+                SELECT p.id, p.name,
+                       COALESCE((SELECT MIN(price) FROM product_variants pv2 WHERE pv2.product_id = p.id AND pv2.status = 'active'), p.price) as price,
+                       p.images, p.category_id, p.category, 
                        p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
+                       p.has_variants,
                        wi.stock_quantity as physical_stock,
                        wi.stock_quantity as stock,
                        wi.reserved_stock as reserved_stock,
@@ -3069,8 +3082,13 @@ def get_products():
             params = [store_id]
         else:
             query = '''
-                SELECT p.id, p.name, p.price, p.images, p.category_id, p.category, 
-                       p.delivery_time, p.stock, p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
+                SELECT p.id, p.name,
+                       COALESCE((SELECT MIN(price) FROM product_variants pv2 WHERE pv2.product_id = p.id AND pv2.status = 'active'), p.price) as price,
+                       p.images, p.category_id, p.category, 
+                       p.delivery_time,
+                       CASE WHEN p.has_variants = 1 THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv3 WHERE pv3.product_id = p.id AND pv3.status = 'active') ELSE p.stock END as stock,
+                       p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
+                       p.has_variants,
                        0 as reserved_stock,
                        COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0) as cart_reserved,
                        p.low_stock_threshold, p.status,
@@ -3401,7 +3419,7 @@ def get_product(product_id):
         product_dict['final_return_policy'] = product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy
 
         # Fetch variants for this product
-        cursor.execute("SELECT * FROM product_variants WHERE product_id = ?", (product_id,))
+        cursor.execute("SELECT * FROM product_variants WHERE product_id = ? ORDER BY id ASC", (product_id,))
         variants = [dict(r) for r in cursor.fetchall()]
         for v in variants:
             if v.get('images'):
@@ -3409,7 +3427,31 @@ def get_product(product_id):
                     v['images'] = json.loads(v['images'])
                 except:
                     pass
+            # Parse the option map ({"Size": "M", "Color": "Red"}) into an object
+            if v.get('options'):
+                try:
+                    v['options'] = json.loads(v['options'])
+                except:
+                    v['options'] = {}
+            else:
+                v['options'] = {}
         product_dict['variants'] = variants
+
+        # Fetch the option groups (e.g. Size -> [S, M, L]) that define how
+        # variants are presented to customers on the storefront.
+        cursor.execute(
+            "SELECT id, option_name, option_values, sort_order FROM product_variant_options WHERE product_id = ? ORDER BY sort_order ASC, id ASC",
+            (product_id,)
+        )
+        variant_options = []
+        for row in cursor.fetchall():
+            o = dict(row)
+            try:
+                o['option_values'] = json.loads(o.get('option_values') or '[]')
+            except:
+                o['option_values'] = []
+            variant_options.append(o)
+        product_dict['variant_options'] = variant_options
 
         # Fetch recommendations
         cursor.execute("""
@@ -6446,6 +6488,10 @@ def admin_add_product():
     if not isinstance(stock, (int, float)) or stock < 0:
         return error_response("Stock must be a non-negative number", 400)
 
+    has_variants = bool(data.get('has_variants'))
+    variants_data = data.get('variants') or []
+    variant_options_data = data.get('variant_options') or []
+
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -6454,10 +6500,54 @@ def admin_add_product():
         seo_slug = generate_seo_slug(name)
         
         cursor.execute(
-            "INSERT INTO products (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, price, offline_price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug)
+            "INSERT INTO products (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, price, offline_price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug, 1 if has_variants else 0, 1 if has_variants else 0)
         )
         product_id = cursor.lastrowid
+
+        # Create variant option groups (e.g. Size -> [S, M, L], Color -> [Red, Blue])
+        if has_variants and variant_options_data:
+            for idx, opt in enumerate(variant_options_data):
+                opt_name = (opt.get('option_name') or '').strip()
+                if not opt_name:
+                    continue
+                opt_values = opt.get('option_values') or []
+                if isinstance(opt_values, str):
+                    try:
+                        opt_values = json.loads(opt_values)
+                    except Exception:
+                        opt_values = [opt_values]
+                cursor.execute(
+                    "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
+                    (product_id, opt_name, json.dumps([str(v).strip() for v in opt_values if str(v).strip()]), idx)
+                )
+
+        # Create variants (each maps one value per option group)
+        if has_variants and variants_data:
+            for v in variants_data:
+                v_name = (v.get('name') or '').strip() or f"{name} - Variant"
+                v_sku = (v.get('sku') or '').strip() or None
+                v_barcode = (v.get('barcode') or '').strip() or None
+                v_price = v.get('price') if v.get('price') is not None else price
+                v_mrp = v.get('mrp')
+                v_stock = int(v.get('stock') or v.get('stock_quantity') or 0)
+                v_images = v.get('images') or images
+                if isinstance(v_images, list):
+                    v_images = json.dumps(v_images)
+                v_options = v.get('options') or {}
+                if isinstance(v_options, str):
+                    try:
+                        v_options = json.loads(v_options)
+                    except Exception:
+                        v_options = {}
+
+                cursor.execute(
+                    """INSERT INTO product_variants
+                       (product_id, name, sku, price, stock, barcode, images, options, mrp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
+                )
+
         conn.commit()
         conn.close()
         log_admin_action(request.user.get('user_id'), "product_updated", "product", product_id)
@@ -6494,7 +6584,7 @@ def admin_update_product(product_id):
         cursor = conn.cursor()
         
         # Fetch current product to ensure stability and repair missing data
-        cursor.execute("SELECT name, share_token, seo_slug FROM products WHERE id = ?", (product_id,))
+        cursor.execute("SELECT name, share_token, seo_slug, has_variants FROM products WHERE id = ?", (product_id,))
         current = cursor.fetchone()
         if not current:
             conn.close()
@@ -6503,11 +6593,13 @@ def admin_update_product(product_id):
         updates = []
         params = []
         
-        for key in ['name', 'price', 'offline_price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state']:
+        for key in ['name', 'price', 'offline_price', 'stock', 'category', 'delivery_time', 'status', 'images', 'barcode', 'global_sku_code', 'return_policy', 'is_featured', 'prepaid_only', 'lifecycle_state', 'has_variants']:
             if key in data:
                 val = data[key]
                 if key == 'offline_price':
                     val = _normalize_offline_price(val)
+                if key == 'has_variants':
+                    val = 1 if val else 0
                 updates.append(f"{key}=?")
                 params.append(val)
                 # Auto-generate fresh slug if name changes
@@ -6531,7 +6623,85 @@ def admin_update_product(product_id):
             
         params.append(product_id)
         cursor.execute(f"UPDATE products SET {', '.join(updates)} WHERE id=?", tuple(params))
-        
+
+        # --- Variant & option-group sync (admin panel product editor) ---
+        # Full-replace semantics: the client always sends the complete variant
+        # set. Rows that still exist keep their id (stable for cart/orders),
+        # removed rows are deleted, and new rows are inserted.
+        if 'variants' in data or 'has_variants' in data:
+            has_variants = bool(data.get('has_variants')) if 'has_variants' in data else bool(current.get('has_variants'))
+            if not has_variants:
+                # Variants disabled: remove all variant rows + option groups.
+                cursor.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+                cursor.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
+                cursor.execute("UPDATE products SET has_variants = 0, is_parent = 0 WHERE id = ?", (product_id,))
+            else:
+                # Sync option groups: delete + re-insert (ids are not referenced elsewhere).
+                cursor.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
+                variant_options_data = data.get('variant_options') or []
+                for idx, opt in enumerate(variant_options_data):
+                    opt_name = (opt.get('option_name') or '').strip()
+                    if not opt_name:
+                        continue
+                    opt_values = opt.get('option_values') or []
+                    if isinstance(opt_values, str):
+                        try:
+                            opt_values = json.loads(opt_values)
+                        except Exception:
+                            opt_values = [opt_values]
+                    cursor.execute(
+                        "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
+                        (product_id, opt_name, json.dumps([str(v).strip() for v in opt_values if str(v).strip()]), idx)
+                    )
+
+                # Sync variants when a full set is provided.
+                if 'variants' in data:
+                    variants_data = data.get('variants') or []
+                    existing_ids = set()
+                    for v in variants_data:
+                        v_id = v.get('id')
+                        v_name = (v.get('name') or '').strip() or f"{current['name']} - Variant"
+                        v_sku = (v.get('sku') or '').strip() or None
+                        v_barcode = (v.get('barcode') or '').strip() or None
+                        v_price = v.get('price')
+                        v_mrp = v.get('mrp')
+                        v_stock = int(v.get('stock') or v.get('stock_quantity') or 0)
+                        v_images = v.get('images')
+                        if isinstance(v_images, list):
+                            v_images = json.dumps(v_images)
+                        v_options = v.get('options') or {}
+                        if isinstance(v_options, str):
+                            try:
+                                v_options = json.loads(v_options)
+                            except Exception:
+                                v_options = {}
+
+                        if v_id and str(v_id).isdigit():
+                            existing_ids.add(int(v_id))
+                            set_parts = ["name = ?", "sku = ?", "price = ?", "stock = ?", "barcode = ?", "options = ?", "mrp = ?"]
+                            set_params = [v_name, v_sku, v_price, v_stock, v_barcode, json.dumps(v_options), v_mrp]
+                            if v_images:
+                                set_parts.append("images = ?")
+                                set_params.append(v_images)
+                            set_params.append(int(v_id))
+                            set_params.append(product_id)
+                            cursor.execute(
+                                f"UPDATE product_variants SET {', '.join(set_parts)} WHERE id = ? AND product_id = ?",
+                                set_params
+                            )
+                        else:
+                            cursor.execute(
+                                """INSERT INTO product_variants
+                                   (product_id, name, sku, price, stock, barcode, images, options, mrp)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
+                            )
+                    # Delete any existing variants the client no longer sent.
+                    cursor.execute("SELECT id FROM product_variants WHERE product_id = ?", (product_id,))
+                    for row in cursor.fetchall():
+                        if row['id'] not in existing_ids:
+                            cursor.execute("DELETE FROM product_variants WHERE id = ?", (row['id'],))
+
         # Trigger Low Stock Notifications if stock was updated and is <= 2
         if 'stock' in data:
             cursor.execute("SELECT name, stock FROM products WHERE id = ?", (product_id,))
@@ -6786,6 +6956,7 @@ def admin_get_inventory():
                 COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND session_id IS NOT NULL AND user_id IS NULL), 0) as guest_reserved,
                 p.low_stock_threshold,
                 p.status,
+                p.has_variants,
                 'Global Catalog' as store_name,
                 'GLOBAL' as store_code,
                 ROUND(COALESCE((SELECT AVG(rating) FROM product_reviews WHERE product_id = p.id), 0), 1) as average_rating,

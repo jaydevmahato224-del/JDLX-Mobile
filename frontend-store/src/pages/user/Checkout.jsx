@@ -471,6 +471,7 @@ function Checkout() {
                     id: item.id, 
                     qty: item.qty, 
                     price: item.price, 
+                    variant_id: item.variant_id || null,
                     device_model: item.device_model || null,
                     fitting_charge: item.fitting ? (item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40) : 0
                 })),
@@ -882,20 +883,30 @@ function Checkout() {
 
                         {/* Cart Items List */}
                         <div className="max-h-40 overflow-y-auto no-scrollbar space-y-4">
-                            {cart.map(item => (
-                                <div key={item.id} className="flex items-center justify-between gap-4">
+                            {cart.map(item => {
+                                const itemVariantLabel = (() => {
+                                    const opts = item.variant_options;
+                                    if (opts && typeof opts === 'object' && Object.keys(opts).length) {
+                                        return Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(' · ');
+                                    }
+                                    return item.variant_name || '';
+                                })();
+                                return (
+                                <div key={`${item.id}-${item.variant_id || 'base'}`} className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-[var(--color-surface-low)] rounded-xl flex-shrink-0 border border-[var(--color-surface-high)] p-1">
                                             <img src={item.image_url || 'https://placehold.co/100'} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-[13px] font-black text-[var(--color-on-surface)] truncate max-w-[120px] sm:max-w-[200px]">{item.name}</p>
+                                            {itemVariantLabel && <p className="text-[9px] font-black text-primary uppercase tracking-widest truncate max-w-[120px] sm:max-w-[200px]">{itemVariantLabel}</p>}
                                             <p className="text-[10px] font-bold text-[var(--color-on-surface-variant)] uppercase tracking-tighter">{Number(item.qty || 1)} x ₹{Number(item.price || 0)}</p>
                                         </div>
                                     </div>
                                     <div className="text-[13px] font-black text-[var(--color-on-surface)]">₹{(Number(item.price || 0) * Number(item.qty || 1)).toLocaleString()}</div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Coupon Input */}

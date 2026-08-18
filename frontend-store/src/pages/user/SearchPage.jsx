@@ -126,7 +126,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
         <div className="mt-auto flex items-end justify-between gap-2">
           <div className="flex flex-col">
-             <span className="text-base font-black text-[var(--color-on-surface)]">₹{product.price}</span>
+             <span className="text-base font-black text-[var(--color-on-surface)]">{product.has_variants && <span className="text-[9px] font-black text-primary uppercase tracking-widest mr-1">From</span>}₹{product.price}</span>
              {product.mrp > product.price && (
                <span className="text-[10px] text-slate-400 line-through font-medium">₹{product.mrp}</span>
              )}
@@ -157,8 +157,8 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (isStickerProduct(product)) {
-                  toast('Select device on product page');
+                if (isStickerProduct(product) || product.has_variants) {
+                  toast(isStickerProduct(product) ? 'Select device on product page' : 'Select options on product page');
                   navigate(getProductUrl(product));
                   return;
                 }

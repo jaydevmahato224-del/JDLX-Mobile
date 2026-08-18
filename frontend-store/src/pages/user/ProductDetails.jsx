@@ -57,6 +57,13 @@ export default function ProductDetails() {
   const [availability, setAvailability] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // Variant & option state — full variant data is fetched from the detail
+  // endpoint (the list payload only carries has_variants + base price).
+  const [detailVariants, setDetailVariants] = useState([]);
+  const [detailVariantOptions, setDetailVariantOptions] = useState([]);
+  const [selectedOptions, setSelectedOptions] = useState({});
+  const [selectedVariantId, setSelectedVariantId] = useState(null);
+
   // Extract token from either :token or :slugToken (e.g. iphone-15-Ag9Kx2Pq7R -> Ag9Kx2Pq7R)
   const resolvedToken = useMemo(() => {
     const rawToken = token || slugToken;
@@ -149,7 +156,107 @@ export default function ProductDetails() {
       .finally(() => setLoadingToken(false));
   }, [token, slugToken, product]);
 
-  const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(product?.id)), [cart, product?.id]);
+  // Reset the variant picker whenever we move to a different product (adjust
+  // state during render — the React-sanctioned equivalent of a reset effect).
+  const productKey = product?.id || null;
+  const [prevProductKey, setPrevProductKey] = useState(null);
+  if (prevProductKey !== productKey) {
+    setPrevProductKey(productKey);
+    if (!product || !product.has_variants) {
+      setDetailVariants([]);
+      setDetailVariantOptions([]);
+      setSelectedOptions({});
+      setSelectedVariantId(null);
+    }
+  }
+
+  // Load full variant/option data whenever we land on a variant product.
+  // Defaults to the first in-stock variant so the page is immediately usable.
+  const productId = product?.id;
+  const productHasVariants = product?.has_variants;
+  useEffect(() => {
+    if (!productId || !productHasVariants) return;
+    fetch(`${API_BASE_URL}/products/${productId}?_t=${Date.now()}`)
+      .then(r => r.json())
+      .then(payload => {
+        const data = payload?.data || payload || {};
+        const variants = Array.isArray(data.variants) ? data.variants : [];
+        let opts = Array.isArray(data.variant_options) ? data.variant_options : [];
+        // Fallback: if no explicit option groups were defined (e.g. variants
+        // created by a warehouse with only per-variant option maps), derive the
+        // groups from the variants themselves.
+        if (opts.length === 0 && variants.length) {
+          const keyOrder = [];
+          const valueMap = {};
+          variants.forEach(v => {
+            Object.entries(v.options || {}).forEach(([k, val]) => {
+              if (!(k in valueMap)) { valueMap[k] = new Set(); keyOrder.push(k); }
+              if (val) valueMap[k].add(val);
+            });
+          });
+          opts = keyOrder.map(k => ({ option_name: k, option_values: Array.from(valueMap[k]) }));
+        }
+        setDetailVariants(variants);
+        setDetailVariantOptions(opts);
+        if (variants.length) {
+          const first = variants.find(v => (v.stock || 0) > 0) || variants[0];
+          setSelectedVariantId(first.id);
+          setSelectedOptions(first.options || {});
+        }
+      })
+      .catch(() => { /* variant data is optional — page still renders base product */ });
+  }, [productId, productHasVariants]);
+
+  // The variant currently chosen by the option chips (if any).
+  const selectedVariant = useMemo(
+    () => detailVariants.find(v => String(v.id) === String(selectedVariantId)) || null,
+    [detailVariants, selectedVariantId]
+  );
+
+  // Merged view of the product + selected variant. Everything below (price,
+  // stock, images, add-to-cart) reads from this so the page reacts to option
+  // changes exactly like a single-SKU product would.
+  const activeProduct = useMemo(() => {
+    if (!product) return null;
+    if (!selectedVariant) return product;
+    return {
+      ...product,
+      ...selectedVariant,
+      id: product.id,
+      name: product.name,
+      price: selectedVariant.price != null ? selectedVariant.price : product.price,
+      mrp: selectedVariant.mrp != null ? selectedVariant.mrp : (product.mrp || product.price),
+      stock: selectedVariant.stock != null ? selectedVariant.stock : 0,
+      variant_id: selectedVariant.id,
+      variant_name: selectedVariant.name,
+      images: Array.isArray(selectedVariant.images) && selectedVariant.images.length
+        ? selectedVariant.images
+        : product.images,
+    };
+  }, [product, selectedVariant]);
+
+  const handleSelectOption = (optionName, value) => {
+    const next = { ...selectedOptions, [optionName]: value };
+    setSelectedOptions(next);
+    // Pick the variant whose option map matches every selection. If the
+    // combination doesn't exist yet the picker stays visible but add-to-cart
+    // is disabled (handled by selectedVariant being stale/unmatched).
+    const match = detailVariants.find(v => {
+      const vo = v.options || {};
+      return Object.entries(next).every(([k, val]) => String(vo[k] || '') === String(val));
+    });
+    // Only keep a selected variant when the full combination exists — otherwise
+    // clear it so the add-to-cart button disables with a clear hint.
+    if (match) setSelectedVariantId(match.id);
+    else setSelectedVariantId(null);
+  };
+
+  const isVariantProduct = Boolean(product?.has_variants) && detailVariants.length > 0;
+  const selectionComplete = isVariantProduct
+    ? detailVariantOptions.every(o => String(selectedOptions[o.option_name] || '') !== '')
+    : true;
+
+  const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(activeProduct?.id) && String(item.variant_id || '') === String(activeProduct?.variant_id || '')), [cart, activeProduct?.id, activeProduct?.variant_id]);
   const quantity = Number(cartItem?.qty || 0);
   const isInWishlist = useMemo(() => wishlist.some(item => String(item.id) === String(product?.id)), [wishlist, product?.id]);
 
@@ -198,34 +305,39 @@ export default function ProductDetails() {
     }
   }, [product, trackEvent]);
 
-  const stock = product?.stock || 0;
-  const rating = product?.average_rating || 0;
-  const canAdd = stock > 0;
-  const requiresDeviceModel = isStickerProduct(product);
+  const stock = activeProduct?.stock || 0;
+  const variantId = activeProduct?.variant_id || null;
+  const rating = activeProduct?.average_rating || 0;
+  const canAdd = stock > 0 && selectionComplete && (isVariantProduct ? Boolean(selectedVariant) : true);
+  const requiresDeviceModel = isStickerProduct(activeProduct);
   
-  const productImages = useMemo(() => getProductImages(product), [product]);
+  const productImages = useMemo(() => getProductImages(activeProduct), [activeProduct]);
   
   const highlights = useMemo(() => [
-    `${product?.category || 'Accessory'} essential ready for secure fulfillment`,
+    `${activeProduct?.category || 'Accessory'} essential ready for secure fulfillment`,
     `Available quantity: ${stock}`,
     `Dispatch window: ${deliveryTimeDisplay}`,
     'Central warehouse dispatched for reliable fulfillment',
-  ], [product?.category, stock, deliveryTimeDisplay]);
+  ], [activeProduct?.category, stock, deliveryTimeDisplay]);
 
   const handleAddToCart = useCallback((toCart = false) => {
-    if (!product) return;
+    if (!activeProduct) return;
+    if (isVariantProduct && !selectedVariant) {
+      toast.error('Please select all options');
+      return;
+    }
     const selectedDeviceModel = getDeviceModelValue(deviceModel);
     if (requiresDeviceModel && !selectedDeviceModel) {
       toast.error('Select Device Model');
       document.getElementById('device-model-selector')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    addToCart({ ...product, device_model: selectedDeviceModel || null, fitting });
-    trackAddToCart(product, 1);
-    trackEvent('add_to_cart', 'product', product.name, product.id);
+    addToCart({ ...activeProduct, device_model: selectedDeviceModel || null, fitting });
+    trackAddToCart(activeProduct, 1);
+    trackEvent('add_to_cart', 'product', activeProduct.name, activeProduct.id);
     if (toCart) navigate('/cart');
     else toast.success('Added to collection');
-  }, [addToCart, deviceModel, fitting, navigate, product, requiresDeviceModel, trackEvent]);
+  }, [activeProduct, addToCart, deviceModel, fitting, isVariantProduct, navigate, requiresDeviceModel, selectedVariant, trackEvent]);
 
   const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? window.location.origin 
@@ -282,6 +394,52 @@ export default function ProductDetails() {
         image={seoImage}
         url={shareUrl}
       />
+      {/* Variant option picker (Size / Color / Model chips). Rendered for both
+          mobile and desktop — selection drives price, stock and images below. */}
+      {isVariantProduct && detailVariantOptions.length > 0 && (
+        <section className="glass-card p-6 sm:p-8 rounded-[2rem] mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-[0.15em]">Choose Options</h3>
+              <p className="text-[11px] font-bold opacity-50 mt-1">{selectedVariant ? selectedVariant.name : 'Select all options to continue'}</p>
+            </div>
+            {selectedVariant?.stock > 0 && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-3 py-1.5 rounded-full">{selectedVariant.stock} in stock</span>}
+          </div>
+          <div className="space-y-5">
+            {detailVariantOptions.map((group) => {
+              const values = Array.isArray(group.option_values) ? group.option_values : [];
+              const current = selectedOptions[group.option_name];
+              return (
+                <div key={group.id || group.option_name}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="ui-label">{group.option_name}</span>
+                    {current && <span className="text-[10px] font-black text-primary uppercase tracking-widest">{current}</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {values.map((value) => {
+                      const selected = String(current || '') === String(value);
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => handleSelectOption(group.option_name, value)}
+                          className={`min-w-[52px] px-4 py-2.5 rounded-2xl text-[12px] font-black transition-all active:scale-95 border-2 ${
+                            selected
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
+                              : 'bg-[var(--color-surface-low)] text-[var(--color-on-surface)] border-[var(--color-surface-high)] hover:border-slate-400'
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {/* Back navigation is provided by the sticky app header (top-left),
           which already navigates back on every non-home route — a second
           floating button here overlapped it on mobile. */}
@@ -351,16 +509,17 @@ export default function ProductDetails() {
               <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-600"><ShieldCheck size={12} /> Quality Checked</div>
               <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-900/5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-900"><Clock size={12} /> Secure Checkout</div>
             </div>
-            <h1 className="text-3xl font-black tracking-tighter md:text-5xl leading-[1.1] mb-2">{product.name}</h1>
-            <p className="ui-label mb-6">{product.category || 'Premium Accessory'}</p>
+            <h1 className="text-3xl font-black tracking-tighter md:text-5xl leading-[1.1] mb-2">{activeProduct.name}</h1>
+            <p className="ui-label mb-2">{activeProduct.category || 'Premium Accessory'}</p>
+            {selectedVariant && <p className="text-[12px] font-black text-primary uppercase tracking-widest mb-6">{selectedVariant.name}</p>}
             <div className="mt-6 flex items-baseline gap-4 p-6 rounded-[2.5rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] shadow-inner">
-              <div className="flex flex-col"><span className="ui-label opacity-40 mb-1">Current Price</span><div className="text-4xl md:text-5xl font-black tracking-tighter">₹{product.price}</div></div>
-              {product.mrp > product.price && <div className="flex flex-col"><span className="ui-label text-red-400 opacity-100 mb-1">MRP</span><div className="text-xl md:text-2xl opacity-30 line-through font-bold">₹{product.mrp}</div></div>}
+              <div className="flex flex-col"><span className="ui-label opacity-40 mb-1">Current Price</span><div className="text-4xl md:text-5xl font-black tracking-tighter">₹{activeProduct.price}</div></div>
+              {activeProduct.mrp > activeProduct.price && <div className="flex flex-col"><span className="ui-label text-red-400 opacity-100 mb-1">MRP</span><div className="text-xl md:text-2xl opacity-30 line-through font-bold">₹{activeProduct.mrp}</div></div>}
               <div className="ml-auto"><div className="inline-flex items-center gap-2 rounded-2xl bg-[#00E676] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white shadow-lg animate-pulse"><BadgePercent size={16} /> Best Deal</div></div>
             </div>
             <div className="mt-8 space-y-4">
               <h3 className="ui-label text-slate-400">Description</h3>
-              <p className="text-[16px] md:text-lg font-bold opacity-70 leading-relaxed">{product.description || 'Premium daily essential from the JDLX collection.'}</p>
+              <p className="text-[16px] md:text-lg font-bold opacity-70 leading-relaxed">{activeProduct.description || 'Premium daily essential from the JDLX collection.'}</p>
             </div>
             <div className="mt-8 overflow-hidden rounded-[2.5rem] border border-[var(--color-surface-high)] bg-[var(--color-surface-low)]">
               <div className="flex items-center justify-between bg-[var(--color-surface-card)] px-6 py-5 border-b border-[var(--color-surface-high)]">
@@ -385,9 +544,9 @@ export default function ProductDetails() {
               {quantity > 0 ? (
                 <div className="flex items-center gap-4">
                   <div className="flex h-16 items-center gap-8 rounded-3xl bg-slate-900 px-8 shadow-2xl">
-                    <button onClick={() => quantity > 1 ? updateQuantity(product.id, quantity - 1) : removeFromCart(product.id)} className="text-white active:scale-75 transition-all"><Minus size={24} /></button>
+                    <button onClick={() => quantity > 1 ? updateQuantity(product.id, quantity - 1, variantId) : removeFromCart(product.id, variantId)} className="text-white active:scale-75 transition-all"><Minus size={24} /></button>
                     <span className="text-2xl font-black text-white">{quantity}</span>
-                    <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1)} className="text-white active:scale-75 transition-all disabled:opacity-20"><Plus size={24} /></button>
+                    <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1, variantId)} className="text-white active:scale-75 transition-all disabled:opacity-20"><Plus size={24} /></button>
                   </div>
                   <Link to="/cart" className="flex-1 h-16 rounded-3xl bg-primary text-slate-950 font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center active:scale-95 transition-all">View in Cart</Link>
                   <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-3xl border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button>
@@ -427,7 +586,7 @@ export default function ProductDetails() {
             <div className="flex p-1.5 bg-slate-100 rounded-full gap-1 mb-8">
               {['overview', 'highlights', 'reviews'].map((tab) => (<button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 rounded-full py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === tab ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>{tab}</button>))}
             </div>
-            {activeTab === 'overview' && <div className="space-y-8 animate-in fade-in duration-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="rounded-[2rem] p-6 bg-primary/5 border border-amber-400/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary"><Truck size={20} /></div><h4 className="ui-label text-primary">Fulfillment</h4></div><p className="text-sm font-bold opacity-80">Safe & trusted order fulfillment dispatched directly to your location.</p></div><div className="rounded-[2rem] p-6 bg-emerald-500/5 border border-emerald-500/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600"><ShieldCheck size={20} /></div><h4 className="ui-label text-emerald-600">Quality Checked</h4></div><p className="text-sm font-bold opacity-80">Inspected before dispatch for quality assurance.</p></div></div><div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100"><p className="text-[15px] font-bold opacity-60 leading-relaxed">{product.description || `A premium daily essential from the JDLX collection.`}</p></div></div>}
+            {activeTab === 'overview' && <div className="space-y-8 animate-in fade-in duration-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="rounded-[2rem] p-6 bg-primary/5 border border-amber-400/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary"><Truck size={20} /></div><h4 className="ui-label text-primary">Fulfillment</h4></div><p className="text-sm font-bold opacity-80">Safe & trusted order fulfillment dispatched directly to your location.</p></div><div className="rounded-[2rem] p-6 bg-emerald-500/5 border border-emerald-500/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600"><ShieldCheck size={20} /></div><h4 className="ui-label text-emerald-600">Quality Checked</h4></div><p className="text-sm font-bold opacity-80">Inspected before dispatch for quality assurance.</p></div></div><div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100"><p className="text-[15px] font-bold opacity-60 leading-relaxed">{activeProduct.description || `A premium daily essential from the JDLX collection.`}</p></div></div>}
             {activeTab === 'highlights' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-500">{highlights.map((h) => (<div key={h} className="flex items-center gap-4 p-5 rounded-3xl bg-white border border-slate-100 shadow-sm"><div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0"><CheckCircle2 size={14} /></div><span className="text-[13px] font-bold text-slate-700">{h}</span></div>))}</div>}
             {activeTab === 'reviews' && <div className="animate-in fade-in duration-500"><ProductReviews productId={product.id} /></div>}
           </div>
@@ -452,9 +611,9 @@ export default function ProductDetails() {
             {quantity > 0 ? (
                 <div className="flex w-full items-center gap-3">
                     <div className="flex h-12 flex-1 items-center justify-between rounded-2xl bg-white/10 px-4 border border-white/10">
-                        <button onClick={() => quantity > 1 ? updateQuantity(product.id, quantity - 1) : removeFromCart(product.id)} className="text-white active:scale-75"><Minus size={18} /></button>
+                        <button onClick={() => quantity > 1 ? updateQuantity(product.id, quantity - 1, variantId) : removeFromCart(product.id, variantId)} className="text-white active:scale-75"><Minus size={18} /></button>
                         <span className="text-lg font-black text-white">{quantity}</span>
-                        <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1)} className="text-white active:scale-75 disabled:opacity-20"><Plus size={18} /></button>
+                        <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1, variantId)} className="text-white active:scale-75 disabled:opacity-20"><Plus size={18} /></button>
                     </div>
                     <Link to="/cart" className="flex h-12 flex-[1.5] items-center justify-center rounded-2xl bg-primary text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">View in Cart</Link>
                     <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-rose-500 border-rose-500 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white'}`} style={{ animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none' }}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>

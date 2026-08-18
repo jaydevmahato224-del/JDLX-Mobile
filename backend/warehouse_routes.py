@@ -2344,25 +2344,52 @@ def warehouse_create_product():
         
         if has_variants and variants_data:
             created_variants = []
+
+            # Persist option groups (e.g. Size -> [S, M, L]) so the storefront
+            # can render a proper variant picker for this product.
+            variant_options_data = data.get('variant_options') or []
+            for idx, opt in enumerate(variant_options_data):
+                opt_name = (opt.get('option_name') or '').strip()
+                if not opt_name:
+                    continue
+                opt_values = opt.get('option_values') or []
+                if isinstance(opt_values, str):
+                    try:
+                        opt_values = json.loads(opt_values)
+                    except Exception:
+                        opt_values = [opt_values]
+                cursor.execute(
+                    "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
+                    (product_id, opt_name, json.dumps([str(x).strip() for x in opt_values if str(x).strip()]), idx)
+                )
+
             for v in variants_data:
                 v_name = f"{name} - {v.get('name', 'Variant')}"
                 v_sku = v.get('sku') or str(random.randint(100000, 999999))
                 v_barcode = v.get('barcode', '').strip() or None
                 v_price = v.get('price', price)
+                v_mrp = v.get('mrp')
                 v_stock = v.get('stock_quantity', 0)
                 v_images = v.get('images', images)
                 if isinstance(v_images, list):
                     v_images = json.dumps(v_images)
+                v_options = v.get('options') or {}
+                if isinstance(v_options, str):
+                    try:
+                        v_options = json.loads(v_options)
+                    except Exception:
+                        v_options = {}
 
                 cursor.execute(
                     """INSERT INTO product_variants 
                        (product_id, name, sku, price, barcode, model_name, color, 
-                        pack_size, material_type, images, weight, dimensions)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        pack_size, material_type, images, weight, dimensions, options, mrp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         product_id, v_name, v_sku, v_price, v_barcode, v.get('model_name'),
                         v.get('color'), v.get('pack_size'), v.get('material_type'),
-                        v_images, v.get('weight'), v.get('dimensions')
+                        v_images, v.get('weight'), v.get('dimensions'),
+                        json.dumps(v_options), v_mrp
                     )
                 )
                 variant_id = cursor.lastrowid

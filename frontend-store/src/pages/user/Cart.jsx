@@ -76,8 +76,19 @@ function Cart() {
         return sum + (price * qty);
     }, 0);
     const removeUnavailable = () => {
-        const unavailableIds = cart.filter(item => item.removedFromInventory || Number(item.stock || 0) <= 0).map(i => i.id);
-        unavailableIds.forEach(id => removeFromCart(id));
+        const unavailableItems = cart.filter(item => item.removedFromInventory || Number(item.stock || 0) <= 0);
+        unavailableItems.forEach(i => removeFromCart(i.id, i.variant_id || null));
+    };
+
+    // Helper to render the selected option combination of a variant line, e.g.
+    // "Size: M · Color: Red" (falls back to the variant name when present).
+    const variantLabel = (item) => {
+        const opts = item.variant_options;
+        if (opts && typeof opts === 'object' && Object.keys(opts).length) {
+            return Object.entries(opts).map(([k, v]) => `${k}: ${v}`).join(' · ');
+        }
+        if (item.variant_name) return item.variant_name;
+        return '';
     };
 
     if (cart.length === 0) {
@@ -162,7 +173,7 @@ function Cart() {
                         const atMaxStock = item.qty >= stockCount && !isUnavailable;
 
                         return (
-                            <div key={item.id} className={`group relative glass-card p-0 overflow-hidden transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] ${isUnavailable ? 'bg-red-50/20' : ''}`}>
+                            <div key={`${item.id}-${item.variant_id || 'base'}`} className={`group relative glass-card p-0 overflow-hidden transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] ${isUnavailable ? 'bg-red-50/20' : ''}`}>
                                 <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                     {/* Image Section */}
                                     <div className={`relative w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-white p-3 flex-shrink-0 border border-[var(--color-surface-high)] shadow-sm transition-transform group-hover:rotate-2 ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
@@ -180,6 +191,9 @@ function Cart() {
                                             <h3 className={`font-black text-[17px] md:text-xl text-[var(--color-on-surface)] leading-tight tracking-tight ${isUnavailable ? 'opacity-50' : ''}`} style={{ fontFamily: 'Manrope, sans-serif' }}>
                                                 {item.name}
                                             </h3>
+                                            {variantLabel(item) && (
+                                                <p className="text-[10px] font-black text-primary uppercase tracking-widest mt-0.5">{variantLabel(item)}</p>
+                                            )}
                                             <div className="flex items-center gap-3">
                                                 <p className={`font-black text-xl text-primary ${isUnavailable ? 'opacity-50' : ''}`}>₹{item.price}</p>
                                                 
@@ -210,7 +224,7 @@ function Cart() {
                                                 <DeviceModelSelector
                                                     compact
                                                     value={item.device_model || ''}
-                                                    onChange={(value) => updateDeviceModel(item.id, value)}
+                                                    onChange={(value) => updateDeviceModel(item.id, value, item.variant_id || null)}
                                                     required
                                                 />
                                             </div>
@@ -224,10 +238,10 @@ function Cart() {
                                                 onClick={() => {
                                                     if (item.qty === 1) {
                                                         trackRemoveFromCart(item, 1);
-                                                        removeFromCart(item.id);
+                                                        removeFromCart(item.id, item.variant_id || null);
                                                     } else {
                                                         trackRemoveFromCart(item, 1);
-                                                        updateQuantity(item.id, item.qty - 1);
+                                                        updateQuantity(item.id, item.qty - 1, item.variant_id || null);
                                                     }
                                                 }}
                                                 className="w-10 h-10 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
@@ -237,7 +251,7 @@ function Cart() {
                                             <span className="w-6 text-center text-[16px] font-black text-[var(--color-on-surface)]">{Number(item.qty || 1)}</span>
                                             <button
                                                 onClick={() => {
-                                                  updateQuantity(item.id, item.qty + 1);
+                                                  updateQuantity(item.id, item.qty + 1, item.variant_id || null);
                                                   trackEvent('add_to_cart', 'product', item.name, item.id);
                                                 }}
                                                 className="w-10 h-10 flex items-center justify-center text-primary hover:bg-[var(--color-surface-low)] rounded-xl transition-all disabled:opacity-20 disabled:cursor-not-allowed"

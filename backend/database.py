@@ -362,7 +362,28 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(product_id) REFERENCES products(id)
     )''')
+    ensure_columns('product_variants', [
+        # JSON map of option_name -> selected value, e.g. {"Size": "M", "Color": "Red"}
+        ('options', 'TEXT'),
+        # MRP (strike-through price) for this specific variant
+        ('mrp', 'REAL'),
+    ])
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)")
+
+    # Option groups that define how a product's variants are presented to
+    # customers (e.g. Size: [S, M, L], Color: [Red, Blue]). Each variant links
+    # to a value per group through product_variants.options (JSON).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_variant_options (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        option_name TEXT NOT NULL,
+        option_values TEXT NOT NULL DEFAULT '[]', -- JSON array of value strings
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_variant_options_product ON product_variant_options(product_id)")
 
     # Legacy Stock Sync
     cursor.execute("PRAGMA table_info(products)")

@@ -138,6 +138,12 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
+      // Variant products need an option selection first — send the user to the
+      // product page where the variant picker lives.
+      if (product.has_variants) {
+        navigate(getProductUrl(product));
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock`);
       const json = await res.json();
       const stockData = json.data || {};
@@ -149,8 +155,12 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         toast.success('Added to collection');
       }
     } catch {
-      onAddToCart(product);
-      toast.success('Added to collection');
+      if (product.has_variants) {
+        navigate(getProductUrl(product));
+      } else {
+        onAddToCart(product);
+        toast.success('Added to collection');
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -227,6 +237,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         <div className="mt-auto flex items-center justify-between gap-2 md:gap-4">
           <div className="space-y-0.5 md:space-y-1">
              <div className="flex items-baseline gap-1 md:gap-2">
+               {product.has_variants && <span className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-widest">From</span>}
                <span className="text-lg md:text-2xl font-black text-[var(--color-on-surface)] tracking-tighter">₹{product.price}</span>
                {product.mrp > product.price && (
                  <span className="text-[10px] md:text-xs text-slate-400 line-through font-bold">₹{product.mrp}</span>

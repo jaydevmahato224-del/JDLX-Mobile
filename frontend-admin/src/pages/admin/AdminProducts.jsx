@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Package, Save, ArrowLeft, Trash2, Plus, Search, Filter, ShieldCheck, Undo2, CreditCard } from 'lucide-react'
+import { Package, Save, ArrowLeft, Trash2, Plus, Search, Filter, ShieldCheck, Undo2, CreditCard, Layers } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
@@ -14,7 +14,7 @@ function AdminProducts() {
     const [editingProduct, setEditingProduct] = useState(null);
     const navigate = useNavigate();
 
-    const [formData, setFormData] = useState({
+    const EMPTY_FORM = {
         name: '',
         price: '',
         category_id: '',
@@ -23,8 +23,13 @@ function AdminProducts() {
         barcode: '',
         global_sku_code: '',
         return_policy: '',
-        prepaid_only: 0
-    });
+        prepaid_only: 0,
+        has_variants: false,
+        variant_options: [],
+        variants: []
+    };
+
+    const [formData, setFormData] = useState(EMPTY_FORM);
 
     const fetchProducts = async () => {
         try {
@@ -58,12 +63,82 @@ function AdminProducts() {
         init();
     }, []);
 
+    // Option-group helpers for the variants editor.
+    const addVariantGroup = () => setFormData(prev => ({
+        ...prev,
+        variant_options: [...prev.variant_options, { option_name: '', option_values: [] }]
+    }));
+
+    const updateVariantGroup = (idx, patch) => setFormData(prev => {
+        const groups = prev.variant_options.map((g, i) => i === idx ? { ...g, ...patch } : g);
+        return { ...prev, variant_options: groups };
+    });
+
+    const removeVariantGroup = (idx) => setFormData(prev => {
+        const removed = prev.variant_options[idx];
+        const groups = prev.variant_options.filter((_, i) => i !== idx);
+        // Drop the removed group's key from every variant's option map.
+        const variants = prev.variants.map(v => {
+            const options = { ...(v.options || {}) };
+            delete options[removed?.option_name];
+            return { ...v, options };
+        });
+        return { ...prev, variant_options: groups, variants };
+    });
+
+    const addVariantRow = () => setFormData(prev => ({
+        ...prev,
+        variants: [...prev.variants, { name: '', sku: '', price: prev.price || '', mrp: '', stock: 0, options: {} }]
+    }));
+
+    const updateVariantRow = (idx, patch) => setFormData(prev => {
+        const variants = prev.variants.map((v, i) => i === idx ? { ...v, ...patch } : v);
+        return { ...prev, variants };
+    });
+
+    const updateVariantOption = (idx, groupName, value) => setFormData(prev => {
+        const variants = prev.variants.map((v, i) => {
+            if (i !== idx) return v;
+            const options = { ...(v.options || {}), [groupName]: value };
+            return { ...v, options };
+        });
+        return { ...prev, variants };
+    });
+
+    const removeVariantRow = (idx) => setFormData(prev => ({
+        ...prev,
+        variants: prev.variants.filter((_, i) => i !== idx)
+    }));
+
     const handleSave = async (e) => {
         e.preventDefault();
         if (!formData.return_policy) {
             toast.error("Return Policy is mandatory!");
             return;
         }
+
+        // Build the variant payload the backend expects: option groups + a
+        // full variant set (existing ids preserved for cart/order stability).
+        const payload = {
+            ...formData,
+            has_variants: formData.has_variants,
+            variant_options: (formData.variant_options || [])
+                .filter(g => (g.option_name || '').trim())
+                .map(g => ({ option_name: g.option_name.trim(), option_values: g.option_values || [] })),
+            variants: (formData.has_variants ? (formData.variants || []) : []).map(v => {
+                const options = v.options || {};
+                const valueParts = Object.values(options).filter(Boolean);
+                return {
+                    ...(v.id ? { id: v.id } : {}),
+                    name: (v.name || '').trim() || valueParts.join(' / '),
+                    sku: v.sku || '',
+                    price: v.price,
+                    mrp: v.mrp,
+                    stock: v.stock,
+                    options
+                };
+            })
+        };
 
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
         const url = editingProduct 
@@ -77,27 +152,28 @@ function AdminProducts() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
                 toast.success(editingProduct ? "Product Updated" : "Product Added");
                 setShowAddModal(false);
                 setEditingProduct(null);
-                setFormData({ name: '', price: '', category_id: '', delivery_time: '15-30 mins', images: '[]', barcode: '', global_sku_code: '', return_policy: '' });
+                setFormData(EMPTY_FORM);
                 fetchProducts();
             } else {
                 const err = await res.json();
                 toast.error(err.error || "Failed to save product");
             }
-        } catch (err) {
+        } catch {
             toast.error("An error occurred");
         }
     };
 
-    const handleEdit = (product) => {
+    const handleEdit = async (product) => {
         setEditingProduct(product);
-        setFormData({
+        const base = {
+            ...EMPTY_FORM,
             name: product.product_name,
             price: product.price,
             category_id: categories.find(c => c.name === product.category)?.id || '',
@@ -107,7 +183,33 @@ function AdminProducts() {
             global_sku_code: product.global_sku_code || '',
             return_policy: product.return_policy || '',
             prepaid_only: product.prepaid_only || 0
-        });
+        };
+        // Variant products need their full variant set — the list payload only
+        // carries the base row, so fetch the detail endpoint.
+        if (product.has_variants) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/products/${product.id}`);
+                const data = await res.json();
+                const detail = data.data || data;
+                base.has_variants = true;
+                base.variant_options = (detail.variant_options || []).map(o => ({
+                    option_name: o.option_name,
+                    option_values: o.option_values || []
+                }));
+                base.variants = (detail.variants || []).map(v => ({
+                    id: v.id,
+                    name: v.name || '',
+                    sku: v.sku || '',
+                    price: v.price,
+                    mrp: v.mrp,
+                    stock: v.stock || 0,
+                    options: v.options || {}
+                }));
+            } catch {
+                console.error('Failed to load variants');
+            }
+        }
+        setFormData(base);
         setShowAddModal(true);
     };
 
@@ -131,7 +233,7 @@ function AdminProducts() {
                 <button 
                     onClick={() => {
                         setEditingProduct(null);
-                        setFormData({ name: '', price: '', category_id: '', delivery_time: '15-30 mins', images: '[]', barcode: '', global_sku_code: '', return_policy: '', prepaid_only: 0 });
+                        setFormData(EMPTY_FORM);
                         setShowAddModal(true);
                     }}
                     className="bg-primary text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
@@ -181,6 +283,12 @@ function AdminProducts() {
                                 <ShieldCheck size={14} className="text-blue-500" />
                                 <span>{p.sku || 'No SKU'}</span>
                             </div>
+                            {p.has_variants === 1 || p.has_variants === true ? (
+                                <div className="flex items-center gap-2 text-xs font-black text-purple-600 bg-purple-50 p-2 rounded-lg border border-purple-100">
+                                    <Layers size={14} />
+                                    <span>VARIANT PRODUCT</span>
+                                </div>
+                            ) : null}
                             {p.prepaid_only === 1 && (
                                 <div className="flex items-center gap-2 text-xs font-black text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
                                     <CreditCard size={14} />
@@ -307,7 +415,139 @@ function AdminProducts() {
                                         </div>
                                     </label>
                                 </div>
+                                <div className="md:col-span-2">
+                                    <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer hover:bg-white hover:shadow-md transition-all">
+                                        <input 
+                                            type="checkbox"
+                                            className="w-5 h-5 rounded-lg border-gray-300 text-primary focus:ring-primary"
+                                            checked={formData.has_variants}
+                                            onChange={e => setFormData(prev => ({
+                                                ...prev,
+                                                has_variants: e.target.checked,
+                                                variants: e.target.checked && prev.variants.length === 0
+                                                    ? [{ name: '', sku: '', price: prev.price || '', mrp: '', stock: 0, options: {} }]
+                                                    : prev.variants
+                                            }))}
+                                        />
+                                        <div>
+                                            <p className="text-sm font-black text-slate-800">Enable Variants & Options</p>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Customers pick options like Size, Color, or Model on the product page</p>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
+
+                            {/* Variants & Options Editor */}
+                            {formData.has_variants && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    {/* Option Groups */}
+                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Option Groups</h3>
+                                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">e.g. Size (S, M, L) or Color (Red, Blue)</p>
+                                            </div>
+                                            <button type="button" onClick={addVariantGroup} className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">
+                                                <Plus size={14} /> Add Group
+                                            </button>
+                                        </div>
+                                        {formData.variant_options.length === 0 && (
+                                            <p className="text-[11px] font-bold text-slate-400 text-center py-3">No option groups yet — add one to structure the picker.</p>
+                                        )}
+                                        {formData.variant_options.map((group, gi) => (
+                                            <div key={gi} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-3 items-center bg-white border border-slate-100 rounded-xl p-3">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Option name (e.g. Size)"
+                                                    className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
+                                                    value={group.option_name}
+                                                    onChange={e => updateVariantGroup(gi, { option_name: e.target.value })}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Values, comma separated (e.g. S, M, L)"
+                                                    className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
+                                                    value={Array.isArray(group.option_values) ? group.option_values.join(', ') : group.option_values}
+                                                    onChange={e => updateVariantGroup(gi, { option_values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) })}
+                                                />
+                                                <button type="button" onClick={() => removeVariantGroup(gi)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Variant Rows */}
+                                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Variants</h3>
+                                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">One row per combination — price, MRP, stock and SKU can differ</p>
+                                            </div>
+                                            <button type="button" onClick={addVariantRow} className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all">
+                                                <Plus size={14} /> Add Variant
+                                            </button>
+                                        </div>
+                                        <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
+                                            <table className="w-full text-left border-collapse min-w-[640px]">
+                                                <thead>
+                                                    <tr className="border-b border-slate-100 bg-gray-50">
+                                                        {formData.variant_options.map((g) => (
+                                                            <th key={g.option_name || 'g'} className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">{g.option_name || 'Option'}</th>
+                                                        ))}
+                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">SKU</th>
+                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Price</th>
+                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">MRP</th>
+                                                        <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
+                                                        <th className="p-3"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {formData.variants.map((variant, vi) => (
+                                                        <tr key={variant.id || `new-${vi}`}>
+                                                            {formData.variant_options.map((g) => {
+                                                                const current = (variant.options || {})[g.option_name];
+                                                                return (
+                                                                    <td key={g.option_name || 'g'} className="p-2">
+                                                                        <select
+                                                                            className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs"
+                                                                            value={current || ''}
+                                                                            onChange={e => updateVariantOption(vi, g.option_name, e.target.value)}
+                                                                        >
+                                                                            <option value="">Select</option>
+                                                                            {(g.option_values || []).map(v => <option key={v} value={v}>{v}</option>)}
+                                                                        </select>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                            <td className="p-2">
+                                                                <input type="text" placeholder="SKU" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.sku || ''} onChange={e => updateVariantRow(vi, { sku: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input type="number" placeholder="Price" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.price ?? ''} onChange={e => updateVariantRow(vi, { price: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input type="number" placeholder="MRP" className="w-24 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.mrp ?? ''} onChange={e => updateVariantRow(vi, { mrp: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <input type="number" min="0" placeholder="0" className="w-20 p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary outline-none font-bold text-xs" value={variant.stock ?? 0} onChange={e => updateVariantRow(vi, { stock: parseInt(e.target.value) || 0 })} />
+                                                            </td>
+                                                            <td className="p-2 text-right">
+                                                                <button type="button" onClick={() => removeVariantRow(vi)} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            {formData.variants.length === 0 && (
+                                                <p className="text-[11px] font-bold text-slate-400 text-center py-4">No variants yet — add one to start configuring combinations.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex gap-4 pt-4">
                                 <button 

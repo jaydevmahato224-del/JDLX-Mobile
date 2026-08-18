@@ -6,7 +6,7 @@ import { refreshRecentlyViewed } from '../utils/recentlyViewedSync'
 
 let processingSync = false;
 
-const syncCartWithServer = async (productId, quantity, action = 'add') => {
+const syncCartWithServer = async (productId, quantity, action = 'add', variantId = null) => {
     const token = localStorage.getItem('token');
     let sessionId = localStorage.getItem('sessionId');
     if (!sessionId) {
@@ -21,7 +21,7 @@ const syncCartWithServer = async (productId, quantity, action = 'add') => {
                 'Content-Type': 'application/json',
                 ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
-            body: JSON.stringify({ product_id: productId, quantity, action, session_id: sessionId })
+            body: JSON.stringify({ product_id: productId, quantity, action, session_id: sessionId, variant_id: variantId })
         });
         return response.ok;
     } catch (e) {
@@ -240,13 +240,18 @@ export const useStore = create((set, get) => ({
         localStorage.removeItem('warehouseRequestToken');
         set({ warehouseRequestUser: null, warehouseRequestToken: null });
     },
+    // Variant-aware helpers: cart lines are keyed by (product_id, variant_id)
+    // so the same product can hold several option combinations (e.g. two
+    // sizes/colors) as separate lines. Products without variants keep their
+    // legacy behavior (variant_id undefined/null).
     addToCart: async (product) => {
         if (processingSync) return;
         processingSync = true;
         try {
             const state = get();
             const deviceModel = getDeviceModelValue(product?.device_model);
-            const existing = state.cart.find(item => String(item.id) === String(product.id));
+            const variantId = product?.variant_id || null;
+            const existing = state.cart.find(item => String(item.id) === String(product.id) && String(item.variant_id || '') === String(variantId || ''));
             const availableStock = getAvailableStock(product)
             
             if (availableStock <= 0) {
@@ -268,13 +273,14 @@ export const useStore = create((set, get) => ({
                 let newCart;
                 if (existing) {
                     newCart = state.cart.map(item =>
-                        String(item.id) === String(product.id) ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
+                        String(item.id) === String(product.id) && String(item.variant_id || '') === String(variantId || '') ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
                     );
                 } else {
                     newCart = [
                         ...state.cart,
                         {
                             ...product,
+                            variant_id: variantId,
                             device_model: deviceModel || null,
                             fitting: product.fitting ?? false,
                             stock: availableStock,
@@ -288,7 +294,7 @@ export const useStore = create((set, get) => ({
             });
 
             // Sync with server in background
-            const success = await syncCartWithServer(product.id, 1, 'add');
+            const success = await syncCartWithServer(product.id, 1, 'add', variantId);
             if (!success) {
                 console.error('Failed to sync add-to-cart with server');
             }
@@ -296,21 +302,21 @@ export const useStore = create((set, get) => ({
             processingSync = false;
         }
     },
-    removeFromCart: async (productId) => {
+    removeFromCart: async (productId, variantId = null) => {
         // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
         set((state) => {
-            const newCart = state.cart.filter(item => String(item.id) !== String(productId));
+            const newCart = state.cart.filter(item => String(item.id) !== String(productId) || String(item.variant_id || '') !== String(variantId || ''));
             localStorage.setItem('cart', JSON.stringify(newCart));
             return { cart: newCart };
         });
 
         // Sync with server in background
-        const success = await syncCartWithServer(productId, 0, 'remove');
+        const success = await syncCartWithServer(productId, 0, 'remove', variantId);
         if (!success) {
             console.error('Failed to sync remove-from-cart with server');
         }
     },
-    updateQuantity: async (productId, qty) => {
+    updateQuantity: async (productId, qty, variantId = null) => {
         if (processingSync) return;
         processingSync = true;
 
@@ -320,7 +326,7 @@ export const useStore = create((set, get) => ({
             
             let finalQty = requestedQty;
             const state = get();
-            const item = state.cart.find(i => String(i.id) === String(productId));
+            const item = state.cart.find(i => String(i.id) === String(productId) && String(i.variant_id || '') === String(variantId || ''));
             if (!item) return;
 
             const maxQty = getAvailableStock(item);
@@ -329,7 +335,7 @@ export const useStore = create((set, get) => ({
             // Update local state IMMEDIATELY for responsiveness
             set((state) => {
                 const newCart = state.cart.map(item => {
-                    if (String(item.id) !== String(productId)) return item;
+                    if (String(item.id) !== String(productId) || String(item.variant_id || '') !== String(variantId || '')) return item;
                     return { ...item, qty: finalQty };
                 });
                 localStorage.setItem('cart', JSON.stringify(newCart));
@@ -337,7 +343,7 @@ export const useStore = create((set, get) => ({
             });
 
             // PERSISTENCE FIX: Sync with server
-            const success = await syncCartWithServer(productId, finalQty, 'update');
+            const success = await syncCartWithServer(productId, finalQty, 'update', variantId);
             if (!success) {
                 console.error('Failed to persist quantity to server');
             }
@@ -345,17 +351,17 @@ export const useStore = create((set, get) => ({
             processingSync = false;
         }
     },
-    updateDeviceModel: (productId, deviceModel) => set((state) => {
+    updateDeviceModel: (productId, deviceModel, variantId = null) => set((state) => {
         const normalizedDeviceModel = getDeviceModelValue(deviceModel);
         const newCart = state.cart.map(item =>
-            String(item.id) === String(productId) ? { ...item, device_model: normalizedDeviceModel || null } : item
+            String(item.id) === String(productId) && String(item.variant_id || '') === String(variantId || '') ? { ...item, device_model: normalizedDeviceModel || null } : item
         );
         localStorage.setItem('cart', JSON.stringify(newCart));
         return { cart: newCart };
     }),
-    toggleFittingService: (productId) => set((state) => {
+    toggleFittingService: (productId, variantId = null) => set((state) => {
         const newCart = state.cart.map(item =>
-            String(item.id) === String(productId) ? { ...item, fitting: !item.fitting } : item
+            String(item.id) === String(productId) && String(item.variant_id || '') === String(variantId || '') ? { ...item, fitting: !item.fitting } : item
         );
         localStorage.setItem('cart', JSON.stringify(newCart));
         return { cart: newCart };
@@ -491,21 +497,39 @@ export const useStore = create((set, get) => ({
                     const json = await res.json();
                     const freshProduct = json.data || {};
                     
+                    // Variant-aware refresh: a variant cart line must keep its own
+                    // price/stock/images instead of inheriting the parent row's.
+                    let stockSource = freshProduct;
+                    if (item.variant_id && Array.isArray(freshProduct.variants)) {
+                        const v = freshProduct.variants.find(v => String(v.id) === String(item.variant_id));
+                        if (v) stockSource = v;
+                    }
+
                     // Standardize stock field matching the refactor
-                    const physical = Number(freshProduct.stock ?? freshProduct.physical_stock ?? freshProduct.stock_quantity ?? 0);
-                    const hardReserved = Number(freshProduct.hard_reserved ?? 0);
+                    const physical = Number(stockSource.stock ?? stockSource.physical_stock ?? stockSource.stock_quantity ?? 0);
+                    const hardReserved = Number(stockSource.hard_reserved ?? 0);
                     const available = Math.max(0, physical - hardReserved);
                     
                     const currentQty = Number(item.qty || item.quantity || 1);
                     const safeQty = isNaN(currentQty) ? 1 : currentQty;
                     
-                    return { 
+                    const refreshed = { 
                         ...item, 
                         ...freshProduct, 
                         stock: available,
                         qty: Math.min(safeQty, Math.max(1, available)),
                         removedFromInventory: false 
                     };
+                    // Restore variant-specific values so a variant line is never
+                    // clobbered by the parent product row.
+                    if (item.variant_id && stockSource !== freshProduct) {
+                        refreshed.price = stockSource.price != null ? stockSource.price : refreshed.price;
+                        refreshed.variant_name = stockSource.name || refreshed.variant_name;
+                        if (Array.isArray(stockSource.images) && stockSource.images.length) {
+                            refreshed.images = stockSource.images;
+                        }
+                    }
+                    return refreshed;
                 } catch {
                     return { ...item, removedFromInventory: true, stock: 0 };
                 }

@@ -48,8 +48,25 @@ import {
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 
+// Convert a variant's option map to editable text, e.g. "Size:M, Color:Red".
+const variantOptionsToText = (options = {}) =>
+    Object.entries(options).filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(', ');
+
+// Parse "Size:M, Color:Red" back into an option map.
+const variantTextToOptions = (text = '') => {
+    const out = {};
+    text.split(',').forEach(part => {
+        const idx = part.indexOf(':');
+        if (idx === -1) return;
+        const key = part.slice(0, idx).trim();
+        const value = part.slice(idx + 1).trim();
+        if (key) out[key] = value;
+    });
+    return out;
+};
+
 const INITIAL_PRODUCT_STATE = {
-    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '', is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
+    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '',    is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
 const WarehouseInventory = () => {
@@ -713,11 +730,19 @@ const WarehouseInventory = () => {
                 expiry_date: newProductData.expiry_date,
                 is_featured: newProductData.is_featured ? 1 : 0,
                 has_variants: newProductData.has_variants,
-                variants: newProductData.variants.map(v => ({
-                    ...v,
-                    price: parseFloat(v.price) || 0,
-                    stock_quantity: parseInt(v.stock_quantity) || 0
-                })),
+                variant_options: (newProductData.variant_options || [])
+                    .filter(g => (g.option_name || '').trim())
+                    .map(g => ({ option_name: g.option_name.trim(), option_values: g.option_values || [] })),
+                variants: newProductData.variants.map(v => {
+                    const options = v.options || {};
+                    return {
+                        ...v,
+                        price: parseFloat(v.price) || 0,
+                        mrp: v.mrp ? parseFloat(v.mrp) : null,
+                        stock_quantity: parseInt(v.stock_quantity) || 0,
+                        options
+                    };
+                }),
                 recommendation_priority: parseInt(newProductData.recommendation_priority) || 0,
                 recommendation_weight: parseFloat(newProductData.recommendation_weight) || 1.0,
                 recommendations: newProductData.recommendations,
@@ -1256,7 +1281,8 @@ const WarehouseInventory = () => {
                                                             setNewProductData(prev => ({
                                                                 ...prev,
                                                                 has_variants: enabled,
-                                                                variants: enabled && prev.variants.length === 0 ? [{ id: Date.now(), name: '', sku: '', price: prev.price, stock_quantity: 0 }] : prev.variants
+                                                                variants: enabled && prev.variants.length === 0 ? [{ id: Date.now(), name: '', sku: '', price: prev.price, mrp: '', stock_quantity: 0, options: {} }] : prev.variants,
+                                                                variant_options: enabled && prev.variant_options.length === 0 ? [] : prev.variant_options
                                                             }))
                                                         }}
                                                     />
@@ -1273,7 +1299,7 @@ const WarehouseInventory = () => {
                                                         type="button"
                                                         onClick={() => setNewProductData(prev => ({
                                                             ...prev,
-                                                            variants: [...prev.variants, { id: Date.now(), name: '', sku: '', price: prev.price, stock_quantity: 0 }]
+                                                            variants: [...prev.variants, { id: Date.now(), name: '', sku: '', price: prev.price, mrp: '', stock_quantity: 0, options: {} }]
                                                         }))}
                                                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400/10 text-amber-500 text-[9px] font-black uppercase tracking-widest hover:bg-amber-400/20 transition-all"
                                                     >
@@ -1281,13 +1307,71 @@ const WarehouseInventory = () => {
                                                     </button>
                                                 </div>
 
+                                                {/* Option groups — structure the storefront picker (Size / Color etc.) */}
+                                                <div className="rounded-2xl border border-white/5 bg-slate-950/30 p-4 space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Option Groups (Optional)</h4>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setNewProductData(prev => ({
+                                                                ...prev,
+                                                                variant_options: [...prev.variant_options, { option_name: '', option_values: [] }]
+                                                            }))}
+                                                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-500 text-[9px] font-black uppercase tracking-widest hover:bg-amber-400/20 transition-all"
+                                                        >
+                                                            <Plus size={10} /> Add Group
+                                                        </button>
+                                                    </div>
+                                                    {newProductData.variant_options.length === 0 && (
+                                                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">e.g. Size with values S, M, L — customers pick these on the store.</p>
+                                                    )}
+                                                    {newProductData.variant_options.map((group, gi) => (
+                                                        <div key={gi} className="grid grid-cols-[1fr_2fr_auto] gap-2 items-center">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Option name (Size)"
+                                                                value={group.option_name}
+                                                                onChange={(e) => {
+                                                                    const next = [...newProductData.variant_options];
+                                                                    next[gi] = { ...next[gi], option_name: e.target.value };
+                                                                    setNewProductData(prev => ({ ...prev, variant_options: next }));
+                                                                }}
+                                                                className="bg-slate-950/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400/50"
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Values, comma separated (S, M, L)"
+                                                                value={Array.isArray(group.option_values) ? group.option_values.join(', ') : group.option_values}
+                                                                onChange={(e) => {
+                                                                    const next = [...newProductData.variant_options];
+                                                                    next[gi] = { ...next[gi], option_values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) };
+                                                                    setNewProductData(prev => ({ ...prev, variant_options: next }));
+                                                                }}
+                                                                className="bg-slate-950/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400/50"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setNewProductData(prev => ({
+                                                                    ...prev,
+                                                                    variant_options: prev.variant_options.filter((_, i) => i !== gi)
+                                                                }))}
+                                                                className="p-2 text-slate-600 hover:text-rose-500 transition-colors"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
                                                 <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-950/30">
                                                     <table className="w-full text-left border-collapse">
                                                         <thead>
                                                             <tr className="border-b border-white/5">
                                                                 <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Variant Name</th>
+                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Options</th>
                                                                 <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU</th>
                                                                 <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Price</th>
+                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">MRP</th>
                                                                 <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
                                                                 <th className="p-4"></th>
                                                             </tr>
@@ -1306,6 +1390,19 @@ const WarehouseInventory = () => {
                                                                                 setNewProductData(prev => ({ ...prev, variants: newVariants }));
                                                                             }}
                                                                             className="w-full bg-transparent border-none p-2 text-xs text-white font-bold focus:outline-none"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="Size:M, Color:Red"
+                                                                            value={variantOptionsToText(variant.options)}
+                                                                            onChange={(e) => {
+                                                                                const newVariants = [...newProductData.variants];
+                                                                                newVariants[idx].options = variantTextToOptions(e.target.value);
+                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
+                                                                            }}
+                                                                            className="w-40 bg-transparent border-none p-2 text-xs text-sky-400 font-bold focus:outline-none"
                                                                         />
                                                                     </td>
                                                                     <td className="p-3">
@@ -1332,6 +1429,19 @@ const WarehouseInventory = () => {
                                                                                 setNewProductData(prev => ({ ...prev, variants: newVariants }));
                                                                             }}
                                                                             className="w-24 bg-transparent border-none p-2 text-xs text-amber-500 font-bold focus:outline-none"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <input
+                                                                            type="number"
+                                                                            placeholder="MRP"
+                                                                            value={variant.mrp ?? ''}
+                                                                            onChange={(e) => {
+                                                                                const newVariants = [...newProductData.variants];
+                                                                                newVariants[idx].mrp = e.target.value;
+                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
+                                                                            }}
+                                                                            className="w-24 bg-transparent border-none p-2 text-xs text-slate-300 font-bold focus:outline-none"
                                                                         />
                                                                     </td>
                                                                     <td className="p-3">

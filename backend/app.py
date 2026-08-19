@@ -6619,11 +6619,16 @@ def admin_update_product(product_id):
         cursor = conn.cursor()
         
         # Fetch current product to ensure stability and repair missing data
-        cursor.execute("SELECT name, share_token, seo_slug, has_variants FROM products WHERE id = ?", (product_id,))
+        cursor.execute("SELECT name, share_token, seo_slug, has_variants, global_sku_code FROM products WHERE id = ?", (product_id,))
         current = cursor.fetchone()
         if not current:
             conn.close()
             return error_response("Product not found", 404)
+
+        # SKU LOCK: Once a global_sku_code has been assigned, it cannot be changed.
+        # This prevents barcode/label mismatches and internal fraud.
+        if 'global_sku_code' in data and current.get('global_sku_code') and data['global_sku_code'] != current['global_sku_code']:
+            return error_response("SKU code is locked after creation and cannot be changed. Contact super admin to modify.", 403)
             
         updates = []
         params = []

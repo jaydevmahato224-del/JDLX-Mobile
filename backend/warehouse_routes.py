@@ -2515,9 +2515,14 @@ def warehouse_patch_inventory(item_id):
 
     conn = get_db()
     try:
-        inv = conn.execute("SELECT product_id FROM warehouse_inventory WHERE id = ? AND warehouse_id = ?", (item_id, wh_id)).fetchone()
+        inv = conn.execute("SELECT product_id, sku FROM warehouse_inventory WHERE id = ? AND warehouse_id = ?", (item_id, wh_id)).fetchone()
         if not inv:
             return error_response("Inventory item not found", 404)
+
+        # SKU LOCK: Once an SKU has been assigned and saved, it cannot be changed
+        # via the edit form. This prevents barcode/label mismatches and fraud.
+        if 'sku' in updates and inv.get('sku') and updates['sku'] != inv['sku']:
+            return error_response("SKU code is locked after creation and cannot be changed. Contact admin to modify.", 403)
             
         # Update product metadata (images, description, brand, etc) if provided
         product_meta_fields = [

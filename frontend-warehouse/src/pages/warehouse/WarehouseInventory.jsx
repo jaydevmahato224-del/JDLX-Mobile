@@ -1146,6 +1146,7 @@ const WarehouseInventory = () => {
                                                     className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all outline-none"
                                                 />
                                                 <datalist id="brand-options">
+                                                    <option value="None" />
                                                     {brands.map(b => (
                                                         <option key={b.id} value={b.name} />
                                                     ))}
@@ -1242,22 +1243,29 @@ const WarehouseInventory = () => {
 
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between ml-1">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Global SKU Code</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={generateRandomSku}
-                                                    className="flex items-center gap-2 text-[9px] font-black text-amber-500 uppercase tracking-widest hover:text-amber-400 transition-colors"
-                                                >
-                                                    <RefreshCw size={12} /> Auto-Generate
-                                                </button>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Global SKU Code {editingItemId && <span className="text-amber-500/80 normal-case tracking-normal">🔒 Locked</span>}</label>
+                                                {!editingItemId && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={generateRandomSku}
+                                                        className="flex items-center gap-2 text-[9px] font-black text-amber-500 uppercase tracking-widest hover:text-amber-400 transition-colors"
+                                                    >
+                                                        <RefreshCw size={12} /> Auto-Generate
+                                                    </button>
+                                                )}
                                             </div>
                                             <input
                                                 type="text"
                                                 placeholder="e.g. ELEC-CHG-65W"
                                                 value={newProductData.sku}
                                                 onChange={(e) => setNewProductData(prev => ({ ...prev, sku: e.target.value.toUpperCase() }))}
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-black focus:outline-none focus:border-amber-400/50 transition-all uppercase outline-none font-mono"
+                                                readOnly={!!editingItemId}
+                                                disabled={!!editingItemId}
+                                                className={`w-full border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-black transition-all uppercase outline-none font-mono ${editingItemId ? 'bg-slate-900/80 text-slate-400 cursor-not-allowed opacity-70' : 'bg-slate-950/50 focus:outline-none focus:border-amber-400/50'}`}
                                             />
+                                            {editingItemId && (
+                                                <p className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest ml-1">SKU is locked after product creation to prevent data corruption. Contact admin to change.</p>
+                                            )}
                                         </div>
 
                                         <div className="space-y-2">
@@ -2710,9 +2718,9 @@ const WarehouseInventory = () => {
 
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                 {[
-                                                    { label: 'COD Eligible', key: 'is_cod_eligible', color: 'bg-emerald-500' },
-                                                    { label: 'Fragile Item', key: 'is_fragile', color: 'bg-amber-500' },
-                                                    { label: 'Express Ready', key: 'is_express_eligible', color: 'bg-sky-500' }
+                                                    { label: 'COD Eligible', key: 'is_cod_eligible', toggleCls: 'peer-checked:bg-emerald-500' },
+                                                    { label: 'Fragile Item', key: 'is_fragile', toggleCls: 'peer-checked:bg-amber-500' },
+                                                    { label: 'Express Ready', key: 'is_express_eligible', toggleCls: 'peer-checked:bg-sky-500' }
                                                 ].map((toggle) => (
                                                     <div key={toggle.key} className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                         <span className="text-[9px] font-black text-white uppercase tracking-widest leading-tight">{toggle.label}</span>
@@ -2726,7 +2734,7 @@ const WarehouseInventory = () => {
                                                                     fulfillment: { ...prev.fulfillment, [toggle.key]: e.target.checked }
                                                                 }))}
                                                             />
-                                                            <div className={`w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:${toggle.color}`}></div>
+                                                            <div className={`w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all ${toggle.toggleCls}`}></div>
                                                         </label>
                                                     </div>
                                                 ))}
@@ -3027,15 +3035,15 @@ const WarehouseInventory = () => {
                     {/* Stats Row */}
                     <div className="flex gap-3 overflow-x-auto pb-1">
                         {[
-                            { label: 'Total SKUs', value: stats.totalItems, icon: Package, color: 'emerald' },
-                            { label: 'Low Stock', value: stats.lowStock, icon: AlertCircle, color: 'amber' },
-                            { label: 'Out of Stock', value: stats.outOfStock, icon: XCircle, color: 'rose' },
-                            { label: 'Featured', value: stats.featured, icon: Zap, color: 'indigo' },
-                            { label: 'Total Units', value: stats.totalUnits, icon: CheckCircle2, color: 'blue' }
+                            { label: 'Total SKUs', value: stats.totalItems, icon: Package, iconBg: 'bg-emerald-400/10 text-emerald-400' },
+                            { label: 'Low Stock', value: stats.lowStock, icon: AlertCircle, iconBg: 'bg-amber-400/10 text-amber-400' },
+                            { label: 'Out of Stock', value: stats.outOfStock, icon: XCircle, iconBg: 'bg-rose-400/10 text-rose-400' },
+                            { label: 'Featured', value: stats.featured, icon: Zap, iconBg: 'bg-indigo-400/10 text-indigo-400' },
+                            { label: 'Total Units', value: stats.totalUnits, icon: CheckCircle2, iconBg: 'bg-blue-400/10 text-blue-400' }
                         ].map((stat, i) => (
                             <div key={i} className="flex-1 min-w-[160px] warehouse-panel p-4 border border-white/5 hover:border-white/10 transition-colors">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg bg-${stat.color}-400/10 text-${stat.color}-400`}>
+                                    <div className={`p-2 rounded-lg ${stat.iconBg}`}>
                                         <stat.icon size={18} />
                                     </div>
                                     <div>

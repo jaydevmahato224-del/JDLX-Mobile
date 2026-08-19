@@ -102,14 +102,14 @@ const WarehouseAnalytics = () => {
             {/* Performance KPIs */}
             <div className="flex gap-3 overflow-x-auto pb-1">
                 {[
-                    { label: 'Fulfillment Efficiency', value: '98.5%', change: '+2.4%', up: true, icon: TrendingUp, color: 'emerald' },
-                    { label: 'Avg Dispatch Time', value: '14m', change: '-3m', up: true, icon: Clock, color: 'blue' },
-                    { label: 'Acceptance Rate', value: '100%', change: '0%', up: true, icon: CheckCircle2, color: 'amber' },
-                    { label: 'Stock Health', value: 'Optimal', change: 'Stable', up: true, icon: Package, color: 'purple' }
+                    { label: 'Fulfillment Efficiency', value: '98.5%', change: '+2.4%', up: true, icon: TrendingUp, iconCls: 'text-emerald-400' },
+                    { label: 'Avg Dispatch Time', value: '14m', change: '-3m', up: true, icon: Clock, iconCls: 'text-blue-400' },
+                    { label: 'Acceptance Rate', value: '100%', change: '0%', up: true, icon: CheckCircle2, iconCls: 'text-amber-400' },
+                    { label: 'Stock Health', value: 'Optimal', change: 'Stable', up: true, icon: Package, iconCls: 'text-purple-400' }
                 ].map((stat, i) => (
                     <div key={i} className="flex-1 min-w-[150px] warehouse-panel p-4 border border-white/5 hover:border-white/10 transition-colors">
                         <div className="flex items-center gap-2">
-                            <stat.icon size={16} className={`text-${stat.color}-400 shrink-0`} />
+                            <stat.icon size={16} className={`${stat.iconCls} shrink-0`} />
                             <div className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-tighter ${stat.up ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 {stat.change}
                                 {stat.up ? <ArrowUpRight size={8} /> : <ArrowDownRight size={8} />}

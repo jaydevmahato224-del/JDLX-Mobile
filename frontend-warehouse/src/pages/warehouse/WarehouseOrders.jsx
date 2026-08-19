@@ -84,10 +84,11 @@ const WarehouseOrders = () => {
     }
 
     const filteredOrders = orders.filter(order => {
+        const q = searchQuery.toLowerCase()
         const matchesSearch = 
-            order.order_id.toString().includes(searchQuery) || 
-            order.delivery_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            order.items?.toLowerCase().includes(searchQuery.toLowerCase())
+            (order.order_id?.toString() || '').includes(searchQuery) || 
+            (order.delivery_address?.toLowerCase() || '').includes(q) ||
+            (order.items?.toLowerCase() || '').includes(q)
         
         const matchesStatus = filterStatus === 'all' || order.assignment_status === filterStatus
         
@@ -151,21 +152,21 @@ const WarehouseOrders = () => {
             </div>
 
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex gap-3 overflow-x-auto pb-1">
                 {[
                     { label: 'Pending', count: orders.filter(o => ['assigned', 'accepted', 'packing'].includes(o.assignment_status) && o.order_status?.toUpperCase() !== 'CANCELLED').length, icon: Clock, color: 'text-amber-500' },
                     { label: 'Ready to Ship', count: orders.filter(o => o.assignment_status === 'packed' && o.order_status?.toUpperCase() !== 'CANCELLED').length, icon: Package, color: 'text-emerald-500' },
                     { label: 'Dispatched', count: orders.filter(o => o.assignment_status === 'dispatched' && o.order_status?.toUpperCase() !== 'CANCELLED').length, icon: Truck, color: 'text-blue-500' },
                     { label: 'Total Assigned', count: orders.length, icon: ShoppingBag, color: 'text-slate-400' }
                 ].map((stat, idx) => (
-                    <div key={idx} className="warehouse-panel p-6 border-white/5 bg-slate-900/40 backdrop-blur-xl">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{stat.label}</p>
-                                <h3 className="text-3xl font-black text-white mt-1">{stat.count}</h3>
+                    <div key={idx} className="flex-1 min-w-[140px] warehouse-panel p-3 sm:p-4 border-white/5 bg-slate-900/40 backdrop-blur-xl">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2.5 rounded-xl bg-white/5 ${stat.color} shrink-0`}>
+                                <stat.icon size={18} />
                             </div>
-                            <div className={`p-4 rounded-2xl bg-white/5 ${stat.color}`}>
-                                <stat.icon size={24} />
+                            <div className="min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{stat.label}</p>
+                                <h3 className="text-xl sm:text-2xl font-black text-white leading-none mt-1">{stat.count}</h3>
                             </div>
                         </div>
                     </div>
@@ -209,20 +210,20 @@ const WarehouseOrders = () => {
             {/* Orders Table/List */}
             <div className="warehouse-panel border-white/5 bg-slate-900/40 backdrop-blur-xl overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
                         <thead>
                             <tr className="border-b border-white/5">
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Order Detail</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Items</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Total</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Status</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 text-right">Operations</th>
+                                <th className="px-4 py-4 sm:px-6 sm:py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Order Detail</th>
+                                <th className="px-4 py-4 sm:px-6 sm:py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Items</th>
+                                <th className="px-4 py-4 sm:px-6 sm:py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Total</th>
+                                <th className="px-4 py-4 sm:px-6 sm:py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Status</th>
+                                <th className="px-4 py-4 sm:px-6 sm:py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 text-right">Operations</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {filteredOrders.length > 0 ? filteredOrders.map((order) => (
                                 <tr key={order.id} className="group hover:bg-white/[0.02] transition-colors">
-                                    <td className="px-6 py-6">
+                                    <td className="px-4 py-4 sm:px-6 sm:py-6">
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-black text-white">#ORD-{order.order_id}</span>
@@ -245,7 +246,7 @@ const WarehouseOrders = () => {
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-6">
+                                    <td className="px-4 py-4 sm:px-6 sm:py-6">
                                         <div className="max-w-[300px]">
                                             <p className="text-xs font-bold text-slate-300 line-clamp-2 italic leading-relaxed">
                                                 {order.items}
@@ -262,15 +263,15 @@ const WarehouseOrders = () => {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-6">
+                                    <td className="px-4 py-4 sm:px-6 sm:py-6">
                                         <span className="text-sm font-black text-amber-400">₹{order.total_amount}</span>
                                     </td>
-                                    <td className="px-6 py-6">
+                                    <td className="px-4 py-4 sm:px-6 sm:py-6">
                                         <span className={`px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest ${getStatusColor(order.assignment_status)}`}>
                                             {order.assignment_status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-6 text-right">
+                                    <td className="px-4 py-4 sm:px-6 sm:py-6 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             {(order.assignment_status?.toUpperCase() === 'CANCELLED' || order.order_status?.toUpperCase() === 'CANCELLED') ? (
                                                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[9px] font-black text-rose-400 uppercase tracking-widest">
@@ -354,9 +355,9 @@ const WarehouseOrders = () => {
                     </table>
                 </div>
                 
-                <div className="p-6 border-t border-white/5 bg-slate-950/20 flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        Showing {filteredOrders.length} of {orders.length} assigned orders
+                <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-white/5 bg-slate-950/20 flex items-center justify-between">
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        {filteredOrders.length} of {orders.length} orders
                     </p>
                     <div className="flex items-center gap-2">
                         <button disabled className="p-2 rounded-lg bg-white/5 text-slate-600 disabled:opacity-30">

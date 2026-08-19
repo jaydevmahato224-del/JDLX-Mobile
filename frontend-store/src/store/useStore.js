@@ -27,8 +27,6 @@ const syncCartWithServer = async (productId, quantity, action = 'add', variantId
     } catch (e) {
         console.error('Failed to sync cart:', e);
         return false;
-    } finally {
-        processingSync = false;
     }
 }
 

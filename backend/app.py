@@ -4907,7 +4907,7 @@ def get_admin_users():
         query = """
             SELECT u.*, 
                    (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) as total_orders, 
-                   (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id AND o.order_status = 'cancelled') as cancelled_orders 
+                   (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id AND UPPER(o.order_status) = 'CANCELLED') as cancelled_orders 
             FROM users u WHERE 1=1
         """
         params = []
@@ -5272,6 +5272,7 @@ def send_warehouse_applicant_email(app_id):
             return error_response("Warehouse application not found", 404)
             
         recipient_email = app_row['email']
+        recipient_name = app_row['owner_name'] or app_row['warehouse_name'] or 'Warehouse Partner'
         
         try:
             cursor.execute('''
@@ -5285,7 +5286,7 @@ def send_warehouse_applicant_email(app_id):
         conn.close()
         from threading import Thread
         from notifier import send_individual_email
-        Thread(target=send_individual_email, args=(recipient_email, subject, message)).start()
+        Thread(target=send_individual_email, args=(recipient_email, recipient_name, subject, message)).start()
         
         return success_response(None, f"Email sent to {recipient_email}", 200)
     except Exception as e:
@@ -5481,7 +5482,37 @@ def get_admin_orders():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("""
+        status_filter = (request.args.get('status') or '').strip()
+        payment_filter = (request.args.get('payment_status') or '').strip()
+        search = (request.args.get('search') or '').strip()
+        start_date = (request.args.get('start_date') or '').strip()
+        end_date = (request.args.get('end_date') or '').strip()
+
+        where = []
+        params = []
+
+        if status_filter and status_filter != 'all':
+            where.append("UPPER(o.order_status) = ?")
+            params.append(status_filter.upper())
+
+        if payment_filter and payment_filter != 'all':
+            where.append("o.payment_status = ?")
+            params.append(payment_filter)
+
+        if search:
+            like = f"%{search}%"
+            where.append("(o.order_number LIKE ? OR u.name LIKE ? OR o.phone LIKE ? OR o.customer_phone LIKE ?)")
+            params.extend([like, like, like, like])
+
+        if start_date:
+            where.append("date(o.created_at) >= date(?)")
+            params.append(start_date)
+
+        if end_date:
+            where.append("date(o.created_at) <= date(?)")
+            params.append(end_date)
+
+        query = """
             SELECT o.*, u.name as customer_name, u.email as customer_email,
                    COALESCE(ds.store_code, w.partner_id) as store_code,
                    COALESCE(ds.name, w.owner_name, w.partner_id, 'Default Store') as store_name,
@@ -5491,8 +5522,12 @@ def get_admin_orders():
             LEFT JOIN dark_stores ds ON COALESCE(o.store_id, o.dark_store_id) = ds.id
             LEFT JOIN warehouses w ON COALESCE(o.store_id, o.dark_store_id) = w.id
             LEFT JOIN shipments s ON o.id = s.order_id
-            ORDER BY o.created_at DESC
-        """)
+        """
+        if where:
+            query += " WHERE " + " AND ".join(where)
+        query += " ORDER BY o.created_at DESC"
+
+        cursor.execute(query, params)
         orders = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(orders)
@@ -7274,7 +7309,7 @@ def get_order_route(order_id):
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT o.order_status as status, o.latitude as cust_lat, o.longitude as cust_lng, 
+            SELECT o.order_status as status, o.delivery_latitude as cust_lat, o.delivery_longitude as cust_lng, 
                    ds.latitude as store_lat, ds.longitude as store_lng,
                    o.delivery_partner_id
             FROM orders o
@@ -7685,9 +7720,9 @@ def get_product_reviews(product_id):
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header.split(" ")[1]
             try:
-                from config import SECRET_KEY
+                from jwt_config import get_jwt_secret
                 import jwt
-                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                payload = jwt.decode(token, get_jwt_secret(), algorithms=["HS256"])
                 current_user_id = payload.get('user_id')
             except:
                 pass

@@ -39,14 +39,26 @@ function isTokenStructureValid(token) {
     }
 }
 
+/**
+ * Safely parse JSON from localStorage — malformed data must never crash the app
+ * at store-init time (which would white-screen the whole admin panel).
+ */
+function safeParse(key) {
+    try {
+        return JSON.parse(localStorage.getItem(key)) || null;
+    } catch {
+        return null;
+    }
+}
+
 export const useStore = create((set, get) => ({
-    user: JSON.parse(localStorage.getItem('user')) || null,
+    user: safeParse('user'),
     token: localStorage.getItem('token') || null,
-    adminUser: JSON.parse(localStorage.getItem('adminUser')) || null,
+    adminUser: safeParse('adminUser'),
     adminToken: localStorage.getItem('adminToken') || null,
-    warehouseUser: JSON.parse(localStorage.getItem('warehouseUser')) || null,
+    warehouseUser: safeParse('warehouseUser'),
     warehouseToken: localStorage.getItem('warehouseToken') || null,
-    warehouseRequestUser: JSON.parse(localStorage.getItem('warehouseRequestUser')) || null,
+    warehouseRequestUser: safeParse('warehouseRequestUser'),
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
     isReauthenticating: false,
     cart: [],

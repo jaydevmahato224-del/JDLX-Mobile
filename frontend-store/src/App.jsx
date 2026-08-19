@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate, useParams } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Layout from './components/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
@@ -166,10 +166,19 @@ const ProductRedirector = lazy(() => Promise.resolve({
     const { id } = useParams();
     const { products, fetchProducts } = useStore();
     const navigate = useNavigate();
+    const productsFetchedRef = useRef(false);
 
     useEffect(() => {
       if (!products || products.length === 0) {
-        fetchProducts();
+        // Guard against an infinite refetch loop when the catalog is genuinely
+        // empty (or the first request failed) — fetch once, then fall through
+        // to the /p/:id route so ProductDetails handles the look-up.
+        if (!productsFetchedRef.current) {
+          productsFetchedRef.current = true;
+          fetchProducts();
+        } else {
+          navigate(`/p/${id}`, { replace: true });
+        }
         return;
       }
       const product = products.find(p => String(p.id) === String(id));
@@ -274,7 +283,12 @@ function OperationalRedirect() {
   const location = useLocation()
   useEffect(() => {
     const hostname = window.location.hostname
-    const isProduction = hostname === 'jdlxmobile.in' || hostname === 'www.jdlxmobile.in'
+    // Matches the production-domain detection used in config.js: the storefront
+    // is deployed on Vercel (jdlx-mobile.vercel.app) and talks to the Render
+    // backend (onrender.com). On any of those hosts /admin and /warehouse must
+    // redirect to the fixed production admin/warehouse URLs, not a localhost
+    // port — otherwise users on the deployed app get dead links.
+    const isProduction = hostname === 'jdlxmobile.in' || hostname === 'www.jdlxmobile.in' || hostname.endsWith('.vercel.app') || hostname.endsWith('onrender.com')
     const isWarehouse = location.pathname.startsWith('/warehouse')
     
     let target = ''
@@ -364,7 +378,12 @@ function App() {
           promises.push(fetchWishlist())
         }
         
-        await Promise.all(promises)
+        // Safety net: never let the splash hang forever waiting on a cold
+        // backend. If the API calls haven't resolved within 12s, proceed
+        // anyway — Home.jsx will do its own loading with retries/error UI.
+        const PRELOAD_HARD_TIMEOUT_MS = 12000
+        const timeout = new Promise((resolve) => setTimeout(resolve, PRELOAD_HARD_TIMEOUT_MS))
+        await Promise.race([Promise.all(promises), timeout])
         console.log("%c JDLX: Preload Complete", "color: #10b981; font-weight: bold;")
       } catch (err) {
         console.error("Preload failed:", err)

@@ -35,7 +35,7 @@ def create_shiprocket_order():
     try:
         # Fetch order and user details if not provided in JSON
         order_query = """
-            SELECT o.id, o.total_amount, o.user_id, u.name, u.email, o.phone, o.delivery_address, o.pincode
+            SELECT o.id, o.total_amount, o.user_id, u.name, u.email, o.phone, o.delivery_address
             FROM orders o
             JOIN users u ON o.user_id = u.id
             WHERE o.id = ?
@@ -59,7 +59,7 @@ def create_shiprocket_order():
         delivery_address = data.get('delivery_address', order['delivery_address'])
         delivery_city = data.get('delivery_city', 'Unknown')
         delivery_state = data.get('delivery_state', 'Unknown')
-        delivery_pincode = data.get('delivery_pincode', order['pincode'])
+        delivery_pincode = data.get('delivery_pincode', '')
         
         weight_kg = data.get('weight_kg', 0.5)
 

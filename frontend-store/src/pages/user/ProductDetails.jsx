@@ -144,8 +144,11 @@ export default function ProductDetails() {
     // Try resolving with the raw token (whole slug) - backend handles the split logic
     fetch(`${API_BASE_URL}/products/s/${rawToken}`)
       .then(r => r.json())
-      .then(p => {
-        if (p.id) {
+      .then(payload => {
+        // Backend wraps token lookups as {success, data: {product}, message};
+        // unwrap so the product object carries the id used below.
+        const p = payload?.data || payload;
+        if (p && p.id) {
           console.log('[DEBUG] Remote matched Product:', p.name, '(ID:', p.id, ')');
           setTokenProduct(p);
         } else {

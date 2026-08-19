@@ -1714,7 +1714,11 @@ def get_warehouse_purchases():
     conn = get_db()
     try:
         wh = conn.execute("SELECT warehouse_name FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
+        if not wh:
+            return error_response("Warehouse not found", 404)
         ds = conn.execute("SELECT id, name FROM dark_stores WHERE name = ?", (wh["warehouse_name"],)).fetchone()
+        if not ds:
+            return error_response("No matching dark store found for this warehouse", 404)
         store_id = ds["id"]
         
         purchases = conn.execute("""
@@ -1756,7 +1760,11 @@ def create_direct_purchase():
     conn = get_db()
     try:
         wh = conn.execute("SELECT warehouse_name FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
+        if not wh:
+            return error_response("Warehouse not found", 404)
         ds = conn.execute("SELECT id FROM dark_stores WHERE name = ?", (wh["warehouse_name"],)).fetchone()
+        if not ds:
+            return error_response("No matching dark store found for this warehouse", 404)
         store_id = ds["id"]
         
         total_amount = sum(float(i['quantity']) * float(i['unit_price']) for i in items)
@@ -2072,7 +2080,7 @@ def warehouse_get_inventory():
         rows = conn.execute(
             """SELECT wi.id, COALESCE(p.name, wi.product_name) as product_name, 
                       COALESCE(wi.sku, CAST(p.id AS TEXT)) as sku, wi.stock_quantity, 
-                      (wi.reserved_stock + COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0)) as reserved_stock,
+                      (COALESCE(wi.reserved_stock, 0) + COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id), 0)) as reserved_stock,
                       COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND user_id IS NOT NULL), 0) as user_reserved,
                       COALESCE((SELECT SUM(quantity) FROM cart WHERE product_id = p.id AND session_id IS NOT NULL AND user_id IS NULL), 0) as guest_reserved,
                       wi.low_stock_threshold, wi.bin_location,
@@ -5003,7 +5011,7 @@ def exchange_billing_order():
                 """,
                 (new_order_id, item["product_id"], item["name"], item["qty"], item["price"], item["subtotal"]),
             )
-            _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"])
+            _decrement_billing_stock(cur, vendor_id, item["product_id"], item["qty"], item.get("variant_id"))
 
         # 4. Update original bill status
         all_returned = all(

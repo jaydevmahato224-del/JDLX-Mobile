@@ -100,30 +100,30 @@ const WarehouseAnalytics = () => {
             </div>
 
             {/* Performance KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex gap-3 overflow-x-auto pb-1">
                 {[
                     { label: 'Fulfillment Efficiency', value: '98.5%', change: '+2.4%', up: true, icon: TrendingUp, color: 'emerald' },
                     { label: 'Avg Dispatch Time', value: '14m', change: '-3m', up: true, icon: Clock, color: 'blue' },
                     { label: 'Acceptance Rate', value: '100%', change: '0%', up: true, icon: CheckCircle2, color: 'amber' },
                     { label: 'Stock Health', value: 'Optimal', change: 'Stable', up: true, icon: Package, color: 'purple' }
                 ].map((stat, i) => (
-                    <div key={i} className="warehouse-panel p-6 border border-white/5 hover:border-white/10 transition-colors">
-                        <div className="flex items-center justify-between mb-2">
-                            <stat.icon size={18} className={`text-${stat.color}-400`} />
-                            <div className={`flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter ${stat.up ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div key={i} className="flex-1 min-w-[150px] warehouse-panel p-4 border border-white/5 hover:border-white/10 transition-colors">
+                        <div className="flex items-center gap-2">
+                            <stat.icon size={16} className={`text-${stat.color}-400 shrink-0`} />
+                            <div className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-tighter ${stat.up ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 {stat.change}
-                                {stat.up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                                {stat.up ? <ArrowUpRight size={8} /> : <ArrowDownRight size={8} />}
                             </div>
                         </div>
-                        <div className="text-2xl font-black text-white">{stat.value}</div>
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{stat.label}</div>
+                        <div className="text-xl font-black text-white leading-none mt-2">{stat.value}</div>
+                        <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">{stat.label}</div>
                     </div>
                 ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Fulfillment Status Chart */}
-                <div className="lg:col-span-2 warehouse-panel p-8 border border-white/5 bg-white/[0.01]">
+                <div className="lg:col-span-2 warehouse-panel p-4 sm:p-6 lg:p-8 border border-white/5 bg-white/[0.01]">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-lg font-black text-white uppercase tracking-tight">Fulfillment Snapshot</h3>
@@ -134,7 +134,7 @@ const WarehouseAnalytics = () => {
                         </span>
                     </div>
 
-                    <div className="h-[350px] w-full">
+                    <div className="h-[250px] sm:h-[300px] lg:h-[350px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -173,7 +173,7 @@ const WarehouseAnalytics = () => {
                 </div>
 
                 {/* Stock Distribution Heatmap Overview */}
-                <div className="warehouse-panel p-8 border border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
+                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
                     <div className="mb-8">
                         <h3 className="text-lg font-black text-white uppercase tracking-tight">Stock Warnings</h3>
                         <p className="text-xs text-slate-500 mt-1 font-bold">Priority alerts needing manual action.</p>
@@ -223,7 +223,7 @@ const WarehouseAnalytics = () => {
             </div>
 
             {/* Placeholder for Historical Trends */}
-            <div className="warehouse-panel p-8 border border-white/5">
+            <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border border-white/5">
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h3 className="text-lg font-black text-white uppercase tracking-tight">Trend Monitoring</h3>

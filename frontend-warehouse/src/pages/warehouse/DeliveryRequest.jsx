@@ -515,7 +515,10 @@ function DeliveryRequest() {
             const response = await fetch(`${API_BASE_URL}/delivery/request-status?email=${encodeURIComponent(emailToCheck)}`)
             const data = await response.json()
             if (!response.ok) throw new Error(data.error || 'Could not fetch request status.')
-            setStatusData(data)
+            // Backend always wraps this endpoint as {success, data}; unwrap so the
+            // status panel / form lock actually reads verification_status.
+            const payload = (data && data.data && typeof data.data === 'object') ? data.data : data
+            setStatusData(payload)
         } catch (statusError) {
             setError(statusError.message || 'Could not fetch request status.')
         } finally {

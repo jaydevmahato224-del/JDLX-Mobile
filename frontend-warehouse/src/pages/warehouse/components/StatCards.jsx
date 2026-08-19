@@ -29,16 +29,16 @@ const CARDS = [
 
 // eslint-disable-next-line no-unused-vars -- Icon is used below as <Icon /> (JSX element)
 const StatCard = ({ icon: Icon, label, value, accentClass }) => (
-    <article className="warehouse-subtle-card p-6">
-        <div className="flex items-start justify-between gap-4">
-            <div>
-                <p className="wh-ui-label">{label}</p>
-                <p className="mt-4 text-4xl font-black tracking-tighter text-white md:text-5xl">
+    <article className="flex-1 min-w-[140px] warehouse-subtle-card p-3 sm:p-4">
+        <div className="flex items-center gap-3">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${accentClass}`}>
+                <Icon size={16} />
+            </div>
+            <div className="min-w-0">
+                <p className="wh-ui-label text-[9px] sm:text-[10px]">{label}</p>
+                <p className="text-xl sm:text-2xl font-black tracking-tighter text-white leading-none mt-1">
                     {value || 0}
                 </p>
-            </div>
-            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${accentClass}`}>
-                <Icon size={20} />
             </div>
         </div>
     </article>
@@ -53,7 +53,7 @@ const StatCards = ({ totalOrdersAssigned, pendingOrders, packedOrders, dispatche
     }
 
     return (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="flex gap-3 overflow-x-auto pb-1">
             {CARDS.map((card) => (
                 <StatCard key={card.key} {...card} value={values[card.key]} />
             ))}

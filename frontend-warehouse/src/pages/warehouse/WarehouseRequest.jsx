@@ -157,8 +157,11 @@ function WarehouseRequest() {
             const response = await fetch(`${API_BASE_URL}/warehouse/request-status?email=${encodeURIComponent(emailToCheck)}`)
             const data = await response.json()
             if (!response.ok) throw new Error(data.message || data.error || 'Could not fetch request status.')
-            setStatusData(data)
-            if (data.verification_status === 'pending') setShowWaitingModal(true)
+            // Backend wraps existing applications as {success, data}; no-application
+            // returns a bare {verification_status, application}. Unwrap when present.
+            const payload = (data && data.data && typeof data.data === 'object') ? data.data : data
+            setStatusData(payload)
+            if (payload.verification_status === 'pending') setShowWaitingModal(true)
         } catch (statusError) {
             setError(statusError.message || 'Could not fetch request status.')
         } finally {

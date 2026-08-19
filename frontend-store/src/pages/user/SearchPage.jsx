@@ -56,7 +56,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
   const cart = useStore((state) => state.cart)
   const updateQuantity = useStore((state) => state.updateQuantity)
 
-  const cartItem = cart.find((item) => item.id === product.id)
+  const cartItem = cart.find((item) => String(item.id) === String(product.id))
   const quantity = cartItem ? Number(cartItem.qty || 0) : 0
 
   const stock = Number(product?.stock ?? 0)

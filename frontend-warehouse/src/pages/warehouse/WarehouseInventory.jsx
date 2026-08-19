@@ -3024,8 +3024,8 @@ const WarehouseInventory = () => {
                         </div>
                     </div>
 
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Stats Row */}
+                    <div className="flex gap-3 overflow-x-auto pb-1">
                         {[
                             { label: 'Total SKUs', value: stats.totalItems, icon: Package, color: 'emerald' },
                             { label: 'Low Stock', value: stats.lowStock, icon: AlertCircle, color: 'amber' },
@@ -3033,15 +3033,16 @@ const WarehouseInventory = () => {
                             { label: 'Featured', value: stats.featured, icon: Zap, color: 'indigo' },
                             { label: 'Total Units', value: stats.totalUnits, icon: CheckCircle2, color: 'blue' }
                         ].map((stat, i) => (
-                            <div key={i} className="warehouse-panel p-6 border border-white/5 hover:border-white/10 transition-colors">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className={`p-2.5 rounded-xl bg-${stat.color}-400/10 text-${stat.color}-400`}>
-                                        <stat.icon size={20} />
+                            <div key={i} className="flex-1 min-w-[160px] warehouse-panel p-4 border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg bg-${stat.color}-400/10 text-${stat.color}-400`}>
+                                        <stat.icon size={18} />
                                     </div>
-                                    <div className="h-1 w-8 rounded-full bg-white/5" />
+                                    <div>
+                                        <div className="text-xl font-black text-white leading-none">{stat.value}</div>
+                                        <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">{stat.label}</div>
+                                    </div>
                                 </div>
-                                <div className="text-2xl font-black text-white">{stat.value}</div>
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{stat.label}</div>
                             </div>
                         ))}
                     </div>
@@ -3106,15 +3107,15 @@ const WarehouseInventory = () => {
 
                         {/* Table */}
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr className="bg-white/[0.01]">
-                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 whitespace-nowrap">Product Detail</th>
-                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">SKU / Bin</th>
-                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Available</th>
-                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Status</th>
-                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Lifecycle</th>
-                                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 text-right">Operations</th>
+                                        <th className="px-4 py-3 sm:px-6 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 whitespace-nowrap">Product Detail</th>
+                                        <th className="px-4 py-3 sm:px-6 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">SKU / Bin</th>
+                                        <th className="px-4 py-3 sm:px-6 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Available</th>
+                                        <th className="px-4 py-3 sm:px-6 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Status</th>
+                                        <th className="px-4 py-3 sm:px-6 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5">Lifecycle</th>
+                                        <th className="px-4 py-3 sm:px-6 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 text-right">Operations</th>
 
                                     </tr>
                                 </thead>
@@ -3125,7 +3126,7 @@ const WarehouseInventory = () => {
 
                                         return (
                                             <tr key={item.id} onClick={() => setSelectedItem(item)} className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
-                                                <td className="px-6 py-5">
+                                                <td className="px-4 py-4 sm:px-6 sm:py-5">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-800 border border-white/5 flex items-center justify-center text-slate-500 overflow-hidden group-hover:border-amber-400/20 transition-all">
                                                             {(() => {
@@ -3171,14 +3172,14 @@ const WarehouseInventory = () => {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-5">
+                                                <td className="px-4 py-4 sm:px-6 sm:py-5">
                                                     <div className="text-xs font-black text-amber-500/80 mb-1">{item.sku}</div>
                                                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                                                         <MapPin size={10} />
                                                         {item.bin_location || 'NO BIN'}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-5">
+                                                <td className="px-4 py-4 sm:px-6 sm:py-5">
                                                     <div className="flex flex-col">
                                                         <div className="flex items-baseline gap-1">
                                                             <span className="text-lg font-black text-white">{item.stock_quantity || 0}</span>
@@ -3197,7 +3198,7 @@ const WarehouseInventory = () => {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-5">
+                                                <td className="px-4 py-4 sm:px-6 sm:py-5">
                                                     {isOut ? (
                                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-400/10 text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-400/20">
                                                             <span className="w-1 h-1 rounded-full bg-rose-400 animate-pulse" />
@@ -3214,7 +3215,7 @@ const WarehouseInventory = () => {
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-4 py-4 sm:px-6 sm:py-4">
                                                     <div className="flex items-center gap-2">
                                                         <div className={`w-1.5 h-1.5 rounded-full ${item.lifecycle_state === 'live' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
                                                                 item.lifecycle_state === 'draft' ? 'bg-slate-500' :
@@ -3229,55 +3230,55 @@ const WarehouseInventory = () => {
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
+                                                <td className="px-4 py-4 sm:px-6 sm:py-4 text-right">
 
                                                     <div className="flex items-center justify-end gap-2">
                                                         {/* Stock IN */}
                                                         <button
                                                             title="Stock IN"
                                                             onClick={(e) => { e.stopPropagation(); openStockAdjust(item, 'IN'); }}
-                                                            className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all"
+                                                            className="p-2 rounded-xl sm:p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all"
                                                         >
-                                                            <ArrowDownCircle size={16} />
+                                                            <ArrowDownCircle size={14} className="sm:w-4 sm:h-4" />
                                                         </button>
                                                         {/* Stock OUT */}
                                                         <button
                                                             title="Stock OUT"
                                                             onClick={(e) => { e.stopPropagation(); openStockAdjust(item, 'OUT'); }}
-                                                            className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all"
+                                                            className="p-2 rounded-xl sm:p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all"
                                                         >
-                                                            <ArrowUpCircle size={16} />
+                                                            <ArrowUpCircle size={14} className="sm:w-4 sm:h-4" />
                                                         </button>
                                                         {/* Featured Toggle */}
                                                         <button
                                                             title={item.is_featured ? "Remove from Featured" : "Mark as Featured"}
                                                             onClick={(e) => { e.stopPropagation(); handleToggleFeatured(item); }}
-                                                            className={`p-2.5 rounded-xl border transition-all ${(item.is_featured === 1 || item.is_featured === true)
+                                                            className={`p-2 rounded-xl sm:p-2.5 border transition-all ${(item.is_featured === 1 || item.is_featured === true)
                                                                     ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
                                                                     : 'bg-white/5 border-white/5 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/20'
                                                                 }`}
                                                         >
-                                                            <Zap size={16} fill={(item.is_featured === 1 || item.is_featured === true) ? "currentColor" : "none"} />
+                                                            <Zap size={14} className="sm:w-4 sm:h-4" fill={(item.is_featured === 1 || item.is_featured === true) ? "currentColor" : "none"} />
                                                         </button>
                                                         {/* Edit */}
                                                         <button
                                                             title="Edit Product"
                                                             onClick={(e) => { e.stopPropagation(); handleEditItem(item); }}
-                                                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-blue-400 hover:border-blue-400/20 transition-all"
+                                                            className="p-2 rounded-xl sm:p-2.5 bg-white/5 border border-white/5 text-slate-400 hover:text-blue-400 hover:border-blue-400/20 transition-all"
                                                         >
-                                                            <Edit2 size={16} />
+                                                            <Edit2 size={14} className="sm:w-4 sm:h-4" />
                                                         </button>
                                                         {/* History */}
                                                         <button
                                                             title="Movement History"
                                                             onClick={(e) => { e.stopPropagation(); loadMovements(item); }}
-                                                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-amber-400 hover:border-amber-400/20 transition-all"
+                                                            className="p-2 rounded-xl sm:p-2.5 bg-white/5 border border-white/5 text-slate-400 hover:text-amber-400 hover:border-amber-400/20 transition-all"
                                                         >
-                                                            <History size={16} />
+                                                            <History size={14} className="sm:w-4 sm:h-4" />
                                                         </button>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
-                                                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-rose-400 hover:border-rose-400/20 transition-all"
+                                                            className="p-2 rounded-xl sm:p-2.5 bg-white/5 border border-white/5 text-slate-400 hover:text-rose-400 hover:border-rose-400/20 transition-all"
                                                         >
                                                             <Trash2 size={16} />
                                                         </button>
@@ -3300,8 +3301,8 @@ const WarehouseInventory = () => {
                         </div>
 
                         {/* Pagination Placeholder */}
-                        <div className="p-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Showing {filteredInventory.length} of {inventory.length} items</p>
+                        <div className="px-4 py-3 sm:px-6 sm:py-4 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
+                            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600">{filteredInventory.length} of {inventory.length} items</p>
                             <div className="flex items-center gap-2">
                                 <button className="p-2 rounded-lg border border-white/5 text-slate-600 cursor-not-allowed">
                                     <ChevronRight size={16} className="rotate-180" />

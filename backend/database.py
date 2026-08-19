@@ -679,9 +679,9 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_addresses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
+        full_name TEXT NOT NULL,
         phone TEXT NOT NULL,
-        flat_no TEXT,
+        house TEXT,
         area TEXT,
         landmark TEXT,
         pincode TEXT NOT NULL,
@@ -694,6 +694,20 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
+    ensure_columns('user_addresses', [
+        ('full_name', 'TEXT'),
+        ('phone', 'TEXT'),
+        ('house', 'TEXT'),
+        ('area', 'TEXT'),
+        ('landmark', 'TEXT'),
+        ('pincode', 'TEXT'),
+        ('city', 'TEXT'),
+        ('state', 'TEXT'),
+        ('type', "TEXT DEFAULT 'HOME'"),
+        ('is_default', 'INTEGER DEFAULT 0'),
+        ('latitude', 'REAL'),
+        ('longitude', 'REAL'),
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS saved_payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

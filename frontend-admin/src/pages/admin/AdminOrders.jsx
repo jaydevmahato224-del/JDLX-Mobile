@@ -96,10 +96,17 @@ function AdminOrders() {
         }
 
         fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+                return res.json();
+            })
             .then(data => {
-                const list = Array.isArray(data) ? data : [];
-                const normalized = list.map(o => ({ ...o, status: o.status || o.order_status || 'PLACED' }));
+                if (!Array.isArray(data)) throw new Error('Unexpected response shape');
+                const list = data;
+                const normalized = list.map(o => ({
+                    ...o,
+                    status: (o.status || o.order_status || 'PLACED').toUpperCase(),
+                }));
 
                 // Smart diff: detect new orders for notification
                 if (silent && ordersRef.current.length > 0) {
@@ -255,9 +262,9 @@ function AdminOrders() {
     // Analytics computation
     const stats = {
         total: orders.length,
-        pending: orders.filter(o => o.status === 'pending').length,
-        outForDelivery: orders.filter(o => o.status === 'out_for_delivery').length,
-        completed: orders.filter(o => o.status === 'delivered').length
+        pending: orders.filter(o => o.status === 'PENDING' || o.status === 'PLACED').length,
+        outForDelivery: orders.filter(o => o.status === 'OUT_FOR_DELIVERY').length,
+        completed: orders.filter(o => o.status === 'DELIVERED').length
     };
 
     return (

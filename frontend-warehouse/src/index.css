@@ -148,3 +148,37 @@
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top);
 }
+
+/* Mobile-friendly scrolling for stat cards & filter bars */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar but keep scrollable */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+}
+
+/* Touch-friendly: prevent text selection on interactive elements */
+.warehouse-panel button,
+.warehouse-panel a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Compact mobile padding for panels */
+@media (max-width: 640px) {
+  .warehouse-panel {
+    border-radius: 20px;
+  }
+  .warehouse-subtle-card {
+    border-radius: 18px;
+  }
+}

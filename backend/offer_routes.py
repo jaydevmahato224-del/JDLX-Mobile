@@ -1,12 +1,15 @@
 import os
 import json
+import logging
 from datetime import datetime
 from functools import wraps
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from database import get_db
 import jwt
 from utils.response_utils import success_response, error_response
 from auth.role_guard import _current_user_claims, require_admin
+
+logger = logging.getLogger(__name__)
 
 offer_bp = Blueprint('offer_bp', __name__)
 

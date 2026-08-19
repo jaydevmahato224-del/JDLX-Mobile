@@ -530,10 +530,14 @@ function Checkout() {
         }
     };
 
-    if (cart.length === 0 && !orderPlaced) {
-        navigate('/');
-        return null;
-    }
+    // If the cart is empty and no order was just placed, send the user home.
+    // Done in an effect (not during render) so the redirect never triggers a
+    // React "navigate during render" warning/crash on deep links.
+    useEffect(() => {
+        if (cart.length === 0 && !orderPlaced) {
+            navigate('/');
+        }
+    }, [cart.length, orderPlaced, navigate]);
 
     if (orderPlaced) {
         return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     Activity,
@@ -42,7 +42,12 @@ const NAV_ITEMS = [
 
 const WarehouseDashboard = () => {
     const navigate = useNavigate()
-    const { warehouseUser, warehouseToken, warehouseLogout, setWarehouseUser } = useStore()
+    const { warehouseUser, warehouseToken, setWarehouseUser } = useStore()
+    // Mirror warehouseUser in a ref so fetchDashboardData can read the latest
+    // value without being recreated on every user-object change (which would
+    // reset the 30s dashboard polling interval).
+    const warehouseUserRef = useRef(warehouseUser)
+    warehouseUserRef.current = warehouseUser
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState(EMPTY_DASHBOARD)
     const [actionError, setActionError] = useState('')
@@ -53,29 +58,32 @@ const WarehouseDashboard = () => {
 
         try {
             const result = await apiClient.get('/warehouse/dashboard')
+            // The dashboard endpoint wraps its payload as {success, data, message};
+            // unwrap so the dashboard fields below actually resolve.
+            const payload = (result && result.data && typeof result.data === 'object') ? result.data : result
             setData({
                 ...EMPTY_DASHBOARD,
-                ...result,
+                ...payload,
                 cards: {
                     ...EMPTY_DASHBOARD.cards,
-                    ...(result.cards || {}),
+                    ...(payload.cards || {}),
                 },
                 performance_metrics: {
                     ...EMPTY_DASHBOARD.performance_metrics,
-                    ...(result.performance_metrics || {}),
+                    ...(payload.performance_metrics || {}),
                 },
-                recent_orders: Array.isArray(result.recent_orders) ? result.recent_orders : [],
-                inventory_summary: Array.isArray(result.inventory_summary) ? result.inventory_summary : [],
+                recent_orders: Array.isArray(payload.recent_orders) ? payload.recent_orders : [],
+                inventory_summary: Array.isArray(payload.inventory_summary) ? payload.inventory_summary : [],
             })
 
             // Sync global user state with current backend settings
-            if (result.settings) {
+            if (payload.settings) {
                 const updatedUser = { 
-                    ...warehouseUser, 
-                    ...result.settings 
+                    ...warehouseUserRef.current, 
+                    ...payload.settings 
                 }
                 // Only update if something actually changed to avoid unnecessary re-renders
-                if (JSON.stringify(updatedUser) !== JSON.stringify(warehouseUser)) {
+                if (JSON.stringify(updatedUser) !== JSON.stringify(warehouseUserRef.current)) {
                     setWarehouseUser(updatedUser, warehouseToken)
                 }
             }
@@ -87,7 +95,7 @@ const WarehouseDashboard = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseToken, warehouseLogout, navigate])
+    }, [warehouseToken, setWarehouseUser])
 
     useEffect(() => {
         if (!warehouseToken) {
@@ -158,7 +166,7 @@ const WarehouseDashboard = () => {
                             </button>
                         </div>
 
-                        <div className="mt-8 flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
+                        <div className="mt-4 sm:mt-8 flex flex-col gap-4 sm:gap-8 xl:flex-row xl:items-end xl:justify-between">
                             <div className="min-w-0">
                                 <h1 className="wh-ui-h1 text-white break-words">
                                     {warehouseUser?.warehouse_name || 'Warehouse Dashboard'}
@@ -214,7 +222,7 @@ const WarehouseDashboard = () => {
                         </div>
                     ) : null}
 
-                    <div className="mt-6 lg:mt-8">
+                    <div className="mt-4 sm:mt-6 lg:mt-8">
                         <StatCards
                             totalOrdersAssigned={data.cards.total_orders_assigned}
                             pendingOrders={data.cards.pending_orders}
@@ -223,7 +231,7 @@ const WarehouseDashboard = () => {
                         />
                     </div>
 
-                    <div className="mt-6 grid gap-6 lg:mt-8 lg:gap-8 xl:grid-cols-[1.72fr_0.94fr]">
+                    <div className="mt-4 sm:mt-6 grid gap-4 sm:gap-6 lg:mt-8 lg:gap-8 xl:grid-cols-[1.72fr_0.94fr]">
                         <div className="min-w-0">
                             <FulfillmentQueue
                                 recentOrders={data.recent_orders}

@@ -140,7 +140,7 @@ def get_admin_reviews():
     try:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT ar.*, u.full_name, u.email 
+            SELECT ar.*, u.name as full_name, u.email 
             FROM app_reviews ar
             JOIN users u ON ar.user_id = u.id
             WHERE ar.submitted_at IS NOT NULL OR ar.rating IS NOT NULL

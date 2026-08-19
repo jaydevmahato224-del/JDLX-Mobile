@@ -244,17 +244,20 @@ const WarehouseEarnings = () => {
                 ) : (
                     <>
                         {/* Stats */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="flex gap-3 overflow-x-auto pb-1">
                             {statCards.map((card) => {
                                 const Icon = card.icon
                                 return (
-                                    <div key={card.label} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${card.iconCls}`}>
-                                            <Icon size={18} />
+                                    <div key={card.label} className="flex-1 min-w-[160px] bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center ${card.iconCls}`}>
+                                                <Icon size={16} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
+                                                <p className="text-xl font-black text-white leading-none mt-1">{card.value}</p>
+                                            </div>
                                         </div>
-                                        <p className="text-2xl font-black text-white">{card.value}</p>
-                                        <p className="text-xs font-bold text-slate-400 mt-1">{card.label}</p>
-                                        <p className="text-[10px] text-slate-500 mt-0.5">{card.sub}</p>
                                     </div>
                                 )
                             })}
@@ -315,7 +318,7 @@ const WarehouseEarnings = () => {
                                                         {st.label}
                                                     </span>
                                                 </div>
-                                                <div className="grid grid-cols-4 gap-2 mt-2 text-[11px]">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[10px] sm:text-[11px]">
                                                     <div>
                                                         <p className="text-slate-500">Item value</p>
                                                         <p className="font-bold text-slate-300">{formatINR(s.item_total)}</p>

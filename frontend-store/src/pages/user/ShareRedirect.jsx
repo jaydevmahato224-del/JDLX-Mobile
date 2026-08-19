@@ -19,7 +19,10 @@ const ShareRedirect = () => {
         const response = await fetch(`${API_BASE_URL}/products/s/${token}`);
         if (!response.ok) throw new Error('Product not found');
         
-        const product = await response.json();
+        const payload = await response.json();
+        // The backend wraps token lookups as {success, data: {product}, message};
+        // unwrap before building the slug so shared links resolve correctly.
+        const product = payload?.data || payload;
         // Redirect to the actual product page using the secure token format
         navigate(getProductUrl(product), { replace: true });
       } catch (err) {

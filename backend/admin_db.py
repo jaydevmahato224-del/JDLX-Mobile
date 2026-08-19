@@ -12,7 +12,7 @@ def get_all_complaints():
     conn = get_db()
     try:
         query = """
-            SELECT c.*, u.name as user_name, u.email as user_email, o.total_amount, o.status as order_status
+            SELECT c.*, u.name as user_name, u.email as user_email, o.total_amount, o.order_status
             FROM complaints c
             JOIN users u ON c.user_id = u.id
             JOIN orders o ON c.order_id = o.id

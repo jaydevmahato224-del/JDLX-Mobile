@@ -51,13 +51,13 @@ const WalletPage = () => {
       {/* Transaction History */}
       <div className="space-y-4">
         <div className="flex items-center justify-between px-2">
-          <h3 className="text-xl font-black text-slate-800">History</h3>
+          <h3 className="text-xl font-black text-[var(--color-on-surface)]">History</h3>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{wallet.transactions.length} Transactions</span>
         </div>
 
         {wallet.transactions.length === 0 ? (
           <div className="bg-[var(--color-surface-card)] rounded-[2rem] p-12 text-center border border-dashed border-[var(--color-surface-high)]">
-            <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-[var(--color-surface-low)] text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Clock size={32} />
             </div>
             <p className="text-slate-400 font-bold">No transactions yet</p>
@@ -68,20 +68,20 @@ const WalletPage = () => {
             {wallet.transactions.map((tx, idx) => (
               <div 
                 key={idx} 
-                className={`p-6 flex items-center justify-between border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors ${idx === 0 ? 'animate-in fade-in slide-in-from-top-2 duration-500' : ''}`}
+                className={`p-6 flex items-center justify-between border-b border-slate-50 last:border-0 hover:bg-[var(--color-surface-low)] transition-colors ${idx === 0 ? 'animate-in fade-in slide-in-from-top-2 duration-500' : ''}`}
               >
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${tx.type === 'credit' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                     {tx.type === 'credit' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                   </div>
                   <div>
-                    <p className="font-black text-slate-800 text-sm">{tx.reason || (tx.type === 'credit' ? 'Wallet Credit' : 'Wallet Debit')}</p>
+                    <p className="font-black text-[var(--color-on-surface)] text-sm">{tx.reason || (tx.type === 'credit' ? 'Wallet Credit' : 'Wallet Debit')}</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
                       {new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} • {new Date(tx.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
-                <div className={`text-lg font-black ${tx.type === 'credit' ? 'text-emerald-600' : 'text-slate-800'}`}>
+                <div className={`text-lg font-black ${tx.type === 'credit' ? 'text-emerald-600' : 'text-[var(--color-on-surface)]'}`}>
                   {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toFixed(0)}
                 </div>
               </div>

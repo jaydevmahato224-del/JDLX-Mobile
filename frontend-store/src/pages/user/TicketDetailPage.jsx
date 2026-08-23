@@ -99,7 +99,7 @@ function TicketDetailPage() {
         if (s === 'open') return 'bg-blue-100 text-blue-700 border-blue-200';
         if (s === 'in progress') return 'bg-yellow-100 text-yellow-700 border-yellow-200';
         if (s === 'resolved') return 'bg-green-100 text-green-700 border-green-200';
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
     };
 
     if (loading) {
@@ -121,8 +121,8 @@ function TicketDetailPage() {
             {/* Header Section */}
             <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <Link to="/profile/support" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                        <ArrowLeft size={20} className="text-gray-600" />
+                    <Link to="/profile/support" className="p-2 hover:bg-[var(--color-surface-container)] rounded-full transition-colors">
+                        <ArrowLeft size={20} className="text-[var(--color-on-surface-variant)]" />
                     </Link>
                     <div>
                         <div className="flex items-center gap-2 mb-1">
@@ -133,7 +133,7 @@ function TicketDetailPage() {
                                 {ticket.status}
                             </span>
                         </div>
-                        <h1 className="text-xl font-black text-gray-900 tracking-tight">{ticket.subject}</h1>
+                        <h1 className="text-xl font-black text-[var(--color-on-surface)] tracking-tight">{ticket.subject}</h1>
                     </div>
                 </div>
             </div>
@@ -141,7 +141,7 @@ function TicketDetailPage() {
             {/* Messages Thread */}
             <div className="flex-1 glass-card p-4 md:p-6 mb-6 overflow-y-auto space-y-6 bg-white/30 backdrop-blur-md">
                 <div className="text-center mb-8">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 bg-[var(--color-surface-low)] px-3 py-1 rounded-full">
                         Thread Started {new Date(ticket.created_at).toLocaleDateString()}
                     </span>
                 </div>
@@ -189,8 +189,8 @@ function TicketDetailPage() {
             {/* Reply Box Section */}
             <div className="sticky bottom-4">
                 {isClosed ? (
-                    <div className="glass-card p-5 bg-gray-50 border-gray-200 flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-gray-500">
+                    <div className="glass-card p-5 bg-[var(--color-surface-low)] border-[var(--color-surface-high)] flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-[var(--color-on-surface-variant)]">
                             <Lock size={18} />
                             <p className="text-xs font-bold uppercase tracking-wider">
                                 This ticket is closed. Please create a new ticket for any new issues.

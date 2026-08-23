@@ -102,12 +102,12 @@ function Coupons() {
                 <div className="flex flex-col items-center justify-center min-h-[40vh] gap-6 text-center">
                     <div className="relative">
                         <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full" />
-                        <div className="relative w-24 h-24 bg-slate-50 rounded-3xl flex items-center justify-center border-2 border-dashed border-slate-200">
+                        <div className="relative w-24 h-24 bg-[var(--color-surface-low)] rounded-3xl flex items-center justify-center border-2 border-dashed border-[var(--color-surface-high)]">
                             <BadgePercent size={40} className="text-slate-300" />
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight">No Active Offers</h3>
+                        <h3 className="text-xl font-black text-[var(--color-on-surface)] tracking-tight">No Active Offers</h3>
                         <p className="text-sm text-slate-400 font-medium max-w-xs">
                             Check back soon! We regularly add new exclusive offers and discounts for our customers.
                         </p>
@@ -138,7 +138,7 @@ function Coupons() {
                                             {getOfferIcon(offer.offer_type)}
                                         </div>
                                         <div className="min-w-0">
-                                            <h3 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
+                                            <h3 className="text-lg font-black text-[var(--color-on-surface)] tracking-tight leading-tight">
                                                 {offer.title}
                                             </h3>
                                             {offer.description && (

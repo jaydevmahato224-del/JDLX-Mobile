@@ -176,7 +176,7 @@ function Cart() {
                             <div key={`${item.id}-${item.variant_id || 'base'}`} className={`group relative glass-card p-0 overflow-hidden transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] ${isUnavailable ? 'bg-red-50/20' : ''}`}>
                                 <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                     {/* Image Section */}
-                                    <div className={`relative w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-white p-3 flex-shrink-0 border border-[var(--color-surface-high)] shadow-sm transition-transform group-hover:rotate-2 ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
+                                    <div className={`relative w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-[var(--color-surface-card)] p-3 flex-shrink-0 border border-[var(--color-surface-high)] shadow-sm transition-transform group-hover:rotate-2 ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
                                         <img src={getProductImage(item)} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-contain transition-transform group-hover:scale-110 duration-500" />
                                         {isUnavailable && (
                                             <div className="absolute inset-0 bg-red-900/5 backdrop-blur-[2px] rounded-3xl flex items-center justify-center">
@@ -298,7 +298,7 @@ function Cart() {
                                 }
                             }}
                             className={`w-full group h-16 rounded-2xl px-8 flex items-center justify-between transition-all active:scale-[0.98] ${subtotal <= 0 || isSyncing || hasStickerMissingDevice
-                                ? 'bg-slate-100 text-slate-300 cursor-not-allowed border border-slate-200' 
+                                ? 'bg-[var(--color-surface-container)] text-slate-300 cursor-not-allowed border border-[var(--color-surface-high)]'
                                 : 'bg-primary text-slate-950 shadow-2xl shadow-primary/30 hover:bg-primary/90'
                             }`}
                         >
@@ -330,7 +330,7 @@ function Cart() {
                     <div className="relative glass-card w-full max-w-sm p-8 flex flex-col items-center text-center animate-in zoom-in slide-in-from-bottom-8 duration-500 shadow-2xl">
                         <button 
                             onClick={() => setShowLoginModal(false)}
-                            className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"
+                            className="absolute top-4 right-4 p-2 hover:bg-[var(--color-surface-container)] rounded-full transition-colors"
                         >
                             <X className="w-5 h-5 text-slate-400" />
                         </button>
@@ -339,10 +339,10 @@ function Cart() {
                             <LogIn className="w-10 h-10" />
                         </div>
 
-                        <h2 className="text-2xl font-black tracking-tighter text-slate-900 mb-3" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                        <h2 className="text-2xl font-black tracking-tighter text-[var(--color-on-surface)] mb-3" style={{ fontFamily: 'Manrope, sans-serif' }}>
                             Login Required
                         </h2>
-                        <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8 px-2">
+                        <p className="text-sm font-medium text-[var(--color-on-surface-variant)] leading-relaxed mb-8 px-2">
                             Please sign in to continue with your premium checkout experience.
                         </p>
 
@@ -355,7 +355,7 @@ function Cart() {
                             </button>
                             <button 
                                 onClick={() => setShowLoginModal(false)}
-                                className="h-14 w-full text-[11px] font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest"
+                                className="h-14 w-full text-[11px] font-black text-slate-400 hover:text-[var(--color-on-surface-variant)] transition-colors uppercase tracking-widest"
                             >
                                 Maybe Later
                             </button>

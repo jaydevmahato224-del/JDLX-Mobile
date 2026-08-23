@@ -133,20 +133,20 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
           </div>
 
           {quantity > 0 ? (
-            <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
+            <div className="flex items-center bg-[var(--color-surface-container)] rounded-lg p-0.5">
               <button
                 onClick={(e) => { e.preventDefault(); updateQuantity(product.id, quantity - 1); }}
-                className="h-7 w-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-md transition-colors"
+                className="h-7 w-7 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-card)] rounded-md transition-colors"
               >
                 <Minus size={14} />
               </button>
-              <span className="min-w-[20px] text-center text-[11px] font-black text-slate-900">
+              <span className="min-w-[20px] text-center text-[11px] font-black text-[var(--color-on-surface)]">
                 {quantity}
               </span>
               <button
                 disabled={quantity >= availableStock}
                 onClick={(e) => { e.preventDefault(); updateQuantity(product.id, quantity + 1); }}
-                className="h-7 w-7 flex items-center justify-center text-slate-600 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
+                className="h-7 w-7 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-card)] rounded-md disabled:opacity-30 transition-colors"
               >
                 <Plus size={14} />
               </button>

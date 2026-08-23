@@ -36,14 +36,14 @@ const WalletCheckout = ({ onApply, totalAmount }) => {
   if (balance <= 0) return null;
 
   return (
-    <div className={`bg-white rounded-3xl p-6 border-2 transition-all duration-300 ${isApplied ? 'border-[#F5A623] bg-orange-50/30' : 'border-slate-100'}`}>
+    <div className={`bg-[var(--color-surface-card)] rounded-3xl p-6 border-2 transition-all duration-300 ${isApplied ? 'border-[#F5A623] bg-orange-50/30' : 'border-[var(--color-surface-high)]'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors shrink-0 ${isApplied ? 'bg-[#F5A623] text-white shadow-lg shadow-orange-200' : 'bg-slate-50 text-slate-400'}`}>
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors shrink-0 ${isApplied ? 'bg-[#F5A623] text-white shadow-lg shadow-orange-200' : 'bg-[var(--color-surface-low)] text-slate-400'}`}>
             <Wallet size={24} />
           </div>
           <div className="min-w-0">
-            <p className="font-black text-slate-800 tracking-tight">Wallet Balance</p>
+            <p className="font-black text-[var(--color-on-surface)] tracking-tight">Wallet Balance</p>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">₹{balance.toFixed(2)} available</p>
           </div>
         </div>

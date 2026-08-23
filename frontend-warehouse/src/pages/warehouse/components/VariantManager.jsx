@@ -635,16 +635,43 @@ const VariantManager = ({
                                         </td>
                                         
                                         <td className="px-3 py-3">
-                                            <div className="flex flex-wrap gap-1">
-                                                {Object.entries(variant.options || {}).map(([k, v]) => (
-                                                    <span key={k} className="px-2 py-0.5 bg-slate-700/50 border border-white/10 text-[10px] font-medium rounded">
-                                                        <span className="text-slate-400">{k}:</span> {v}
-                                                    </span>
-                                                ))}
-                                                {(!variant.options || Object.keys(variant.options).length === 0) && (
-                                                    <span className="text-xs text-slate-600 italic">No options</span>
-                                                )}
-                                            </div>
+                                            {_isEditing && allOptionGroups.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {allOptionGroups.map((g) => {
+                                                        const gName = g.option_name.trim();
+                                                        return (
+                                                            <select
+                                                                key={gName}
+                                                                value={(variant.options && variant.options[gName]) || ''}
+                                                                onChange={(e) => {
+                                                                    const next = { ...(variant.options || {}) };
+                                                                    if (e.target.value) next[gName] = e.target.value;
+                                                                    else delete next[gName];
+                                                                    handleVariantChange(index, 'options', next);
+                                                                }}
+                                                                disabled={disabled}
+                                                                className="bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-semibold focus:outline-none focus:border-amber-400/50"
+                                                            >
+                                                                <option value="">{gName}…</option>
+                                                                {g.option_values.map((val) => (
+                                                                    <option key={val} value={val}>{gName}: {val}</option>
+                                                                ))}
+                                                            </select>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {Object.entries(variant.options || {}).map(([k, v]) => (
+                                                        <span key={k} className="px-2 py-0.5 bg-slate-700/50 border border-white/10 text-[10px] font-medium rounded">
+                                                            <span className="text-slate-400">{k}:</span> {v}
+                                                        </span>
+                                                    ))}
+                                                    {(!variant.options || Object.keys(variant.options).length === 0) && (
+                                                        <span className="text-xs text-slate-600 italic">No options</span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </td>
                                         
                                         <td className="px-3 py-3">

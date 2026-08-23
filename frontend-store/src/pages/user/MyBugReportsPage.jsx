@@ -52,9 +52,9 @@ function MyBugReportsPage() {
             case 'new': return 'bg-blue-100 text-blue-700 border-blue-200';
             case 'investigating': return 'bg-amber-100 text-amber-700 border-amber-200';
             case 'fixed': return 'bg-green-100 text-green-700 border-green-200';
-            case 'closed': return 'bg-gray-100 text-gray-700 border-gray-200';
-            case 'duplicate': return 'bg-gray-100 text-gray-500 border-gray-200 line-through';
-            default: return 'bg-gray-50 text-gray-600 border-gray-100';
+            case 'closed': return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
+            case 'duplicate': return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)] line-through';
+            default: return 'bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
         }
     };
 
@@ -65,7 +65,7 @@ function MyBugReportsPage() {
             case 'high': return 'text-orange-600 bg-orange-50 border-orange-100';
             case 'medium': return 'text-yellow-700 bg-yellow-50 border-yellow-100';
             case 'low': return 'text-green-600 bg-green-50 border-green-100';
-            default: return 'text-gray-600 bg-gray-50 border-gray-100';
+            default: return 'text-[var(--color-on-surface-variant)] bg-[var(--color-surface-low)] border-[var(--color-surface-high)]';
         }
     };
 
@@ -83,21 +83,21 @@ function MyBugReportsPage() {
     return (
         <div className="container-standard py-6 max-w-3xl">
             <div className="flex items-center gap-4 mb-8">
-                <Link to="/profile" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <Link to="/profile" className="p-2 hover:bg-[var(--color-surface-container)] rounded-full transition-colors">
                     <ArrowLeft size={24} />
                 </Link>
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">Bug Reports</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Status of the issues you have reported.</p>
+                    <p className="text-[var(--color-on-surface-variant)] mt-1 text-sm">Status of the issues you have reported.</p>
                 </div>
             </div>
 
             {reports.length === 0 ? (
-                <div className="glass-card p-12 text-center flex flex-col items-center border-2 border-dashed border-gray-100">
-                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-6">
+                <div className="glass-card p-12 text-center flex flex-col items-center border-2 border-dashed border-[var(--color-surface-high)]">
+                    <div className="w-20 h-20 bg-[var(--color-surface-low)] rounded-full flex items-center justify-center text-gray-300 mb-6">
                         <Bug size={40} />
                     </div>
-                    <h3 className="text-2xl font-black text-gray-800">No bug reports yet</h3>
+                    <h3 className="text-2xl font-black text-[var(--color-on-surface)]">No bug reports yet</h3>
                     <p className="text-gray-400 text-sm mt-2 max-w-xs font-medium">When you report a system bug, it will appear here.</p>
                     <Link to="/profile/bug-report" className="btn-primary mt-8 px-10 h-14">
                         Report a bug <ChevronRight size={18} className="ml-1" />
@@ -113,11 +113,11 @@ function MyBugReportsPage() {
                                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${getSeverityStyles(report.severity)}`}>
                                             {report.severity}
                                         </span>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 bg-[var(--color-surface-low)] px-2 py-0.5 rounded-md border border-[var(--color-surface-high)]">
                                             <Layout size={10} /> {report.page_location}
                                         </span>
                                     </div>
-                                    <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                    <h3 className="text-lg font-black text-[var(--color-on-surface)] flex items-center gap-2">
                                         <Bug size={18} className="text-primary group-hover:rotate-12 transition-transform" />
                                         Bug #{report.id}
                                     </h3>
@@ -127,7 +127,7 @@ function MyBugReportsPage() {
                                 </span>
                             </div>
 
-                            <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                            <p className="text-sm text-[var(--color-on-surface-variant)] leading-relaxed font-medium">
                                 {report.description}
                             </p>
 

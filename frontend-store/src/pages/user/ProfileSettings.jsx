@@ -105,7 +105,7 @@ function ProfileSettings() {
                             onError={() => setImageFailed(true)}
                         />
                     ) : (
-                        <div className="w-16 h-16 bg-gray-200 rounded-full" />
+                        <div className="w-16 h-16 bg-[var(--color-surface-high)] rounded-full" />
                     )}
                     <input type="file" accept="image/*" onChange={handleFileChange} />
                 </div>
@@ -116,7 +116,7 @@ function ProfileSettings() {
                     onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
                     className="input"
                 />
-                <input type="email" value={profile.email} disabled className="input bg-gray-100" />
+                <input type="email" value={profile.email} disabled className="input bg-[var(--color-surface-container)]" />
                 <input
                     type="text"
                     placeholder="Phone"
@@ -130,7 +130,7 @@ function ProfileSettings() {
                         onClick={() => setGenderDropdownOpen(!genderDropdownOpen)}
                         className="w-full h-12 rounded-xl bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] px-4 text-sm font-semibold text-[var(--color-on-surface)] flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-[var(--color-surface-low)]"
                     >
-                        <span className={form.gender ? 'text-slate-800' : 'text-slate-400'}>
+                        <span className={form.gender ? 'text-[var(--color-on-surface)]' : 'text-slate-400'}>
                             {form.gender ? form.gender.charAt(0).toUpperCase() + form.gender.slice(1) : "Select Gender"}
                         </span>
                         <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${genderDropdownOpen ? 'rotate-180' : ''}`} />
@@ -155,7 +155,7 @@ function ProfileSettings() {
                                         className={`w-full text-left px-4 py-3 text-xs font-bold rounded-lg transition-all flex items-center justify-between ${
                                             form.gender === genderObj.value
                                             ? 'bg-primary text-white'
-                                            : 'text-slate-700 hover:bg-slate-50'
+                                            : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                         }`}
                                     >
                                         <span>{genderObj.label}</span>

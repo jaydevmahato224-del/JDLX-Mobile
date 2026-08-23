@@ -54,8 +54,8 @@ function MyRefundsPage() {
         if (s === 'approved') return 'bg-green-100 text-green-700 border-green-200';
         if (s === 'rejected') return 'bg-red-100 text-red-700 border-red-200';
         if (s === 'processing') return 'bg-amber-100 text-amber-700 border-amber-200';
-        if (s === 'completed') return 'bg-gray-100 text-gray-700 border-gray-200';
-        return 'bg-gray-50 text-gray-600 border-gray-100';
+        if (s === 'completed') return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
+        return 'bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
     };
 
     if (loading) {
@@ -74,7 +74,7 @@ function MyRefundsPage() {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">My Refunds</h1>
-                    <p className="text-gray-500 mt-1">Track the status of your return and refund requests.</p>
+                    <p className="text-[var(--color-on-surface-variant)] mt-1">Track the status of your return and refund requests.</p>
                 </div>
                 <Link to="/profile/refund-request" className="btn-primary h-12 px-6">
                     New Refund
@@ -83,10 +83,10 @@ function MyRefundsPage() {
 
             {requests.length === 0 ? (
                 <div className="glass-card p-12 text-center flex flex-col items-center">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
+                    <div className="w-16 h-16 bg-[var(--color-surface-low)] rounded-full flex items-center justify-center text-gray-300 mb-4">
                         <RotateCcw size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800">No refund requests yet</h3>
+                    <h3 className="text-xl font-bold text-[var(--color-on-surface)]">No refund requests yet</h3>
                     <p className="text-gray-400 text-sm mt-2 max-w-xs">When you submit a refund or exchange request, it will appear here.</p>
                     <Link to="/profile/refund-request" className="btn-primary mt-6 px-8 h-12">
                         Submit refund request
@@ -106,7 +106,7 @@ function MyRefundsPage() {
                                             Order #{req.order_id}
                                         </span>
                                     </div>
-                                    <h3 className="font-black text-gray-800 flex items-center gap-2">
+                                    <h3 className="font-black text-[var(--color-on-surface)] flex items-center gap-2">
                                         <Package size={16} className="text-primary" />
                                         {req.reason}
                                     </h3>
@@ -124,7 +124,7 @@ function MyRefundsPage() {
                                 </div>
                             </div>
 
-                            <p className="text-sm text-gray-600 line-clamp-3">
+                            <p className="text-sm text-[var(--color-on-surface-variant)] line-clamp-3">
                                 {req.description}
                             </p>
 

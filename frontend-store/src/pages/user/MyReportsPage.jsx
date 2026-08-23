@@ -53,7 +53,7 @@ function MyReportsPage() {
         if (s === 'under review') return 'bg-amber-100 text-amber-700 border-amber-200';
         if (s === 'resolved') return 'bg-green-100 text-green-700 border-green-200';
         if (s === 'rejected') return 'bg-red-100 text-red-700 border-red-200';
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
     };
 
     if (loading) {
@@ -72,7 +72,7 @@ function MyReportsPage() {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">Order Reports</h1>
-                    <p className="text-gray-500 mt-1">Status of your reported order issues.</p>
+                    <p className="text-[var(--color-on-surface-variant)] mt-1">Status of your reported order issues.</p>
                 </div>
                 <Link to="/profile/order-report" className="btn-primary h-12 px-6">
                     New Report
@@ -81,10 +81,10 @@ function MyReportsPage() {
 
             {reports.length === 0 ? (
                 <div className="glass-card p-12 text-center flex flex-col items-center">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
+                    <div className="w-16 h-16 bg-[var(--color-surface-low)] rounded-full flex items-center justify-center text-gray-300 mb-4">
                         <ClipboardList size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800">No reports yet</h3>
+                    <h3 className="text-xl font-bold text-[var(--color-on-surface)]">No reports yet</h3>
                     <p className="text-gray-400 text-sm mt-2 max-w-xs">When you report an order issue, it will appear here.</p>
                     <Link to="/profile/order-report" className="btn-primary mt-6 px-8 h-12">
                         Report an issue
@@ -104,7 +104,7 @@ function MyReportsPage() {
                                             Order #{report.order_id}
                                         </span>
                                     </div>
-                                    <h3 className="font-black text-gray-800 flex items-center gap-2">
+                                    <h3 className="font-black text-[var(--color-on-surface)] flex items-center gap-2">
                                         <Package size={16} className="text-primary" />
                                         Reported on {new Date(report.order_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                                     </h3>
@@ -114,7 +114,7 @@ function MyReportsPage() {
                                 </span>
                             </div>
 
-                            <p className="text-sm text-gray-600 line-clamp-3">
+                            <p className="text-sm text-[var(--color-on-surface-variant)] line-clamp-3">
                                 {report.description}
                             </p>
 
@@ -138,7 +138,7 @@ function MyReportsPage() {
                             )}
 
                             {report.admin_notes && report.status?.toLowerCase() !== 'rejected' && (
-                                <div className="flex items-start gap-2 text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                <div className="flex items-start gap-2 text-[11px] text-[var(--color-on-surface-variant)] bg-[var(--color-surface-low)] p-3 rounded-xl border border-[var(--color-surface-high)]">
                                     <Info size={14} className="shrink-0 mt-0.5" />
                                     <p>{report.admin_notes}</p>
                                 </div>

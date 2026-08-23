@@ -351,7 +351,7 @@ function Profile() {
                             <Gift size={20} />
                         </div>
                         <div>
-                            <h3 className="font-black text-slate-800 tracking-tight">Have a Referral Code?</h3>
+                            <h3 className="font-black text-[var(--color-on-surface)] tracking-tight">Have a Referral Code?</h3>
                             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Get ₹10 instantly + ₹20 after your first order of ₹199+</p>
                         </div>
                     </div>

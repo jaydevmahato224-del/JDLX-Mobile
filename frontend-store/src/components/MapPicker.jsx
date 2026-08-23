@@ -139,7 +139,7 @@ export default function MapPicker({ onLocationSelect }) {
                                 });
                             }
                         }}
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-lg text-primary hover:bg-slate-50 transition-colors"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-surface-card)] shadow-lg text-primary hover:bg-[var(--color-surface-low)] transition-colors"
                     >
                         <Navigation size={20} />
                     </button>

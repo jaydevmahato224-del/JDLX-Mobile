@@ -53,8 +53,8 @@ function CategoryGrid({ onCategorySelect, activeCategory }) {
             <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
                 {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="flex-shrink-0 w-20 flex flex-col gap-2 animate-pulse">
-                        <div className="w-20 h-20 bg-gray-200 rounded-2xl"></div>
-                        <div className="h-3 bg-gray-200 rounded w-16 mx-auto"></div>
+                        <div className="w-20 h-20 bg-[var(--color-surface-high)] rounded-2xl"></div>
+                        <div className="h-3 bg-[var(--color-surface-high)] rounded w-16 mx-auto"></div>
                     </div>
                 ))}
             </div>
@@ -63,16 +63,16 @@ function CategoryGrid({ onCategorySelect, activeCategory }) {
 
     return (
         <div className="flex flex-col gap-4">
-            <h3 className="text-lg font-bold text-gray-800 px-1">Shop by Category</h3>
+            <h3 className="text-lg font-bold text-[var(--color-on-surface)] px-1">Shop by Category</h3>
             <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar -mx-1 px-1">
                 <button
                     onClick={() => onCategorySelect(null)}
                     className="flex-shrink-0 w-20 flex flex-col items-center gap-2 group"
                 >
-                    <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-300 ${!activeCategory ? 'bg-primary ring-4 ring-primary/20 scale-95 shadow-lg' : 'bg-white shadow-sm border border-gray-100 group-hover:shadow-md'}`}>
+                    <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-300 ${!activeCategory ? 'bg-primary ring-4 ring-primary/20 scale-95 shadow-lg' : 'bg-[var(--color-surface-card)] shadow-sm border border-[var(--color-surface-high)] group-hover:shadow-md'}`}>
                         <span className={`text-2xl ${!activeCategory ? 'text-white' : 'text-gray-400'}`}>🛍️</span>
                     </div>
-                    <span className={`text-[11px] font-bold text-center leading-tight transition-colors ${!activeCategory ? 'text-primary' : 'text-gray-600'}`}>All Items</span>
+                    <span className={`text-[11px] font-bold text-center leading-tight transition-colors ${!activeCategory ? 'text-primary' : 'text-[var(--color-on-surface-variant)]'}`}>All Items</span>
                 </button>
 
                 {categories.map((category) => (
@@ -85,7 +85,7 @@ function CategoryGrid({ onCategorySelect, activeCategory }) {
                         onTouchEnd={() => handleCategoryHoverLeave(category.id)}
                         className="flex-shrink-0 w-20 flex flex-col items-center gap-2 group"
                     >
-                        <div className={`w-20 h-20 rounded-2xl overflow-hidden transition-all duration-300 ${activeCategory === category.id ? 'ring-4 ring-primary/20 scale-95 shadow-lg' : 'shadow-sm border border-gray-100 group-hover:shadow-md'}`}>
+                        <div className={`w-20 h-20 rounded-2xl overflow-hidden transition-all duration-300 ${activeCategory === category.id ? 'ring-4 ring-primary/20 scale-95 shadow-lg' : 'shadow-sm border border-[var(--color-surface-high)] group-hover:shadow-md'}`}>
                             <div className={`w-full h-full flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${activeCategory === category.id ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}>
                                 {category.icon && category.icon.length <= 4 ? (
                                     <span className="text-3xl">{category.icon}</span>
@@ -99,7 +99,7 @@ function CategoryGrid({ onCategorySelect, activeCategory }) {
                                 )}
                             </div>
                         </div>
-                        <span className={`text-[11px] font-bold text-center leading-tight transition-colors ${activeCategory === category.id ? 'text-primary' : 'text-gray-600'}`}>
+                        <span className={`text-[11px] font-bold text-center leading-tight transition-colors ${activeCategory === category.id ? 'text-primary' : 'text-[var(--color-on-surface-variant)]'}`}>
                             {category.name}
                         </span>
                     </button>

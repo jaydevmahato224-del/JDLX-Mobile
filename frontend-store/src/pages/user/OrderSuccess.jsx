@@ -52,7 +52,7 @@ function OrderSuccess() {
       {/* Order Quick Summary Card */}
       {order && (
         <div className="w-full max-w-md glass-card p-6 border-none shadow-2xl mb-10 space-y-4">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center justify-between pb-4 border-b border-[var(--color-surface-high)]">
             <span className="text-xs font-black uppercase tracking-widest text-slate-400">Order Details</span>
             <span className="text-xs font-black bg-primary/10 text-primary px-3 py-1 rounded-full uppercase tracking-tighter">
               {order.order_status}
@@ -61,16 +61,16 @@ function OrderSuccess() {
           
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-bold text-slate-500 flex items-center gap-2">
+              <span className="text-sm font-bold text-[var(--color-on-surface-variant)] flex items-center gap-2">
                 <Package size={16} /> Total Amount
               </span>
-              <span className="text-lg font-black text-slate-900">₹{order.total_amount}</span>
+              <span className="text-lg font-black text-[var(--color-on-surface)]">₹{order.total_amount}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm font-bold text-slate-500 flex items-center gap-2">
+              <span className="text-sm font-bold text-[var(--color-on-surface-variant)] flex items-center gap-2">
                 <Truck size={16} /> Delivery To
               </span>
-              <span className="text-sm font-black text-slate-900 truncate max-w-[200px]">{order.delivery_address}</span>
+              <span className="text-sm font-black text-[var(--color-on-surface)] truncate max-w-[200px]">{order.delivery_address}</span>
             </div>
           </div>
         </div>
@@ -86,7 +86,7 @@ function OrderSuccess() {
         </button>
         <button 
           onClick={() => navigate('/')}
-          className="flex-1 py-4 rounded-[20px] bg-slate-100 text-slate-900 font-black tracking-tight flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
+          className="flex-1 py-4 rounded-[20px] bg-[var(--color-surface-container)] text-[var(--color-on-surface)] font-black tracking-tight flex items-center justify-center gap-2 hover:bg-[var(--color-surface-high)] transition-all"
         >
           <ShoppingBag size={18} /> Continue Shopping
         </button>
@@ -94,7 +94,7 @@ function OrderSuccess() {
 
       {/* Footer Signals */}
       <div className="mt-12 flex flex-col items-center gap-4 opacity-40">
-        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
           <ShieldCheck size={14} className="text-emerald-500" />
           JDLX Guaranteed Service
         </div>

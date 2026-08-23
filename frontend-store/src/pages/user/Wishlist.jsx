@@ -53,7 +53,7 @@ export default function Wishlist() {
         return (
             <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 space-y-4">
                 <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-                <p className="text-slate-500 font-bold animate-pulse">Syncing your favorites...</p>
+                <p className="text-[var(--color-on-surface-variant)] font-bold animate-pulse">Syncing your favorites...</p>
             </div>
         );
     }
@@ -64,28 +64,28 @@ export default function Wishlist() {
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={() => navigate(-1)}
-                        className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+                        className="h-10 w-10 rounded-full bg-[var(--color-surface-container)] flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-high)] transition-colors"
                     >
                         <ArrowLeft size={20} />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                        <h1 className="text-2xl font-black text-[var(--color-on-surface)] flex items-center gap-2">
                             <Heart className="text-red-500" fill="currentColor" size={24} />
                             My Wishlist
                         </h1>
-                        <p className="text-sm text-slate-500 font-medium">{wishlist.length} items saved</p>
+                        <p className="text-sm text-[var(--color-on-surface-variant)] font-medium">{wishlist.length} items saved</p>
                     </div>
                 </div>
             </header>
 
             {wishlist.length === 0 ? (
                 <div className="glass-card p-12 flex flex-col items-center text-center space-y-6">
-                    <div className="h-24 w-24 rounded-[2.5rem] bg-slate-50 flex items-center justify-center text-slate-300">
+                    <div className="h-24 w-24 rounded-[2.5rem] bg-[var(--color-surface-low)] flex items-center justify-center text-slate-300">
                         <Heart size={48} strokeWidth={1} />
                     </div>
                     <div className="space-y-2">
-                        <h3 className="text-xl font-black text-slate-900">Your wishlist is empty</h3>
-                        <p className="text-slate-500 max-w-xs mx-auto">Save your favorite items here to track stock and buy them later.</p>
+                        <h3 className="text-xl font-black text-[var(--color-on-surface)]">Your wishlist is empty</h3>
+                        <p className="text-[var(--color-on-surface-variant)] max-w-xs mx-auto">Save your favorite items here to track stock and buy them later.</p>
                     </div>
                     <Link to="/" className="btn-primary px-8">
                         Continue Shopping
@@ -101,7 +101,7 @@ export default function Wishlist() {
                         return (
                             <div key={product.id} className="glass-card group overflow-hidden flex flex-col md:flex-row items-center gap-6 p-4 md:p-6 hover:border-primary/20 transition-all duration-300">
                                 {/* Product Image */}
-                                <Link to={getProductUrl(product)} className="relative w-full md:w-32 aspect-square rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0">
+                                <Link to={getProductUrl(product)} className="relative w-full md:w-32 aspect-square rounded-2xl bg-[var(--color-surface-container)] overflow-hidden flex-shrink-0">
                                     <BlurImage 
                                         src={getProductImage(product)}
                                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -118,14 +118,14 @@ export default function Wishlist() {
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                                         <div>
                                             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{product.category}</div>
-                                            <Link to={getProductUrl(product)} className="text-lg font-black text-slate-900 hover:text-primary transition-colors line-clamp-1">{product.name}</Link>
+                                            <Link to={getProductUrl(product)} className="text-lg font-black text-[var(--color-on-surface)] hover:text-primary transition-colors line-clamp-1">{product.name}</Link>
                                             
                                             {product.average_rating > 0 && (
                                                 <div className="mt-1 flex items-center justify-center md:justify-start gap-1.5">
                                                     <div className="flex items-center gap-0.5 text-amber-400">
                                                         <Star size={12} fill="currentColor" />
                                                     </div>
-                                                    <span className="text-[11px] font-black text-slate-700">
+                                                    <span className="text-[11px] font-black text-[var(--color-on-surface-variant)]">
                                                         {Number(product.average_rating).toFixed(1)}
                                                     </span>
                                                     {product.total_reviews > 0 && (
@@ -158,7 +158,7 @@ export default function Wishlist() {
                                 <div className="flex items-center gap-3 w-full md:w-auto">
                                     <button 
                                         onClick={() => handleRemove(product)}
-                                        className="h-12 w-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100"
+                                        className="h-12 w-12 rounded-2xl bg-[var(--color-surface-low)] text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-[var(--color-surface-high)]"
                                         title="Remove from wishlist"
                                     >
                                         <Trash2 size={20} />
@@ -179,15 +179,15 @@ export default function Wishlist() {
 
             {/* Footer Suggestions */}
             {wishlist.length > 0 && (
-                <section className="pt-8 border-t border-slate-100">
+                <section className="pt-8 border-t border-[var(--color-surface-high)]">
                     <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-black text-slate-900">Recommended for you</h2>
+                        <h2 className="text-xl font-black text-[var(--color-on-surface)]">Recommended for you</h2>
                         <Link to="/" className="text-sm font-bold text-primary hover:underline flex items-center gap-1">
                             View All <ChevronRight size={16} />
                         </Link>
                     </div>
                     {/* Placeholder for Recommendations or just some text */}
-                    <p className="text-sm text-slate-500 italic font-medium">Based on your saved items and interests.</p>
+                    <p className="text-sm text-[var(--color-on-surface-variant)] italic font-medium">Based on your saved items and interests.</p>
                 </section>
             )}
         </div>

@@ -653,7 +653,7 @@ export default function Home() {
           {offerBanners.map(offer => (
             <div 
               key={offer.id} 
-              className="snap-center shrink-0 w-[280px] h-[120px] rounded-2xl overflow-hidden shadow-lg cursor-pointer bg-slate-100 relative group"
+              className="snap-center shrink-0 w-[280px] h-[120px] rounded-2xl overflow-hidden shadow-lg cursor-pointer bg-[var(--color-surface-container)] relative group"
               onClick={() => {
                  trackEvent('click', 'offer_banner', offer.title);
                  // Determine route based on applicable_on
@@ -745,9 +745,9 @@ export default function Home() {
                         </p>
                       </div>
                       {offer.min_order_amount > 0 && (
-                        <div className="border-l border-slate-200 pl-4">
+                        <div className="border-l border-[var(--color-surface-high)] pl-4">
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Min. Order</p>
-                          <p className="text-sm font-black text-slate-700">₹{offer.min_order_amount}</p>
+                          <p className="text-sm font-black text-[var(--color-on-surface-variant)]">₹{offer.min_order_amount}</p>
                         </div>
                       )}
                     </div>
@@ -762,7 +762,7 @@ export default function Home() {
                             style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontSize: '12px', fontWeight: 'bold' }
                           });
                         }}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-sm font-black text-slate-700 uppercase tracking-widest hover:border-primary hover:bg-primary/5 transition-all active:scale-95"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[var(--color-surface-high)] text-sm font-black text-[var(--color-on-surface-variant)] uppercase tracking-widest hover:border-primary hover:bg-primary/5 transition-all active:scale-95"
                       >
                         <span>{offer.coupon_code}</span>
                         <span className="text-[9px] text-slate-400 normal-case tracking-normal font-bold">Tap to copy</span>

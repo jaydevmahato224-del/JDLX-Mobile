@@ -81,7 +81,7 @@ function Notifications() {
                         <div className="font-bold">
                             {pushState === 'granted' ? '🔔 Push notifications enabled' : '🔕 Push notifications off'}
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-[var(--color-on-surface-variant)]">
                             {pushState === 'granted'
                                 ? 'You will get order updates and offers even when the app is closed.'
                                 : 'Enable to receive order updates and offers when the app is closed.'}
@@ -98,10 +98,10 @@ function Notifications() {
             <button onClick={markAll} className="btn-secondary mb-4">Mark All Read</button>
             <ul className="space-y-2">
                 {notes.map(n=> (
-                    <li key={n.id} className={`p-3 ${isReadNotification(n)?'bg-gray-100':''} glass-card`}> 
+                    <li key={n.id} className={`p-3 ${isReadNotification(n)?'bg-[var(--color-surface-container)]':''} glass-card`}>
                         <div className="font-bold">{n.title}</div>
                         <div className="text-sm">{n.message}</div>
-                        <div className="text-xs text-gray-500">{n.created_at}</div>
+                        <div className="text-xs text-[var(--color-on-surface-variant)]">{n.created_at}</div>
                     </li>
                 ))}
             </ul>

@@ -39,7 +39,7 @@ const ShareRedirect = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface-low)]">
       <div className="text-center">
         <LoadingScreen />
         <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">

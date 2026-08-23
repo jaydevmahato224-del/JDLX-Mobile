@@ -123,7 +123,7 @@ function SearchBar() {
                                     onClick={() => handleSelect(product)}
                                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${activeIndex === index ? 'bg-primary/10' : 'hover:bg-[var(--color-surface-low)]'}`}
                                 >
-                                    <div className="w-10 h-10 bg-white rounded-lg border border-[var(--color-surface-high)] flex-shrink-0 p-1">
+                                    <div className="w-10 h-10 bg-[var(--color-surface-card)] rounded-lg border border-[var(--color-surface-high)] flex-shrink-0 p-1">
                                         <img src={product.images} alt={product.name} className="w-full h-full object-contain" />
                                     </div>
                                     <div className="flex-1 min-w-0">

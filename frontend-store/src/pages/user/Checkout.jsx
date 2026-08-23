@@ -665,7 +665,7 @@ function Checkout() {
                             </div>
 
                             {!selectedAddressId && (
-                                <div className="space-y-4 animate-in slide-in-from-top-2 border-t border-slate-100 pt-4">
+                                <div className="space-y-4 animate-in slide-in-from-top-2 border-t border-[var(--color-surface-high)] pt-4">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Manual Address Entry</label>
                                     
                                     <div className="grid grid-cols-2 gap-3">
@@ -947,7 +947,7 @@ function Checkout() {
                                         value={couponCode}
                                         onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                                         placeholder="Enter Coupon Code" 
-                                        className="bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-primary uppercase transition-colors"
+                                        className="bg-[var(--color-surface-low)] border-2 border-[var(--color-surface-high)] rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-primary uppercase transition-colors"
                                         style={{ flex: '1 1 0%', minWidth: 0, width: 0 }}
                                     />
                                     <button 
@@ -973,16 +973,16 @@ function Checkout() {
                         </div>
 
                         {/* Wallet Section */}
-                        <div className="pt-4 border-t border-slate-100">
-                            <WalletCheckout 
+                        <div className="pt-4 border-t border-[var(--color-surface-high)]">
+                            <WalletCheckout
                                 totalAmount={subtotal - discountAmount + platformFee + deliveryCharge + fittingTotal} 
                                 onApply={(amt) => setWalletAmount(amt)} 
                             />
                         </div>
 
                         {/* Detailed Bill */}
-                        <div className="space-y-4 pt-4 border-t border-slate-100">
-                            <div className="flex justify-between text-sm font-bold text-slate-500">
+                        <div className="space-y-4 pt-4 border-t border-[var(--color-surface-high)]">
+                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface-variant)]">
                                 <span>Subtotal</span>
                                 <span>₹{subtotal.toLocaleString()}</span>
                             </div>
@@ -1001,7 +1001,7 @@ function Checkout() {
                                 </div>
                             )}
 
-                            <div className="flex justify-between text-sm font-bold text-slate-500">
+                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface-variant)]">
                                 <span>Delivery Charge</span>
                                 {deliveryCharge === 0 ? (
                                     <span className="text-emerald-500 uppercase tracking-widest text-xs font-black">Free</span>
@@ -1010,7 +1010,7 @@ function Checkout() {
                                 )}
                             </div>
 
-                            <div className="flex justify-between text-sm font-bold text-slate-500">
+                            <div className="flex justify-between text-sm font-bold text-[var(--color-on-surface-variant)]">
                                 <span>Platform Fee</span>
                                 <span>₹{platformFee}</span>
                             </div>
@@ -1023,7 +1023,7 @@ function Checkout() {
                             )}
 
                             {/* Final Total */}
-                            <div className="flex justify-between items-center pt-4 border-t-2 border-dashed border-slate-100">
+                            <div className="flex justify-between items-center pt-4 border-t-2 border-dashed border-[var(--color-surface-high)]">
                                 <span className="text-lg font-black text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>Final Total</span>
                                 <span className="text-2xl font-black text-primary tracking-tighter" style={{ fontFamily: 'Manrope, sans-serif' }}>
                                     ₹{finalTotal.toLocaleString()}
@@ -1032,26 +1032,26 @@ function Checkout() {
 
                             {/* COD Breakdown / Shiprocket Info */}
                             {paymentMethod === 'COD' ? (
-                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in zoom-in">
+                                <div className="p-4 rounded-2xl bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] space-y-2 animate-in fade-in zoom-in">
                                     {codAdvance > 0 ? (
                                         <>
                                             <div className="flex justify-between text-[13px] font-black text-[var(--color-on-surface)]">
                                                 <span className="flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Pay Now (Advance)</span>
                                                 <span className="text-primary font-black">₹{payNowAmount.toLocaleString()}</span>
                                             </div>
-                                            <div className="flex justify-between text-[12px] font-bold text-slate-500">
+                                            <div className="flex justify-between text-[12px] font-bold text-[var(--color-on-surface-variant)]">
                                                 <span>Remaining Amount (at Delivery)</span>
                                                 <span>₹{remainingCodAmount.toLocaleString()}</span>
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="flex justify-between text-[13px] font-black text-slate-900">
+                                        <div className="flex justify-between text-[13px] font-black text-[var(--color-on-surface)]">
                                             <span className="flex items-center gap-1.5"><Zap size={14} className="text-emerald-500" /> Full Amount at Delivery</span>
                                             <span className="text-emerald-600 font-black">₹{finalTotal.toLocaleString()}</span>
                                         </div>
                                     )}
                                     {isShiprocket && (
-                                        <div className="text-[10px] text-blue-600 font-bold border-t border-slate-100 pt-2 flex items-center gap-1">
+                                        <div className="text-[10px] text-blue-600 font-bold border-t border-[var(--color-surface-high)] pt-2 flex items-center gap-1">
                                             <Truck size={12} /> Standard courier shipping (3-5 business days)
                                         </div>
                                     )}
@@ -1074,7 +1074,7 @@ function Checkout() {
                                 <button
                                     type="submit"
                                     disabled={!user || isProcessing}
-                                    className={`w-full py-5 rounded-[24px] shadow-2xl flex items-center justify-center gap-3 font-black tracking-tighter transition-all ${isProcessing ? 'bg-slate-100 text-slate-400' : 'bg-primary text-white hover:scale-[1.02] active:scale-[0.98]'}`}
+                                    className={`w-full py-5 rounded-[24px] shadow-2xl flex items-center justify-center gap-3 font-black tracking-tighter transition-all ${isProcessing ? 'bg-[var(--color-surface-container)] text-slate-400' : 'bg-primary text-white hover:scale-[1.02] active:scale-[0.98]'}`}
                                     style={{ fontFamily: 'Manrope, sans-serif' }}
                                 >
                                     {isProcessing ? (

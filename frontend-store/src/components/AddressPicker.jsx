@@ -169,7 +169,7 @@ function AddressPicker({ onSelect, onClose }) {
 
     return (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="bg-[var(--color-surface-card)] w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300">
                 {/* Header */}
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
                     <h2 className="text-xl font-black text-gray-800 tracking-tight">Select Location</h2>
@@ -192,7 +192,7 @@ function AddressPicker({ onSelect, onClose }) {
                                 value={formData.flatNo}
                                 onChange={handleChange}
                                 placeholder="e.g. 202, 2nd Floor"
-                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                className="w-full px-4 py-3 bg-[var(--color-surface-low)] border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-[var(--color-surface-card)] focus:outline-none transition-all text-[var(--color-on-surface)]"
                                 required
                             />
                         </div>
@@ -204,7 +204,7 @@ function AddressPicker({ onSelect, onClose }) {
                                 value={formData.area}
                                 onChange={handleChange}
                                 placeholder="e.g. Sector 15, Rohini"
-                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                className="w-full px-4 py-3 bg-[var(--color-surface-low)] border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-[var(--color-surface-card)] focus:outline-none transition-all text-[var(--color-on-surface)]"
                                 required
                             />
                         </div>
@@ -219,7 +219,7 @@ function AddressPicker({ onSelect, onClose }) {
                                 value={formData.landmark}
                                 onChange={handleChange}
                                 placeholder="e.g. Near Metro Station"
-                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                className="w-full px-4 py-3 bg-[var(--color-surface-low)] border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-[var(--color-surface-card)] focus:outline-none transition-all text-[var(--color-on-surface)]"
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -231,7 +231,7 @@ function AddressPicker({ onSelect, onClose }) {
                                 onChange={handleChange}
                                 placeholder="6-digit Pincode"
                                 maxLength="6"
-                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                className="w-full px-4 py-3 bg-[var(--color-surface-low)] border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-[var(--color-surface-card)] focus:outline-none transition-all text-[var(--color-on-surface)]"
                                 required
                             />
                             {pincodeMessage && (
@@ -254,7 +254,7 @@ function AddressPicker({ onSelect, onClose }) {
                                 value={formData.city}
                                 onChange={handleChange}
                                 placeholder="City"
-                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                className="w-full px-4 py-3 bg-[var(--color-surface-low)] border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-[var(--color-surface-card)] focus:outline-none transition-all text-[var(--color-on-surface)]"
                                 required
                             />
                         </div>
@@ -266,7 +266,7 @@ function AddressPicker({ onSelect, onClose }) {
                                 value={formData.state}
                                 onChange={handleChange}
                                 placeholder="State"
-                                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-white focus:outline-none transition-all text-slate-900"
+                                className="w-full px-4 py-3 bg-[var(--color-surface-low)] border-2 border-gray-50 rounded-2xl text-xs font-semibold focus:border-primary/30 focus:bg-[var(--color-surface-card)] focus:outline-none transition-all text-[var(--color-on-surface)]"
                                 required
                             />
                         </div>

@@ -133,7 +133,7 @@ function OrderReportPage() {
                     <CheckCircle2 size={40} />
                 </div>
                 <h2 className="text-3xl font-black mb-2">Report Submitted!</h2>
-                <p className="text-gray-500 mb-8 max-w-md">Your report has been submitted! Our team will review it within 48 hours and provide an update.</p>
+                <p className="text-[var(--color-on-surface-variant)] mb-8 max-w-md">Your report has been submitted! Our team will review it within 48 hours and provide an update.</p>
                 <Link to="/profile/my-reports" className="btn-primary h-14 px-10">
                     My Reports History <ChevronRight size={18} className="ml-2" />
                 </Link>
@@ -148,7 +148,7 @@ function OrderReportPage() {
                     <PackageSearch className="text-primary w-8 h-8" />
                     <h1 className="text-3xl font-black tracking-tight">Report Order Issue</h1>
                 </div>
-                <p className="text-gray-500">Experienced a problem after your order was delivered? Report it here.</p>
+                <p className="text-[var(--color-on-surface-variant)]">Experienced a problem after your order was delivered? Report it here.</p>
             </div>
 
             {errorMsg && (
@@ -201,7 +201,7 @@ function OrderReportPage() {
                                         className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                             String(form.order_id) === String(order.id)
                                             ? 'bg-primary text-white'
-                                            : 'text-slate-700 hover:bg-slate-50'
+                                            : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                         }`}
                                     >
                                         <span className="truncate max-w-[90%]">
@@ -256,7 +256,7 @@ function OrderReportPage() {
                                         className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                             form.report_type === typeVal
                                             ? 'bg-primary text-white'
-                                            : 'text-slate-700 hover:bg-slate-50'
+                                            : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                         }`}
                                     >
                                         <span>{typeVal}</span>
@@ -288,13 +288,13 @@ function OrderReportPage() {
                 <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Evidence Photo (Optional)</label>
                     <div className="flex items-center gap-4">
-                        <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
+                        <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-surface-high)] hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
                             <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                             <Camera size={24} />
                             <span className="text-[9px] font-black uppercase mt-1">Upload</span>
                         </label>
                         {preview && (
-                            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+                            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-[var(--color-surface-high)] shadow-sm">
                                 <img src={preview} alt="Preview" className="w-full h-full object-cover" />
                                 <button 
                                     type="button"

@@ -111,7 +111,7 @@ function ComplaintPage() {
                     <CheckCircle2 size={40} />
                 </div>
                 <h2 className="text-3xl font-black mb-2">Complaint Submitted!</h2>
-                <p className="text-gray-500 mb-8 max-w-md">Your issue has been recorded. Our team will review it and get back to you shortly.</p>
+                <p className="text-[var(--color-on-surface-variant)] mb-8 max-w-md">Your issue has been recorded. Our team will review it and get back to you shortly.</p>
                 <Link to="/my-requests" className="btn-primary h-14 px-10">
                     View My Requests <ChevronRight size={18} className="ml-2" />
                 </Link>
@@ -123,7 +123,7 @@ function ComplaintPage() {
         <div className="container-standard py-6 max-w-3xl">
             <div className="mb-8">
                 <h1 className="text-3xl font-black tracking-tight">Report an Issue</h1>
-                <p className="text-gray-500 mt-1">Tell us what went wrong with your order.</p>
+                <p className="text-[var(--color-on-surface-variant)] mt-1">Tell us what went wrong with your order.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="glass-card p-6 md:p-8 space-y-6">
@@ -169,7 +169,7 @@ function ComplaintPage() {
                                         className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                             String(form.order_id) === String(order.id)
                                             ? 'bg-primary text-white'
-                                            : 'text-slate-700 hover:bg-slate-50'
+                                            : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                         }`}
                                     >
                                         <span className="truncate max-w-[90%]">
@@ -223,7 +223,7 @@ function ComplaintPage() {
                                         className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                             form.issue_type === issue
                                             ? 'bg-primary text-white'
-                                            : 'text-slate-700 hover:bg-slate-50'
+                                            : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                         }`}
                                     >
                                         <span>{issue}</span>
@@ -252,13 +252,13 @@ function ComplaintPage() {
                 <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Attach Photo (Optional)</label>
                     <div className="flex items-center gap-4">
-                        <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
+                        <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-surface-high)] hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
                             <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                             <Camera size={24} />
                             <span className="text-[9px] font-black uppercase mt-1">Upload</span>
                         </label>
                         {preview && (
-                            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+                            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-[var(--color-surface-high)] shadow-sm">
                                 <img src={preview} alt="Preview" className="w-full h-full object-cover" />
                                 <button 
                                     type="button"

@@ -244,9 +244,9 @@ function OrderTracking() {
         return first || '';
     };
 
-    if (loading) return <div className="p-10 text-center text-gray-500">Tracking your order...</div>;
+    if (loading) return <div className="p-10 text-center text-[var(--color-on-surface-variant)]">Tracking your order...</div>;
     if (error) return (
-        <div className="p-10 text-center flex flex-col items-center gap-4 text-gray-500">
+        <div className="p-10 text-center flex flex-col items-center gap-4 text-[var(--color-on-surface-variant)]">
             <p>{error}</p>
             <Link to="/" className="text-primary font-bold">Back to Home</Link>
         </div>
@@ -258,9 +258,9 @@ function OrderTracking() {
         <div className="container-standard py-6 flex flex-col gap-6">
             <div className="flex items-center gap-4">
                 <Link to="/" className="p-2 hover:bg-white/40 rounded-full transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                    <ArrowLeft className="w-5 h-5 text-[var(--color-on-surface-variant)]" />
                 </Link>
-                <h1 className="text-2xl font-bold text-gray-800">Track Order #{order?.order_number || orderId}</h1>
+                <h1 className="text-2xl font-bold text-[var(--color-on-surface)]">Track Order #{order?.order_number || orderId}</h1>
             </div>
 
             <div className="glass-card p-6 flex flex-col gap-6 relative overflow-hidden">
@@ -270,12 +270,12 @@ function OrderTracking() {
 
                 {isOrderInactive ? (
                     <div className="flex flex-col gap-4">
-                        <div className={`flex items-center gap-3 p-4 rounded-2xl ${order?.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-50 border border-red-100' : 'bg-slate-50 border border-slate-100'}`}>
+                        <div className={`flex items-center gap-3 p-4 rounded-2xl ${order?.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-50 border border-red-100' : 'bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]'}`}>
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${order?.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-500 text-white' : 'bg-slate-400 text-white'}`}>
                                 <Ban className="w-6 h-6" />
                             </div>
                             <div>
-                                <p className={`text-lg font-black tracking-tight ${order?.status?.toUpperCase() === 'CANCELLED' ? 'text-red-600' : 'text-slate-700'}`}>
+                                <p className={`text-lg font-black tracking-tight ${order?.status?.toUpperCase() === 'CANCELLED' ? 'text-red-600' : 'text-[var(--color-on-surface-variant)]'}`}>
                                     {isPendingRefundRequest ? 'Refund Requested' : (order?.status || 'Cancelled').replace(/_/g, ' ')}
                                 </p>
                                 <p className="text-[11px] font-bold text-gray-400 mt-0.5">
@@ -305,7 +305,7 @@ function OrderTracking() {
 
                         <div className="relative flex flex-col gap-8 mt-4">
                             {/* Vertical Line */}
-                            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-gray-100"></div>
+                            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-[var(--color-surface-container)]"></div>
 
                             {stages.map((stage, index) => {
                                 const Icon = stage.icon;
@@ -320,7 +320,7 @@ function OrderTracking() {
                                             <Icon className="w-5 h-5" />
                                         </div>
                                         <div className="flex-1 pt-1">
-                                            <h3 className={`font-bold text-sm ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
+                                            <h3 className={`font-bold text-sm ${isCompleted ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}`}>
                                                 {stage.label}
                                             </h3>
                                             {stage.time && (
@@ -345,7 +345,7 @@ function OrderTracking() {
             {(trackingInfo?.assigned_rider || order?.partner_name) && (
                 <div className="glass-card p-5 animate-in fade-in slide-in-from-bottom-4 flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-[var(--color-on-surface)] flex items-center gap-2">
                             <Truck className="w-5 h-5 text-primary" /> Delivery Partner
                         </h3>
                         {order?.status === 'OUT_FOR_DELIVERY' && (
@@ -358,10 +358,10 @@ function OrderTracking() {
 
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="font-black text-lg text-gray-900">
+                            <p className="font-black text-lg text-[var(--color-on-surface)]">
                                 {trackingInfo?.assigned_rider?.name || order.partner_name}
                             </p>
-                            <div className="flex items-center gap-1 text-gray-500 text-sm mt-1">
+                            <div className="flex items-center gap-1 text-[var(--color-on-surface-variant)] text-sm mt-1">
                                 <Phone className="w-4 h-4" /> {trackingInfo?.assigned_rider?.phone || order.partner_phone}
                             </div>
                         </div>
@@ -378,7 +378,7 @@ function OrderTracking() {
                                     {calculateDistance(riderLocation.latitude, riderLocation.longitude, order.latitude, order.longitude).toFixed(2)} km away
                                 </span>
                             </div>
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-[var(--color-surface-container)] rounded-full overflow-hidden">
                                 <div className="h-full bg-primary animate-pulse" style={{ width: '40%' }}></div>
                             </div>
                             <p className="text-[10px] text-gray-400 text-center italic">Arriving soon at your location</p>
@@ -386,14 +386,14 @@ function OrderTracking() {
                     )}
 
                     {routeData && order?.status !== 'DELIVERED' && (
-                        <div className="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-3">
+                        <div className="mt-2 p-3 bg-[var(--color-surface-low)] rounded-xl border border-[var(--color-surface-high)] flex flex-col gap-3">
                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                                 <MapPin className="w-3 h-3" /> Optimized Route
                             </h4>
                             <div className="flex items-center justify-between text-[11px]">
                                 {routeData.legs.map((leg, idx) => (
                                     <div key={idx} className="flex flex-col items-center flex-1 relative">
-                                        <span className="font-bold text-gray-800">{leg.from}</span>
+                                        <span className="font-bold text-[var(--color-on-surface)]">{leg.from}</span>
                                         <span className="text-[9px] text-primary font-black mt-0.5">{leg.distance}km</span>
                                         <span className="text-[8px] text-gray-400">{leg.time}m</span>
                                         {idx < routeData.legs.length - 1 && (
@@ -402,13 +402,13 @@ function OrderTracking() {
                                     </div>
                                 ))}
                                 <div className="flex flex-col items-center flex-1">
-                                    <span className="font-bold text-gray-800">{routeData.legs[routeData.legs.length - 1].to}</span>
+                                    <span className="font-bold text-[var(--color-on-surface)]">{routeData.legs[routeData.legs.length - 1].to}</span>
                                     <span className="text-[9px] text-green-500 font-black mt-0.5">End</span>
                                 </div>
                             </div>
-                            <div className="flex justify-between items-center text-[10px] pt-1 border-t border-gray-100">
-                                <span className="text-gray-500">Total Optimized Distance</span>
-                                <span className="font-black text-gray-800">{routeData.total_distance} km</span>
+                            <div className="flex justify-between items-center text-[10px] pt-1 border-t border-[var(--color-surface-high)]">
+                                <span className="text-[var(--color-on-surface-variant)]">Total Optimized Distance</span>
+                                <span className="font-black text-[var(--color-on-surface)]">{routeData.total_distance} km</span>
                             </div>
                         </div>
                     )}
@@ -416,16 +416,16 @@ function OrderTracking() {
             )}
 
             <div className="glass-card p-5 flex flex-col gap-3">
-                <div className="flex items-center gap-3 text-gray-700">
+                <div className="flex items-center gap-3 text-[var(--color-on-surface-variant)]">
                     <MapPin className="w-5 h-5 text-primary" />
                     <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Delivery Address</p>
                         <p className="text-sm font-medium">{order?.delivery_address}</p>
                     </div>
                 </div>
-                <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
-                    <span className="text-sm font-bold text-gray-800">Total Amount</span>
-                    <span className="text-lg font-black text-gray-900">₹{order?.total_amount}</span>
+                <div className="border-t border-[var(--color-surface-high)] pt-3 flex justify-between items-center">
+                    <span className="text-sm font-bold text-[var(--color-on-surface)]">Total Amount</span>
+                    <span className="text-lg font-black text-[var(--color-on-surface)]">₹{order?.total_amount}</span>
                 </div>
             </div>
 
@@ -433,7 +433,7 @@ function OrderTracking() {
             {Array.isArray(order?.items) && order.items.length > 0 && (
                 <div className="glass-card p-5 flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+                        <h3 className="text-sm font-black text-[var(--color-on-surface)] uppercase tracking-tight flex items-center gap-2">
                             <Package className="w-4 h-4 text-primary" /> Items ({order.items.length})
                         </h3>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty × Price</span>
@@ -447,7 +447,7 @@ function OrderTracking() {
                             const lineTotal = (price * qty) + (fitting * qty);
                             return (
                                 <div key={idx} className="py-3 flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center shrink-0 p-1">
+                                    <div className="w-14 h-14 rounded-2xl bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] overflow-hidden flex items-center justify-center shrink-0 p-1">
                                         {img ? (
                                             <img src={resolveMediaUrl(img)} alt={item.product_name || 'Product'} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                                         ) : (
@@ -455,14 +455,14 @@ function OrderTracking() {
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-black text-gray-800 truncate">{item.product_name || 'Product'}</p>
+                                        <p className="text-sm font-black text-[var(--color-on-surface)] truncate">{item.product_name || 'Product'}</p>
                                         {item.device_model && (
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.device_model}</p>
                                         )}
                                         <p className="text-[10px] font-bold text-gray-400 mt-0.5">Qty {qty} × ₹{price}{fitting > 0 ? ` + ₹${fitting} fitting` : ''}</p>
                                     </div>
                                     <div className="text-right shrink-0">
-                                        <p className="text-sm font-black text-gray-900">₹{lineTotal.toFixed(0)}</p>
+                                        <p className="text-sm font-black text-[var(--color-on-surface)]">₹{lineTotal.toFixed(0)}</p>
                                     </div>
                                 </div>
                             );
@@ -477,7 +477,7 @@ function OrderTracking() {
                     <div className="glass-card p-5 flex flex-col gap-4 border-l-4 border-l-primary">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight">Shipment Details</h3>
+                                <h3 className="text-sm font-black text-[var(--color-on-surface)] uppercase tracking-tight">Shipment Details</h3>
                                 <p className="text-[10px] font-bold text-gray-400">Via {shipmentData.courier_name}</p>
                             </div>
                             <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black rounded-full uppercase tracking-wider">
@@ -488,11 +488,11 @@ function OrderTracking() {
                         <div className="grid grid-cols-2 gap-4 py-2 border-y border-gray-50">
                             <div>
                                 <p className="text-[9px] font-black text-gray-400 uppercase">AWB Code</p>
-                                <p className="text-xs font-bold text-gray-800">{shipmentData.awb_code}</p>
+                                <p className="text-xs font-bold text-[var(--color-on-surface)]">{shipmentData.awb_code}</p>
                             </div>
                             <div>
                                 <p className="text-[9px] font-black text-gray-400 uppercase">Est. Delivery</p>
-                                <p className="text-xs font-bold text-gray-800">{shipmentData.estimated_delivery || 'Calculating...'}</p>
+                                <p className="text-xs font-bold text-[var(--color-on-surface)]">{shipmentData.estimated_delivery || 'Calculating...'}</p>
                             </div>
                         </div>
 
@@ -509,19 +509,19 @@ function OrderTracking() {
                     </div>
 
                     <div className="glass-card p-6 flex flex-col gap-6">
-                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight">Tracking Timeline</h3>
+                        <h3 className="text-sm font-black text-[var(--color-on-surface)] uppercase tracking-tight">Tracking Timeline</h3>
                         
                         <div className="relative flex flex-col gap-8">
                             {/* Vertical Line */}
-                            <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-100"></div>
+                            <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-[var(--color-surface-container)]"></div>
 
                             {shipmentData.events && shipmentData.events.length > 0 ? (
                                 shipmentData.events.map((event, idx) => (
                                     <div key={idx} className="flex gap-4 items-start relative z-10">
-                                        <div className={`w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-primary border-primary ring-4 ring-primary/20' : 'bg-white border-gray-200'} mt-1`}></div>
+                                        <div className={`w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-primary border-primary ring-4 ring-primary/20' : 'bg-[var(--color-surface-card)] border-[var(--color-surface-high)]'} mt-1`}></div>
                                         <div className="flex-1">
                                             <div className="flex justify-between items-start">
-                                                <h4 className={`text-sm font-black ${idx === 0 ? 'text-gray-900' : 'text-gray-600'}`}>
+                                                <h4 className={`text-sm font-black ${idx === 0 ? 'text-[var(--color-on-surface)]' : 'text-[var(--color-on-surface-variant)]'}`}>
                                                     {event.status}
                                                 </h4>
                                                 <span className="text-[9px] font-bold text-gray-400">
@@ -533,7 +533,7 @@ function OrderTracking() {
                                                     <MapPin size={10} /> {event.location}
                                                 </p>
                                             )}
-                                            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                                            <p className="text-[11px] text-[var(--color-on-surface-variant)] mt-1 leading-relaxed">
                                                 {event.activity}
                                             </p>
                                         </div>
@@ -551,7 +551,7 @@ function OrderTracking() {
                 the status message + relevant actions are never hidden. */}
             {(isOrderInactive || ['PLACED', 'PACKING', 'PACKED', 'PENDING_PAYMENT', 'PENDING', 'DELIVERED'].includes(order?.status)) && (
                 <div className="glass-card p-5 flex flex-col gap-4 border-t-4 border-t-red-400">
-                    <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-[var(--color-on-surface)] flex items-center gap-2">
                         <AlertCircle className="w-5 h-5 text-red-500" /> Need Help?
                     </h3>
 
@@ -579,7 +579,7 @@ function OrderTracking() {
                                             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                                             className="w-full h-12 rounded-xl bg-[var(--color-surface-card)] border border-red-500/20 px-4 text-xs font-bold text-[var(--color-on-surface)] flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-red-400/10 transition-all hover:bg-[var(--color-surface-low)]"
                                         >
-                                            <span className={cancelReason ? 'text-slate-800' : 'text-slate-400'}>
+                                            <span className={cancelReason ? 'text-[var(--color-on-surface)]' : 'text-slate-400'}>
                                                 {cancelReason || "Select cancellation reason..."}
                                             </span>
                                             <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
@@ -644,7 +644,7 @@ function OrderTracking() {
                                         <button
                                             type="button"
                                             onClick={() => { setShowCancelForm(false); setCancelReason(''); setCustomReason(''); }}
-                                            className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+                                            className="px-5 py-3 bg-[var(--color-surface-container)] hover:bg-[var(--color-surface-high)] text-[var(--color-on-surface-variant)] font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
                                         >
                                             Keep Order
                                         </button>
@@ -701,7 +701,7 @@ function OrderTracking() {
                                 return (
                                     <button
                                         disabled
-                                        className="w-full py-3 bg-gray-50 text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-gray-100 cursor-not-allowed"
+                                        className="w-full py-3 bg-[var(--color-surface-low)] text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-[var(--color-surface-high)] cursor-not-allowed"
                                     >
                                         <RotateCcw size={18} /> Return window expired
                                     </button>
@@ -712,13 +712,13 @@ function OrderTracking() {
 
                     {showRefundForm && (
                         <form onSubmit={handleRefundRequest} className="flex flex-col gap-3 animate-in slide-in-from-top-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Reason for Refund</label>
+                            <label className="text-xs font-bold text-[var(--color-on-surface-variant)] uppercase tracking-wider">Reason for Refund</label>
                             <textarea
                                 value={refundReason}
                                 onChange={(e) => setRefundReason(e.target.value)}
                                 required
                                 placeholder="E.g. Item damaged, wrong item received..."
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                                className="w-full p-3 bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] rounded-xl text-sm focus:ring-2 focus:ring-primary focus:outline-none"
                                 rows="3"
                             />
                             <div className="flex gap-2">
@@ -732,7 +732,7 @@ function OrderTracking() {
                                 <button
                                     type="button"
                                     onClick={() => setShowRefundForm(false)}
-                                    className="px-4 py-3 bg-gray-100 text-gray-500 font-bold rounded-xl"
+                                    className="px-4 py-3 bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] font-bold rounded-xl"
                                 >
                                     Cancel
                                 </button>
@@ -742,7 +742,7 @@ function OrderTracking() {
 
                     {isOrderInactive && (
                         <div className="flex flex-col items-center gap-2 py-2">
-                            <span className={`text-sm font-black ${order?.status?.toUpperCase() === 'CANCELLED' ? 'text-red-500' : 'text-slate-500'}`}>Order Status: {(order.status || 'CANCELLED').replace('_', ' ')}</span>
+                            <span className={`text-sm font-black ${order?.status?.toUpperCase() === 'CANCELLED' ? 'text-red-500' : 'text-[var(--color-on-surface-variant)]'}`}>Order Status: {(order.status || 'CANCELLED').replace('_', ' ')}</span>
                             <p className="text-[10px] text-center text-gray-400">
                                 {order?.status?.toUpperCase() === 'CANCELLED'
                                     ? 'This order has been cancelled and cannot be modified.'

@@ -102,7 +102,7 @@ function SupportPage() {
         if (s === 'open') return 'bg-blue-100 text-blue-700 border-blue-200';
         if (s === 'in progress') return 'bg-yellow-100 text-yellow-700 border-yellow-200';
         if (s === 'resolved') return 'bg-green-100 text-green-700 border-green-200';
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+        return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
     };
 
     return (
@@ -110,7 +110,7 @@ function SupportPage() {
             {/* Header */}
             <div>
                 <h1 className="text-3xl font-black tracking-tight">Support Center</h1>
-                <p className="text-gray-500 mt-1">We're here to help you with any issues.</p>
+                <p className="text-[var(--color-on-surface-variant)] mt-1">We're here to help you with any issues.</p>
             </div>
 
             {/* SECTION A: New Ticket Form */}
@@ -198,10 +198,10 @@ function SupportPage() {
                     </div>
                 ) : tickets.length === 0 ? (
                     <div className="glass-card p-12 text-center flex flex-col items-center">
-                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
+                        <div className="w-16 h-16 bg-[var(--color-surface-low)] rounded-full flex items-center justify-center text-gray-300 mb-4">
                             <Ticket size={32} />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-800">No tickets yet</h3>
+                        <h3 className="text-xl font-bold text-[var(--color-on-surface)]">No tickets yet</h3>
                         <p className="text-gray-400 text-sm mt-2 max-w-xs">When you submit a support request, it will appear here.</p>
                     </div>
                 ) : (
@@ -213,18 +213,18 @@ function SupportPage() {
                                         <span className="px-2 py-0.5 bg-primary text-white rounded-md text-[9px] font-black uppercase tracking-widest">
                                             {ticket.ticket_number}
                                         </span>
-                                        <h3 className="font-black text-gray-800 text-base">{ticket.subject}</h3>
+                                        <h3 className="font-black text-[var(--color-on-surface)] text-base">{ticket.subject}</h3>
                                     </div>
                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusStyles(ticket.status)}`}>
                                         {ticket.status}
                                     </span>
                                 </div>
 
-                                <p className="text-sm text-gray-500 line-clamp-2 italic mb-4">
+                                <p className="text-sm text-[var(--color-on-surface-variant)] line-clamp-2 italic mb-4">
                                     "{ticket.last_message}"
                                 </p>
 
-                                <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+                                <div className="flex items-center justify-between border-t border-[var(--color-surface-high)] pt-4">
                                     <div className="flex items-center gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                                         <div className="flex items-center gap-1">
                                             <Clock size={12} />

@@ -185,7 +185,7 @@ function RefundRequestPage() {
                     <p className="font-bold text-lg mb-1 text-green-900">Expected refund: ₹{eligibility?.order_amount || '...'}</p>
                     <p className="text-sm opacity-80 italic">Final amount will be confirmed after admin review.</p>
                 </div>
-                <p className="text-gray-500 mb-8 max-w-md">Our team will process your request within 3-5 business days and provide a status update.</p>
+                <p className="text-[var(--color-on-surface-variant)] mb-8 max-w-md">Our team will process your request within 3-5 business days and provide a status update.</p>
                 <Link to="/profile/my-refunds" className="btn-primary h-14 px-10">
                     My Refunds History <ChevronRight size={18} className="ml-2" />
                 </Link>
@@ -201,7 +201,7 @@ function RefundRequestPage() {
                         <RotateCcw className="text-primary w-8 h-8" />
                         <h1 className="text-3xl font-black tracking-tight">Returns & Refunds</h1>
                     </div>
-                    <p className="text-gray-500">Need to return an order? Please provide the details.</p>
+                    <p className="text-[var(--color-on-surface-variant)]">Need to return an order? Please provide the details.</p>
                 </div>
                 <Link to="/profile/orders" className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline flex items-center gap-1">
                     <ArrowLeft size={12} /> Orders
@@ -220,8 +220,8 @@ function RefundRequestPage() {
                     <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-400 mx-auto">
                         <AlertCircle size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800">Not Eligible for Refund</h3>
-                    <p className="text-gray-500 text-sm max-w-xs mx-auto">{eligibility.reason}</p>
+                    <h3 className="text-xl font-bold text-[var(--color-on-surface)]">Not Eligible for Refund</h3>
+                    <p className="text-[var(--color-on-surface-variant)] text-sm max-w-xs mx-auto">{eligibility.reason}</p>
                     <Link to="/profile/orders" className="btn-primary inline-flex mt-4 px-10">
                         Back to My Orders
                     </Link>
@@ -275,7 +275,7 @@ function RefundRequestPage() {
                                             className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                                 String(form.order_id) === String(order.id)
                                                 ? 'bg-primary text-white'
-                                                : 'text-slate-700 hover:bg-slate-50'
+                                                : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                             }`}
                                         >
                                             <span className="truncate max-w-[90%]">
@@ -349,7 +349,7 @@ function RefundRequestPage() {
                                                 className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                                     form.request_type === typeVal
                                                     ? 'bg-primary text-white'
-                                                    : 'text-slate-700 hover:bg-slate-50'
+                                                    : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                                 }`}
                                             >
                                                 <span>{typeVal}</span>
@@ -403,7 +403,7 @@ function RefundRequestPage() {
                                                 className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                                     form.reason === reasonVal
                                                     ? 'bg-primary text-white'
-                                                    : 'text-slate-700 hover:bg-slate-50'
+                                                    : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                                 }`}
                                             >
                                                 <span>{reasonVal}</span>
@@ -439,13 +439,13 @@ function RefundRequestPage() {
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Evidence Photo (Optional)</label>
                         <div className="flex items-center gap-4">
-                            <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
+                            <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-surface-high)] hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
                                 <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                                 <Camera size={24} />
                                 <span className="text-[9px] font-black uppercase mt-1">Upload</span>
                             </label>
                             {preview && (
-                                <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-gray-100 shadow-sm group">
+                                <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-[var(--color-surface-high)] shadow-sm group">
                                     <img src={preview} alt="Preview" className="w-full h-full object-cover" />
                                     <button 
                                         type="button"

@@ -99,7 +99,7 @@ export default function ProductReviews({ productId }) {
             <div className="grid md:grid-cols-[1fr_1.5fr] gap-10 items-start">
                 <div className="space-y-6">
                     <div className="space-y-2">
-                        <h2 className="text-3xl font-black tracking-tight text-slate-900">Customer Reviews</h2>
+                        <h2 className="text-3xl font-black tracking-tight text-[var(--color-on-surface)]">Customer Reviews</h2>
                         <div className="flex items-center gap-3">
                             <div className="flex items-center text-amber-400">
                                 {[1, 2, 3, 4, 5].map((s) => (
@@ -111,9 +111,9 @@ export default function ProductReviews({ productId }) {
                                     />
                                 ))}
                             </div>
-                            <span className="text-xl font-black text-slate-900">{stats.average} out of 5</span>
+                            <span className="text-xl font-black text-[var(--color-on-surface)]">{stats.average} out of 5</span>
                         </div>
-                        <p className="text-sm text-slate-500 font-medium">{stats.total} total global ratings</p>
+                        <p className="text-sm text-[var(--color-on-surface-variant)] font-medium">{stats.total} total global ratings</p>
                     </div>
 
                     <button 
@@ -129,8 +129,8 @@ export default function ProductReviews({ productId }) {
                 <div className="space-y-3">
                     {distributionArray.map((item) => (
                         <div key={item.star} className="flex items-center gap-4 group cursor-default">
-                            <span className="text-xs font-black text-slate-600 w-10">{item.star} Star</span>
-                            <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                            <span className="text-xs font-black text-[var(--color-on-surface-variant)] w-10">{item.star} Star</span>
+                            <div className="flex-1 h-3 bg-[var(--color-surface-container)] rounded-full overflow-hidden">
                                 <div 
                                     className="h-full bg-primary transition-all duration-1000 ease-out" 
                                     style={{ width: `${item.percentage}%` }}
@@ -144,14 +144,14 @@ export default function ProductReviews({ productId }) {
 
             {/* Reviews List */}
             <div className="space-y-8">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Verified Experiences</h3>
+                <div className="flex items-center justify-between border-b border-[var(--color-surface-high)] pb-4">
+                    <h3 className="font-black text-[var(--color-on-surface)] uppercase tracking-widest text-xs">Verified Experiences</h3>
                     <div className="text-[10px] font-bold text-slate-400">Sort: Most Recent</div>
                 </div>
 
                 {reviews.length === 0 ? (
                     <div className="py-20 text-center space-y-6 bg-slate-50/50 rounded-[3rem] border-2 border-dashed border-slate-100 animate-in fade-in zoom-in-95 duration-700">
-                        <div className="h-24 w-24 bg-white rounded-[2.5rem] flex items-center justify-center text-primary/20 mx-auto shadow-xl shadow-slate-200/50">
+                        <div className="h-24 w-24 bg-[var(--color-surface-card)] rounded-[2.5rem] flex items-center justify-center text-primary/20 mx-auto shadow-xl shadow-slate-200/50">
                             <Star size={48} className="animate-pulse" />
                         </div>
                         <div className="space-y-2">
@@ -174,7 +174,7 @@ export default function ProductReviews({ productId }) {
                             <div key={rev.id} className="space-y-4 group animate-in slide-in-from-bottom-4 duration-500">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 font-black text-xs overflow-hidden">
+                                        <div className="h-10 w-10 rounded-2xl bg-[var(--color-surface-container)] flex items-center justify-center text-slate-400 font-black text-xs overflow-hidden">
                                             {rev.profile_image ? (
                                                 <img src={resolveMediaUrl(rev.profile_image)} className="h-full w-full object-cover" alt="" />
                                             ) : (
@@ -182,7 +182,7 @@ export default function ProductReviews({ productId }) {
                                             )}
                                         </div>
                                         <div>
-                                            <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                                            <div className="text-sm font-black text-[var(--color-on-surface)] flex items-center gap-2">
                                                 {rev.user_name}
                                                 {rev.is_verified === 1 && (
                                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
@@ -207,7 +207,7 @@ export default function ProductReviews({ productId }) {
                                     </div>
                                 </div>
 
-                                <p className="text-sm font-medium leading-relaxed text-slate-600 md:pl-[3.25rem]">
+                                <p className="text-sm font-medium leading-relaxed text-[var(--color-on-surface-variant)] md:pl-[3.25rem]">
                                     {rev.review_text}
                                 </p>
 
@@ -252,13 +252,13 @@ export default function ProductReviews({ productId }) {
             {/* Submission Modal */}
             {showForm && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                    <div className="bg-[var(--color-surface-card)] w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                             <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
                                 <Star className="text-amber-400" fill="currentColor" size={24} />
                                 Share Your Experience
                             </h2>
-                            <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400">
+                            <button onClick={() => setShowForm(false)} className="p-2 hover:bg-[var(--color-surface-card)] rounded-full transition-colors text-slate-400">
                                 <X size={24} />
                             </button>
                         </div>
@@ -300,7 +300,7 @@ export default function ProductReviews({ productId }) {
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
                                     rows={4}
-                                    className="w-full px-5 py-4 rounded-3xl bg-slate-50 border-2 border-transparent focus:border-primary focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder:text-slate-300 resize-none"
+                                    className="w-full px-5 py-4 rounded-3xl bg-[var(--color-surface-low)] border-2 border-transparent focus:border-primary focus:bg-[var(--color-surface-card)] outline-none transition-all font-medium text-[var(--color-on-surface-variant)] placeholder:text-slate-300 resize-none"
                                     placeholder="What did you like or dislike? How was the quality?"
                                     required
                                 />

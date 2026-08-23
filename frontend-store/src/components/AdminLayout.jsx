@@ -139,7 +139,7 @@ function AdminLayout({ children }) {
                     {canGoBack && (
                         <button
                             onClick={handleBack}
-                            className="md:hidden mb-4 flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm text-sm font-medium text-gray-700"
+                            className="md:hidden mb-4 flex items-center gap-2 px-3 py-2 bg-[var(--color-surface-card)] rounded-lg border border-[var(--color-surface-high)] shadow-sm text-sm font-medium text-[var(--color-on-surface-variant)]"
                         >
                             <ArrowLeft className="w-4 h-4" /> Back
                         </button>

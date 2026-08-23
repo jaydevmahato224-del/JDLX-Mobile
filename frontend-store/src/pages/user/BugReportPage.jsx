@@ -135,7 +135,7 @@ function BugReportPage() {
                     <CheckCircle2 size={48} />
                 </div>
                 <h2 className="text-4xl font-black mb-4">Bug report submitted! Thank you!</h2>
-                <p className="text-gray-500 mb-10 max-w-md text-lg">Your feedback helps make JDLX Mobile better. Our tech team will check it soon.</p>
+                <p className="text-[var(--color-on-surface-variant)] mb-10 max-w-md text-lg">Your feedback helps make JDLX Mobile better. Our tech team will check it soon.</p>
                 <Link to="/profile/my-bug-reports" className="btn-primary h-16 px-12 text-lg">
                     View my reports <ChevronRight size={20} className="ml-2" />
                 </Link>
@@ -150,7 +150,7 @@ function BugReportPage() {
                     <AlertCircle size={14} /> System Debugger
                 </div>
                 <h1 className="text-4xl font-black tracking-tighter">Report a Bug</h1>
-                <p className="text-gray-500 mt-2 text-lg">Help us fix issues and make JDLX Mobile faster for everyone.</p>
+                <p className="text-[var(--color-on-surface-variant)] mt-2 text-lg">Help us fix issues and make JDLX Mobile faster for everyone.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8 pb-20">
@@ -163,7 +163,7 @@ function BugReportPage() {
                             onClick={() => setPageLocationDropdownOpen(!pageLocationDropdownOpen)}
                             className="w-full h-14 rounded-2xl bg-[var(--color-surface-low)] px-6 text-sm font-bold text-[var(--color-on-surface)] border-2 border-transparent focus:border-primary/20 focus:bg-[var(--color-surface-card)] transition-all outline-none flex items-center justify-between"
                         >
-                            <span className={form.page_location ? 'text-gray-900' : 'text-gray-400'}>
+                            <span className={form.page_location ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}>
                                 {form.page_location || "Select Page..."}
                             </span>
                             <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${pageLocationDropdownOpen ? 'rotate-180' : ''}`} />
@@ -193,7 +193,7 @@ function BugReportPage() {
                                             className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl transition-all flex items-center justify-between ${
                                                 form.page_location === loc
                                                 ? 'bg-primary text-white'
-                                                : 'text-slate-700 hover:bg-slate-50'
+                                                : 'text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]'
                                             }`}
                                         >
                                             <span>{loc}</span>
@@ -258,7 +258,7 @@ function BugReportPage() {
                     <div className="space-y-3">
                         <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Attach Screenshot (Optional)</label>
                         <div className="flex flex-wrap items-center gap-6">
-                            <label className="cursor-pointer flex flex-col items-center justify-center w-32 h-32 rounded-3xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
+                            <label className="cursor-pointer flex flex-col items-center justify-center w-32 h-32 rounded-3xl border-2 border-dashed border-[var(--color-surface-high)] hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
                                 <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                                 <Camera size={32} />
                                 <span className="text-[10px] font-black uppercase mt-2">Upload File</span>

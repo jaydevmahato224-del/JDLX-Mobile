@@ -494,7 +494,7 @@ export default function ProductDetails() {
                               ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
                               : isAvailable
                                 ? 'bg-[var(--color-surface-low)] text-[var(--color-on-surface)] border-[var(--color-surface-high)] hover:border-slate-400'
-                                : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                                : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)] cursor-not-allowed opacity-50'
                           }`}
                           aria-disabled={!isAvailable}
                           aria-label={isAvailable ? `${group.option_name}: ${value}` : `${group.option_name}: ${value} (unavailable)`}
@@ -517,7 +517,7 @@ export default function ProductDetails() {
       <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr] animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="space-y-6">
           <div className="md:glass-card overflow-hidden md:p-1.5 -mx-4 md:mx-0">
-            <div className="relative overflow-hidden md:rounded-[28px] bg-white md:bg-transparent">
+            <div className="relative overflow-hidden md:rounded-[28px] bg-[var(--color-surface-card)] md:bg-transparent">
               <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 md:hidden">
                 <span className="bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-white/10">{product.category || 'General'}</span>
                 {stock <= LOW_STOCK_LIMIT && stock > 0 && <span className="bg-primary text-slate-900 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-500/20 shadow-lg">Only {stock} Left</span>}
@@ -533,7 +533,7 @@ export default function ProductDetails() {
                 className={`absolute top-4 right-4 z-20 h-11 w-11 flex items-center justify-center rounded-full backdrop-blur-md border shadow-lg transition-all duration-300 active:scale-75 ${
                   isInWishlist 
                     ? 'bg-rose-500 border-rose-500 text-white hover:bg-rose-600' 
-                    : 'bg-white/80 border-slate-100 text-slate-700 hover:text-rose-500 hover:bg-white'
+                    : 'bg-[var(--color-surface-card)] border-[var(--color-surface-high)] text-[var(--color-on-surface-variant)] hover:text-rose-500 hover:bg-[var(--color-surface-high)]'
                 }`}
                 style={{
                   animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none'
@@ -542,7 +542,7 @@ export default function ProductDetails() {
               >
                 <Heart size={20} fill={isInWishlist ? 'currentColor' : 'none'} className="transition-transform duration-300" />
               </button>
-              <div className="overflow-hidden bg-white">
+              <div className="overflow-hidden bg-[var(--color-surface-card)]">
                 <img
                   src={productImages[activeImageIndex]}
                   alt={product.name}
@@ -577,7 +577,7 @@ export default function ProductDetails() {
             <div className="flex flex-wrap items-center gap-2 mb-4">
               {rating > 0 && <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-primary border border-amber-400/20"><Star size={12} fill="currentColor" /> {Number(rating).toFixed(1)} Rating</div>}
               <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-600"><ShieldCheck size={12} /> Quality Checked</div>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-900/5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-900"><Clock size={12} /> Secure Checkout</div>
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-on-surface)]/5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[var(--color-on-surface)]"><Clock size={12} /> Secure Checkout</div>
             </div>
             <h1 className="text-3xl font-black tracking-tighter md:text-5xl leading-[1.1] mb-2">{activeProduct.name}</h1>
             <p className="ui-label mb-2">{activeProduct.category || 'Premium Accessory'}</p>
@@ -619,11 +619,11 @@ export default function ProductDetails() {
                     <button disabled={quantity >= stock} onClick={() => updateQuantity(product.id, quantity + 1, variantId)} className="text-white active:scale-75 transition-all disabled:opacity-20"><Plus size={24} /></button>
                   </div>
                   <Link to="/cart" className="flex-1 h-16 rounded-3xl bg-primary text-slate-950 font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center active:scale-95 transition-all">View in Cart</Link>
-                  <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-3xl border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button>
+                  <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-3xl border-2 border-[var(--color-surface-high)] bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {requiresDeviceModel && <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
+                  {requiresDeviceModel && <div className="p-6 rounded-[2rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
                   <div className="flex items-center gap-4">
 {canAdd && hasAvailableCombinations ? (
                       <><button onClick={() => handleAddToCart()} className="flex-1 h-12 rounded-2xl bg-white/10 text-white text-[11px] font-black uppercase tracking-widest border border-white/10 active:scale-95 flex items-center justify-center gap-2"><ShoppingCart size={14} /> Add</button>
@@ -633,7 +633,7 @@ export default function ProductDetails() {
                     ) : (
                       <div className="flex w-full gap-2">
                         {hasAvailableCombinations && !canAdd && stock <= 0 ? (
-                          <button disabled className="h-12 flex-1 rounded-2xl bg-slate-200 text-slate-400 text-[11px] font-black uppercase tracking-widest border border-slate-200 cursor-not-allowed flex items-center justify-center gap-2">
+                          <button disabled className="h-12 flex-1 rounded-2xl bg-[var(--color-surface-high)] text-[var(--color-on-surface-variant)] text-[11px] font-black uppercase tracking-widest border border-[var(--color-surface-high)] cursor-not-allowed flex items-center justify-center gap-2">
                             <ShoppingCart size={14} /> Out of Stock
                           </button>
                         ) : (!hasAvailableCombinations && Object.keys(selectedOptions).length > 0 ? (
@@ -656,7 +656,7 @@ export default function ProductDetails() {
 
             {/* Mobile-only Customization */}
             <div className="md:hidden space-y-6 mt-6">
-               {requiresDeviceModel && <div className="p-6 rounded-[2.5rem] bg-slate-50 border border-slate-100" id="device-model-selector"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
+               {requiresDeviceModel && <div className="p-6 rounded-[2.5rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]" id="device-model-selector"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
                {/* Note: the mobile 'Expert Fitting' toggle block was removed —
                    it was gated behind a hardcoded `false &&` so it never
                    rendered. The `fitting` state is still used by
@@ -664,11 +664,11 @@ export default function ProductDetails() {
             </div>
           </div>
           <div className="glass-card p-4 md:p-8 rounded-[2.5rem]">
-            <div className="flex p-1.5 bg-slate-100 rounded-full gap-1 mb-8">
-              {['overview', 'highlights', 'reviews'].map((tab) => (<button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 rounded-full py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === tab ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>{tab}</button>))}
+            <div className="flex p-1.5 bg-[var(--color-surface-container)] rounded-full gap-1 mb-8">
+              {['overview', 'highlights', 'reviews'].map((tab) => (<button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 rounded-full py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === tab ? 'bg-slate-900 text-white shadow-lg' : 'text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]'}`}>{tab}</button>))}
             </div>
-            {activeTab === 'overview' && <div className="space-y-8 animate-in fade-in duration-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="rounded-[2rem] p-6 bg-primary/5 border border-amber-400/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary"><Truck size={20} /></div><h4 className="ui-label text-primary">Fulfillment</h4></div><p className="text-sm font-bold opacity-80">Safe & trusted order fulfillment dispatched directly to your location.</p></div><div className="rounded-[2rem] p-6 bg-emerald-500/5 border border-emerald-500/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600"><ShieldCheck size={20} /></div><h4 className="ui-label text-emerald-600">Quality Checked</h4></div><p className="text-sm font-bold opacity-80">Inspected before dispatch for quality assurance.</p></div></div><div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100"><p className="text-[15px] font-bold opacity-60 leading-relaxed">{activeProduct.description || `A premium daily essential from the JDLX collection.`}</p></div></div>}
-            {activeTab === 'highlights' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-500">{highlights.map((h) => (<div key={h} className="flex items-center gap-4 p-5 rounded-3xl bg-white border border-slate-100 shadow-sm"><div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0"><CheckCircle2 size={14} /></div><span className="text-[13px] font-bold text-slate-700">{h}</span></div>))}</div>}
+            {activeTab === 'overview' && <div className="space-y-8 animate-in fade-in duration-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="rounded-[2rem] p-6 bg-primary/5 border border-amber-400/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary"><Truck size={20} /></div><h4 className="ui-label text-primary">Fulfillment</h4></div><p className="text-sm font-bold opacity-80">Safe & trusted order fulfillment dispatched directly to your location.</p></div><div className="rounded-[2rem] p-6 bg-emerald-500/5 border border-emerald-500/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600"><ShieldCheck size={20} /></div><h4 className="ui-label text-emerald-600">Quality Checked</h4></div><p className="text-sm font-bold opacity-80">Inspected before dispatch for quality assurance.</p></div></div><div className="p-8 rounded-[2rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]"><p className="text-[15px] font-bold opacity-60 leading-relaxed">{activeProduct.description || `A premium daily essential from the JDLX collection.`}</p></div></div>}
+            {activeTab === 'highlights' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-500">{highlights.map((h) => (<div key={h} className="flex items-center gap-4 p-5 rounded-3xl bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] shadow-sm"><div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0"><CheckCircle2 size={14} /></div><span className="text-[13px] font-bold text-[var(--color-on-surface)]">{h}</span></div>))}</div>}
             {activeTab === 'reviews' && <div className="animate-in fade-in duration-500"><ProductReviews productId={product.id} /></div>}
           </div>
         </div>
@@ -738,10 +738,10 @@ function ProductRecommendationScroller({ currentProduct, allProducts }) {
   const recommendations = useMemo(() => allProducts.filter(p => p.id !== currentProduct.id && p.category === currentProduct.category).slice(0, 6), [currentProduct.id, currentProduct.category, allProducts]);
   if (!recommendations.length) return null;
   return (
-    <div className="mt-20 border-t border-slate-100 pt-16">
+    <div className="mt-20 border-t border-[var(--color-surface-high)] pt-16">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10"><div><span className="ui-label text-primary mb-3 block">From the same aisle</span><h2 className="text-3xl font-black tracking-tighter">You May Also Like</h2></div><Link to="/" className="text-sm font-bold text-primary flex items-center gap-2 group">View Collection <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" /></Link></div>
       <div className="flex gap-6 overflow-x-auto pb-8 no-scrollbar reveal-staggered">
-        {recommendations.map(p => (<Link key={p.id} to={getProductUrl(p)} className="flex-shrink-0 w-64 glass-card rounded-[32px] overflow-hidden group hover:-translate-y-2 transition-all duration-500"><div className="aspect-square bg-slate-50 overflow-hidden"><img src={getProductImages(p)[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div><div className="p-6"><h4 className="font-bold text-slate-900 truncate mb-1">{p.name}</h4><div className="text-lg font-black text-primary">₹{p.price}</div></div></Link>))}
+        {recommendations.map(p => (<Link key={p.id} to={getProductUrl(p)} className="flex-shrink-0 w-64 glass-card rounded-[32px] overflow-hidden group hover:-translate-y-2 transition-all duration-500"><div className="aspect-square bg-[var(--color-surface-low)] overflow-hidden"><img src={getProductImages(p)[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div><div className="p-6"><h4 className="font-bold text-[var(--color-on-surface)] truncate mb-1">{p.name}</h4><div className="text-lg font-black text-primary">₹{p.price}</div></div></Link>))}
       </div>
     </div>
   );

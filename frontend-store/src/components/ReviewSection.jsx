@@ -82,19 +82,19 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
 
     return (
         <div className="mt-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-surface-high)] pb-4">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/10 rounded-xl">
                         <MessageSquare className="text-primary w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-gray-800">Customer Reviews</h3>
-                        <p className="text-xs text-gray-500">{totalReviews} verified ratings</p>
+                        <h3 className="text-lg font-bold text-[var(--color-on-surface)]">Customer Reviews</h3>
+                        <p className="text-xs text-[var(--color-on-surface-variant)]">{totalReviews} verified ratings</p>
                     </div>
                 </div>
                 <div className="text-right">
                     <div className="flex items-center gap-1">
-                        <span className="text-2xl font-black text-gray-800">{averageRating || '0.0'}</span>
+                        <span className="text-2xl font-black text-[var(--color-on-surface)]">{averageRating || '0.0'}</span>
                         <div className="flex">{renderStars(Math.round(averageRating || 0), true, 18)}</div>
                     </div>
                 </div>
@@ -103,13 +103,13 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
             {/* Review Form (Conditional for buyers in real logic, currently public for verification) */}
             {user && (
                 <div className="glass-card p-6 border-2 border-primary/10 bg-primary/5">
-                    <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <h4 className="font-bold text-[var(--color-on-surface)] mb-4 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 text-primary" /> Verified Purchase Review
                     </h4>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-medium text-gray-600">Your Rating:</span>
+                            <span className="text-sm font-medium text-[var(--color-on-surface-variant)]">Your Rating:</span>
                             <div className="flex gap-1">
                                 {[1, 2, 3, 4, 5].map((num) => (
                                     <button
@@ -128,7 +128,7 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
                             value={reviewText}
                             onChange={(e) => setReviewText(e.target.value)}
                             placeholder="Share your experience with this product..."
-                            className="w-full bg-white border border-gray-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all h-24 placeholder:text-gray-400"
+                            className="w-full bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all h-24 placeholder:text-gray-400"
                         />
 
                         {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
@@ -154,18 +154,18 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
             <div className="space-y-6">
                 {reviews.length === 0 ? (
                     <div className="text-center py-10 opacity-50">
-                        <p className="text-sm text-gray-500 italic">No reviews yet. Be the first to share your feedback!</p>
+                        <p className="text-sm text-[var(--color-on-surface-variant)] italic">No reviews yet. Be the first to share your feedback!</p>
                     </div>
                 ) : (
                     reviews.map((rev) => (
                         <div key={rev.id} className="glass-card p-5 animate-in fade-in slide-in-from-left-2 duration-500">
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+                                    <div className="w-8 h-8 rounded-full bg-[var(--color-surface-container)] flex items-center justify-center border border-[var(--color-surface-high)]">
                                         <User size={16} className="text-gray-400" />
                                     </div>
                                     <div>
-                                        <h5 className="text-sm font-bold text-gray-800">{rev.user_name}</h5>
+                                        <h5 className="text-sm font-bold text-[var(--color-on-surface)]">{rev.user_name}</h5>
                                         <div className="flex">{renderStars(rev.rating, true, 12)}</div>
                                     </div>
                                 </div>
@@ -173,7 +173,7 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
                                     {new Date(rev.created_at).toLocaleDateString()}
                                 </span>
                             </div>
-                            <p className="text-gray-600 text-sm leading-relaxed mt-3 italic">
+                            <p className="text-[var(--color-on-surface-variant)] text-sm leading-relaxed mt-3 italic">
                                 "{rev.review_text}"
                             </p>
                         </div>

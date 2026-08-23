@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Star, ThumbsUp, CheckCircle2, MessageSquare, AlertCircle, Send, X, Camera, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Star, ThumbsUp, CheckCircle2, MessageSquare, AlertCircle, Send, X, Camera, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../config'
 import { useStore } from '../store/useStore'
 import toast from 'react-hot-toast'
@@ -16,6 +16,14 @@ export default function ProductReviews({ productId }) {
     const [hoverRating, setHoverRating] = useState(0);
     const [comment, setComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
+
+    // Pagination: show only the latest few by default, then reveal a page at a
+    // time so the DOM never renders the entire review history at once.
+    const INITIAL_COUNT = 3;
+    const PAGE_SIZE = 10;
+    const [showAll, setShowAll] = useState(false);
+    const [page, setPage] = useState(0);
+    const listRef = useRef(null);
 
     const fetchReviews = useCallback(async () => {
         try {
@@ -38,6 +46,12 @@ export default function ProductReviews({ productId }) {
     useEffect(() => {
         fetchReviews();
     }, [fetchReviews]);
+
+    // Collapse back to the summary view whenever we switch products.
+    useEffect(() => {
+        setShowAll(false);
+        setPage(0);
+    }, [productId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -83,6 +97,17 @@ export default function ProductReviews({ productId }) {
             percentage: stats.total > 0 ? (dist[star] || 0) / stats.total * 100 : 0
         }));
     }, [stats]);
+
+    const totalPages = Math.max(1, Math.ceil(reviews.length / PAGE_SIZE));
+    const visibleReviews = showAll
+        ? reviews.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+        : reviews.slice(0, INITIAL_COUNT);
+
+    const goToPage = (next) => {
+        setPage(next);
+        // Nudge the viewport back to the top of the list so the new page starts in view.
+        requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    };
 
     if (loading && reviews.length === 0) {
         return (
@@ -143,10 +168,12 @@ export default function ProductReviews({ productId }) {
             </div>
 
             {/* Reviews List */}
-            <div className="space-y-8">
+            <div ref={listRef} className="space-y-8 scroll-mt-[calc(var(--app-header-offset)+1rem)]">
                 <div className="flex items-center justify-between border-b border-[var(--color-surface-high)] pb-4">
                     <h3 className="font-black text-[var(--color-on-surface)] uppercase tracking-widest text-xs">Verified Experiences</h3>
-                    <div className="text-[10px] font-bold text-slate-400">Sort: Most Recent</div>
+                    <div className="text-[10px] font-bold text-slate-400">
+                        {showAll ? `Showing ${page * PAGE_SIZE + 1}–${Math.min(reviews.length, page * PAGE_SIZE + PAGE_SIZE)} of ${reviews.length}` : 'Sort: Most Recent'}
+                    </div>
                 </div>
 
                 {reviews.length === 0 ? (
@@ -170,7 +197,7 @@ export default function ProductReviews({ productId }) {
                     </div>
                 ) : (
                     <div className="grid gap-8">
-                        {reviews.map((rev) => (
+                        {visibleReviews.map((rev) => (
                             <div key={rev.id} className="space-y-4 group animate-in slide-in-from-bottom-4 duration-500">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
@@ -245,6 +272,47 @@ export default function ProductReviews({ productId }) {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* View-more / pagination controls */}
+                {reviews.length > INITIAL_COUNT && (
+                    <div className="pt-2">
+                        {!showAll ? (
+                            <button
+                                onClick={() => { setShowAll(true); setPage(0); }}
+                                className="w-full py-4 rounded-2xl border-2 border-[var(--color-surface-high)] bg-[var(--color-surface-low)] text-[var(--color-on-surface)] font-black text-xs uppercase tracking-widest hover:bg-[var(--color-surface-container)] active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                            >
+                                <ChevronDown size={16} />
+                                View More Reviews ({reviews.length - INITIAL_COUNT} more)
+                            </button>
+                        ) : (
+                            <div className="flex items-center justify-between gap-3">
+                                <button
+                                    disabled={page === 0}
+                                    onClick={() => goToPage(Math.max(0, page - 1))}
+                                    className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[var(--color-surface-low)] border-2 border-[var(--color-surface-high)] text-[var(--color-on-surface)] font-black text-[11px] uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all"
+                                >
+                                    <ChevronLeft size={16} /> Prev
+                                </button>
+                                <span className="text-[11px] font-black uppercase tracking-widest text-[var(--color-on-surface-variant)]">Page {page + 1} of {totalPages}</span>
+                                {page < totalPages - 1 ? (
+                                    <button
+                                        onClick={() => goToPage(page + 1)}
+                                        className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-lg"
+                                    >
+                                        Next <ChevronRight size={16} />
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => { setShowAll(false); setPage(0); requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}
+                                        className="px-5 py-3 rounded-2xl bg-[var(--color-surface-low)] border-2 border-[var(--color-surface-high)] text-[var(--color-on-surface)] font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all"
+                                    >
+                                        Show Less
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

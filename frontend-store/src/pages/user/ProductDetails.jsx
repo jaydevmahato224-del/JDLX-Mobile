@@ -46,7 +46,6 @@ export default function ProductDetails() {
   const [remoteProducts, setRemoteProducts] = useState([]);
   const [tokenProduct, setTokenProduct] = useState(null);
   const [loadingToken, setLoadingToken] = useState(!!(token || slugToken));
-  const [activeTab, setActiveTab] = useState('overview');
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [deviceModel, setDeviceModel] = useState('');
@@ -447,75 +446,16 @@ export default function ProductDetails() {
         image={seoImage}
         url={shareUrl}
       />
-      {/* Variant option picker (Size / Color / Model chips). Rendered for both
-          mobile and desktop — selection drives price, stock and images below. */}
-      {isVariantProduct && detailVariantOptions.length > 0 && (
-        <section className="glass-card p-6 sm:p-8 rounded-[2rem] mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-[0.15em]">Choose Options</h3>
-              <p className="text-[11px] font-bold opacity-50 mt-1">
-                {selectedVariant ? selectedVariant.name : 
-                 !hasAvailableCombinations ? 'This combination is not available' : 
-                 'Select all options to continue'}
-              </p>
-            </div>
-            {selectedVariant?.stock > 0 && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-3 py-1.5 rounded-full">{selectedVariant.stock} in stock</span>}
-            {!hasAvailableCombinations && selectedOptions && Object.keys(selectedOptions).length > 0 && (
-              <span className="text-[10px] font-black uppercase tracking-widest text-rose-600 bg-rose-500/10 px-3 py-1.5 rounded-full">Unavailable</span>
-            )}
-          </div>
-          <div className="space-y-5">
-            {detailVariantOptions.map((group) => {
-              const values = Array.isArray(group.option_values) ? group.option_values : [];
-              const current = selectedOptions[group.option_name];
-              const availableValues = availableOptionValues[group.option_name] || [];
-              return (
-                <div key={group.id || group.option_name}>
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <span className="ui-label">{group.option_name}</span>
-                    {current && <span className="text-[10px] font-black text-primary uppercase tracking-widest">{current}</span>}
-                    {!hasAvailableCombinations && (
-                      <span className="text-[9px] font-black text-rose-500">No available combinations</span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {values.map((value) => {
-                      const selected = String(current || '') === String(value);
-                      const isAvailable = availableValues.includes(value);
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => isAvailable && handleSelectOption(group.option_name, value)}
-                          disabled={!isAvailable}
-                          className={`min-w-[52px] px-4 py-2.5 rounded-2xl text-[12px] font-black transition-all active:scale-95 border-2 ${
-                            selected
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
-                              : isAvailable
-                                ? 'bg-[var(--color-surface-low)] text-[var(--color-on-surface)] border-[var(--color-surface-high)] hover:border-slate-400'
-                                : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)] cursor-not-allowed opacity-50'
-                          }`}
-                          aria-disabled={!isAvailable}
-                          aria-label={isAvailable ? `${group.option_name}: ${value}` : `${group.option_name}: ${value} (unavailable)`}
-                        >
-                          {value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
       {/* Back navigation is provided by the sticky app header (top-left),
           which already navigates back on every non-home route — a second
           floating button here overlapped it on mobile. */}
 
-      <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr] animate-in fade-in slide-in-from-bottom-8 duration-700">
-        <div className="space-y-6">
+      <section className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-start animate-in fade-in slide-in-from-bottom-8 duration-700">
+        {/* Left media column pins on desktop (xl) so the shorter image side follows
+            the scroll of the taller detail column instead of leaving an empty void
+            below it. self-start stops the grid cell from stretching; sticky sits just
+            under the app header. On <xl the layout stacks, so these classes are inert. */}
+        <div className="space-y-6 xl:sticky xl:self-start xl:top-[calc(var(--app-header-offset)+1.5rem)]">
           <div className="md:glass-card overflow-hidden md:p-1.5 -mx-4 md:mx-0">
             <div className="relative overflow-hidden md:rounded-[28px] bg-[var(--color-surface-card)] md:bg-transparent">
               <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 md:hidden">
@@ -561,6 +501,69 @@ export default function ProductDetails() {
               )}
             </div>
           </div>
+          {/* Variant option picker (Size / Color / Model chips). Rendered for both
+              mobile and desktop — selection drives price, stock and images below. */}
+          {isVariantProduct && detailVariantOptions.length > 0 && (
+            <section className="glass-card p-6 sm:p-8 rounded-[2rem] animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-[0.15em]">Choose Options</h3>
+                  <p className="text-[11px] font-bold opacity-50 mt-1">
+                    {selectedVariant ? selectedVariant.name : 
+                     !hasAvailableCombinations ? 'This combination is not available' : 
+                     'Select all options to continue'}
+                  </p>
+                </div>
+                {selectedVariant?.stock > 0 && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-3 py-1.5 rounded-full">{selectedVariant.stock} in stock</span>}
+                {!hasAvailableCombinations && selectedOptions && Object.keys(selectedOptions).length > 0 && (
+                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-600 bg-rose-500/10 px-3 py-1.5 rounded-full">Unavailable</span>
+                )}
+              </div>
+              <div className="space-y-5">
+                {detailVariantOptions.map((group) => {
+                  const values = Array.isArray(group.option_values) ? group.option_values : [];
+                  const current = selectedOptions[group.option_name];
+                  const availableValues = availableOptionValues[group.option_name] || [];
+                  return (
+                    <div key={group.id || group.option_name}>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <span className="ui-label">{group.option_name}</span>
+                        {current && <span className="text-[10px] font-black text-primary uppercase tracking-widest">{current}</span>}
+                        {!hasAvailableCombinations && (
+                          <span className="text-[9px] font-black text-rose-500">No available combinations</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {values.map((value) => {
+                          const selected = String(current || '') === String(value);
+                          const isAvailable = availableValues.includes(value);
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => isAvailable && handleSelectOption(group.option_name, value)}
+                              disabled={!isAvailable}
+                              className={`min-w-[52px] px-4 py-2.5 rounded-2xl text-[12px] font-black transition-all active:scale-95 border-2 ${
+                                selected
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
+                                  : isAvailable
+                                    ? 'bg-[var(--color-surface-low)] text-[var(--color-on-surface)] border-[var(--color-surface-high)] hover:border-slate-400'
+                                    : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)] cursor-not-allowed opacity-50'
+                              }`}
+                              aria-disabled={!isAvailable}
+                              aria-label={isAvailable ? `${group.option_name}: ${value}` : `${group.option_name}: ${value} (unavailable)`}
+                            >
+                              {value}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           <div className="grid gap-4 md:grid-cols-3">
             {[ { icon: Truck, val: deliveryTimeDisplay, note: deliveryNoteDisplay, label: 'Delivery' }, { icon: ShieldCheck, val: 'Quality Checked', note: 'Managed inventory batches.', label: 'Quality' }, { icon: Store, val: `${stock} units`, note: 'Live inventory status.', label: 'Availability' } ].map((item, i) => (
               <div key={i} className="glass-card p-6 transition-transform hover:-translate-y-1">
@@ -680,15 +683,50 @@ export default function ProductDetails() {
                    handleAddToCart, so cart logic is unchanged. */}
             </div>
           </div>
-          <div className="glass-card p-4 md:p-8 rounded-[2.5rem]">
-            <div className="flex p-1.5 bg-[var(--color-surface-container)] rounded-full gap-1 mb-8">
-              {['overview', 'highlights', 'reviews'].map((tab) => (<button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 rounded-full py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === tab ? 'bg-slate-900 text-white shadow-lg' : 'text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]'}`}>{tab}</button>))}
+          <div className="glass-card p-4 sm:p-6 md:p-8 rounded-[2.5rem]">
+            <span className="ui-label text-primary mb-4 block">Highlights</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {highlights.map((h) => (
+                <div key={h} className="flex items-center gap-3 p-4 rounded-3xl bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]">
+                  <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0"><CheckCircle2 size={14} /></div>
+                  <span className="text-[13px] font-bold text-[var(--color-on-surface)]">{h}</span>
+                </div>
+              ))}
             </div>
-            {activeTab === 'overview' && <div className="space-y-8 animate-in fade-in duration-500"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="rounded-[2rem] p-6 bg-primary/5 border border-amber-400/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary"><Truck size={20} /></div><h4 className="ui-label text-primary">Fulfillment</h4></div><p className="text-sm font-bold opacity-80">Safe & trusted order fulfillment dispatched directly to your location.</p></div><div className="rounded-[2rem] p-6 bg-emerald-500/5 border border-emerald-500/10"><div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600"><ShieldCheck size={20} /></div><h4 className="ui-label text-emerald-600">Quality Checked</h4></div><p className="text-sm font-bold opacity-80">Inspected before dispatch for quality assurance.</p></div></div><div className="p-8 rounded-[2rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]"><p className="text-[15px] font-bold opacity-60 leading-relaxed">{activeProduct.description || `A premium daily essential from the JDLX collection.`}</p></div></div>}
-            {activeTab === 'highlights' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-500">{highlights.map((h) => (<div key={h} className="flex items-center gap-4 p-5 rounded-3xl bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] shadow-sm"><div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0"><CheckCircle2 size={14} /></div><span className="text-[13px] font-bold text-[var(--color-on-surface)]">{h}</span></div>))}</div>}
-            {activeTab === 'reviews' && <div className="animate-in fade-in duration-500"><ProductReviews productId={product.id} /></div>}
           </div>
         </div>
+      </section>
+
+      {/* Product Gallery — full-width stacked imagery, revealed on scroll (Amazon-style).
+          Rendered only when the product has more than one image. */}
+      {productImages.length > 1 && (
+        <section className="mt-16 sm:mt-20 animate-in fade-in duration-700">
+          <div className="flex items-end justify-between gap-6 mb-8">
+            <div>
+              <span className="ui-label text-primary mb-2 block">Gallery</span>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tighter">Product Images</h2>
+            </div>
+            <span className="text-xs font-bold text-[var(--color-on-surface-variant)] shrink-0">{productImages.length} photos</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            {productImages.map((img, i) => (
+              <div key={i} className="glass-card overflow-hidden rounded-[2rem] p-2 group">
+                <img
+                  src={img}
+                  alt={`${product.name} — view ${i + 1}`}
+                  onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+                  loading="lazy"
+                  className="w-full h-[300px] sm:h-[420px] object-contain rounded-[1.5rem] bg-[var(--color-surface-low)] transition-transform duration-700 group-hover:scale-[1.02]"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Customer Reviews — full-width, latest 3 by default with paged "View More". */}
+      <section className="mt-16 sm:mt-20">
+        <ProductReviews productId={product.id} />
       </section>
 
       {/* Policy Modal */}

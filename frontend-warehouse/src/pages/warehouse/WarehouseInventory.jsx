@@ -47,6 +47,7 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
+import VariantManager from './components/VariantManager'
 
 // Convert a variant's option map to editable text, e.g. "Size:M, Color:Red".
 

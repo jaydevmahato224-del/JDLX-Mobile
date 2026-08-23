@@ -393,8 +393,8 @@ export default function StaffBilling() {
 
   if (error) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center p-6 bg-slate-950">
-        <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-2xl p-8 text-center shadow-2xl">
+      <div className="min-h-[80vh] flex items-center justify-center p-4 sm:p-6 bg-slate-950">
+        <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-2xl p-4 sm:p-6 lg:p-8 text-center shadow-2xl">
           <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4 animate-bounce" />
           <h2 className="text-2xl font-bold text-slate-100 mb-2">Billing Access Restricted</h2>
           <p className="text-slate-400 mb-6">{error}</p>
@@ -477,7 +477,7 @@ export default function StaffBilling() {
 
       {/* Main Grid: Left Catalog, Right Cart/Checkout */}
       {activeTab === 'pos' && (
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         {/* Left Column: Product Selection (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
           {/* Search & Category Filter */}

@@ -240,7 +240,7 @@ const WarehouseDashboard = () => {
                             />
                         </div>
 
-                        <div className="grid gap-6 lg:gap-8">
+                        <div className="grid gap-4 sm:gap-6 lg:gap-8">
                             <section className="warehouse-panel p-4 sm:p-6 lg:p-8">
                                 <p className="wh-ui-label text-slate-400/80">
                                     Shift Summary

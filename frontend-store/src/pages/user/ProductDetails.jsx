@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Store, Truck, Zap, Undo2, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Store, Truck, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -564,9 +564,9 @@ export default function ProductDetails() {
           <div className="grid gap-4 md:grid-cols-3">
             {[ { icon: Truck, val: deliveryTimeDisplay, note: deliveryNoteDisplay, label: 'Delivery' }, { icon: ShieldCheck, val: 'Quality Checked', note: 'Managed inventory batches.', label: 'Quality' }, { icon: Store, val: `${stock} units`, note: 'Live inventory status.', label: 'Availability' } ].map((item, i) => (
               <div key={i} className="glass-card p-6 transition-transform hover:-translate-y-1">
-                <div className="flex items-center gap-3"><div className="p-2.5 rounded-2xl bg-primary/10 text-primary"><item.icon size={20} /></div><span className="ui-label opacity-60">{item.label}</span></div>
-                <div className="mt-4 text-[17px] font-black tracking-tight">{item.val}</div>
-                <p className="mt-2 text-[13px] font-bold opacity-60">{item.note}</p>
+                <div className="flex items-center gap-3"><div className="p-2.5 rounded-2xl bg-primary/10 text-primary"><item.icon size={20} /></div><span className="ui-label text-[var(--color-on-surface-variant)]">{item.label}</span></div>
+                <div className="mt-4 text-[17px] font-black tracking-tight text-[var(--color-on-surface)]">{item.val}</div>
+                <p className="mt-2 text-[13px] font-bold text-[var(--color-on-surface-variant)]">{item.note}</p>
               </div>
             ))}
           </div>
@@ -582,10 +582,17 @@ export default function ProductDetails() {
             <h1 className="text-3xl font-black tracking-tighter md:text-5xl leading-[1.1] mb-2">{activeProduct.name}</h1>
             <p className="ui-label mb-2">{activeProduct.category || 'Premium Accessory'}</p>
             {selectedVariant && <p className="text-[12px] font-black text-primary uppercase tracking-widest mb-6">{selectedVariant.name}</p>}
-            <div className="mt-6 flex items-baseline gap-4 p-6 rounded-[2.5rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] shadow-inner">
-              <div className="flex flex-col"><span className="ui-label opacity-40 mb-1">Current Price</span><div className="text-4xl md:text-5xl font-black tracking-tighter">₹{activeProduct.price}</div></div>
-              {activeProduct.mrp > activeProduct.price && <div className="flex flex-col"><span className="ui-label text-red-400 opacity-100 mb-1">MRP</span><div className="text-xl md:text-2xl opacity-30 line-through font-bold">₹{activeProduct.mrp}</div></div>}
-              <div className="ml-auto"><div className="inline-flex items-center gap-2 rounded-2xl bg-[#00E676] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-white shadow-lg animate-pulse"><BadgePercent size={16} /> Best Deal</div></div>
+            <div className="mt-6 p-6 rounded-[2.5rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] shadow-inner">
+              <div className="flex items-baseline gap-4 flex-wrap">
+                <div className="flex flex-col"><span className="ui-label text-[var(--color-on-surface-variant)] mb-1">Current Price</span><div className="text-4xl md:text-5xl font-black tracking-tighter text-[var(--color-on-surface)]">₹{activeProduct.price}</div></div>
+                {activeProduct.mrp > activeProduct.price && (
+                  <>
+                    <div className="flex flex-col"><span className="ui-label text-[var(--color-on-surface-variant)] mb-1">MRP</span><div className="text-xl md:text-2xl text-[var(--color-on-surface-variant)] line-through font-bold">₹{activeProduct.mrp}</div></div>
+                    <div className="ml-auto inline-flex items-center gap-1.5 rounded-2xl bg-emerald-500/15 px-4 py-2 text-[12px] font-black uppercase tracking-wider text-emerald-500 border border-emerald-500/20"><BadgePercent size={16} /> {Math.round(((activeProduct.mrp - activeProduct.price) / activeProduct.mrp) * 100)}% OFF</div>
+                  </>
+                )}
+              </div>
+              {activeProduct.mrp > activeProduct.price && <p className="mt-3 text-[13px] font-bold text-emerald-500">You save ₹{activeProduct.mrp - activeProduct.price} on this order</p>}
             </div>
             <div className="mt-8 space-y-4">
               <h3 className="ui-label text-slate-400">Description</h3>
@@ -597,16 +604,26 @@ export default function ProductDetails() {
                 <button onClick={() => setShowPolicyModal(true)} className="rounded-full bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-lg active:scale-95 transition-all">View Details</button>
               </div>
             </div>
-            <div className="mt-8 grid grid-cols-2 gap-4">
-              <div className="rounded-[2rem] bg-primary p-6 text-slate-950 shadow-xl shadow-primary/20">
-                <div className="flex items-center gap-2 mb-3"><ShieldCheck size={16} className="opacity-40" /><span className="ui-label opacity-40">Inventory</span></div>
-                <div className="text-xl font-black tracking-tight">{stock <= 0 ? 'Out of Stock' : stock <= LOW_STOCK_LIMIT ? `Only ${stock} Left` : 'Fully Stocked'}</div>
-                <p className="mt-1 text-[11px] font-bold opacity-60">{stock > 0 ? 'Ready for fulfillment' : 'Restocking soon'}</p>
+            <div className="mt-8 rounded-[2rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] overflow-hidden">
+              <div className="flex items-center gap-3 px-6 py-5">
+                <span className="relative flex h-3 w-3 shrink-0">
+                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 ${stock <= 0 ? 'bg-red-500' : stock <= LOW_STOCK_LIMIT ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-ping'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${stock <= 0 ? 'bg-red-500' : stock <= LOW_STOCK_LIMIT ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-black tracking-tight text-[var(--color-on-surface)]">{stock <= 0 ? 'Out of Stock' : stock <= LOW_STOCK_LIMIT ? `Only ${stock} left in stock` : 'In Stock'}</div>
+                  <p className="text-[12px] font-bold text-[var(--color-on-surface-variant)]">{stock > 0 ? 'Ready for fulfillment · Ships from JDLX warehouse' : 'Restocking soon — get notified below'}</p>
+                </div>
               </div>
-              <div className="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/20">
-                <div className="flex items-center gap-2 mb-3"><Zap size={16} className="text-amber-400" /><span className="ui-label text-slate-400">Dispatch</span></div>
-                <div className="text-xl font-black tracking-tight">{deliveryTimeDisplay}</div>
-                <p className="mt-1 text-[11px] font-bold text-slate-400">Standard</p>
+              <div className="grid grid-cols-2 border-t border-[var(--color-surface-high)]">
+                <div className="flex items-center gap-3 px-6 py-4 border-r border-[var(--color-surface-high)]">
+                  <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0"><Truck size={18} /></div>
+                  <div className="min-w-0"><div className="text-[13px] font-black text-[var(--color-on-surface)] truncate">{deliveryTimeDisplay}</div><p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-on-surface-variant)]">Delivery</p></div>
+                </div>
+                <div className="flex items-center gap-3 px-6 py-4">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0"><ShieldCheck size={18} /></div>
+                  <div className="min-w-0"><div className="text-[13px] font-black text-[var(--color-on-surface)] truncate">Secure &amp; Verified</div><p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-on-surface-variant)]">Checkout</p></div>
+                </div>
               </div>
             </div>
 

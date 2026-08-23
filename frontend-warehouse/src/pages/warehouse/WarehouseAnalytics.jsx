@@ -77,9 +77,9 @@ const WarehouseAnalytics = () => {
     const COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#8B5CF6']
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-700">
             {/* Header Section */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
                 <div>
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 rounded-lg bg-emerald-400/10 text-emerald-500">
@@ -121,10 +121,10 @@ const WarehouseAnalytics = () => {
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                 {/* Fulfillment Status Chart */}
                 <div className="lg:col-span-2 warehouse-panel p-4 sm:p-6 lg:p-8 border border-white/5 bg-white/[0.01]">
-                    <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center justify-between mb-5 sm:mb-8">
                         <div>
                             <h3 className="text-lg font-black text-white uppercase tracking-tight">Fulfillment Snapshot</h3>
                             <p className="text-xs text-slate-500 mt-1 font-bold">Distribution of order statuses in current cycle.</p>
@@ -174,7 +174,7 @@ const WarehouseAnalytics = () => {
 
                 {/* Stock Distribution Heatmap Overview */}
                 <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
-                    <div className="mb-8">
+                    <div className="mb-5 sm:mb-8">
                         <h3 className="text-lg font-black text-white uppercase tracking-tight">Stock Warnings</h3>
                         <p className="text-xs text-slate-500 mt-1 font-bold">Priority alerts needing manual action.</p>
                     </div>
@@ -199,7 +199,7 @@ const WarehouseAnalytics = () => {
                         ))}
                     </div>
 
-                    <div className="mt-8 pt-8 border-t border-white/5 space-y-6">
+                    <div className="mt-5 sm:mt-8 pt-8 border-t border-white/5 space-y-4 sm:space-y-6">
                         <div>
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Utilization</span>
@@ -224,7 +224,7 @@ const WarehouseAnalytics = () => {
 
             {/* Placeholder for Historical Trends */}
             <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border border-white/5">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-5 sm:mb-8">
                     <div>
                         <h3 className="text-lg font-black text-white uppercase tracking-tight">Trend Monitoring</h3>
                         <p className="text-xs text-slate-500 mt-1 font-bold">Performance analytics over the last 24 hours.</p>

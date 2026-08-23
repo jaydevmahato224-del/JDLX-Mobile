@@ -35,7 +35,7 @@ const ManageRiders = () => {
     ]
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-500">
             <div>
                 <h2 className="text-3xl font-black text-white flex items-center gap-3 tracking-tight">
                     <LayoutGrid className="w-8 h-8 text-amber-500" />
@@ -46,7 +46,7 @@ const ManageRiders = () => {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {sections.map((section, idx) => (
                     <motion.div
                         key={idx}
@@ -69,14 +69,14 @@ const ManageRiders = () => {
 
 const SectionCard = ({ section }) => (
     <div className={`
-        relative h-full bg-[#0f172a]/40 border border-white/5 p-8 rounded-[2rem] 
+        relative h-full bg-[#0f172a]/40 border border-white/5 p-4 sm:p-6 lg:p-8 rounded-[2rem]
         backdrop-blur-xl group transition-all duration-500 cursor-pointer overflow-hidden
         ${section.isActive ? 'hover:border-amber-500/20 hover:bg-white/[0.03]' : 'opacity-60 grayscale cursor-not-allowed'}
     `}>
         {/* Background Gradient Glow */}
         <div className={`absolute -right-12 -top-12 w-48 h-48 bg-gradient-to-br ${section.color} opacity-[0.03] blur-3xl group-hover:opacity-[0.08] transition-opacity`} />
         
-        <div className="flex flex-col h-full gap-6 relative z-10">
+        <div className="flex flex-col h-full gap-4 sm:gap-6 relative z-10">
             <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${section.color} p-[1px]`}>
                 <div className="w-full h-full bg-slate-900 rounded-[15px] flex items-center justify-center">
                     <section.icon className="w-7 h-7 text-white" />

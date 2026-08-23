@@ -49,7 +49,7 @@ const VendorModal = ({
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl" onClick={onClose} />
             
             <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-[40px] shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-12 duration-500">
-                <div className="p-8 border-b border-white/5 flex items-center justify-between bg-slate-950/30">
+                <div className="p-4 sm:p-6 lg:p-8 border-b border-white/5 flex items-center justify-between bg-slate-950/30">
                     <div>
                         <h3 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
                             {isEditing ? <Edit3 className="text-amber-500" size={24} /> : <User className="text-amber-500" size={24} />}
@@ -68,7 +68,7 @@ const VendorModal = ({
                     </button>
                 </div>
 
-                <div className="p-8 space-y-6">
+                <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
                     <div className="space-y-4">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Vendor Name</label>
                         <input 
@@ -134,7 +134,7 @@ const VendorModal = ({
                     </div>
                 </div>
 
-                <div className="p-8 bg-slate-950/50 border-t border-white/5">
+                <div className="p-4 sm:p-6 lg:p-8 bg-slate-950/50 border-t border-white/5">
                     <button 
                         type="button"
                         onClick={onSave}
@@ -186,7 +186,7 @@ const CategoryModal = ({
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 animate-in fade-in duration-300">
             <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" onClick={onClose} />
             <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-slate-950/30">
+                <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between bg-slate-950/30">
                     <div className="flex items-center gap-3">
                         <Tag className="text-amber-500" size={20} />
                         <div>
@@ -197,7 +197,7 @@ const CategoryModal = ({
                     <button onClick={onClose} className="p-2 rounded-xl bg-white/5 text-slate-500 hover:text-white transition-all"><X size={20} /></button>
                 </div>
 
-                <div className="p-6 space-y-6">
+                <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between mb-2">
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Select Existing</label>
@@ -240,7 +240,7 @@ const CategoryModal = ({
                     </div>
                 </div>
 
-                <div className="p-6 bg-slate-950/50 border-t border-white/5">
+                <div className="p-4 sm:p-6 bg-slate-950/50 border-t border-white/5">
                     <button 
                         onClick={handleConfirm}
                         disabled={(!selectedCategory && !newCategory) || submitting}
@@ -709,7 +709,7 @@ const WarehouseProcurement = () => {
                     </div>
                 )}
 
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-5 sm:mb-8">
                     <div className="flex items-center gap-4">
                         <button 
                             type="button"
@@ -744,10 +744,10 @@ const WarehouseProcurement = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                    <div className="lg:col-span-3 space-y-8">
-                        <div className="warehouse-panel p-8 border-white/5 bg-slate-900/40 backdrop-blur-xl space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+                    <div className="lg:col-span-3 space-y-5 sm:space-y-8">
+                        <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border-white/5 bg-slate-900/40 backdrop-blur-xl space-y-5 sm:space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                                 <div className="space-y-2 relative">
                                     <div className="flex items-center justify-between ml-1">
                                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -844,7 +844,7 @@ const WarehouseProcurement = () => {
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-black text-white uppercase tracking-widest">Products & Items</h3>
-                                    <div className="flex items-center gap-6">
+                                    <div className="flex items-center gap-4 sm:gap-6">
                                         <input 
                                             type="file" 
                                             ref={fileInputRef} 
@@ -1050,7 +1050,7 @@ const WarehouseProcurement = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="warehouse-panel p-8 border-white/5 bg-slate-900/40 backdrop-blur-xl">
+                        <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border-white/5 bg-slate-900/40 backdrop-blur-xl">
                             <div className="space-y-4">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Additional Reference / Notes</label>
                                 <textarea 
@@ -1063,9 +1063,9 @@ const WarehouseProcurement = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="warehouse-panel p-8 border-white/5 bg-slate-900/60 backdrop-blur-xl sticky top-8">
-                            <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.2em] mb-8">Purchase Summary</h3>
+                    <div className="lg:col-span-1 space-y-4 sm:space-y-6">
+                        <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border-white/5 bg-slate-900/60 backdrop-blur-xl sticky top-8">
+                            <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.2em] mb-5 sm:mb-8">Purchase Summary</h3>
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between text-white">
                                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Items</span>
@@ -1084,7 +1084,7 @@ const WarehouseProcurement = () => {
                                     type="button"
                                     onClick={handleSavePurchase}
                                     disabled={submitting}
-                                    className="w-full mt-8 py-5 rounded-2xl bg-amber-400 text-slate-950 text-sm font-black uppercase tracking-[0.3em] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-30 disabled:grayscale shadow-2xl shadow-amber-400/20 flex items-center justify-center gap-3"
+                                    className="w-full mt-5 sm:mt-8 py-5 rounded-2xl bg-amber-400 text-slate-950 text-sm font-black uppercase tracking-[0.3em] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-30 disabled:grayscale shadow-2xl shadow-amber-400/20 flex items-center justify-center gap-3"
                                 >
                                     {submitting ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} strokeWidth={3} />}
                                     Confirm Purchase
@@ -1116,7 +1116,7 @@ const WarehouseProcurement = () => {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-700 relative min-h-screen pb-20">
+        <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-700 relative min-h-screen pb-20">
             {notification && (
                 <div className={`fixed top-24 right-8 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 fade-in border ${
                     notification.type === 'error' 
@@ -1127,7 +1127,7 @@ const WarehouseProcurement = () => {
                     <span className="font-bold text-sm uppercase tracking-wide">{notification.message}</span>
                 </div>
             )}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
                 <div>
                     <h1 className="text-4xl font-black text-white tracking-tight flex items-center gap-4">
                         <ShoppingBag className="text-amber-500" size={36} />
@@ -1146,7 +1146,7 @@ const WarehouseProcurement = () => {
             </div>
 
             <div className="warehouse-panel border-white/5 bg-slate-900/40 backdrop-blur-xl overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between">
                     <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
                         <Layers size={20} className="text-amber-500" />
                         Purchase History
@@ -1204,8 +1204,8 @@ const WarehouseProcurement = () => {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-32 text-center">
-                                        <div className="flex flex-col items-center gap-6 opacity-20">
+                                    <td colSpan="6" className="px-4 sm:px-6 py-16 sm:py-32 text-center">
+                                        <div className="flex flex-col items-center gap-4 sm:gap-6 opacity-20">
                                             <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center">
                                                 <ShoppingBag size={48} className="text-slate-500" />
                                             </div>

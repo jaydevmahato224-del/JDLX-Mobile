@@ -130,7 +130,7 @@ const WarehouseRiderApplications = () => {
 
             <div className="grid grid-cols-1 gap-4">
                 {filteredApps.length === 0 ? (
-                    <div className="bg-slate-900/50 border border-slate-800/50 border-dashed rounded-3xl p-12 text-center">
+                    <div className="bg-slate-900/50 border border-slate-800/50 border-dashed rounded-3xl p-6 sm:p-12 text-center">
                         <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Clock className="w-10 h-10 text-slate-600" />
                         </div>
@@ -139,8 +139,8 @@ const WarehouseRiderApplications = () => {
                     </div>
                 ) : (
                     filteredApps.map((app) => (
-                        <div key={app.id} className="bg-slate-900/80 border border-slate-800 p-6 rounded-3xl hover:border-slate-700 transition-all group">
-                            <div className="flex flex-col md:flex-row justify-between gap-6">
+                        <div key={app.id} className="bg-slate-900/80 border border-slate-800 p-4 sm:p-6 rounded-3xl hover:border-slate-700 transition-all group">
+                            <div className="flex flex-col md:flex-row justify-between gap-4 sm:gap-6">
                                 <div className="flex gap-4">
                                     <div className="w-14 h-14 bg-teal-500/10 border border-teal-500/20 rounded-2xl flex items-center justify-center text-teal-500 shrink-0">
                                         <User className="w-8 h-8" />

@@ -549,7 +549,7 @@ export default function SalesHistory() {
 
       {/* Error state */}
       {error && (
-        <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 text-center">
+        <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-4 sm:p-6 lg:p-8 text-center">
           <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
           <p className="text-slate-300 text-sm mb-4">{error}</p>
           <button

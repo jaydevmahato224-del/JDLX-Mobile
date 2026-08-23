@@ -320,7 +320,7 @@ export default function WarehouseOffers() {
         .filter(Boolean)
 
     return (
-        <div className="space-y-6 text-white p-6">
+        <div className="space-y-4 sm:space-y-6 text-white p-4 sm:p-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -392,11 +392,11 @@ export default function WarehouseOffers() {
 
             {/* Offers grid */}
             {loading ? (
-                <div className="flex justify-center py-20">
+                <div className="flex justify-center py-10 sm:py-20">
                     <div className="w-10 h-10 border-4 border-slate-800 border-t-amber-500 rounded-full animate-spin" />
                 </div>
             ) : filteredOffers.length === 0 ? (
-                <div className="py-24 text-center bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-800">
+                <div className="py-12 sm:py-24 text-center bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-800">
                     <div className="flex flex-col items-center gap-4">
                         <div className="p-4 bg-slate-800/50 rounded-full">
                             <BadgePercent size={44} className="text-slate-600" />
@@ -415,7 +415,7 @@ export default function WarehouseOffers() {
                     </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                     {filteredOffers.map(offer => {
                         const typeMeta = OFFER_TYPE_META[offer.offer_type] || OFFER_TYPE_META.automatic
                         const TypeIcon = typeMeta.icon
@@ -426,7 +426,7 @@ export default function WarehouseOffers() {
                         const usagePct = offer.usage_limit ? Math.min((offer.usage_count / offer.usage_limit) * 100, 100) : null
 
                         return (
-                            <div key={offer.id} className="bg-slate-900 rounded-[2rem] border border-slate-800 p-6 space-y-4 hover:border-amber-500/40 transition-all group relative overflow-hidden">
+                            <div key={offer.id} className="bg-slate-900 rounded-[2rem] border border-slate-800 p-4 sm:p-6 space-y-4 hover:border-amber-500/40 transition-all group relative overflow-hidden">
                                 {offer.banner_image && (
                                     <div className="absolute inset-x-0 top-0 h-24 overflow-hidden">
                                         <img src={resolveMediaUrl(offer.banner_image)} alt="" className="w-full h-full object-cover opacity-40" />
@@ -745,7 +745,7 @@ export default function WarehouseOffers() {
                                         )}
                                         <div className="max-h-56 overflow-y-auto custom-scrollbar border border-slate-800 rounded-2xl divide-y divide-slate-800/70">
                                             {filteredProducts.length === 0 && (
-                                                <p className="p-6 text-center text-sm font-bold text-slate-500">No products found in your inventory.</p>
+                                                <p className="p-4 sm:p-6 text-center text-sm font-bold text-slate-500">No products found in your inventory.</p>
                                             )}
                                             {filteredProducts.map(p => {
                                                 const selected = formData.applicable_ids.includes(p.id)

@@ -195,7 +195,7 @@ const WarehouseEarnings = () => {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-6 lg:p-8">
-            <div className="max-w-6xl mx-auto space-y-6">
+            <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -238,7 +238,7 @@ const WarehouseEarnings = () => {
                 )}
 
                 {loading && !summary ? (
-                    <div className="flex items-center justify-center py-24">
+                    <div className="flex items-center justify-center py-10 sm:py-16">
                         <Loader2 className="animate-spin text-amber-400" size={28} />
                     </div>
                 ) : (
@@ -275,7 +275,7 @@ const WarehouseEarnings = () => {
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                             {/* Settlements */}
                             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
@@ -298,7 +298,7 @@ const WarehouseEarnings = () => {
                                 </div>
                                 <div className="divide-y divide-slate-800/70 max-h-[420px] overflow-y-auto">
                                     {settlements.length === 0 ? (
-                                        <p className="text-sm text-slate-500 px-5 py-10 text-center">
+                                        <p className="text-sm text-slate-500 px-5 py-5 sm:py-8 text-center">
                                             No settlements yet — orders will appear here after delivery.
                                         </p>
                                     ) : settlements.map((s) => {
@@ -370,7 +370,7 @@ const WarehouseEarnings = () => {
                                 </div>
                                 <div className="divide-y divide-slate-800/70 max-h-[420px] overflow-y-auto">
                                     {payouts.length === 0 ? (
-                                        <p className="text-sm text-slate-500 px-5 py-10 text-center">
+                                        <p className="text-sm text-slate-500 px-5 py-5 sm:py-8 text-center">
                                             No payouts yet — request a withdrawal from your wallet balance.
                                         </p>
                                     ) : payouts.map((p) => {
@@ -400,7 +400,7 @@ const WarehouseEarnings = () => {
             {/* Withdraw modal */}
             {withdrawOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-                    <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                    <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
                         <div className="flex items-center justify-between mb-5">
                             <h3 className="text-lg font-black text-white flex items-center gap-2">
                                 <ArrowDownToLine size={18} className="text-emerald-400" /> Request Payout

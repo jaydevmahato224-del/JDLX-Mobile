@@ -861,7 +861,7 @@ const WarehouseInventory = () => {
     }
 
     const mainUI = (
-        <div className="space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-700">
             {/* Notification Toast */}
             {notification && (
                 <div className={`fixed top-24 right-8 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 fade-in border ${notification.type === 'error'
@@ -874,7 +874,7 @@ const WarehouseInventory = () => {
             )}
 
             {showAddProductView ? (
-                <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                <div className="space-y-5 sm:space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                         <div>
                             <button
@@ -902,8 +902,8 @@ const WarehouseInventory = () => {
 
                     {/* Unified Search Section */}
                     {!editingItemId && (
-                        <div className="warehouse-panel p-8 border-amber-400/20 bg-amber-400/[0.02]">
-                            <div className="space-y-6">
+                        <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border-amber-400/20 bg-amber-400/[0.02]">
+                            <div className="space-y-4 sm:space-y-6">
                                 <div className="flex items-center gap-4">
                                     <div className="h-px flex-1 bg-gradient-to-r from-amber-400/20 to-transparent" />
                                     <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500/80">Search Global Catalog</span>
@@ -987,10 +987,10 @@ const WarehouseInventory = () => {
                     )}
 
                     <div className="relative">
-                        <form onSubmit={handleAddProduct} className="space-y-8 pb-32">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <form onSubmit={handleAddProduct} className="space-y-5 sm:space-y-8 pb-32">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
                                 {/* SECTION 1: BASIC INFORMATION */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl relative overflow-hidden group">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl relative overflow-hidden group">
                                     <div className="absolute top-0 right-0 p-1">
                                         <div className="w-20 h-20 bg-amber-400/5 blur-3xl rounded-full" />
                                     </div>
@@ -1005,7 +1005,7 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
+                                    <div className="space-y-4 sm:space-y-6">
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between ml-1">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Product Name</label>
@@ -1129,7 +1129,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 2: CATEGORY & IDENTITY */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-blue-400/10 text-blue-400">
                                             <Barcode size={22} />
@@ -1140,8 +1140,8 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4 sm:space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Brand Name</label>
                                                 <input
@@ -1359,7 +1359,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 3: INVENTORY DETAILS */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-emerald-400/10 text-emerald-400">
                                             <Warehouse size={22} />
@@ -1370,8 +1370,8 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4 sm:space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Initial Stock Quantity</label>
                                                 <div className="flex items-center gap-2">
@@ -1428,7 +1428,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                             </button>
                                         ) : (
-                                            <div className="p-6 bg-slate-950/50 rounded-3xl border border-white/5 space-y-6 relative group/mapping">
+                                            <div className="p-4 sm:p-6 bg-slate-950/50 rounded-3xl border border-white/5 space-y-4 sm:space-y-6 relative group/mapping">
                                                 <button
                                                     type="button"
                                                     onClick={() => {
@@ -1487,7 +1487,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 4: PRICING */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-500">
                                             <DollarSign size={22} />
@@ -1498,8 +1498,8 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4 sm:space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Base Selling Price</label>
                                                 <div className="relative">
@@ -1660,7 +1660,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 4.5: OFFLINE SALE (POS) PRICING */}
-                                <div className="warehouse-panel p-8 space-y-6 border-t-2 border-white/5 bg-slate-900/40 backdrop-blur-xl group relative overflow-hidden">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 border-t-2 border-white/5 bg-slate-900/40 backdrop-blur-xl group relative overflow-hidden">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-violet-400/10 text-violet-400">
                                             <Store size={22} />
@@ -1748,7 +1748,7 @@ const WarehouseInventory = () => {
                                         </div>
                                     </button>
                                 ) : (
-                                    <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group relative overflow-hidden">
+                                    <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group relative overflow-hidden">
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -1772,8 +1772,8 @@ const WarehouseInventory = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4 sm:space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Physical Weight</label>
                                                     <div className="relative">
@@ -1864,7 +1864,7 @@ const WarehouseInventory = () => {
                                 )}
 
                                 {/* SECTION 6: SUPPLIER INFO */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-cyan-400/10 text-cyan-400">
                                             <RefreshCw size={22} />
@@ -1875,7 +1875,7 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
+                                    <div className="space-y-4 sm:space-y-6">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Supplier / Vendor Name</label>
                                             <input
@@ -1887,7 +1887,7 @@ const WarehouseInventory = () => {
                                             />
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Contact Information</label>
                                                 <input
@@ -1916,7 +1916,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 7: STATUS & CONTROL */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-500">
                                             <Shield size={22} />
@@ -1927,8 +1927,8 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                        <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+                                        <div className="space-y-4 sm:space-y-6">
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Active Status</div>
@@ -1958,7 +1958,7 @@ const WarehouseInventory = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-6">
+                                        <div className="space-y-4 sm:space-y-6">
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Perishable Goods</div>
@@ -2003,7 +2003,7 @@ const WarehouseInventory = () => {
                                             )}
                                         </div>
 
-                                        <div className="p-6 rounded-3xl bg-amber-400/5 border border-amber-400/10 flex flex-col justify-center gap-2">
+                                        <div className="p-4 sm:p-6 rounded-3xl bg-amber-400/5 border border-amber-400/10 flex flex-col justify-center gap-2">
                                             <div className="flex items-center gap-2 text-amber-500">
                                                 <Info size={16} />
                                                 <span className="text-[10px] font-black uppercase tracking-widest leading-none">System Note</span>
@@ -2046,7 +2046,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 6: RECOMMENDATION CONTROLS */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-indigo-400/10 text-indigo-400">
                                             <TrendingUp size={22} />
@@ -2057,8 +2057,8 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+                                        <div className="space-y-4 sm:space-y-6">
                                             {[
                                                 { label: 'Related Products', type: 'related', color: 'indigo' },
                                                 { label: 'Upsell Products', type: 'upsell', color: 'emerald' },
@@ -2112,7 +2112,7 @@ const WarehouseInventory = () => {
                                             ))}
                                         </div>
 
-                                        <div className="space-y-8 bg-slate-950/20 p-6 rounded-3xl border border-white/5">
+                                        <div className="space-y-5 sm:space-y-8 bg-slate-950/20 p-4 sm:p-6 rounded-3xl border border-white/5">
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Manual Recommendation Priority</label>
@@ -2160,7 +2160,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 7: PRODUCT CONTENT BUILDER */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-rose-400/10 text-rose-400">
                                             <MessageSquare size={22} />
@@ -2172,7 +2172,7 @@ const WarehouseInventory = () => {
                                     </div>
 
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                                        <div className="space-y-8">
+                                        <div className="space-y-5 sm:space-y-8">
                                             <div className="space-y-3">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Rich Overview (Main Tab)</label>
                                                 <textarea
@@ -2239,7 +2239,7 @@ const WarehouseInventory = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-8">
+                                        <div className="space-y-5 sm:space-y-8">
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between ml-1">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Technical Specifications</label>
@@ -2312,7 +2312,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Compatibility</label>
                                                     <input
@@ -2341,7 +2341,7 @@ const WarehouseInventory = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Warranty Info</label>
                                                     <textarea
@@ -2374,7 +2374,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 8: STOREFRONT BADGES */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-500">
                                             <Tag size={22} />
@@ -2385,7 +2385,7 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                                         {[
                                             { label: 'Best Seller', type: 'best_seller', color: 'bg-amber-500' },
                                             { label: 'Trending', type: 'trending', color: 'bg-indigo-500' },
@@ -2454,7 +2454,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 9: FULFILLMENT CONFIGURATION */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-sky-400/10 text-sky-400">
                                             <Truck size={22} />
@@ -2466,8 +2466,8 @@ const WarehouseInventory = () => {
                                     </div>
 
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                                        <div className="space-y-8">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-5 sm:space-y-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Package Weight (kg)</label>
                                                     <div className="relative">
@@ -2529,8 +2529,8 @@ const WarehouseInventory = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-8">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-5 sm:space-y-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Dispatch SLA (Hours)</label>
                                                     <input
@@ -2587,7 +2587,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 10: SEARCH & DISCOVERY */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-emerald-400/10 text-emerald-400">
                                             <Search size={22} />
@@ -2599,7 +2599,7 @@ const WarehouseInventory = () => {
                                     </div>
 
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                                        <div className="space-y-8">
+                                        <div className="space-y-5 sm:space-y-8">
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between ml-1">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meta Title (SEO)</label>
@@ -2635,7 +2635,7 @@ const WarehouseInventory = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-8">
+                                        <div className="space-y-5 sm:space-y-8">
                                             {[
                                                 { label: 'Search Keywords', key: 'search_keywords', placeholder: 'Add search term...', color: 'text-emerald-400' },
                                                 { label: 'Product Tags', key: 'product_tags', placeholder: 'Add tag...', color: 'text-blue-400' },
@@ -2697,7 +2697,7 @@ const WarehouseInventory = () => {
                                 </div>
 
                                 {/* SECTION 11: PRODUCT ANALYTICS (READ-ONLY) */}
-                                <div className="warehouse-panel p-8 space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
+                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-indigo-400/10 text-indigo-400">
                                             <TrendingUp size={22} />
@@ -2708,7 +2708,7 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
                                         {[
                                             { label: 'Lifetime Views', value: newProductData.analytics.view_count, icon: Eye, color: 'text-blue-400' },
                                             { label: 'Cart Additions', value: newProductData.analytics.cart_add_count, icon: ShoppingCart, color: 'text-amber-400' },
@@ -2810,8 +2810,8 @@ const WarehouseInventory = () => {
                             )}
 
                             {/* STICKY ACTION BAR */}
-                            <div className="fixed bottom-0 left-0 right-0 p-8 pt-10 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent z-[100] flex justify-center">
-                                <div className="max-w-5xl w-full flex items-center justify-between gap-6 px-10 py-6 bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl shadow-amber-400/5 animate-in slide-in-from-bottom-12 duration-700">
+                            <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8 pt-10 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent z-[100] flex justify-center">
+                                <div className="max-w-5xl w-full flex items-center justify-between gap-4 sm:gap-6 px-10 py-6 bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl shadow-amber-400/5 animate-in slide-in-from-bottom-12 duration-700">
                                     <div className="hidden md:block">
                                         <div className="text-xs font-black text-white uppercase tracking-widest">Unsaved Configuration</div>
                                         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">Review all sections before global registration</p>
@@ -2852,7 +2852,7 @@ const WarehouseInventory = () => {
                 </div>
             ) : (
                 <>
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="p-2 rounded-lg bg-amber-400/10 text-amber-500">
@@ -2901,7 +2901,7 @@ const WarehouseInventory = () => {
                     {/* Controls & Table */}
                     <div className="warehouse-panel overflow-hidden border border-white/5">
                         {/* Search & Filter Bar */}
-                        <div className="p-6 border-b border-white/5 flex flex-col lg:flex-row gap-4 justify-between bg-white/[0.02]">
+                        <div className="p-4 sm:p-6 border-b border-white/5 flex flex-col lg:flex-row gap-4 justify-between bg-white/[0.02]">
                             <div className="relative flex-1 max-w-md">
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 <input
@@ -3172,7 +3172,7 @@ const WarehouseInventory = () => {
     return (
         <div className="relative">
             {/* Main Inventory UI with Animation */}
-            <div className="space-y-8 animate-in fade-in duration-700">
+            <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-700">
                 {mainUI}
             </div>
 
@@ -3185,7 +3185,7 @@ const WarehouseInventory = () => {
                 return (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setStockAdjustModal(null)} />
-                        <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="relative w-full max-w-md bg-slate-900 border border-white/10 rounded-[32px] p-4 sm:p-6 lg:p-8 shadow-2xl animate-in zoom-in-95 duration-300">
                             {/* Header */}
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
@@ -3321,7 +3321,7 @@ const WarehouseInventory = () => {
             {showHistory && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setShowHistory(null)} />
-                    <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[80vh] flex flex-col">
+                    <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-[32px] p-4 sm:p-6 lg:p-8 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[80vh] flex flex-col">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-400">
@@ -3382,7 +3382,7 @@ const WarehouseInventory = () => {
                         className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
                         onClick={() => setShowCreateBrandModal(false)}
                     />
-                    <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                    <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[32px] p-4 sm:p-6 lg:p-8 shadow-2xl animate-in zoom-in-95 duration-300">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
@@ -3438,7 +3438,7 @@ const WarehouseInventory = () => {
                         className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
                         onClick={() => setShowCreateCategoryModal(false)}
                     />
-                    <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                    <div className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-[32px] p-4 sm:p-6 lg:p-8 shadow-2xl animate-in zoom-in-95 duration-300">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
@@ -3546,7 +3546,7 @@ const WarehouseInventory = () => {
                         </div>
 
                         {/* Scrollable Content */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
                             {/* Image Gallery */}
                             {(() => {
                                 let imageList = [];
@@ -3658,7 +3658,7 @@ const WarehouseInventory = () => {
                                         <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Fetching reviews...</span>
                                     </div>
                                 ) : itemReviews.length === 0 ? (
-                                    <div className="p-6 rounded-2xl bg-white/[0.01] border border-dashed border-white/5 text-center">
+                                    <div className="p-4 sm:p-6 rounded-2xl bg-white/[0.01] border border-dashed border-white/5 text-center">
                                         <MessageSquare size={24} className="mx-auto mb-2 text-slate-800" />
                                         <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">No customer reviews yet</p>
                                     </div>
@@ -3699,7 +3699,7 @@ const WarehouseInventory = () => {
                         </div>
 
                         {/* Footer Actions */}
-                        <div className="p-6 border-t border-white/5 shrink-0 flex gap-3">
+                        <div className="p-4 sm:p-6 border-t border-white/5 shrink-0 flex gap-3">
                             <button
                                 onClick={() => { setSelectedItem(null); handleEditItem(selectedItem); }}
                                 className="flex-1 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"

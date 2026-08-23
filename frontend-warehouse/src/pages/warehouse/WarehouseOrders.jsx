@@ -118,7 +118,7 @@ const WarehouseOrders = () => {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-700">
             {/* Notification Toast */}
             {notification && (
                 <div className={`fixed top-24 right-8 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 fade-in border ${
@@ -131,7 +131,7 @@ const WarehouseOrders = () => {
                 </div>
             )}
 
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
                 <div>
                     <h1 className="text-4xl font-black text-white tracking-tight flex items-center gap-4">
                         <ShoppingBag className="text-amber-500" size={36} />
@@ -340,7 +340,7 @@ const WarehouseOrders = () => {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-20 text-center">
+                                    <td colSpan="5" className="px-4 sm:px-6 py-10 sm:py-16 text-center">
                                         <div className="flex flex-col items-center gap-4 opacity-30">
                                             <AlertCircle size={48} className="text-slate-500" />
                                             <div className="space-y-1">

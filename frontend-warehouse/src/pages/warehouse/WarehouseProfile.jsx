@@ -107,7 +107,7 @@ export default function WarehouseProfile() {
     const warehouseType = (user?.warehouse_type || 'Micro Fulfillment').replace(/_/g, ' ');
 
     return (
-        <div className="space-y-6 lg:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="space-y-4 sm:space-y-6 lg:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Navigation Header */}
             <div className="flex items-center justify-between gap-4 pt-[var(--app-header-height)] lg:pt-0">
                 <button
@@ -121,11 +121,11 @@ export default function WarehouseProfile() {
             </div>
 
             {/* Header Hero */}
-            <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-white/5 p-6 sm:p-8 lg:p-12">
+            <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-white/5 p-4 sm:p-8 lg:p-12">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 blur-[100px] -mr-48 -mt-48 rounded-full" />
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 blur-[80px] -ml-32 -mb-32 rounded-full" />
 
-                <div className="relative flex flex-col md:flex-row items-center gap-6 sm:gap-8">
+                <div className="relative flex flex-col md:flex-row items-center gap-4 sm:gap-8">
                     <div className="relative group">
                         <div className="absolute -inset-1 bg-gradient-to-tr from-amber-500 to-orange-500 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
                         <div className="relative w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-[#0f172a] border-2 border-white/10 rounded-3xl flex items-center justify-center text-4xl sm:text-5xl md:text-6xl font-black text-amber-500 shadow-2xl">
@@ -164,9 +164,9 @@ export default function WarehouseProfile() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                 {/* Left column — Terminal + identity + details */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                     {/* Terminal Status (controls moved here from the dashboard) */}
                     <section className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -189,7 +189,7 @@ export default function WarehouseProfile() {
                     </section>
 
                     {/* Partner Details */}
-                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-6 sm:p-8 space-y-6 backdrop-blur-sm">
+                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-4 sm:p-8 space-y-4 sm:space-y-6 backdrop-blur-sm">
                         <div className="flex items-center gap-3 border-b border-white/5 pb-4">
                             <User className="w-5 h-5 text-amber-500" />
                             <h2 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">Partner Details</h2>
@@ -204,7 +204,7 @@ export default function WarehouseProfile() {
                     </div>
 
                     {/* Warehouse Status (real data) */}
-                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-6 sm:p-8 space-y-6 backdrop-blur-sm">
+                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-4 sm:p-8 space-y-4 sm:space-y-6 backdrop-blur-sm">
                         <div className="flex items-center gap-3 border-b border-white/5 pb-4">
                             <Building className="w-5 h-5 text-amber-500" />
                             <h2 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">Warehouse Status</h2>
@@ -220,7 +220,7 @@ export default function WarehouseProfile() {
                 </div>
 
                 {/* Right column — Operations Hub + score + security */}
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                     <section className="warehouse-panel p-5 sm:p-6">
                         <p className="wh-ui-label text-slate-400/80">Operations Hub</p>
                         <div className="mt-5 space-y-3">
@@ -263,7 +263,7 @@ export default function WarehouseProfile() {
                         </div>
                     </section>
 
-                    <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-[2rem] p-6 sm:p-8 text-slate-900 shadow-2xl shadow-amber-500/10">
+                    <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-[2rem] p-4 sm:p-8 text-slate-900 shadow-2xl shadow-amber-500/10">
                         <h3 className="text-xl font-black mb-2">Operational Score</h3>
                         <p className="text-slate-900/60 text-xs font-bold uppercase tracking-widest mb-6">Performance Rating</p>
 
@@ -272,7 +272,7 @@ export default function WarehouseProfile() {
                             <span className="text-xl font-bold mb-1">/10</span>
                         </div>
 
-                        <div className="mt-8 pt-8 border-t border-slate-900/10 space-y-4">
+                        <div className="mt-5 sm:mt-8 pt-8 border-t border-slate-900/10 space-y-4">
                             <div className="flex justify-between items-center text-sm font-bold">
                                 <span>Efficiency</span>
                                 <span>99%</span>
@@ -283,7 +283,7 @@ export default function WarehouseProfile() {
                         </div>
                     </div>
 
-                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-6 space-y-4">
+                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-4 sm:p-6 space-y-4">
                         <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">Account Security</h4>
                         <button className="w-full flex items-center justify-between px-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition-all font-bold text-sm">
                             <div className="flex items-center gap-3">

@@ -4,7 +4,7 @@ const InventoryAlerts = ({ lowStockCount }) => {
     const hasAlerts = lowStockCount > 0
 
     return (
-        <section className="warehouse-panel p-8">
+        <section className="warehouse-panel p-4 sm:p-6 lg:p-8">
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <p className="wh-ui-label">
@@ -32,7 +32,7 @@ const InventoryAlerts = ({ lowStockCount }) => {
                     </p>
                     <p className="mt-2 text-4xl font-black text-white mb-0 tracking-tighter">{lowStockCount || 0}</p>
                 </div>
-                <div className="warehouse-subtle-card p-6">
+                <div className="warehouse-subtle-card p-4 sm:p-6">
                     <p className={`text-sm font-bold tracking-tight ${hasAlerts ? 'text-rose-300' : 'text-emerald-300'}`}>
                         {hasAlerts ? 'Attention required - check inventory nodes' : 'No active alerts in this zone'}
                     </p>

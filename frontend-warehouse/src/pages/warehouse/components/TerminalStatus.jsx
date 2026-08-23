@@ -13,7 +13,7 @@ const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStat
     }
 
     return (
-        <section className={`warehouse-panel relative overflow-hidden ${compact ? 'p-5 sm:p-8' : 'p-8'}`}>
+        <section className={`warehouse-panel relative overflow-hidden ${compact ? 'p-5 sm:p-8' : 'p-4 sm:p-6 lg:p-8'}`}>
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <p className="wh-ui-label">
@@ -40,7 +40,7 @@ const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStat
             {/* Confirmation Overlay */}
             {showConfirm && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0f172a]/95 backdrop-blur-md transition-all duration-300 animate-in fade-in zoom-in-95">
-                    <div className="px-6 text-center">
+                    <div className="px-4 sm:px-6 text-center">
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-400/10 text-amber-400 ring-4 ring-amber-400/5">
                             <AlertTriangle size={24} />
                         </div>
@@ -70,9 +70,9 @@ const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStat
                 </div>
             )}
 
-            <div className="mt-8 flex flex-col gap-4">
+            <div className="mt-5 sm:mt-8 flex flex-col gap-4">
                 {/* Operations Mode Status */}
-                <div className="flex items-center justify-between warehouse-subtle-card px-6 py-5 hover:bg-white/[0.02] transition-colors group">
+                <div className="flex items-center justify-between warehouse-subtle-card px-4 sm:px-6 py-5 hover:bg-white/[0.02] transition-colors group">
                     <div className="flex items-center gap-4">
                         <div className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-all ${
                             isOpen ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400' : 'border-rose-400/20 bg-rose-400/10 text-rose-400'
@@ -110,7 +110,7 @@ const TerminalStatus = ({ operationsStatus, weatherStatus, pincode, onToggleStat
                 </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-4 warehouse-subtle-card px-6 py-4 border-emerald-400/10">
+            <div className="mt-6 flex items-center gap-4 warehouse-subtle-card px-4 sm:px-6 py-4 border-emerald-400/10">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
                     <ShieldCheck size={16} />
                 </div>

@@ -403,7 +403,7 @@ export default function WarehouseLayout() {
 
                 {/* Content Area */}
                 <main className="flex-1 w-full flex flex-col overflow-y-auto custom-scrollbar scroll-smooth">
-                    <div className="flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:p-10 max-w-[1600px] w-full mx-auto relative">
+                    <div className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-8 max-w-[1600px] w-full mx-auto relative">
                         <Outlet />
                     </div>
                 </main>

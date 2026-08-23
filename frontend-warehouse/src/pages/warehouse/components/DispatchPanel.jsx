@@ -2,8 +2,8 @@ import { PackageCheck, ArrowRight } from 'lucide-react'
 
 const DispatchPanel = ({ packedOrders, onDispatchAll }) => {
     return (
-        <div className="group relative overflow-hidden rounded-[24px] border border-white/5 bg-[var(--bg-card)] backdrop-blur-[12px] p-8 transition-all duration-500 hover:bg-[var(--bg-card-hover)] flex flex-col sm:flex-row items-center justify-between gap-10 shadow-2xl">
-            <div className="flex items-center gap-6 min-w-0">
+        <div className="group relative overflow-hidden rounded-[24px] border border-white/5 bg-[var(--bg-card)] backdrop-blur-[12px] p-4 sm:p-6 lg:p-8 transition-all duration-500 hover:bg-[var(--bg-card-hover)] flex flex-col sm:flex-row items-center justify-between gap-10 shadow-2xl">
+            <div className="flex items-center gap-4 sm:gap-6 min-w-0">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 group-hover:scale-105 transition-transform duration-700 shadow-[0_0_30px_rgba(255,215,0,0.1)]">
                     <PackageCheck className="h-8 w-8 text-[var(--accent)]" />
                 </div>

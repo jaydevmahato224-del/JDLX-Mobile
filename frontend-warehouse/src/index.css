@@ -76,17 +76,13 @@
     margin-right: auto;
     width: 100%;
     max-width: 1400px;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    /* Horizontal padding is owned by the WarehouseLayout content wrapper.
+       This class previously added another 0.75rem (mobile) / 1.5rem (desktop)
+       ON TOP of the layout's px-3 / sm:px-6, doubling the side gap and
+       shrinking the usable content width on phones. Removed to reclaim width. */
     min-height: 100vh;
     background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.05), transparent 400px),
                 radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.05), transparent 400px);
-  }
-  @media (min-width: 768px) {
-    .warehouse-page-content {
-      padding-left: 1.5rem;
-      padding-right: 1.5rem;
-    }
   }
 
   .warehouse-panel {

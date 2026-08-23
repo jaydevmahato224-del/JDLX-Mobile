@@ -249,7 +249,7 @@ export default function BillingAgents() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 lg:p-6 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-5 rounded-2xl backdrop-blur-md">
           <div className="flex items-center gap-3">
@@ -309,12 +309,12 @@ export default function BillingAgents() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Registration form */}
           <div className="lg:col-span-5">
             <form
               onSubmit={handleRegister}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5"
+              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 space-y-5"
             >
               <div className="flex items-center gap-2 border-b border-slate-800 pb-4">
                 <div className="p-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-indigo-400">
@@ -411,7 +411,7 @@ export default function BillingAgents() {
 
           {/* Agents list */}
           <div className="lg:col-span-7">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-indigo-400" />
@@ -537,7 +537,7 @@ export default function BillingAgents() {
         </div>
 
         {/* How it works */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
           <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-amber-400" />
             How Offline Billing Works

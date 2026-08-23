@@ -4,7 +4,7 @@ const ScoreCards = ({ acceptanceRate = 0, ordersAccepted = 0, completedDispatche
     const safeRate = Math.max(0, Math.min(Number(acceptanceRate) || 0, 100))
 
     return (
-        <section className="card-glass p-8">
+        <section className="card-glass p-4 sm:p-6 lg:p-8">
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <p className="wh-ui-label">

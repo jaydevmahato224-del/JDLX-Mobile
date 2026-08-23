@@ -393,7 +393,7 @@ const VariantManager = ({
             </div>
             
             {variantOptions.length === 0 && (
-                <div className="p-6 text-center bg-slate-800/30 border border-dashed border-white/10 rounded-xl">
+                <div className="p-4 sm:p-6 text-center bg-slate-800/30 border border-dashed border-white/10 rounded-xl">
                     <Zap className="w-10 h-10 text-slate-600 mx-auto mb-2" />
                     <p className="text-sm text-slate-500">No option groups defined</p>
                     <p className="text-xs text-slate-600 mt-1">Add groups like Color, Size, Storage to generate variants</p>
@@ -481,14 +481,14 @@ const VariantManager = ({
                 </div>
 
                 {!hasOptionGroups && (
-                    <div className="p-6 text-center bg-slate-800/30 border border-dashed border-white/10 rounded-xl">
+                    <div className="p-4 sm:p-6 text-center bg-slate-800/30 border border-dashed border-white/10 rounded-xl">
                         <Info className="w-10 h-10 text-slate-600 mx-auto mb-2" />
                         <p className="text-sm text-slate-500">Define option groups first to generate variants</p>
                     </div>
                 )}
 
                 {hasOptionGroups && totalCombinations === 0 && (
-                    <div className="p-6 text-center bg-rose-400/10 border border-rose-400/20 rounded-xl">
+                    <div className="p-4 sm:p-6 text-center bg-rose-400/10 border border-rose-400/20 rounded-xl">
                         <AlertTriangle className="w-10 h-10 text-rose-400 mx-auto mb-2" />
                         <p className="text-sm text-rose-300">Each option group must have at least one value</p>
                     </div>
@@ -850,7 +850,7 @@ const VariantManager = ({
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-amber-400/5 to-indigo-400/5 border border-amber-400/10 rounded-xl">
                 <div className="p-2 rounded-lg bg-amber-400/20 text-amber-500">
                     <Layers size={20} />

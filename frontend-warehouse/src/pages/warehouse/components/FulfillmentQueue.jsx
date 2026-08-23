@@ -88,8 +88,8 @@ const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId =
     }
 
     return (
-        <section className="warehouse-panel flex min-h-[700px] flex-col p-8">
-            <div className="flex flex-col gap-6 border-b border-white/5 pb-8 sm:flex-row sm:items-center sm:justify-between">
+        <section className="warehouse-panel flex min-h-[700px] flex-col p-4 sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-4 sm:gap-6 border-b border-white/5 pb-8 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p className="wh-ui-label">
                         Fulfillment Queue
@@ -106,22 +106,22 @@ const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId =
                 </div>
             </div>
 
-            <div className="mt-10 flex-1 min-h-0">
+            <div className="mt-6 sm:mt-10 flex-1 min-h-0">
                 {recentOrders.length === 0 ? (
                     <div className="flex h-full min-h-[500px] flex-col items-center justify-center rounded-[32px] border border-dashed border-white/10 bg-white/[0.02] px-10 text-center">
                         <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-slate-500">
                             <Package size={34} />
                         </div>
-                        <h3 className="mt-8 text-2xl font-bold tracking-tight text-white">
+                        <h3 className="mt-5 sm:mt-8 text-2xl font-bold tracking-tight text-white">
                             No active queue items
                         </h3>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-6 pr-1">
+                    <div className="flex flex-col gap-4 sm:gap-6 pr-1">
                         {recentOrders.map((order) => (
                             <article
                                 key={order.id}
-                                className="warehouse-subtle-card p-6 transition-all hover:translate-x-1"
+                                className="warehouse-subtle-card p-4 sm:p-6 transition-all hover:translate-x-1"
                             >
                                 <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                                     <div className="flex min-w-0 gap-4">

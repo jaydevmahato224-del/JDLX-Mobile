@@ -2670,6 +2670,7 @@ def warehouse_patch_inventory(item_id):
         return error_response("No valid fields to update", 400)
 
     conn = get_db()
+    cursor = conn.cursor()
     try:
         inv = conn.execute("SELECT product_id, sku FROM warehouse_inventory WHERE id = ? AND warehouse_id = ?", (item_id, wh_id)).fetchone()
         if not inv:

@@ -14,6 +14,7 @@ import {
     Settings,
     RotateCcw,
     Grid,
+    Layers,
     List,
     Eye,
     EyeOff,

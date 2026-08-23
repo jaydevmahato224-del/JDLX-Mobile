@@ -128,10 +128,13 @@ def _open_connection():
             _raise_turso_config_error(e)
         conn = LibsqlConnectionWrapper(raw_conn)
         conn.row_factory = LibsqlRow
+        # Enable foreign key constraints for libSQL as well
+        raw_conn.execute("PRAGMA foreign_keys = ON")
     else:
         conn = sqlite3.connect(DATABASE_PATH, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 10000")  # 10s retry on lock
+        conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -369,6 +372,8 @@ def init_db():
         ('mrp', 'REAL'),
     ])
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)")
+    # Unique constraint on (product_id, options) to prevent duplicate variant combinations
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_variants_product_options ON product_variants(product_id, options)")
 
     # Option groups that define how a product's variants are presented to
     # customers (e.g. Size: [S, M, L], Color: [Red, Blue]). Each variant links
@@ -384,6 +389,8 @@ def init_db():
         FOREIGN KEY(product_id) REFERENCES products(id)
     )''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_variant_options_product ON product_variant_options(product_id)")
+    # Unique constraint on (product_id, option_name) to prevent duplicate option groups
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_variant_options_product_name ON product_variant_options(product_id, option_name)")
 
     # Legacy Stock Sync
     cursor.execute("PRAGMA table_info(products)")
@@ -455,7 +462,15 @@ def init_db():
         ('subtotal', 'REAL'),
         ('device_model', 'TEXT'),
         ('fitting_charge', 'REAL DEFAULT 0'),
-        ('returned_qty', 'INTEGER DEFAULT 0')
+        ('returned_qty', 'INTEGER DEFAULT 0'),
+        ('damage_qty', 'INTEGER DEFAULT 0'),
+        ('damage_comment', 'TEXT'),
+        ('damage_image_url', 'TEXT'),
+        ('variant_name', 'TEXT'),
+        ('variant_options', 'TEXT'),
+        ('variant_mrp', 'REAL'),
+        ('variant_sku', 'TEXT'),
+        ('variant_image', 'TEXT'),
     ])
     # Hot-path indexes: order history (get_user_orders / get_admin_orders filter by
     # user + sort by created_at) and every order_items lookup by order_id (order
@@ -609,6 +624,10 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_partner ON warehouse_inventory(warehouse_partner_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_prod ON warehouse_inventory(product_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_wh_inv_variant ON warehouse_inventory(variant_id)")
+    # Composite unique index for variant-level inventory (prevents duplicate rows per variant per warehouse)
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_inv_wh_variant ON warehouse_inventory(warehouse_id, variant_id) WHERE variant_id IS NOT NULL")
+    # Composite unique index for product+variant per warehouse (prevents duplicate product+variant in same warehouse)
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_inv_prod_var ON warehouse_inventory(warehouse_id, product_id, variant_id)")
 
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_order_assignments (
@@ -1067,7 +1086,11 @@ def init_db():
 
     # --- User Interactions ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_interactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, interaction_type TEXT NOT NULL, target_id TEXT, category TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS wishlist (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, product_id INTEGER NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, product_id), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id))''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS wishlist (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, product_id INTEGER NOT NULL, variant_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, product_id, variant_id), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id), FOREIGN KEY(variant_id) REFERENCES product_variants(id))''')
+    ensure_columns('wishlist', [('variant_id', 'INTEGER REFERENCES product_variants(id)')])
+    # Backfill unique constraint for existing databases: drop old index, create new
+    cursor.execute("DROP INDEX IF EXISTS sqlite_autoindex_wishlist_1")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wishlist_user_product_variant ON wishlist(user_id, product_id, variant_id)")
     cursor.execute('''CREATE TABLE IF NOT EXISTS product_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, user_id INTEGER NOT NULL, rating INTEGER NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(product_id, user_id), FOREIGN KEY(product_id) REFERENCES products(id), FOREIGN KEY(user_id) REFERENCES users(id))''')
     ensure_columns('product_reviews', [('review_text', 'TEXT'), ('review_images', 'TEXT'), ('is_verified', 'INTEGER DEFAULT 0'), ('helpful_count', 'INTEGER DEFAULT 0'), ('store_id', 'INTEGER')])
 

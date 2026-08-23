@@ -2762,8 +2762,10 @@ def update_server_cart():
 
         # Stock Validation
         if variant_id:
-            cursor.execute("SELECT stock FROM product_variants WHERE id = ?", (variant_id,))
+            cursor.execute("SELECT stock FROM product_variants WHERE id = ? AND product_id = ? AND status = 'active'", (variant_id, product_id))
             variant = cursor.fetchone()
+            if not variant:
+                return error_response("Variant not found or inactive for this product", 404)
             available = variant['stock'] if variant else 0
         else:
             cursor.execute('''
@@ -2886,13 +2888,31 @@ def get_wishlist():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT w.created_at, p.id, p.name, p.price, p.images, p.category, p.stock
+            SELECT w.created_at, w.variant_id, p.id, p.name, p.price, p.images, p.category, p.stock,
+                   pv.name as variant_name, pv.price as variant_price, pv.images as variant_images, pv.stock as variant_stock,
+                   pv.options as variant_options
             FROM wishlist w 
             JOIN products p ON w.product_id = p.id 
+            LEFT JOIN product_variants pv ON w.variant_id = pv.id
             WHERE w.user_id = ?
             ORDER BY w.created_at DESC
         """, (user_id,))
-        items = [normalize_product_row(row) for row in cursor.fetchall()]
+        items = []
+        for row in cursor.fetchall():
+            item = normalize_product_row(row)
+            if item.get('variant_id'):
+                item['name'] = item['variant_name'] or item['name']
+                item['price'] = item['variant_price'] if item['variant_price'] is not None else item['price']
+                if item.get('variant_images'):
+                    item['images'] = item['variant_images']
+                if item.get('variant_stock') is not None:
+                    item['stock'] = item['variant_stock']
+                if item.get('variant_options'):
+                    try:
+                        item['variant_options'] = json.loads(item['variant_options'])
+                    except Exception:
+                        item['variant_options'] = {}
+            items.append(item)
         conn.close()
         return success_response(items, "Wishlist retrieved")
     except Exception as e:
@@ -2901,9 +2921,10 @@ def get_wishlist():
 @app.route('/api/wishlist', methods=['POST'])
 @token_required
 def add_to_wishlist():
-    """Adds a product to the user's wishlist."""
+    """Adds a product (or variant) to the user's wishlist."""
     data = request.json
     product_id = data.get('product_id')
+    variant_id = data.get('variant_id')
     if not product_id:
         return error_response("Product ID required", 400)
     
@@ -2911,7 +2932,14 @@ def add_to_wishlist():
         user_id = request.user.get('user_id')
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO wishlist (user_id, product_id) VALUES (?, ?)", (user_id, product_id))
+        
+        # Validate variant exists if provided
+        if variant_id:
+            cursor.execute("SELECT id FROM product_variants WHERE id = ? AND product_id = ?", (variant_id, product_id))
+            if not cursor.fetchone():
+                return error_response("Variant not found for this product", 404)
+        
+        cursor.execute("INSERT OR IGNORE INTO wishlist (user_id, product_id, variant_id) VALUES (?, ?, ?)", (user_id, product_id, variant_id))
         conn.commit()
         conn.close()
         return success_response(None, "Product added to wishlist")
@@ -2921,12 +2949,16 @@ def add_to_wishlist():
 @app.route('/api/wishlist/<int:product_id>', methods=['DELETE'])
 @token_required
 def remove_from_wishlist(product_id):
-    """Removes a product from the user's wishlist."""
+    """Removes a product (or variant) from the user's wishlist."""
+    variant_id = request.args.get('variant_id', type=int)
     try:
         user_id = request.user.get('user_id')
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM wishlist WHERE user_id = ? AND product_id = ?", (user_id, product_id))
+        if variant_id:
+            cursor.execute("DELETE FROM wishlist WHERE user_id = ? AND product_id = ? AND variant_id = ?", (user_id, product_id, variant_id))
+        else:
+            cursor.execute("DELETE FROM wishlist WHERE user_id = ? AND product_id = ? AND variant_id IS NULL", (user_id, product_id))
         conn.commit()
         conn.close()
         return success_response(None, "Product removed from wishlist")
@@ -3868,8 +3900,10 @@ def checkout():
                     SELECT COALESCE(wi.warehouse_id, wi.warehouse_partner_id) as wh_id
                     FROM warehouse_inventory wi
                     JOIN warehouses w ON w.id = COALESCE(wi.warehouse_id, wi.warehouse_partner_id)
+                    JOIN product_variants pv ON pv.id = wi.variant_id
                     WHERE wi.product_id = ? AND wi.variant_id = ? AND (wi.stock_quantity > 0 OR wi.available_stock > 0)
                       AND w.operations_status = 'open' AND w.account_status = 'active'
+                      AND pv.status = 'active'
                     LIMIT 1
                 """, (p_id, v_id))
                 row = cursor.fetchone()
@@ -3900,7 +3934,8 @@ def checkout():
                     cursor.execute("""
                         SELECT COALESCE(wi.warehouse_id, wi.warehouse_partner_id) as wh_id
                         FROM warehouse_inventory wi
-                        WHERE wi.product_id = ? AND wi.variant_id = ?
+                        JOIN product_variants pv ON pv.id = wi.variant_id
+                        WHERE wi.product_id = ? AND wi.variant_id = ? AND pv.status = 'active'
                         LIMIT 1
                     """, (p_id, v_id))
                     row = cursor.fetchone()
@@ -3935,12 +3970,14 @@ def checkout():
             product = product_meta.get(item['id'])
             if item.get('variant_id'):
                 cursor.execute(
-                    "SELECT stock, name, price FROM product_variants WHERE id = ? AND product_id = ?",
+                    "SELECT stock, name, price, status FROM product_variants WHERE id = ? AND product_id = ?",
                     (item.get('variant_id'), item['id'])
                 )
                 stock_row = cursor.fetchone()
                 if not stock_row:
                     return error_response(f"Variant for product {item['id']} not found", 404)
+                if stock_row['status'] != 'active':
+                    return error_response(f"Variant {stock_row['name']} is not available", 400)
                 available_stock = int(stock_row['stock'] or 0)
                 stock_name = stock_row['name'] or product['name']
                 item['price'] = float(stock_row['price'] if stock_row['price'] is not None else (product.get('price') or 0))
@@ -4153,9 +4190,33 @@ def checkout():
             v_id = item.get('variant_id')
             product_name = product_meta.get(item['id'], {}).get('name', 'Unknown Product')
             item_subtotal = float(item['price']) * int(item['qty'])
+            
+            # Snapshot variant details at time of order for historical accuracy
+            variant_name = item.get('variant_name')
+            variant_options = item.get('variant_options')
+            variant_mrp = item.get('variant_mrp')
+            variant_sku = item.get('variant_sku')
+            variant_image = item.get('variant_image')
+            
+            if v_id:
+                cursor.execute("SELECT name, options, mrp, sku, images FROM product_variants WHERE id = ?", (v_id,))
+                variant_data = cursor.fetchone()
+                if variant_data:
+                    if not variant_name:
+                        variant_name = variant_data['name']
+                    if not variant_options:
+                        variant_options = variant_data['options']
+                    if not variant_mrp:
+                        variant_mrp = variant_data['mrp']
+                    if not variant_sku:
+                        variant_sku = variant_data['sku']
+                    if not variant_image:
+                        variant_image = variant_data['images']
+
+            item_subtotal = float(item['price']) * int(item['qty'])
             cursor.execute(
-                "INSERT INTO order_items (order_id, product_id, product_name, variant_id, quantity, price, subtotal, device_model, fitting_charge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (order_id, item['id'], product_name, v_id, item['qty'], item['price'], item_subtotal, item.get('device_model'), item.get('fitting_charge', 0))
+                """INSERT INTO order_items (order_id, product_id, product_name, variant_id, quantity, price, subtotal, device_model, fitting_charge, variant_name, variant_options, variant_mrp, variant_sku, variant_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (order_id, item['id'], product_name, v_id, item['qty'], item['price'], item_subtotal, item.get('device_model'), item.get('fitting_charge', 0), variant_name, variant_options, variant_mrp, variant_sku, variant_image)
             )
 
             # Note: Inventory stock is NOT decremented here during placement anymore.
@@ -4300,6 +4361,7 @@ def get_order_status(order_id):
         cursor.execute('''
             SELECT oi.product_id, oi.quantity, oi.price, oi.subtotal,
                    oi.fitting_charge, oi.product_name, oi.device_model,
+                   oi.variant_id, oi.variant_name, oi.variant_options, oi.variant_mrp, oi.variant_sku, oi.variant_image,
                    COALESCE(p.images, '') as images
             FROM order_items oi
             LEFT JOIN products p ON oi.product_id = p.id
@@ -4307,6 +4369,18 @@ def get_order_status(order_id):
         ''', (str(order_id),))
         items = [dict(row) for row in cursor.fetchall()]
         conn.close()
+        
+        # Add variant snapshot info to each item for historical accuracy
+        for item in items:
+            if item.get('variant_id'):
+                item['variant_info'] = {
+                    'variant_id': item.get('variant_id'),
+                    'variant_name': item.get('variant_name'),
+                    'variant_options': item.get('variant_options'),
+                    'variant_mrp': item.get('variant_mrp'),
+                    'variant_sku': item.get('variant_sku'),
+                    'variant_image': item.get('variant_image'),
+                }
         
         order_dict = dict(order)
         order_dict['items'] = items
@@ -4331,6 +4405,30 @@ def get_user_orders():
         """
         cursor.execute(query, (user_id,))
         orders = [dict(row) for row in cursor.fetchall()]
+        
+        # Fetch order items with variant snapshot data for each order
+        for order in orders:
+            cursor.execute('''
+                SELECT oi.product_id, oi.quantity, oi.price, oi.subtotal,
+                       oi.fitting_charge, oi.product_name, oi.device_model,
+                       oi.variant_id, oi.variant_name, oi.variant_options, oi.variant_mrp, oi.variant_sku, oi.variant_image,
+                       COALESCE(p.images, '') as images
+                FROM order_items oi
+                LEFT JOIN products p ON oi.product_id = p.id
+                WHERE oi.order_id = ?
+            ''', (str(order['id']),))
+            items = [dict(row) for row in cursor.fetchall()]
+            for item in items:
+                if item.get('variant_id'):
+                    item['variant_info'] = {
+                        'variant_id': item.get('variant_id'),
+                        'variant_name': item.get('variant_name'),
+                        'variant_options': item.get('variant_options'),
+                        'variant_mrp': item.get('variant_mrp'),
+                        'variant_sku': item.get('variant_sku'),
+                        'variant_image': item.get('variant_image'),
+                    }
+            order['items'] = items
         conn.close()
         return jsonify(orders), 200
     except Exception as e:
@@ -4350,6 +4448,30 @@ def get_order_tracking(order_id):
             WHERE o.id = ? AND o.user_id = ?
         ''', (order_id, user_id))
         tracking_data = cursor.fetchone()
+        
+        # Fetch order items with variant snapshot data
+        cursor.execute('''
+            SELECT oi.product_id, oi.quantity, oi.price, oi.subtotal,
+                   oi.fitting_charge, oi.product_name, oi.device_model,
+                   oi.variant_id, oi.variant_name, oi.variant_options, oi.variant_mrp, oi.variant_sku, oi.variant_image,
+                   COALESCE(p.images, '') as images
+            FROM order_items oi
+            LEFT JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        ''', (str(order_id),))
+        items = [dict(row) for row in cursor.fetchall()]
+        
+        for item in items:
+            if item.get('variant_id'):
+                item['variant_info'] = {
+                    'variant_id': item.get('variant_id'),
+                    'variant_name': item.get('variant_name'),
+                    'variant_options': item.get('variant_options'),
+                    'variant_mrp': item.get('variant_mrp'),
+                    'variant_sku': item.get('variant_sku'),
+                    'variant_image': item.get('variant_image'),
+                }
+        
         conn.close()
         
         if tracking_data:
@@ -4359,7 +4481,8 @@ def get_order_tracking(order_id):
                     "name": tracking_data['rider_name'],
                     "phone": tracking_data['rider_phone']
                 } if tracking_data['rider_name'] else None,
-                "estimated_delivery_time": tracking_data['estimated_delivery']
+                "estimated_delivery_time": tracking_data['estimated_delivery'],
+                "items": items
             })
         return error_response("Order not found", 404)
     except Exception as e:

@@ -102,7 +102,7 @@ export const useStore = create((set, get) => ({
                     
                     const existingMapped = serverCartMapped.find(m => 
                         String(m.product_id) === String(item.product_id) && 
-                        String(m.variant_id || '') === String(item.variant_id || '')
+                        (m.variant_id === item.variant_id || (m.variant_id === null && item.variant_id === null) || (m.variant_id === undefined && item.variant_id === undefined))
                     );
                     
                     if (existingMapped) {
@@ -126,7 +126,7 @@ export const useStore = create((set, get) => ({
                 for (const localItem of localCart) {
                     const existsOnServer = mergedCart.find(item => 
                         String(item.id) === String(localItem.id) && 
-                        String(item.variant_id || '') === String(localItem.variant_id || '')
+                        (item.variant_id === localItem.variant_id || (item.variant_id === null && localItem.variant_id === null) || (item.variant_id === undefined && localItem.variant_id === undefined))
                     );
 
                     if (!existsOnServer) {
@@ -249,7 +249,8 @@ export const useStore = create((set, get) => ({
             const state = get();
             const deviceModel = getDeviceModelValue(product?.device_model);
             const variantId = product?.variant_id || null;
-            const existing = state.cart.find(item => String(item.id) === String(product.id) && String(item.variant_id || '') === String(variantId || ''));
+            const existing = state.cart.find(item => String(item.id) === String(product.id) && 
+                (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)));
             const availableStock = getAvailableStock(product)
             
             if (availableStock <= 0) {
@@ -303,7 +304,8 @@ export const useStore = create((set, get) => ({
     removeFromCart: async (productId, variantId = null) => {
         // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
         set((state) => {
-            const newCart = state.cart.filter(item => String(item.id) !== String(productId) || String(item.variant_id || '') !== String(variantId || ''));
+            const newCart = state.cart.filter(item => !(String(item.id) === String(productId) && 
+                (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null))));
             localStorage.setItem('cart', JSON.stringify(newCart));
             return { cart: newCart };
         });
@@ -324,7 +326,8 @@ export const useStore = create((set, get) => ({
             
             let finalQty = requestedQty;
             const state = get();
-            const item = state.cart.find(i => String(i.id) === String(productId) && String(i.variant_id || '') === String(variantId || ''));
+            const item = state.cart.find(i => String(i.id) === String(productId) && 
+                (i.variant_id === variantId || (i.variant_id === null && variantId === null) || (i.variant_id === undefined && variantId === null)));
             if (!item) return;
 
             const maxQty = getAvailableStock(item);
@@ -333,7 +336,8 @@ export const useStore = create((set, get) => ({
             // Update local state IMMEDIATELY for responsiveness
             set((state) => {
                 const newCart = state.cart.map(item => {
-                    if (String(item.id) !== String(productId) || String(item.variant_id || '') !== String(variantId || '')) return item;
+                    if (!(String(item.id) === String(productId) && 
+      (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)))) return item;
                     return { ...item, qty: finalQty };
                 });
                 localStorage.setItem('cart', JSON.stringify(newCart));
@@ -352,14 +356,16 @@ export const useStore = create((set, get) => ({
     updateDeviceModel: (productId, deviceModel, variantId = null) => set((state) => {
         const normalizedDeviceModel = getDeviceModelValue(deviceModel);
         const newCart = state.cart.map(item =>
-            String(item.id) === String(productId) && String(item.variant_id || '') === String(variantId || '') ? { ...item, device_model: normalizedDeviceModel || null } : item
+            String(item.id) === String(productId) && 
+            (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)) ? { ...item, device_model: normalizedDeviceModel || null } : item
         );
         localStorage.setItem('cart', JSON.stringify(newCart));
         return { cart: newCart };
     }),
     toggleFittingService: (productId, variantId = null) => set((state) => {
         const newCart = state.cart.map(item =>
-            String(item.id) === String(productId) && String(item.variant_id || '') === String(variantId || '') ? { ...item, fitting: !item.fitting } : item
+            String(item.id) === String(productId) && 
+            (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)) ? { ...item, fitting: !item.fitting } : item
         );
         localStorage.setItem('cart', JSON.stringify(newCart));
         return { cart: newCart };

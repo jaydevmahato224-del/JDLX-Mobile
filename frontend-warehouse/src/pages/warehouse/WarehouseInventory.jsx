@@ -49,20 +49,27 @@ import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 
 // Convert a variant's option map to editable text, e.g. "Size:M, Color:Red".
-const variantOptionsToText = (options = {}) =>
-    Object.entries(options).filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(', ');
 
-// Parse "Size:M, Color:Red" back into an option map.
-const variantTextToOptions = (text = '') => {
-    const out = {};
-    text.split(',').forEach(part => {
-        const idx = part.indexOf(':');
-        if (idx === -1) return;
-        const key = part.slice(0, idx).trim();
-        const value = part.slice(idx + 1).trim();
-        if (key) out[key] = value;
-    });
-    return out;
+
+// Generate SKU from option values
+const generateSkuFromOptions = (baseSku, options, existingSkus = new Set()) => {
+    if (!baseSku || !options || Object.keys(options).length === 0) {
+        return '';
+    }
+    const sortedKeys = Object.keys(options).sort();
+    const optionParts = sortedKeys.map(k => {
+        const val = String(options[k] || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8);
+        return val;
+    }).filter(Boolean);
+    if (optionParts.length === 0) return '';
+    let sku = `${baseSku.toUpperCase()}-${optionParts.join('-')}`;
+    let counter = 1;
+    let finalSku = sku;
+    while (existingSkus.has(finalSku)) {
+        finalSku = `${sku}-${counter}`;
+        counter++;
+    }
+    return finalSku;
 };
 
 const INITIAL_PRODUCT_STATE = {
@@ -1321,195 +1328,31 @@ const WarehouseInventory = () => {
                                         </div>
 
                                         {newProductData.has_variants && (
-                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                                                <div className="flex items-center justify-between">
-                                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Variant Configuration</h4>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setNewProductData(prev => ({
-                                                            ...prev,
-                                                            variants: [...prev.variants, { id: Date.now(), name: '', sku: '', price: prev.price, mrp: '', stock_quantity: 0, options: {} }]
-                                                        }))}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400/10 text-amber-500 text-[9px] font-black uppercase tracking-widest hover:bg-amber-400/20 transition-all"
-                                                    >
-                                                        <Plus size={12} /> Add Variant
-                                                    </button>
-                                                </div>
-
-                                                {/* Option groups — structure the storefront picker (Size / Color etc.) */}
-                                                <div className="rounded-2xl border border-white/5 bg-slate-950/30 p-4 space-y-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Option Groups (Optional)</h4>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setNewProductData(prev => ({
-                                                                ...prev,
-                                                                variant_options: [...prev.variant_options, { option_name: '', option_values: [] }]
-                                                            }))}
-                                                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-500 text-[9px] font-black uppercase tracking-widest hover:bg-amber-400/20 transition-all"
-                                                        >
-                                                            <Plus size={10} /> Add Group
-                                                        </button>
-                                                    </div>
-                                                    {newProductData.variant_options.length === 0 && (
-                                                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">e.g. Size with values S, M, L — customers pick these on the store.</p>
-                                                    )}
-                                                    {newProductData.variant_options.map((group, gi) => (
-                                                        <div key={gi} className="grid grid-cols-[1fr_2fr_auto] gap-2 items-center">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Option name (Size)"
-                                                                value={group.option_name}
-                                                                onChange={(e) => {
-                                                                    const next = [...newProductData.variant_options];
-                                                                    next[gi] = { ...next[gi], option_name: e.target.value };
-                                                                    setNewProductData(prev => ({ ...prev, variant_options: next }));
-                                                                }}
-                                                                className="bg-slate-950/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400/50"
-                                                            />
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Values, comma separated (S, M, L)"
-                                                                value={Array.isArray(group.option_values) ? group.option_values.join(', ') : group.option_values}
-                                                                onChange={(e) => {
-                                                                    const next = [...newProductData.variant_options];
-                                                                    next[gi] = { ...next[gi], option_values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) };
-                                                                    setNewProductData(prev => ({ ...prev, variant_options: next }));
-                                                                }}
-                                                                className="bg-slate-950/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-amber-400/50"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setNewProductData(prev => ({
-                                                                    ...prev,
-                                                                    variant_options: prev.variant_options.filter((_, i) => i !== gi)
-                                                                }))}
-                                                                className="p-2 text-slate-600 hover:text-rose-500 transition-colors"
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-950/30">
-                                                    <table className="w-full text-left border-collapse">
-                                                        <thead>
-                                                            <tr className="border-b border-white/5">
-                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Variant Name</th>
-                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Options</th>
-                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">SKU</th>
-                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Price</th>
-                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">MRP</th>
-                                                                <th className="p-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Stock</th>
-                                                                <th className="p-4"></th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-white/5">
-                                                            {newProductData.variants.map((variant, idx) => (
-                                                                <tr key={variant.id} className="group/row hover:bg-white/[0.02] transition-colors">
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Blue / 128GB"
-                                                                            value={variant.name}
-                                                                            onChange={(e) => {
-                                                                                const newVariants = [...newProductData.variants];
-                                                                                newVariants[idx].name = e.target.value;
-                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
-                                                                            }}
-                                                                            className="w-full bg-transparent border-none p-2 text-xs text-white font-bold focus:outline-none"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Size:M, Color:Red"
-                                                                            value={variantOptionsToText(variant.options)}
-                                                                            onChange={(e) => {
-                                                                                const newVariants = [...newProductData.variants];
-                                                                                newVariants[idx].options = variantTextToOptions(e.target.value);
-                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
-                                                                            }}
-                                                                            className="w-40 bg-transparent border-none p-2 text-xs text-sky-400 font-bold focus:outline-none"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="SKU"
-                                                                            value={variant.sku}
-                                                                            onChange={(e) => {
-                                                                                const newVariants = [...newProductData.variants];
-                                                                                newVariants[idx].sku = e.target.value.toUpperCase();
-                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
-                                                                            }}
-                                                                            className="w-full bg-transparent border-none p-2 text-xs text-white font-black uppercase font-mono focus:outline-none"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="Price"
-                                                                            value={variant.price}
-                                                                            onChange={(e) => {
-                                                                                const newVariants = [...newProductData.variants];
-                                                                                newVariants[idx].price = e.target.value;
-                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
-                                                                            }}
-                                                                            className="w-24 bg-transparent border-none p-2 text-xs text-amber-500 font-bold focus:outline-none"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="MRP"
-                                                                            value={variant.mrp ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const newVariants = [...newProductData.variants];
-                                                                                newVariants[idx].mrp = e.target.value;
-                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
-                                                                            }}
-                                                                            className="w-24 bg-transparent border-none p-2 text-xs text-slate-300 font-bold focus:outline-none"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-3">
-                                                                        <input
-                                                                            type="number"
-                                                                            placeholder="Qty"
-                                                                            value={variant.stock_quantity}
-                                                                            onChange={(e) => {
-                                                                                const newVariants = [...newProductData.variants];
-                                                                                newVariants[idx].stock_quantity = e.target.value;
-                                                                                setNewProductData(prev => ({ ...prev, variants: newVariants }));
-                                                                            }}
-                                                                            className="w-16 bg-transparent border-none p-2 text-xs text-emerald-500 font-bold focus:outline-none"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-3 text-right">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setNewProductData(prev => ({
-                                                                                    ...prev,
-                                                                                    variants: prev.variants.filter((_, i) => i !== idx)
-                                                                                }));
-                                                                            }}
-                                                                            className="p-2 text-slate-600 hover:text-rose-500 transition-colors"
-                                                                        >
-                                                                            <Trash2 size={14} />
-                                                                        </button>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                    {newProductData.variants.length === 0 && (
-                                                        <div className="p-8 text-center">
-                                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">No variants added yet</p>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                            <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                                                <VariantManager
+                                                    baseProduct={newProductData}
+                                                    variantOptions={newProductData.variant_options}
+                                                    variants={newProductData.variants}
+                                                    onChange={(updates) => setNewProductData(prev => ({ ...prev, ...updates }))}
+                                                    onGenerateVariants={async (combinations) => {
+                                                        const baseSku = newProductData.global_sku_code || newProductData.sku || 'PRD';
+                                                        const existingSkus = new Set(newProductData.variants.map(v => v.sku?.toUpperCase()).filter(Boolean));
+                                                        const newVariants = combinations.map((combo, i) => ({
+                                                            id: `var_${Date.now()}_${i}`,
+                                                            name: Object.entries(combo.options).map(([k, v]) => `${k}: ${v}`).join(' / '),
+                                                            sku: generateSkuFromOptions(baseSku, combo.options, existingSkus),
+                                                            price: newProductData.price || 0,
+                                                            mrp: null,
+                                                            stock_quantity: 0,
+                                                            options: combo.options,
+                                                            images: [],
+                                                            status: 'active'
+                                                        }));
+                                                        setNewProductData(prev => ({ ...prev, variants: [...prev.variants, ...newVariants] }));
+                                                    }}
+                                                    disabled={loading}
+                                                    isEditing={!!editingItemId}
+                                                />
                                             </div>
                                         )}
                                     </div>

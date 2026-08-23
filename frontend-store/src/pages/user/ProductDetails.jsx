@@ -210,6 +210,31 @@ export default function ProductDetails() {
       .catch(() => { /* variant data is optional — page still renders base product */ });
   }, [productId, productHasVariants]);
 
+  // Determine if this is a variant product early so other memos can use it
+  const isVariantProduct = Boolean(product?.has_variants) && detailVariants.length > 0;
+
+  // Build a map of available combinations for quick lookup
+  const availableCombinations = useMemo(() => {
+    const map = new Map();
+    detailVariants.forEach(v => {
+      if (v.stock > 0 && v.options) {
+        const key = Object.entries(v.options).sort().map(([k, v]) => `${k}:${v}`).join('|');
+        map.set(key, v);
+      }
+    });
+    return map;
+  }, [detailVariants]);
+
+  // Check if a partial selection can lead to any available variant
+  const hasAvailableCombinations = useMemo(() => {
+    if (!isVariantProduct) return true;
+    if (Object.keys(selectedOptions).length === 0) return availableCombinations.size > 0;
+    return Array.from(availableCombinations.keys()).some(key => {
+      const comboOptions = Object.fromEntries(key.split('|').map(kv => kv.split(':')));
+      return Object.entries(selectedOptions).every(([k, v]) => comboOptions[k] === v);
+    });
+  }, [selectedOptions, availableCombinations, isVariantProduct]);
+
   // The variant currently chosen by the option chips (if any).
   const selectedVariant = useMemo(
     () => detailVariants.find(v => String(v.id) === String(selectedVariantId)) || null,
@@ -254,10 +279,29 @@ export default function ProductDetails() {
     else setSelectedVariantId(null);
   };
 
-  const isVariantProduct = Boolean(product?.has_variants) && detailVariants.length > 0;
   const selectionComplete = isVariantProduct
     ? detailVariantOptions.every(o => String(selectedOptions[o.option_name] || '') !== '')
     : true;
+
+  // Determine available values for each option group based on current selection
+  const availableOptionValues = useMemo(() => {
+    if (!isVariantProduct) return {};
+    const available = {};
+    detailVariantOptions.forEach(group => {
+      const groupName = group.option_name;
+      const currentSelection = { ...selectedOptions };
+      delete currentSelection[groupName];
+      
+      const matchingVariants = detailVariants.filter(v => {
+        const vo = v.options || {};
+        return Object.entries(currentSelection).every(([k, val]) => String(vo[k] || '') === String(val)) && 
+               (v.stock || 0) > 0;
+      });
+      
+      available[groupName] = [...new Set(matchingVariants.flatMap(v => v.options?.[groupName]).filter(Boolean))];
+    });
+    return available;
+  }, [isVariantProduct, detailVariantOptions, selectedOptions, detailVariants]);
 
   const cartItem = useMemo(() => cart.find((item) => String(item.id) === String(activeProduct?.id) && String(item.variant_id || '') === String(activeProduct?.variant_id || '')), [cart, activeProduct?.id, activeProduct?.variant_id]);
   const quantity = Number(cartItem?.qty || 0);
@@ -326,7 +370,13 @@ export default function ProductDetails() {
   const handleAddToCart = useCallback((toCart = false) => {
     if (!activeProduct) return;
     if (isVariantProduct && !selectedVariant) {
-      toast.error('Please select all options');
+      if (!hasAvailableCombinations && Object.keys(selectedOptions).length > 0) {
+        toast.error('This combination is not available. Please change your selection.');
+      } else if (!selectionComplete) {
+        toast.error('Please select all options');
+      } else {
+        toast.error('Please select all options');
+      }
       return;
     }
     const selectedDeviceModel = getDeviceModelValue(deviceModel);
@@ -340,7 +390,7 @@ export default function ProductDetails() {
     trackEvent('add_to_cart', 'product', activeProduct.name, activeProduct.id);
     if (toCart) navigate('/cart');
     else toast.success('Added to collection');
-  }, [activeProduct, addToCart, deviceModel, fitting, isVariantProduct, navigate, requiresDeviceModel, selectedVariant, trackEvent]);
+  }, [activeProduct, addToCart, deviceModel, fitting, isVariantProduct, navigate, requiresDeviceModel, selectedVariant, trackEvent, hasAvailableCombinations, selectionComplete, selectedOptions]);
 
   const origin = useMemo(() => (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
     ? window.location.origin 
@@ -404,33 +454,50 @@ export default function ProductDetails() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="text-sm font-black uppercase tracking-[0.15em]">Choose Options</h3>
-              <p className="text-[11px] font-bold opacity-50 mt-1">{selectedVariant ? selectedVariant.name : 'Select all options to continue'}</p>
+              <p className="text-[11px] font-bold opacity-50 mt-1">
+                {selectedVariant ? selectedVariant.name : 
+                 !hasAvailableCombinations ? 'This combination is not available' : 
+                 'Select all options to continue'}
+              </p>
             </div>
             {selectedVariant?.stock > 0 && <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-3 py-1.5 rounded-full">{selectedVariant.stock} in stock</span>}
+            {!hasAvailableCombinations && selectedOptions && Object.keys(selectedOptions).length > 0 && (
+              <span className="text-[10px] font-black uppercase tracking-widest text-rose-600 bg-rose-500/10 px-3 py-1.5 rounded-full">Unavailable</span>
+            )}
           </div>
           <div className="space-y-5">
             {detailVariantOptions.map((group) => {
               const values = Array.isArray(group.option_values) ? group.option_values : [];
               const current = selectedOptions[group.option_name];
+              const availableValues = availableOptionValues[group.option_name] || [];
               return (
                 <div key={group.id || group.option_name}>
                   <div className="flex items-center gap-2 mb-2.5">
                     <span className="ui-label">{group.option_name}</span>
                     {current && <span className="text-[10px] font-black text-primary uppercase tracking-widest">{current}</span>}
+                    {!hasAvailableCombinations && (
+                      <span className="text-[9px] font-black text-rose-500">No available combinations</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {values.map((value) => {
                       const selected = String(current || '') === String(value);
+                      const isAvailable = availableValues.includes(value);
                       return (
                         <button
                           key={value}
                           type="button"
-                          onClick={() => handleSelectOption(group.option_name, value)}
+                          onClick={() => isAvailable && handleSelectOption(group.option_name, value)}
+                          disabled={!isAvailable}
                           className={`min-w-[52px] px-4 py-2.5 rounded-2xl text-[12px] font-black transition-all active:scale-95 border-2 ${
                             selected
                               ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
-                              : 'bg-[var(--color-surface-low)] text-[var(--color-on-surface)] border-[var(--color-surface-high)] hover:border-slate-400'
+                              : isAvailable
+                                ? 'bg-[var(--color-surface-low)] text-[var(--color-on-surface)] border-[var(--color-surface-high)] hover:border-slate-400'
+                                : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
                           }`}
+                          aria-disabled={!isAvailable}
+                          aria-label={isAvailable ? `${group.option_name}: ${value}` : `${group.option_name}: ${value} (unavailable)`}
                         >
                           {value}
                         </button>
@@ -558,17 +625,28 @@ export default function ProductDetails() {
                 <div className="space-y-4">
                   {requiresDeviceModel && <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100"><DeviceModelSelector value={deviceModel} onChange={setDeviceModel} required /></div>}
                   <div className="flex items-center gap-4">
-                    {canAdd ? (
-                      <><button onClick={() => handleAddToCart()} className="flex-[2] h-16 rounded-[2rem] bg-slate-900 text-white font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><ShoppingCart size={20} /> Add to Cart</button>
-                        <button onClick={() => handleAddToCart(true)} className="flex-1 h-16 rounded-[2rem] bg-primary text-slate-950 font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all">Buy Now</button>
-                        <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed' : 'Saved'); }} className={`h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 transition-all active:scale-90 ${isInWishlist ? 'bg-red-50 border-red-100 text-red-500' : 'bg-slate-50 border-slate-100 text-slate-400 hover:text-red-500'}`}><Heart size={28} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
-                        <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button></>
+{canAdd && hasAvailableCombinations ? (
+                      <><button onClick={() => handleAddToCart()} className="flex-1 h-12 rounded-2xl bg-white/10 text-white text-[11px] font-black uppercase tracking-widest border border-white/10 active:scale-95 flex items-center justify-center gap-2"><ShoppingCart size={14} /> Add</button>
+                        <button onClick={() => handleAddToCart(true)} className="flex-[1.5] h-12 rounded-2xl bg-primary text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">Buy Now</button>
+                        <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-rose-500 border-rose-500 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white'}`} style={{ animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none' }}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
+                        <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button></>
                     ) : (
-                      <div className="flex items-center gap-4 w-full">
-                        <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-16 flex-1 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
-                          {isNotified ? <CheckCircle2 size={24} /> : <Bell size={24} />} {isNotified ? 'Notified' : 'Notify on Restock'}
-                        </button>
-                        <button onClick={handleShare} className="h-16 w-16 flex items-center justify-center rounded-[2rem] border-2 border-slate-100 bg-slate-50 text-slate-400 hover:text-primary hover:border-primary/20 hover:shadow-lg active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={24} className="group-hover:rotate-12 transition-transform" /></button>
+                      <div className="flex w-full gap-2">
+                        {hasAvailableCombinations && !canAdd && stock <= 0 ? (
+                          <button disabled className="h-12 flex-1 rounded-2xl bg-slate-200 text-slate-400 text-[11px] font-black uppercase tracking-widest border border-slate-200 cursor-not-allowed flex items-center justify-center gap-2">
+                            <ShoppingCart size={14} /> Out of Stock
+                          </button>
+                        ) : (!hasAvailableCombinations && Object.keys(selectedOptions).length > 0 ? (
+                          <button disabled className="h-12 flex-1 rounded-2xl bg-rose-100 text-rose-500 text-[11px] font-black uppercase tracking-widest border border-rose-200 cursor-not-allowed flex items-center justify-center gap-2">
+                            <AlertCircle size={14} /> Unavailable
+                          </button>
+                        ) : (
+                          <button disabled={isNotified} onClick={async () => { if (!isNotified) { const res = await registerForNotification(product.id, user?.email); if (res.success) { toast.success(res.message); setIsNotified(true); } } }} className={`h-12 flex-1 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 ${isNotified ? 'bg-emerald-500 text-white' : 'bg-primary text-slate-950'}`}>
+                            {isNotified ? <CheckCircle2 size={16} /> : <Bell size={16} />} {isNotified ? 'Notified' : 'Notify on Restock'}
+                          </button>
+                        ))}
+                        <button onClick={() => { toggleWishlist(product); toast.success(isInWishlist ? 'Removed from favorites' : 'Saved to favorites'); }} className={`h-12 w-12 flex items-center justify-center rounded-2xl border transition-all active:scale-90 ${isInWishlist ? 'bg-rose-500 border-rose-500 text-white shadow-lg' : 'bg-white/10 border-white/10 text-white'}`} style={{ animation: isInWishlist ? 'heartPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' : 'none' }}><Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} /></button>
+                        <button onClick={handleShare} className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white/10 text-white border border-white/10 active:scale-90 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] group"><Share2 size={18} className="group-hover:rotate-12 transition-transform" /></button>
                       </div>
                     )}
                   </div>

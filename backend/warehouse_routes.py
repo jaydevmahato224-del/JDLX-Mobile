@@ -302,6 +302,133 @@ def _sync_legacy_warehouse_kyc_rollout(conn):
         Thread(target=send_warehouse_kyc_pending_email, args=mail_job, daemon=True).start()
 
 
+# =============================================================================
+# Variant Helper Functions
+# =============================================================================
+
+def _generate_variant_sku(product_sku, options):
+    """
+    Generate human-readable SKU from option values.
+    Format: {product_sku}-{OPTION1_VALUE}-{OPTION2_VALUE}...
+    Options are sorted by name for consistency.
+    """
+    if not options:
+        return None
+    
+    sorted_options = sorted(options.items())
+    option_parts = []
+    for key, value in sorted_options:
+        clean_value = str(value).replace(' ', '').replace('/', '').upper()[:10]
+        if clean_value:
+            option_parts.append(clean_value)
+    
+    if not option_parts:
+        return None
+    
+    option_suffix = '-'.join(option_parts)
+    base_sku = product_sku or 'PRD'
+    return f"{base_sku}-{option_suffix}"
+
+
+def _validate_variant_options(cursor, product_id, variant_options, option_groups, exclude_variant_id=None):
+    """
+    Validate variant options against defined option groups.
+    Returns list of error messages (empty if valid).
+    """
+    errors = []
+    
+    if not option_groups:
+        return errors
+    
+    # Build map of valid option values per group
+    valid_values = {}
+    for group in option_groups:
+        group_name = group['option_name']
+        group_values = set(str(v).strip() for v in group.get('option_values', []))
+        valid_values[group_name] = group_values
+    
+    # Check each option group has a value in variant_options
+    for group_name, allowed_values in valid_values.items():
+        if group_name not in variant_options:
+            errors.append(f"Missing required option: {group_name}")
+        else:
+            value = str(variant_options[group_name]).strip()
+            if value not in allowed_values:
+                errors.append(f"Invalid value for {group_name}: '{value}'. Allowed: {', '.join(sorted(allowed_values))}")
+    
+    # Check for extra options not in any group
+    for opt_name in variant_options:
+        if opt_name not in valid_values:
+            errors.append(f"Unknown option group: {opt_name}")
+    
+    return errors
+
+
+def _check_duplicate_variant_combination(cursor, product_id, variant_options, exclude_variant_id=None):
+    """
+    Check if a variant with the same option combination already exists.
+    Returns the conflicting variant ID if found, None otherwise.
+    """
+    if not variant_options:
+        return None
+    
+    options_json = json.dumps(variant_options, sort_keys=True)
+    
+    if exclude_variant_id:
+        row = cursor.execute(
+            "SELECT id FROM product_variants WHERE product_id = ? AND options = ? AND id != ?",
+            (product_id, options_json, exclude_variant_id)
+        ).fetchone()
+    else:
+        row = cursor.execute(
+            "SELECT id FROM product_variants WHERE product_id = ? AND options = ?",
+            (product_id, options_json)
+        ).fetchone()
+    
+    return row['id'] if row else None
+
+
+def _get_product_option_groups(cursor, product_id):
+    """Fetch option groups for a product, returning list of dicts with option_name and option_values."""
+    cursor.execute(
+        "SELECT option_name, option_values FROM product_variant_options WHERE product_id = ? ORDER BY sort_order, id",
+        (product_id,)
+    )
+    groups = []
+    for row in cursor.fetchall():
+        try:
+            values = json.loads(row['option_values'] or '[]')
+        except:
+            values = []
+        groups.append({
+            'option_name': row['option_name'],
+            'option_values': [str(v).strip() for v in values if str(v).strip()]
+        })
+    return groups
+
+
+def _normalize_variant_options(raw_options):
+    """Normalize variant options from various input formats to a dict."""
+    if not raw_options:
+        return {}
+    if isinstance(raw_options, str):
+        try:
+            raw_options = json.loads(raw_options)
+        except:
+            return {}
+    if isinstance(raw_options, dict):
+        return {str(k).strip(): str(v).strip() for k, v in raw_options.items() if str(v).strip()}
+    return {}
+
+
+def _get_product_sku_base(cursor, product_id):
+    """Get the base SKU for a product (global_sku_code or generated)."""
+    row = cursor.execute("SELECT global_sku_code, name FROM products WHERE id = ?", (product_id,)).fetchone()
+    if row:
+        return row['global_sku_code'] or f"PRD{product_id}"
+    return f"PRD{product_id}"
+
+
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 
 def _get_jwt_secret():
@@ -2370,6 +2497,7 @@ def warehouse_create_product():
             # Persist option groups (e.g. Size -> [S, M, L]) so the storefront
             # can render a proper variant picker for this product.
             variant_options_data = data.get('variant_options') or []
+            option_groups = []
             for idx, opt in enumerate(variant_options_data):
                 opt_name = (opt.get('option_name') or '').strip()
                 if not opt_name:
@@ -2380,14 +2508,24 @@ def warehouse_create_product():
                         opt_values = json.loads(opt_values)
                     except Exception:
                         opt_values = [opt_values]
+                clean_values = [str(x).strip() for x in opt_values if str(x).strip()]
                 cursor.execute(
                     "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
-                    (product_id, opt_name, json.dumps([str(x).strip() for x in opt_values if str(x).strip()]), idx)
+                    (product_id, opt_name, json.dumps(clean_values), idx)
                 )
+                option_groups.append({'option_name': opt_name, 'option_values': clean_values})
+
+            # Validate option groups for duplicate names
+            seen_opt_names = set()
+            for g in option_groups:
+                if g['option_name'] in seen_opt_names:
+                    return error_response(f"Duplicate option group name: {g['option_name']}", 400)
+                seen_opt_names.add(g['option_name'])
+
+            product_sku_base = _get_product_sku_base(cursor, product_id)
 
             for v in variants_data:
                 v_name = f"{name} - {v.get('name', 'Variant')}"
-                v_sku = v.get('sku') or str(random.randint(100000, 999999))
                 v_barcode = v.get('barcode', '').strip() or None
                 v_price = v.get('price', price)
                 v_mrp = v.get('mrp')
@@ -2395,12 +2533,30 @@ def warehouse_create_product():
                 v_images = v.get('images', images)
                 if isinstance(v_images, list):
                     v_images = json.dumps(v_images)
-                v_options = v.get('options') or {}
-                if isinstance(v_options, str):
-                    try:
-                        v_options = json.loads(v_options)
-                    except Exception:
-                        v_options = {}
+                
+                # Normalize and validate variant options
+                v_options = _normalize_variant_options(v.get('options'))
+                
+                # Validate against option groups
+                validation_errors = _validate_variant_options(cursor, product_id, v_options, option_groups)
+                if validation_errors:
+                    return error_response(f"Variant validation failed: {'; '.join(validation_errors)}", 400)
+                
+                # Check for duplicate variant combination
+                existing_vid = _check_duplicate_variant_combination(cursor, product_id, v_options)
+                if existing_vid:
+                    return error_response(f"Variant with this option combination already exists (variant_id: {existing_vid})", 409)
+                
+                # Generate SKU from options if not provided
+                v_sku = v.get('sku')
+                if not v_sku:
+                    v_sku = _generate_variant_sku(product_sku_base, v_options)
+                if not v_sku:
+                    v_sku = f"{product_sku_base}-{random.randint(10000, 99999)}"
+                
+                # Ensure SKU uniqueness
+                while cursor.execute("SELECT id FROM product_variants WHERE sku = ?", (v_sku,)).fetchone():
+                    v_sku = f"{v_sku}-{random.randint(10, 99)}"
 
                 cursor.execute(
                     """INSERT INTO product_variants 
@@ -2437,7 +2593,7 @@ def warehouse_create_product():
                     "UPDATE product_variants SET stock = ? WHERE id = ?",
                     (v_stock, variant_id)
                 )
-                created_variants.append({"variant_id": variant_id, "sku": v_sku})
+                created_variants.append({"variant_id": variant_id, "sku": v_sku, "options": v_options})
 
             # Sync parent stock
             conn.execute(
@@ -2663,6 +2819,7 @@ def warehouse_patch_inventory(item_id):
                 # Sync option groups: delete + re-insert (ids not referenced elsewhere).
                 conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
                 variant_options_data = data.get("variant_options") or []
+                option_groups = []
                 for idx, opt in enumerate(variant_options_data):
                     opt_name = (opt.get("option_name") or "").strip()
                     if not opt_name:
@@ -2673,10 +2830,21 @@ def warehouse_patch_inventory(item_id):
                             opt_values = json.loads(opt_values)
                         except Exception:
                             opt_values = [opt_values]
+                    clean_values = [str(x).strip() for x in opt_values if str(x).strip()]
                     conn.execute(
                         "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
-                        (product_id, opt_name, json.dumps([str(x).strip() for x in opt_values if str(x).strip()]), idx)
+                        (product_id, opt_name, json.dumps(clean_values), idx)
                     )
+                    option_groups.append({'option_name': opt_name, 'option_values': clean_values})
+
+                # Validate option groups for duplicate names
+                seen_opt_names = set()
+                for g in option_groups:
+                    if g['option_name'] in seen_opt_names:
+                        return error_response(f"Duplicate option group name: {g['option_name']}", 400)
+                    seen_opt_names.add(g['option_name'])
+
+                product_sku_base = _get_product_sku_base(cursor, product_id)
 
                 if "variants" in data:
                     variants_data = data.get("variants") or []
@@ -2692,12 +2860,18 @@ def warehouse_patch_inventory(item_id):
                         v_images = v.get("images")
                         if isinstance(v_images, list):
                             v_images = json.dumps(v_images)
-                        v_options = v.get("options") or {}
-                        if isinstance(v_options, str):
-                            try:
-                                v_options = json.loads(v_options)
-                            except Exception:
-                                v_options = {}
+                        v_options = _normalize_variant_options(v.get("options"))
+
+                        # Validate against option groups
+                        validation_errors = _validate_variant_options(cursor, product_id, v_options, option_groups, exclude_variant_id=v_id if v_id and str(v_id).isdigit() else None)
+                        if validation_errors:
+                            return error_response(f"Variant validation failed: {'; '.join(validation_errors)}", 400)
+
+                        # Check for duplicate variant combination (excluding self)
+                        exclude_vid = int(v_id) if v_id and str(v_id).isdigit() else None
+                        existing_vid = _check_duplicate_variant_combination(cursor, product_id, v_options, exclude_variant_id=exclude_vid)
+                        if existing_vid:
+                            return error_response(f"Variant with this option combination already exists (variant_id: {existing_vid})", 409)
 
                         if v_id and str(v_id).isdigit():
                             existing_ids.add(int(v_id))
@@ -2724,6 +2898,16 @@ def warehouse_patch_inventory(item_id):
                                     (v_price or 0, v_mrp or 0, v_stock, new_avail, line["id"])
                                 )
                         else:
+                            # Generate SKU from options if not provided
+                            if not v_sku:
+                                v_sku = _generate_variant_sku(product_sku_base, v_options)
+                            if not v_sku:
+                                v_sku = f"{product_sku_base}-{random.randint(10000, 99999)}"
+                            
+                            # Ensure SKU uniqueness
+                            while cursor.execute("SELECT id FROM product_variants WHERE sku = ?", (v_sku,)).fetchone():
+                                v_sku = f"{v_sku}-{random.randint(10, 99)}"
+
                             cur = conn.execute(
                                 """INSERT INTO product_variants
                                    (product_id, name, sku, price, stock, barcode, images, options, mrp)

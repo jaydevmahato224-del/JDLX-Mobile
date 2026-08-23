@@ -248,12 +248,15 @@ def init_db():
         ('offline_price', 'REAL'), 
         ('has_variants', 'BOOLEAN DEFAULT 0'), 
         ('is_parent', 'BOOLEAN DEFAULT 0'), 
+        ('variant_group_id', 'INTEGER'), 
+        ('variant_name', 'TEXT'), 
         ('recommendation_priority', 'INTEGER DEFAULT 0'), 
         ('recommendation_weight', 'REAL DEFAULT 1.0'), 
         ('lifecycle_state', "TEXT DEFAULT 'live'"), 
         ('share_token', 'TEXT'), 
         ('seo_slug', 'TEXT')
     ])
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_variant_group ON products(variant_group_id)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_share_token ON products(share_token)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_seo_slug ON products(seo_slug)")

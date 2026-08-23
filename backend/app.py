@@ -3067,6 +3067,7 @@ def get_products():
     """
     Get products with smart pagination and caching.
     Supports filtering by category and store availability.
+    Now includes linked variant products (each variant is a separate product).
     """
     category = request.args.get('category')
     category_id = request.args.get('category_id')
@@ -3088,16 +3089,16 @@ def get_products():
         
         if store_id:
             query = '''
-                SELECT p.id, p.name,
-                       COALESCE((SELECT MIN(price) FROM product_variants pv2 WHERE pv2.product_id = p.id AND pv2.status = 'active'), p.price) as price,
+                SELECT p.id, p.name, p.variant_group_id, p.variant_name, p.is_parent,
+                       p.price,
                        p.images, p.category_id, p.category, 
                        p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
                        p.has_variants,
                        wi.stock_quantity as physical_stock,
                        wi.stock_quantity as stock,
                        wi.reserved_stock as reserved_stock,
-                wi.stock_quantity as available_stock,
-                (SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE product_id = p.id) as cart_reserved,
+                       wi.stock_quantity as available_stock,
+                       (SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE product_id = p.id) as cart_reserved,
                        wi.low_stock_threshold, p.status,
                        c.name as category_name,
                        c.important_note as category_note,
@@ -3114,11 +3115,11 @@ def get_products():
             params = [store_id]
         else:
             query = '''
-                SELECT p.id, p.name,
-                       COALESCE((SELECT MIN(price) FROM product_variants pv2 WHERE pv2.product_id = p.id AND pv2.status = 'active'), p.price) as price,
+                SELECT p.id, p.name, p.variant_group_id, p.variant_name, p.is_parent,
+                       p.price,
                        p.images, p.category_id, p.category, 
                        p.delivery_time,
-                       CASE WHEN p.has_variants = 1 THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv3 WHERE pv3.product_id = p.id AND pv3.status = 'active') ELSE p.stock END as stock,
+                       p.stock,
                        p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
                        p.has_variants,
                        0 as reserved_stock,
@@ -3417,7 +3418,10 @@ def get_product_by_token(token):
 
 @app.route('/api/products/<int:product_id>', methods=['GET'])
 def get_product(product_id):
-    """Retrieves detailed information for a single product."""
+    """Retrieves detailed information for a single product.
+    
+    Now supports linked variants: fetches variant products linked via variant_group_id.
+    """
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -3450,40 +3454,132 @@ def get_product(product_id):
         # Determine the effective return policy: Product > Category > Global
         product_dict['final_return_policy'] = product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy
 
-        # Fetch variants for this product
-        cursor.execute("SELECT * FROM product_variants WHERE product_id = ? ORDER BY id ASC", (product_id,))
-        variants = [dict(r) for r in cursor.fetchall()]
-        for v in variants:
-            if v.get('images'):
+        # Fetch linked variant products (new system: variants are separate products linked via variant_group_id)
+        variant_group_id = product_dict.get('variant_group_id')
+        is_parent = product_dict.get('is_parent', 0)
+        
+        if is_parent and variant_group_id:
+            # This is a parent product - fetch its linked variants
+            cursor.execute("""
+                SELECT id, name, variant_name, price, stock, images, share_token, seo_slug, 
+                       mrp, barcode, global_sku_code, offline_price, category, delivery_time
+                FROM products 
+                WHERE variant_group_id = ? AND id != ?
+                ORDER BY id ASC
+            """, (variant_group_id, product_id))
+            linked_variants = [dict(r) for r in cursor.fetchall()]
+            
+            # Also fetch option groups from parent
+            cursor.execute(
+                "SELECT id, option_name, option_values, sort_order FROM product_variant_options WHERE product_id = ? ORDER BY sort_order ASC, id ASC",
+                (product_id,)
+            )
+            variant_options = []
+            for row in cursor.fetchall():
+                o = dict(row)
                 try:
-                    v['images'] = json.loads(v['images'])
+                    o['option_values'] = json.loads(o.get('option_values') or '[]')
                 except:
-                    pass
-            # Parse the option map ({"Size": "M", "Color": "Red"}) into an object
-            if v.get('options'):
-                try:
-                    v['options'] = json.loads(v['options'])
-                except:
-                    v['options'] = {}
+                    o['option_values'] = []
+                variant_options.append(o)
+            
+            # Convert linked variants to variant format for backward compatibility
+            variants = []
+            for v in linked_variants:
+                variant = {
+                    'id': v['id'],
+                    'name': v['variant_name'] or v['name'],
+                    'price': v['price'],
+                    'stock': v['stock'],
+                    'images': v['images'],
+                    'mrp': v.get('mrp'),
+                    'sku': v.get('global_sku_code'),
+                    'barcode': v.get('barcode'),
+                    'offline_price': v.get('offline_price'),
+                    'share_token': v['share_token'],
+                    'seo_slug': v['seo_slug'],
+                    'options': {},  # Options stored in product_variant_options on parent
+                    'product_id': v['id']  # Link to the variant product
+                }
+                if variant['images']:
+                    try:
+                        variant['images'] = json.loads(variant['images'])
+                    except:
+                        pass
+                variants.append(variant)
+            
+            product_dict['variants'] = variants
+            product_dict['variant_options'] = variant_options
+            product_dict['linked_variant_products'] = linked_variants  # Full variant product data
+        else:
+            # Check if this is a variant product (has variant_group_id but not is_parent)
+            if variant_group_id and variant_group_id != product_id:
+                # This is a variant product - fetch parent and siblings
+                cursor.execute("""
+                    SELECT id, name, variant_name, price, stock, images, share_token, seo_slug,
+                           mrp, barcode, global_sku_code, offline_price, category, delivery_time,
+                           is_parent
+                    FROM products 
+                    WHERE variant_group_id = ?
+                    ORDER BY is_parent DESC, id ASC
+                """, (variant_group_id,))
+                group_products = [dict(r) for r in cursor.fetchall()]
+                
+                # Find parent
+                parent = next((p for p in group_products if p['is_parent']), None)
+                siblings = [p for p in group_products if not p['is_parent']]
+                
+                if parent:
+                    # Fetch option groups from parent
+                    cursor.execute(
+                        "SELECT id, option_name, option_values, sort_order FROM product_variant_options WHERE product_id = ? ORDER BY sort_order ASC, id ASC",
+                        (parent['id'],)
+                    )
+                    variant_options = []
+                    for row in cursor.fetchall():
+                        o = dict(row)
+                        try:
+                            o['option_values'] = json.loads(o.get('option_values') or '[]')
+                        except:
+                            o['option_values'] = []
+                        variant_options.append(o)
+                    
+                    # Convert siblings to variant format
+                    variants = []
+                    for v in siblings:
+                        variant = {
+                            'id': v['id'],
+                            'name': v['variant_name'] or v['name'],
+                            'price': v['price'],
+                            'stock': v['stock'],
+                            'images': v['images'],
+                            'mrp': v.get('mrp'),
+                            'sku': v.get('global_sku_code'),
+                            'barcode': v.get('barcode'),
+                            'offline_price': v.get('offline_price'),
+                            'share_token': v['share_token'],
+                            'seo_slug': v['seo_slug'],
+                            'options': {},
+                            'product_id': v['id']
+                        }
+                        if variant['images']:
+                            try:
+                                variant['images'] = json.loads(variant['images'])
+                            except:
+                                pass
+                        variants.append(variant)
+                    
+                    product_dict['variants'] = variants
+                    product_dict['variant_options'] = variant_options
+                    product_dict['linked_variant_products'] = siblings
+                    product_dict['parent_product'] = parent
+                else:
+                    product_dict['variants'] = []
+                    product_dict['variant_options'] = []
             else:
-                v['options'] = {}
-        product_dict['variants'] = variants
-
-        # Fetch the option groups (e.g. Size -> [S, M, L]) that define how
-        # variants are presented to customers on the storefront.
-        cursor.execute(
-            "SELECT id, option_name, option_values, sort_order FROM product_variant_options WHERE product_id = ? ORDER BY sort_order ASC, id ASC",
-            (product_id,)
-        )
-        variant_options = []
-        for row in cursor.fetchall():
-            o = dict(row)
-            try:
-                o['option_values'] = json.loads(o.get('option_values') or '[]')
-            except:
-                o['option_values'] = []
-            variant_options.append(o)
-        product_dict['variant_options'] = variant_options
+                # Regular product without variants
+                product_dict['variants'] = []
+                product_dict['variant_options'] = []
 
         # Fetch recommendations
         cursor.execute("""
@@ -6630,7 +6726,12 @@ def admin_delete_category(category_id):
 @require_admin()
 @require_permission("manage_products")
 def admin_add_product():
-    """Adds a new product to the global catalog."""
+    """Adds a new product to the global catalog.
+    
+    Supports variant linking: when has_variants is true and variants_data is provided,
+    each variant becomes a separate product linked via variant_group_id.
+    Parent product gets variant_group_id = its own id, variants get variant_group_id = parent_id.
+    """
     data = request.json
     name = data.get('name')
     price = data.get('price')
@@ -6657,11 +6758,21 @@ def admin_add_product():
         share_token = generate_share_token()
         seo_slug = generate_seo_slug(name)
         
+        # Insert parent product
         cursor.execute(
-            "INSERT INTO products (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, price, offline_price, int(stock), category, delivery_time, images, data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), data.get('prepaid_only', 0), share_token, seo_slug, 1 if has_variants else 0, 1 if has_variants else 0)
+            """INSERT INTO products 
+               (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, 
+                return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, price, offline_price, int(stock), category, delivery_time, images, 
+             data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), 
+             data.get('prepaid_only', 0), share_token, seo_slug, 
+             1 if has_variants else 0, 1 if has_variants else 0, None, None)
         )
         product_id = cursor.lastrowid
+        
+        # Set variant_group_id to its own id for parent
+        cursor.execute("UPDATE products SET variant_group_id = ? WHERE id = ?", (product_id, product_id))
 
         # Create variant option groups (e.g. Size -> [S, M, L], Color -> [Red, Blue])
         if has_variants and variant_options_data:
@@ -6680,7 +6791,8 @@ def admin_add_product():
                     (product_id, opt_name, json.dumps([str(v).strip() for v in opt_values if str(v).strip()]), idx)
                 )
 
-        # Create variants (each maps one value per option group)
+        # Create variant products (each variant is a separate product linked via variant_group_id)
+        created_variants = []
         if has_variants and variants_data:
             for v in variants_data:
                 v_name = (v.get('name') or '').strip() or f"{name} - Variant"
@@ -6692,19 +6804,32 @@ def admin_add_product():
                 v_images = v.get('images') or images
                 if isinstance(v_images, list):
                     v_images = json.dumps(v_images)
-                v_options = v.get('options') or {}
-                if isinstance(v_options, str):
-                    try:
-                        v_options = json.loads(v_options)
-                    except Exception:
-                        v_options = {}
-
+                v_offline_price = _normalize_offline_price(v.get('offline_price'))
+                
+                # Generate unique share_token and seo_slug for variant
+                v_share_token = generate_share_token()
+                v_seo_slug = generate_seo_slug(f"{name}-{v_name}")
+                
+                # Insert variant as separate product
                 cursor.execute(
-                    """INSERT INTO product_variants
-                       (product_id, name, sku, price, stock, barcode, images, options, mrp)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
+                    """INSERT INTO products 
+                       (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, 
+                        return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)""",
+                    (f"{name} - {v_name}", v_price, v_offline_price, v_stock, category, delivery_time, v_images,
+                     v_barcode, v_sku, data.get('return_policy'), data.get('prepaid_only', 0),
+                     v_share_token, v_seo_slug, product_id, v_name)
                 )
+                variant_product_id = cursor.lastrowid
+                created_variants.append({
+                    "id": variant_product_id,
+                    "name": v_name,
+                    "price": v_price,
+                    "stock": v_stock,
+                    "images": v_images,
+                    "share_token": v_share_token,
+                    "seo_slug": v_seo_slug
+                })
 
         conn.commit()
         conn.close()
@@ -6714,7 +6839,7 @@ def admin_add_product():
             "admin_updated_product",
             "product",
             product_id,
-            f"Created product {name}",
+            f"Created product {name}" + (f" with {len(created_variants)} variants" if created_variants else ""),
         )
         run_admin_anomaly_check(request.user.get('user_id'), "admin_updated_product")
         
@@ -6722,7 +6847,8 @@ def admin_add_product():
         product_obj = {"id": product_id, "name": name, "share_token": share_token, "seo_slug": seo_slug}
         success_payload = {
             **product_obj,
-            "share_url": generate_product_url(product_obj)
+            "share_url": generate_product_url(product_obj),
+            "variants": created_variants
         }
         
         return success_response(success_payload, "Product added", 201)
@@ -6791,14 +6917,18 @@ def admin_update_product(product_id):
         # Full-replace semantics: the client always sends the complete variant
         # set. Rows that still exist keep their id (stable for cart/orders),
         # removed rows are deleted, and new rows are inserted.
+        # NEW: Variants are now separate products linked via variant_group_id
         if 'variants' in data or 'has_variants' in data:
             has_variants = bool(data.get('has_variants')) if 'has_variants' in data else bool(current.get('has_variants'))
             if not has_variants:
-                # Variants disabled: remove all variant rows + option groups.
-                cursor.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+                # Variants disabled: remove all linked variant products + option groups.
+                cursor.execute("DELETE FROM products WHERE variant_group_id = ? AND id != ?", (product_id, product_id))
                 cursor.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
-                cursor.execute("UPDATE products SET has_variants = 0, is_parent = 0 WHERE id = ?", (product_id,))
+                cursor.execute("UPDATE products SET has_variants = 0, is_parent = 0, variant_group_id = NULL WHERE id = ?", (product_id,))
             else:
+                # Ensure parent has variant_group_id set to itself
+                cursor.execute("UPDATE products SET variant_group_id = ?, has_variants = 1, is_parent = 1 WHERE id = ?", (product_id, product_id))
+                
                 # Sync option groups: delete + re-insert (ids are not referenced elsewhere).
                 cursor.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
                 variant_options_data = data.get('variant_options') or []
@@ -6817,10 +6947,15 @@ def admin_update_product(product_id):
                         (product_id, opt_name, json.dumps([str(v).strip() for v in opt_values if str(v).strip()]), idx)
                     )
 
-                # Sync variants when a full set is provided.
+                # Sync variant products when a full set is provided.
                 if 'variants' in data:
                     variants_data = data.get('variants') or []
-                    existing_ids = set()
+                    existing_variant_ids = set()
+                    
+                    # Fetch current variant products for this group
+                    cursor.execute("SELECT id, variant_name FROM products WHERE variant_group_id = ? AND id != ?", (product_id, product_id))
+                    current_variants = {row['variant_name']: row['id'] for row in cursor.fetchall()}
+                    
                     for v in variants_data:
                         v_id = v.get('id')
                         v_name = (v.get('name') or '').strip() or f"{current['name']} - Variant"
@@ -6832,38 +6967,53 @@ def admin_update_product(product_id):
                         v_images = v.get('images')
                         if isinstance(v_images, list):
                             v_images = json.dumps(v_images)
-                        v_options = v.get('options') or {}
-                        if isinstance(v_options, str):
-                            try:
-                                v_options = json.loads(v_options)
-                            except Exception:
-                                v_options = {}
-
+                        v_offline_price = _normalize_offline_price(v.get('offline_price'))
+                        
+                        # Check if this variant already exists (by variant_name or id)
+                        variant_product_id = None
                         if v_id and str(v_id).isdigit():
-                            existing_ids.add(int(v_id))
-                            set_parts = ["name = ?", "sku = ?", "price = ?", "stock = ?", "barcode = ?", "options = ?", "mrp = ?"]
-                            set_params = [v_name, v_sku, v_price, v_stock, v_barcode, json.dumps(v_options), v_mrp]
-                            if v_images:
-                                set_parts.append("images = ?")
-                                set_params.append(v_images)
-                            set_params.append(int(v_id))
-                            set_params.append(product_id)
+                            # Check if it's an existing variant product ID
+                            cursor.execute("SELECT id FROM products WHERE id = ? AND variant_group_id = ?", (int(v_id), product_id))
+                            existing = cursor.fetchone()
+                            if existing:
+                                variant_product_id = existing['id']
+                                existing_variant_ids.add(variant_product_id)
+                        
+                        # If not found by ID, try by variant_name
+                        if not variant_product_id and v_name in current_variants:
+                            variant_product_id = current_variants[v_name]
+                            existing_variant_ids.add(variant_product_id)
+                        
+                        if variant_product_id:
+                            # Update existing variant product
+                            set_parts = ["name = ?", "price = ?", "offline_price = ?", "stock = ?", "barcode = ?", "global_sku_code = ?", "images = ?", "mrp = ?"]
+                            set_params = [f"{current['name']} - {v_name}", v_price, v_offline_price, v_stock, v_barcode, v_sku, v_images, v_mrp]
+                            set_params.append(variant_product_id)
                             cursor.execute(
-                                f"UPDATE product_variants SET {', '.join(set_parts)} WHERE id = ? AND product_id = ?",
+                                f"UPDATE products SET {', '.join(set_parts)} WHERE id = ?",
                                 set_params
                             )
                         else:
+                            # Create new variant product
+                            v_share_token = generate_share_token()
+                            v_seo_slug = generate_seo_slug(f"{current['name']}-{v_name}")
                             cursor.execute(
-                                """INSERT INTO product_variants
-                                   (product_id, name, sku, price, stock, barcode, images, options, mrp)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                                (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
+                                """INSERT INTO products 
+                                   (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, 
+                                    return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)""",
+                                (f"{current['name']} - {v_name}", v_price, v_offline_price, v_stock, current['category'], 
+                                 data.get('delivery_time', '30-120 mins'), v_images,
+                                 v_barcode, v_sku, data.get('return_policy'), data.get('prepaid_only', 0),
+                                 v_share_token, v_seo_slug, product_id, v_name)
                             )
-                    # Delete any existing variants the client no longer sent.
-                    cursor.execute("SELECT id FROM product_variants WHERE product_id = ?", (product_id,))
-                    for row in cursor.fetchall():
-                        if row['id'] not in existing_ids:
-                            cursor.execute("DELETE FROM product_variants WHERE id = ?", (row['id'],))
+                            new_variant_id = cursor.lastrowid
+                            existing_variant_ids.add(new_variant_id)
+                    
+                    # Delete variant products the client no longer sent
+                    for v_name, v_pid in current_variants.items():
+                        if v_pid not in existing_variant_ids:
+                            cursor.execute("DELETE FROM products WHERE id = ?", (v_pid,))
 
         # Trigger Low Stock Notifications if stock was updated and is <= 2
         if 'stock' in data:
@@ -6890,15 +7040,20 @@ def admin_update_product(product_id):
         run_admin_anomaly_check(request.user.get('user_id'), "admin_updated_product")
         
         # Fetch updated record to return latest slugs/tokens
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT id, name, share_token, seo_slug FROM products WHERE id = ?", (product_id,))
         updated_product = dict(cursor.fetchone())
+        # Also fetch variant products
+        cursor.execute("SELECT id, name, variant_name, share_token, seo_slug, price, stock FROM products WHERE variant_group_id = ? AND id != ?", (product_id, product_id))
+        variants = [dict(r) for r in cursor.fetchall()]
         conn.close()
         
         return success_response({
             "seo_slug": updated_product['seo_slug'],
             "share_token": updated_product['share_token'],
-            "share_url": generate_product_url(updated_product)
+            "share_url": generate_product_url(updated_product),
+            "variants": variants
         }, "Product updated")
     except Exception as e:
         return error_response(str(e), 500)

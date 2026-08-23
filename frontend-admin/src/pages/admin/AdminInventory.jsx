@@ -287,17 +287,25 @@ function InventoryContent() {
                                 </tr>
                             ) : (
                                 currentItems.map(product => {
-                                    const isVariant = product.has_variants === 1 || product.has_variants === true;
+                                    const isParentWithVariants = product.is_parent === 1 && product.has_variants;
+                                    const isVariantProduct = product.variant_group_id && product.variant_group_id !== product.id;
+                                    const isVariantOrParent = isParentWithVariants || isVariantProduct;
                                     const isLowStock = product.stock <= product.low_stock_threshold;
                                     return (
                                         <tr key={product.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${!product.status || product.status === 'disabled' ? 'opacity-50' : ''}`}>
                                             <td className="p-4">
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-gray-800 text-xs">{product.id}</span>
-                                                    <span className="text-xs text-gray-500">{product.sku}</span>
+                                                    <span className="text-xs text-gray-500">{product.sku || product.global_sku_code || ''}</span>
                                                 </div>
                                             </td>
-                                            <td className="p-4 font-medium text-gray-800">{product.product_name}</td>
+                                            <td className="p-4 font-medium text-gray-800">
+                                                {isVariantProduct && product.variant_name ? (
+                                                    <span>{product.product_name} ({product.variant_name})</span>
+                                                ) : (
+                                                    product.product_name
+                                                )}
+                                            </td>
                                             <td className="p-4 text-sm text-gray-500">{product.category}</td>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg w-fit">
@@ -321,8 +329,11 @@ function InventoryContent() {
                                                         <span className={`font-black ${isLowStock ? 'text-red-600' : 'text-gray-800'}`}>
                                                             {product.stock}
                                                         </span>
-                                                        {isVariant && (
-                                                            <span className="text-[9px] text-purple-600 font-black uppercase tracking-widest mt-0.5">Sum of variants</span>
+                                                        {isParentWithVariants && (
+                                                            <span className="text-[9px] text-indigo-600 font-black uppercase tracking-widest mt-0.5">Parent with variants</span>
+                                                        )}
+                                                        {isVariantProduct && (
+                                                            <span className="text-[9px] text-purple-600 font-black uppercase tracking-widest mt-0.5">Variant: {product.variant_name}</span>
                                                         )}
                                                         {isLowStock && (
                                                             <span className="text-[10px] text-red-500 font-bold flex items-center gap-1 uppercase mt-1">
@@ -361,9 +372,13 @@ function InventoryContent() {
                                                         <button onClick={() => handleSave(product.id)} className="p-2 bg-primary text-white rounded-lg hover:shadow-lg transition-shadow">
                                                             <Save className="w-4 h-4" />
                                                         </button>
-                                                    ) : isVariant ? (
-                                                        <span className="px-3 py-1.5 text-[11px] font-black text-purple-600 bg-purple-50 border border-purple-100 rounded-lg whitespace-nowrap" title="Stock is managed per variant in the Product editor">
-                                                            VARIANT
+                                                    ) : isParentWithVariants ? (
+                                                        <span className="px-3 py-1.5 text-[11px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg whitespace-nowrap" title="This is a parent product with linked variants">
+                                                            PARENT
+                                                        </span>
+                                                    ) : isVariantProduct ? (
+                                                        <span className="px-3 py-1.5 text-[11px] font-black text-purple-600 bg-purple-50 border border-purple-100 rounded-lg whitespace-nowrap" title="This is a linked variant product">
+                                                            VARIANT: {product.variant_name}
                                                         </span>
                                                     ) : (
                                                         <button onClick={() => handleEdit(product)} className="px-3 py-1.5 text-primary font-bold text-sm bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors">

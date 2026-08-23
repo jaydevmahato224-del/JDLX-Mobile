@@ -186,25 +186,46 @@ function AdminProducts() {
         };
         // Variant products need their full variant set — the list payload only
         // carries the base row, so fetch the detail endpoint.
-        if (product.has_variants) {
+        if (product.has_variants || product.variant_group_id) {
             try {
                 const res = await fetch(`${API_BASE_URL}/products/${product.id}`);
                 const data = await res.json();
                 const detail = data.data || data;
-                base.has_variants = true;
-                base.variant_options = (detail.variant_options || []).map(o => ({
-                    option_name: o.option_name,
-                    option_values: o.option_values || []
-                }));
-                base.variants = (detail.variants || []).map(v => ({
-                    id: v.id,
-                    name: v.name || '',
-                    sku: v.sku || '',
-                    price: v.price,
-                    mrp: v.mrp,
-                    stock: v.stock || 0,
-                    options: v.options || {}
-                }));
+                
+                // Check if this is a parent product with linked variants
+                if (detail.is_parent && detail.linked_variant_products) {
+                    base.has_variants = true;
+                    base.variant_options = (detail.variant_options || []).map(o => ({
+                        option_name: o.option_name,
+                        option_values: o.option_values || []
+                    }));
+                    base.variants = (detail.linked_variant_products || []).map(v => ({
+                        id: v.id,
+                        name: v.variant_name || '',
+                        sku: v.global_sku_code || '',
+                        price: v.price,
+                        mrp: v.mrp,
+                        stock: v.stock || 0,
+                        images: v.images,
+                        options: {}
+                    }));
+                } else if (detail.variants && detail.variants.length > 0) {
+                    // Backward compatibility with old variant system
+                    base.has_variants = true;
+                    base.variant_options = (detail.variant_options || []).map(o => ({
+                        option_name: o.option_name,
+                        option_values: o.option_values || []
+                    }));
+                    base.variants = (detail.variants || []).map(v => ({
+                        id: v.id,
+                        name: v.name || '',
+                        sku: v.sku || '',
+                        price: v.price,
+                        mrp: v.mrp,
+                        stock: v.stock || 0,
+                        options: v.options || {}
+                    }));
+                }
             } catch {
                 console.error('Failed to load variants');
             }
@@ -264,52 +285,64 @@ function AdminProducts() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProducts.map(p => (
-                    <div key={p.id} className="glass-card p-5 group hover:shadow-xl transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="font-bold text-gray-900 line-clamp-1">{p.product_name}</h3>
-                                <p className="text-xs text-primary font-black uppercase tracking-tighter mt-1">{p.category}</p>
-                            </div>
-                            <span className="text-xl font-black text-slate-900 tracking-tighter">₹{p.price}</span>
-                        </div>
-                        
-                        <div className="flex flex-col gap-2 mb-6">
-                            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 p-2 rounded-lg">
-                                <Undo2 size={14} className="text-emerald-500 shrink-0" />
-                                <span className="truncate">{(p.return_policy || 'Using Category Policy').split('\n')[0]}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 p-2 rounded-lg">
-                                <ShieldCheck size={14} className="text-blue-500" />
-                                <span>{p.sku || 'No SKU'}</span>
-                            </div>
-                            {p.has_variants === 1 || p.has_variants === true ? (
-                                <div className="flex items-center gap-2 text-xs font-black text-purple-600 bg-purple-50 p-2 rounded-lg border border-purple-100">
-                                    <Layers size={14} />
-                                    <span>VARIANT PRODUCT</span>
+                {filteredProducts.map(p => {
+                    const isVariantProduct = p.variant_group_id && p.variant_group_id !== p.id;
+                    const isParentProduct = p.is_parent === 1;
+                    const displayName = isVariantProduct && p.variant_name 
+                        ? `${p.product_name} (${p.variant_name})` 
+                        : p.product_name;
+                    
+                    return (
+                        <div key={p.id} className="glass-card p-5 group hover:shadow-xl transition-all">
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 className="font-bold text-gray-900 line-clamp-1">{displayName}</h3>
+                                    <p className="text-xs text-primary font-black uppercase tracking-tighter mt-1">{p.category}</p>
+                                    {isVariantProduct && (
+                                        <span className="text-[10px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded uppercase tracking-widest">
+                                            VARIANT: {p.variant_name}
+                                        </span>
+                                    )}
+                                    {isParentProduct && p.has_variants && (
+                                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-widest ml-1">
+                                            PARENT WITH VARIANTS
+                                        </span>
+                                    )}
                                 </div>
-                            ) : null}
-                            {p.prepaid_only === 1 && (
-                                <div className="flex items-center gap-2 text-xs font-black text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
-                                    <CreditCard size={14} />
-                                    <span>PREPAID ONLY</span>
+                                <span className="text-xl font-black text-slate-900 tracking-tighter">₹{p.price}</span>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2 mb-6">
+                                <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 p-2 rounded-lg">
+                                    <Undo2 size={14} className="text-emerald-500 shrink-0" />
+                                    <span className="truncate">{(p.return_policy || 'Using Category Policy').split('\n')[0]}</span>
                                 </div>
-                            )}
-                        </div>
+                                <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 p-2 rounded-lg">
+                                    <ShieldCheck size={14} className="text-blue-500" />
+                                    <span>{p.sku || p.global_sku_code || 'No SKU'}</span>
+                                </div>
+                                {p.prepaid_only === 1 && (
+                                    <div className="flex items-center gap-2 text-xs font-black text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                                        <CreditCard size={14} />
+                                        <span>PREPAID ONLY</span>
+                                    </div>
+                                )}
+                            </div>
 
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => handleEdit(p)}
-                                className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-                            >
-                                Edit Product
-                            </button>
-                            <button className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
-                                <Trash2 size={18} />
-                            </button>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => handleEdit(p)}
+                                    className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
+                                >
+                                    Edit Product
+                                </button>
+                                <button className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Add/Edit Modal */}

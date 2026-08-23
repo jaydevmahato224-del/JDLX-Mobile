@@ -2195,7 +2195,10 @@ def match_products_from_text(text, conn):
 @warehouse_bp.route("/api/warehouse/inventory", methods=["GET"])
 @require_warehouse_auth
 def warehouse_get_inventory():
-    """List all inventory items for current warehouse."""
+    """List all inventory items for current warehouse.
+    
+    Now includes variant products (linked via variant_group_id) as separate items.
+    """
     wh_id = request.warehouse_payload.get("warehouse_id")
     current_app.logger.info(f"Fetching inventory for warehouse_id: {wh_id}")
     
@@ -2221,6 +2224,7 @@ def warehouse_get_inventory():
                       wi.variant_id,
                       pv.name as variant_name, pv.options as variant_options, pv.price as variant_price,
                       p.has_variants,
+                      p.variant_group_id, p.variant_name as product_variant_name, p.is_parent,
                       p.id as product_id, c.name as category, p.category_id, p.sub_category, p.images,
                       p.description, p.delivery_time, p.units_per_pack, p.material_type,
                       p.weight, p.dimensions, p.is_fragile, p.is_temp_sensitive,
@@ -2335,7 +2339,12 @@ def warehouse_add_inventory():
 @warehouse_bp.route("/api/warehouse/products", methods=["POST"])
 @require_warehouse_auth
 def warehouse_create_product():
-    """Create a new global product and automatically add it to this warehouse inventory."""
+    """Create a new global product and automatically add it to this warehouse inventory.
+    
+    Supports variant linking: when has_variants is true and variants_data is provided,
+    each variant becomes a separate product linked via variant_group_id.
+    Parent product gets variant_group_id = its own id, variants get variant_group_id = parent_id.
+    """
     data = request.json
     wh_id = _get_current_warehouse_id()
     
@@ -2385,7 +2394,7 @@ def warehouse_create_product():
             if existing:
                 return error_response(f"Product with barcode {barcode} already exists in global catalog.", 409)
 
-        # 1. Insert into products
+        # 1. Insert parent product
         share_token = generate_share_token()
         cursor.execute(
             """
@@ -2393,10 +2402,11 @@ def warehouse_create_product():
                 name, description, sub_category, price, offline_price, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
                 weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
-                is_featured, has_variants, is_parent, recommendation_priority, recommendation_weight,
+                is_featured, has_variants, is_parent, variant_group_id, variant_name,
+                recommendation_priority, recommendation_weight,
                 lifecycle_state, share_token
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name, description, data.get('sub_category'), price or 0, offline_price, category, category_id, images, 
@@ -2405,10 +2415,14 @@ def warehouse_create_product():
                 data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
                 data.get('is_perishable', 0), data.get('expiry_date'),
                 data.get('is_featured', 0), 1 if has_variants else 0, 1 if has_variants else 0,
+                None, None,
                 rec_priority, rec_weight, lifecycle_state, share_token
             )
         )
         product_id = cursor.lastrowid
+        
+        # Set variant_group_id to its own id for parent
+        cursor.execute("UPDATE products SET variant_group_id = ? WHERE id = ?", (product_id, product_id))
 
         # Save Recommendations
         for rec_type, prod_ids in recommendations.items():
@@ -2491,9 +2505,8 @@ def warehouse_create_product():
                 )
             )
         
+        created_variants = []
         if has_variants and variants_data:
-            created_variants = []
-
             # Persist option groups (e.g. Size -> [S, M, L]) so the storefront
             # can render a proper variant picker for this product.
             variant_options_data = data.get('variant_options') or []
@@ -2522,10 +2535,8 @@ def warehouse_create_product():
                     return error_response(f"Duplicate option group name: {g['option_name']}", 400)
                 seen_opt_names.add(g['option_name'])
 
-            product_sku_base = _get_product_sku_base(cursor, product_id)
-
             for v in variants_data:
-                v_name = f"{name} - {v.get('name', 'Variant')}"
+                v_name = (v.get('name') or '').strip() or f"{name} - Variant"
                 v_barcode = v.get('barcode', '').strip() or None
                 v_price = v.get('price', price)
                 v_mrp = v.get('mrp')
@@ -2533,6 +2544,7 @@ def warehouse_create_product():
                 v_images = v.get('images', images)
                 if isinstance(v_images, list):
                     v_images = json.dumps(v_images)
+                v_offline_price = _normalize_offline_price(v.get('offline_price'))
                 
                 # Normalize and validate variant options
                 v_options = _normalize_variant_options(v.get('options'))
@@ -2542,45 +2554,59 @@ def warehouse_create_product():
                 if validation_errors:
                     return error_response(f"Variant validation failed: {'; '.join(validation_errors)}", 400)
                 
-                # Check for duplicate variant combination
+                # Check for duplicate variant combination (by options JSON)
                 existing_vid = _check_duplicate_variant_combination(cursor, product_id, v_options)
                 if existing_vid:
                     return error_response(f"Variant with this option combination already exists (variant_id: {existing_vid})", 409)
                 
                 # Generate SKU from options if not provided
                 v_sku = v.get('sku')
+                product_sku_base = _get_product_sku_base(cursor, product_id)
                 if not v_sku:
                     v_sku = _generate_variant_sku(product_sku_base, v_options)
                 if not v_sku:
                     v_sku = f"{product_sku_base}-{random.randint(10000, 99999)}"
                 
                 # Ensure SKU uniqueness
-                while cursor.execute("SELECT id FROM product_variants WHERE sku = ?", (v_sku,)).fetchone():
+                while cursor.execute("SELECT id FROM products WHERE global_sku_code = ?", (v_sku,)).fetchone():
                     v_sku = f"{v_sku}-{random.randint(10, 99)}"
 
+                # Generate unique share_token and seo_slug for variant
+                v_share_token = generate_share_token()
+                v_seo_slug = generate_seo_slug(f"{name}-{v_name}")
+                
+                # Insert variant as separate product linked via variant_group_id
                 cursor.execute(
-                    """INSERT INTO product_variants 
-                       (product_id, name, sku, price, barcode, model_name, color, 
-                        pack_size, material_type, images, weight, dimensions, options, mrp)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT INTO products 
+                       (name, description, sub_category, price, offline_price, category, category_id, images, 
+                        delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
+                        weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
+                        is_featured, has_variants, is_parent, variant_group_id, variant_name,
+                        recommendation_priority, recommendation_weight,
+                        lifecycle_state, share_token)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)""",
                     (
-                        product_id, v_name, v_sku, v_price, v_barcode, v.get('model_name'),
-                        v.get('color'), v.get('pack_size'), v.get('material_type'),
-                        v_images, v.get('weight'), v.get('dimensions'),
-                        json.dumps(v_options), v_mrp
+                        f"{name} - {v_name}", description, data.get('sub_category'), v_price, v_offline_price, 
+                        category, category_id, v_images,
+                        delivery_time, v_barcode, v_sku, data.get('brand'), data.get('units_per_pack'), 
+                        data.get('material_type'), data.get('weight'), data.get('dimensions'),
+                        data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
+                        data.get('is_perishable', 0), data.get('expiry_date'),
+                        data.get('is_featured', 0), product_id, v_name,
+                        rec_priority, rec_weight, lifecycle_state, v_share_token
                     )
                 )
-                variant_id = cursor.lastrowid
+                variant_product_id = cursor.lastrowid
                 
-                # Add to warehouse_inventory
+                # Add variant to warehouse_inventory (as separate product, no variant_id)
                 cursor.execute(
                     """INSERT INTO warehouse_inventory 
-                       (warehouse_id, product_id, variant_id, product_name, sku, stock_quantity, available_stock,
+                       (warehouse_id, product_id, product_name, sku, stock_quantity, available_stock,
                         low_stock_threshold, cost_price, selling_price, mrp, 
                         discount_pct, discount_amt, gst_pct, brand, unit)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
-                        wh_id, product_id, variant_id, v_name, v_sku, v_stock, v_stock, 2, 
+                        wh_id, variant_product_id, f"{name} - {v_name}", v_sku, v_stock, v_stock, 2, 
                         v.get('cost_price', 0), v_price,
                         v.get('mrp', 0.0), v.get('discount_pct', 0.0),
                         v.get('discount_amt', 0.0),
@@ -2588,20 +2614,24 @@ def warehouse_create_product():
                     )
                 )
                 
-                # Sync variant stock
-                cursor.execute(
-                    "UPDATE product_variants SET stock = ? WHERE id = ?",
-                    (v_stock, variant_id)
-                )
-                created_variants.append({"variant_id": variant_id, "sku": v_sku, "options": v_options})
+                created_variants.append({
+                    "product_id": variant_product_id, 
+                    "sku": v_sku, 
+                    "options": v_options,
+                    "name": v_name,
+                    "price": v_price,
+                    "stock": v_stock
+                })
 
-            # Sync parent stock
+            # Sync parent stock (sum of all variant stocks in this warehouse)
             conn.execute(
                 """UPDATE products SET stock = (
                     SELECT COALESCE(SUM(stock_quantity), 0)
-                    FROM warehouse_inventory WHERE product_id = ?
+                    FROM warehouse_inventory WHERE product_id IN (
+                        SELECT id FROM products WHERE variant_group_id = ?
+                    ) AND warehouse_id = ?
                 ) WHERE id = ?""",
-                (product_id, product_id)
+                (product_id, wh_id, product_id)
             )
             
             conn.commit()

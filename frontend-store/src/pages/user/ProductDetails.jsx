@@ -176,17 +176,42 @@ export default function ProductDetails() {
   // Defaults to the first in-stock variant so the page is immediately usable.
   const productId = product?.id;
   const productHasVariants = product?.has_variants;
+  const productVariantGroupId = product?.variant_group_id;
+  const productIsParent = product?.is_parent;
   useEffect(() => {
-    if (!productId || !productHasVariants) return;
+    if (!productId || (!productHasVariants && !productVariantGroupId)) return;
     fetch(`${API_BASE_URL}/products/${productId}?_t=${Date.now()}`)
       .then(r => r.json())
       .then(payload => {
         const data = payload?.data || payload || {};
-        const variants = Array.isArray(data.variants) ? data.variants : [];
-        let opts = Array.isArray(data.variant_options) ? data.variant_options : [];
-        // Fallback: if no explicit option groups were defined (e.g. variants
-        // created by a warehouse with only per-variant option maps), derive the
-        // groups from the variants themselves.
+        
+        // New variant linking system: linked_variant_products
+        let variants = [];
+        let opts = [];
+        
+        if (data.linked_variant_products && data.linked_variant_products.length > 0) {
+          // Parent product with linked variants or variant product with siblings
+          variants = data.linked_variant_products.map(v => ({
+            id: v.id,
+            name: v.variant_name,
+            price: v.price,
+            stock: v.stock,
+            images: v.images,
+            mrp: v.mrp,
+            sku: v.global_sku_code,
+            share_token: v.share_token,
+            seo_slug: v.seo_slug,
+            options: {}, // Options come from parent's variant_options
+            product_id: v.id
+          }));
+          opts = data.variant_options || [];
+        } else {
+          // Backward compatibility with old variant system
+          variants = Array.isArray(data.variants) ? data.variants : [];
+          opts = Array.isArray(data.variant_options) ? data.variant_options : [];
+        }
+        
+        // Fallback: if no explicit option groups were defined, derive from variants
         if (opts.length === 0 && variants.length) {
           const keyOrder = [];
           const valueMap = {};
@@ -198,6 +223,7 @@ export default function ProductDetails() {
           });
           opts = keyOrder.map(k => ({ option_name: k, option_values: Array.from(valueMap[k]) }));
         }
+        
         setDetailVariants(variants);
         setDetailVariantOptions(opts);
         if (variants.length) {
@@ -207,10 +233,10 @@ export default function ProductDetails() {
         }
       })
       .catch(() => { /* variant data is optional — page still renders base product */ });
-  }, [productId, productHasVariants]);
+  }, [productId, productHasVariants, productVariantGroupId, productIsParent]);
 
   // Determine if this is a variant product early so other memos can use it
-  const isVariantProduct = Boolean(product?.has_variants) && detailVariants.length > 0;
+  const isVariantProduct = Boolean(product?.has_variants || product?.variant_group_id) && detailVariants.length > 0;
 
   // Build a map of available combinations for quick lookup
   const availableCombinations = useMemo(() => {
@@ -243,22 +269,27 @@ export default function ProductDetails() {
   // Merged view of the product + selected variant. Everything below (price,
   // stock, images, add-to-cart) reads from this so the page reacts to option
   // changes exactly like a single-SKU product would.
+  // With the new variant linking system, each variant is a separate product.
+  // When a variant is selected, we use the variant product's ID as the main product ID.
   const activeProduct = useMemo(() => {
     if (!product) return null;
     if (!selectedVariant) return product;
     return {
       ...product,
       ...selectedVariant,
-      id: product.id,
+      id: selectedVariant.id, // Use variant product's ID for cart/order
       name: product.name,
       price: selectedVariant.price != null ? selectedVariant.price : product.price,
       mrp: selectedVariant.mrp != null ? selectedVariant.mrp : (product.mrp || product.price),
       stock: selectedVariant.stock != null ? selectedVariant.stock : 0,
-      variant_id: selectedVariant.id,
+      variant_id: null, // Variant is now a separate product, no need for variant_id
       variant_name: selectedVariant.name,
       images: Array.isArray(selectedVariant.images) && selectedVariant.images.length
         ? selectedVariant.images
         : product.images,
+      // Keep reference to parent for display purposes
+      parent_product_id: product.id,
+      parent_product_name: product.name,
     };
   }, [product, selectedVariant]);
 
@@ -720,6 +751,77 @@ export default function ProductDetails() {
                 />
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* Linked Variants — show sibling variant products when viewing a variant or parent product */}
+      {detailVariants.length > 0 && (
+        <section className="mt-16 sm:mt-20 animate-in fade-in duration-700">
+          <div className="flex items-end justify-between gap-6 mb-8">
+            <div>
+              <span className="ui-label text-primary mb-2 block">Available Variants</span>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tighter">
+                {product.is_parent ? 'Other Colors / Options' : 'Other Variants'}
+              </h2>
+            </div>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+            {detailVariants.map((variant) => {
+              const variantImages = variant.images 
+                ? (Array.isArray(variant.images) ? variant.images : (typeof variant.images === 'string' && variant.images.startsWith('[') ? JSON.parse(variant.images) : [variant.images]))
+                : productImages;
+              const firstImage = variantImages[0] || FALLBACK_IMAGE;
+              const variantUrl = variant.share_token 
+                ? `${window.location.origin}/p/${variant.share_token}` 
+                : (variant.seo_slug ? `${window.location.origin}/p/${variant.seo_slug}` : `#`);
+              const isCurrentVariant = selectedVariant && String(selectedVariant.id) === String(variant.id);
+              const isCurrentProduct = !selectedVariant && String(product.id) === String(variant.id);
+              const isActive = isCurrentVariant || isCurrentProduct;
+              
+              return (
+                <Link 
+                  key={variant.id} 
+                  to={variantUrl}
+                  className={`flex-shrink-0 w-52 glass-card rounded-[2rem] overflow-hidden group transition-all duration-500 ${
+                    isActive ? 'ring-2 ring-primary scale-105' : 'hover:-translate-y-2 hover:shadow-xl'
+                  }`}
+                >
+                  <div className="aspect-square bg-[var(--color-surface-low)] overflow-hidden relative">
+                    <img 
+                      src={resolveMediaUrl(firstImage)} 
+                      alt={`${product.name} - ${variant.name}`}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+                    />
+                    {isActive && (
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                        <div className="bg-primary text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                          Current
+                        </div>
+                      </div>
+                    )}
+                    {(variant.stock || 0) <= 0 && (variant.stock || 0) !== null && (
+                      <div className="absolute inset-0 bg-slate-900/70 flex items-center justify-center">
+                        <span className="text-white text-[10px] font-black uppercase tracking-widest bg-rose-500 px-3 py-1 rounded-full">Out of Stock</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h4 className="font-bold text-[var(--color-on-surface)] truncate mb-1">{variant.name}</h4>
+                    <div className="flex items-center gap-2">
+                      <div className="text-lg font-black text-primary">₹{variant.price}</div>
+                      {variant.mrp && variant.mrp > variant.price && (
+                        <div className="text-sm text-[var(--color-on-surface-variant)] line-through">₹{variant.mrp}</div>
+                      )}
+                    </div>
+                    <div className="mt-2 text-[11px] font-bold text-[var(--color-on-surface-variant)]">
+                      {variant.stock > 0 ? `${variant.stock} in stock` : 'Out of Stock'}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}

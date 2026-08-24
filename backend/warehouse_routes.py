@@ -42,7 +42,7 @@ from google.auth.transport import requests as google_requests
 # Local imports
 from database import get_db as _db_get_db
 from utils.response_utils import success_response, error_response, safe_float
-from utils.product_url_utils import generate_share_token
+from utils.product_url_utils import generate_share_token, generate_product_description
 from notifier import (
     send_warehouse_application_email, 
     send_warehouse_registration_confirmation_email,
@@ -2368,6 +2368,44 @@ def warehouse_create_product():
     has_variants = data.get('has_variants', False)
     variants_data = data.get('variants', [])
     
+    # Extract additional fields for description generation
+    material_type = data.get('material_type')
+    color = data.get('color')
+    brand = data.get('brand')
+    units_per_pack = data.get('units_per_pack')
+    weight = data.get('weight')
+    dimensions = data.get('dimensions')
+    is_fragile = data.get('is_fragile', 0)
+    is_temp_sensitive = data.get('is_temp_sensitive', 0)
+    is_perishable = data.get('is_perishable', 0)
+    is_featured = data.get('is_featured', 0)
+    prepaid_only = data.get('prepaid_only', 0)
+    return_policy = data.get('return_policy')
+    usage_instructions = data.get('usage_instructions')
+    expiry_date = data.get('expiry_date')
+    sub_category = data.get('sub_category')
+    
+    # Generate professional description
+    product_data_for_desc = {
+        'description': description,
+        'material_type': material_type,
+        'color': color,
+        'brand': brand,
+        'units_per_pack': units_per_pack,
+        'weight': weight,
+        'dimensions': dimensions,
+        'is_fragile': is_fragile,
+        'is_temp_sensitive': is_temp_sensitive,
+        'is_perishable': is_perishable,
+        'is_featured': is_featured,
+        'prepaid_only': prepaid_only,
+        'return_policy': return_policy,
+        'usage_instructions': usage_instructions,
+        'name': name,
+        'category': category,
+    }
+    generated_description = generate_product_description(product_data_for_desc)
+    
     # Recommendation Controls
     rec_priority = data.get('recommendation_priority', 0)
     rec_weight = data.get('recommendation_weight', 1.0)
@@ -2394,14 +2432,14 @@ def warehouse_create_product():
             if existing:
                 return error_response(f"Product with barcode {barcode} already exists in global catalog.", 409)
 
-        # 1. Insert parent product
+        # 1. Insert parent product with generated description
         share_token = generate_share_token()
         cursor.execute(
             """
             INSERT INTO products (
                 name, description, sub_category, price, offline_price, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
-                weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
+                color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                 is_featured, has_variants, is_parent, variant_group_id, variant_name,
                 recommendation_priority, recommendation_weight,
                 lifecycle_state, share_token
@@ -2409,12 +2447,10 @@ def warehouse_create_product():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                name, description, data.get('sub_category'), price or 0, offline_price, category, category_id, images, 
-                delivery_time, barcode, global_sku_code, data.get('brand'), data.get('units_per_pack'), 
-                data.get('material_type'), data.get('weight'), data.get('dimensions'),
-                data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
-                data.get('is_perishable', 0), data.get('expiry_date'),
-                data.get('is_featured', 0), 1 if has_variants else 0, 1 if has_variants else 0,
+                name, generated_description, sub_category, price or 0, offline_price, category, category_id, images, 
+                delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
+                color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date,
+                is_featured, 1 if has_variants else 0, 1 if has_variants else 0,
                 None, None,
                 rec_priority, rec_weight, lifecycle_state, share_token
             )
@@ -2580,19 +2616,17 @@ def warehouse_create_product():
                     """INSERT INTO products 
                        (name, description, sub_category, price, offline_price, category, category_id, images, 
                         delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
-                        weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
+                        color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                         is_featured, has_variants, is_parent, variant_group_id, variant_name,
                         recommendation_priority, recommendation_weight,
                         lifecycle_state, share_token)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)""",
                     (
-                        f"{name} - {v_name}", description, data.get('sub_category'), v_price, v_offline_price, 
+                        f"{name} - {v_name}", generated_description, sub_category, v_price, v_offline_price, 
                         category, category_id, v_images,
-                        delivery_time, v_barcode, v_sku, data.get('brand'), data.get('units_per_pack'), 
-                        data.get('material_type'), data.get('weight'), data.get('dimensions'),
-                        data.get('is_fragile', 0), data.get('is_temp_sensitive', 0), 
-                        data.get('is_perishable', 0), data.get('expiry_date'),
-                        data.get('is_featured', 0), product_id, v_name,
+                        delivery_time, v_barcode, v_sku, brand, units_per_pack, material_type,
+                        color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date,
+                        is_featured, product_id, v_name,
                         rec_priority, rec_weight, lifecycle_state, v_share_token
                     )
                 )
@@ -2714,10 +2748,10 @@ def warehouse_patch_inventory(item_id):
         # Update product metadata (images, description, brand, etc) if provided
         product_meta_fields = [
             "name", "images", "description", "brand", "units_per_pack", "material_type", 
-            "category_id", "sub_category", "weight", "dimensions", "is_fragile", 
+            "color", "category_id", "sub_category", "weight", "dimensions", "is_fragile", 
             "is_temp_sensitive", "is_perishable", "expiry_date", "is_featured",
             "recommendation_priority", "recommendation_weight", "lifecycle_state",
-            "offline_price"
+            "offline_price", "usage_instructions"
         ]
         meta_updates = []
         meta_values = []

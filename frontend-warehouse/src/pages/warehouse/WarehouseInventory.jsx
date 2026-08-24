@@ -74,7 +74,7 @@ const generateSkuFromOptions = (baseSku, options, existingSkus = new Set()) => {
 };
 
 const INITIAL_PRODUCT_STATE = {
-    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '',    is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
+    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '',    is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', color: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
 const WarehouseInventory = () => {
@@ -1037,18 +1037,30 @@ const WarehouseInventory = () => {
                                             />
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
+<div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Units per Pack</label>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Material Type</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="e.g. 1 unit, 2 pcs"
-                                                    value={newProductData.units_per_pack}
-                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, units_per_pack: e.target.value }))}
+                                                    placeholder="e.g. Premium Glass, Silicone"
+                                                    value={newProductData.material_type}
+                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, material_type: e.target.value }))}
                                                     className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none"
                                                 />
                                             </div>
                                             <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Product Color</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="e.g. Midnight Blue, Jet Black, Rose Gold"
+                                                    value={newProductData.color}
+                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, color: e.target.value }))}
+                                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Material Type</label>
                                                 <input
                                                     type="text"
@@ -1071,6 +1083,17 @@ const WarehouseInventory = () => {
                                                 placeholder="1. 7 Days Replacement&#10;2. Original packaging required"
                                                 value={newProductData.return_policy}
                                                 onChange={(e) => setNewProductData(prev => ({ ...prev, return_policy: e.target.value }))}
+                                                className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none resize-none"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">How to Use Instructions</label>
+                                            <textarea
+                                                rows="3"
+                                                placeholder="Step-by-step usage instructions for customers..."
+                                                value={newProductData.usage_instructions}
+                                                onChange={(e) => setNewProductData(prev => ({ ...prev, usage_instructions: e.target.value }))}
                                                 className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none resize-none"
                                             />
                                         </div>

@@ -232,6 +232,7 @@ def init_db():
         ('brand', 'TEXT'), 
         ('units_per_pack', 'TEXT'), 
         ('material_type', 'TEXT'), 
+        ('color', 'TEXT'), 
         ('weight', 'TEXT'), 
         ('dimensions', 'TEXT'), 
         ('is_fragile', 'BOOLEAN DEFAULT 0'), 

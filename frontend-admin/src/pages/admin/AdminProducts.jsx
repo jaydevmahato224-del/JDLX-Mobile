@@ -26,7 +26,18 @@ function AdminProducts() {
         prepaid_only: 0,
         has_variants: false,
         variant_options: [],
-        variants: []
+        variants: [],
+        color: '',
+        material_type: '',
+        brand: '',
+        units_per_pack: '',
+        weight: '',
+        dimensions: '',
+        is_fragile: false,
+        is_temp_sensitive: false,
+        is_perishable: false,
+        expiry_date: '',
+        usage_instructions: '',
     };
 
     const [formData, setFormData] = useState(EMPTY_FORM);
@@ -182,7 +193,18 @@ function AdminProducts() {
             barcode: product.barcode || '',
             global_sku_code: product.global_sku_code || '',
             return_policy: product.return_policy || '',
-            prepaid_only: product.prepaid_only || 0
+            prepaid_only: product.prepaid_only || 0,
+            color: product.color || '',
+            material_type: product.material_type || '',
+            brand: product.brand || '',
+            units_per_pack: product.units_per_pack || '',
+            weight: product.weight || '',
+            dimensions: product.dimensions || '',
+            is_fragile: product.is_fragile || false,
+            is_temp_sensitive: product.is_temp_sensitive || false,
+            is_perishable: product.is_perishable || false,
+            expiry_date: product.expiry_date || '',
+            usage_instructions: product.usage_instructions || '',
         };
         // Variant products need their full variant set — the list payload only
         // carries the base row, so fetch the detail endpoint.
@@ -432,6 +454,132 @@ function AdminProducts() {
                                         className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
                                         value={formData.global_sku_code}
                                         onChange={e => setFormData({...formData, global_sku_code: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Product Color</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="e.g. Midnight Blue, Jet Black, Rose Gold"
+                                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                        value={formData.color}
+                                        onChange={e => setFormData({...formData, color: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Material Type</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="e.g. Premium Glass, Silicone, TPU"
+                                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                        value={formData.material_type}
+                                        onChange={e => setFormData({...formData, material_type: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Brand</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="e.g. Apple, Samsung, Generic"
+                                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                        value={formData.brand}
+                                        onChange={e => setFormData({...formData, brand: e.target.value})}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Units per Pack</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="e.g. 1 pc, 2 pcs, 1 set"
+                                            className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                            value={formData.units_per_pack}
+                                            onChange={e => setFormData({...formData, units_per_pack: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Weight</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="e.g. 50g, 0.5kg"
+                                            className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                            value={formData.weight}
+                                            onChange={e => setFormData({...formData, weight: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Dimensions</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="e.g. 15x7x1 cm, 6.5x3x0.5 inch"
+                                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                        value={formData.dimensions}
+                                        onChange={e => setFormData({...formData, dimensions: e.target.value})}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Expiry Date (Optional)</label>
+                                        <input 
+                                            type="date"
+                                            className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold"
+                                            value={formData.expiry_date}
+                                            onChange={e => setFormData({...formData, expiry_date: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="flex items-end">
+                                        <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer hover:bg-white hover:shadow-md transition-all w-full">
+                                            <input 
+                                                type="checkbox"
+                                                className="w-5 h-5 rounded-lg border-gray-300 text-primary focus:ring-primary"
+                                                checked={formData.is_fragile}
+                                                onChange={e => setFormData({...formData, is_fragile: e.target.checked})}
+                                            />
+                                            <div>
+                                                <p className="text-sm font-black text-slate-800">Fragile</p>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Requires special handling</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex items-end">
+                                        <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer hover:bg-white hover:shadow-md transition-all w-full">
+                                            <input 
+                                                type="checkbox"
+                                                className="w-5 h-5 rounded-lg border-gray-300 text-primary focus:ring-primary"
+                                                checked={formData.is_temp_sensitive}
+                                                onChange={e => setFormData({...formData, is_temp_sensitive: e.target.checked})}
+                                            />
+                                            <div>
+                                                <p className="text-sm font-black text-slate-800">Temperature Sensitive</p>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Store in controlled environment</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div className="flex items-end">
+                                        <label className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer hover:bg-white hover:shadow-md transition-all w-full">
+                                            <input 
+                                                type="checkbox"
+                                                className="w-5 h-5 rounded-lg border-gray-300 text-primary focus:ring-primary"
+                                                checked={formData.is_perishable}
+                                                onChange={e => setFormData({...formData, is_perishable: e.target.checked})}
+                                            />
+                                            <div>
+                                                <p className="text-sm font-black text-slate-800">Perishable</p>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Has limited shelf life</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">How to Use Instructions</label>
+                                    <textarea 
+                                        placeholder="Step-by-step usage instructions for customers..."
+                                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none font-bold h-24"
+                                        value={formData.usage_instructions}
+                                        onChange={e => setFormData({...formData, usage_instructions: e.target.value})}
                                     />
                                 </div>
                                 <div className="md:col-span-2">

@@ -105,7 +105,8 @@ from utils.product_url_utils import (
     generate_share_token, 
     generate_seo_slug, 
     generate_product_url,
-    repair_product_data
+    repair_product_data,
+    generate_product_description
 )
 from services.health_monitor import get_system_health_metrics
 from services.auto_healer import trigger_system_scan
@@ -6740,6 +6741,41 @@ def admin_add_product():
     delivery_time = data.get('delivery_time', '30-120 mins')
     images = data.get('images')
     offline_price = _normalize_offline_price(data.get('offline_price'))
+    
+    # Extract additional fields for description generation
+    material_type = data.get('material_type')
+    color = data.get('color')
+    brand = data.get('brand')
+    units_per_pack = data.get('units_per_pack')
+    weight = data.get('weight')
+    dimensions = data.get('dimensions')
+    is_fragile = data.get('is_fragile', 0)
+    is_temp_sensitive = data.get('is_temp_sensitive', 0)
+    is_featured = data.get('is_featured', 0)
+    prepaid_only = data.get('prepaid_only', 0)
+    return_policy = data.get('return_policy')
+    usage_instructions = data.get('usage_instructions')
+    description = data.get('description')  # User-provided description (from admin)
+    
+    # Generate professional description
+    product_data_for_desc = {
+        'description': description,
+        'material_type': material_type,
+        'color': color,
+        'brand': brand,
+        'units_per_pack': units_per_pack,
+        'weight': weight,
+        'dimensions': dimensions,
+        'is_fragile': is_fragile,
+        'is_temp_sensitive': is_temp_sensitive,
+        'is_featured': is_featured,
+        'prepaid_only': prepaid_only,
+        'return_policy': return_policy,
+        'usage_instructions': usage_instructions,
+        'name': name,
+        'category': category,
+    }
+    generated_description = generate_product_description(product_data_for_desc)
 
     if not name or price is None:
         return error_response("Missing required fields", 400)
@@ -6758,16 +6794,18 @@ def admin_add_product():
         share_token = generate_share_token()
         seo_slug = generate_seo_slug(name)
         
-        # Insert parent product
+        # Insert parent product with generated description
         cursor.execute(
             """INSERT INTO products 
                (name, price, offline_price, stock, category, delivery_time, images, barcode, global_sku_code, 
-                return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name,
+                material_type, color, brand, units_per_pack, weight, dimensions, is_fragile, is_temp_sensitive, description)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (name, price, offline_price, int(stock), category, delivery_time, images, 
-             data.get('barcode'), data.get('global_sku_code'), data.get('return_policy'), 
-             data.get('prepaid_only', 0), share_token, seo_slug, 
-             1 if has_variants else 0, 1 if has_variants else 0, None, None)
+             data.get('barcode'), data.get('global_sku_code'), return_policy, 
+             prepaid_only, share_token, seo_slug, 
+             1 if has_variants else 0, 1 if has_variants else 0, None, None,
+             material_type, color, brand, units_per_pack, weight, dimensions, is_fragile, is_temp_sensitive, generated_description)
         )
         product_id = cursor.lastrowid
         
@@ -6817,7 +6855,7 @@ def admin_add_product():
                         return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)""",
                     (f"{name} - {v_name}", v_price, v_offline_price, v_stock, category, delivery_time, v_images,
-                     v_barcode, v_sku, data.get('return_policy'), data.get('prepaid_only', 0),
+                     v_barcode, v_sku, return_policy, prepaid_only,
                      v_share_token, v_seo_slug, product_id, v_name)
                 )
                 variant_product_id = cursor.lastrowid

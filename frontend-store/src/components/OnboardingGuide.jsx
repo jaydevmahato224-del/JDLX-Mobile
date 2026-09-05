@@ -14,7 +14,7 @@ const PAGES = [
     emoji: '🛍️',
     title: 'Shop Anything, Anytime',
     points: [
-      '📱 Phones, gadgets & daily essentials — everything in one app',
+      '📱 Mobile phones, accessories & gadgets — everything in one app',
       '🔍 Find products fast with categories & search',
       '🛒 Tap “Add to Cart” — checkout in seconds',
     ],

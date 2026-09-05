@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
 import LoadingScreen from './components/LoadingScreen'
 import SplashScreen from './components/SplashScreen'
+import OnboardingFlow from './components/OnboardingFlow'
 import AnalyticsTracker from './components/AnalyticsTracker'
 import PushNotificationManager from './components/PushNotificationManager'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
@@ -253,6 +254,24 @@ function RouteChangeTracker() {
   return null
 }
 
+// ─── Post-Onboarding Redirect ───────────────────────────────────────────────────
+// After first-run onboarding completes, send logged-out users to the login page
+// (guide ke baad login step). Logged-in users stay where they are. Guests can
+// still browse back home from /login — the existing guest-browsing flow is
+// untouched, this just presents login as the natural next step.
+function PostOnboardingRedirect({ active, user }) {
+  const navigate = useNavigate()
+  useEffect(() => {
+    // After first-run onboarding, present the login page as the next step for
+    // logged-out users (guide ke baad login). Guests can still browse back to
+    // home from /login — the guest-browsing flow itself is untouched.
+    if (active && !user) {
+      navigate('/login', { replace: true })
+    }
+  }, [active, user, navigate])
+  return null
+}
+
 // ─── Operational Redirects (Admin/Warehouse Port Logic) ────────────────────────
 function OperationalRedirect() {
   const location = useLocation()
@@ -320,6 +339,17 @@ function App() {
 
   const [dataReady, setDataReady] = useState(false)
   const [splashFinished, setSplashFinished] = useState(false)
+
+  // One-time first-run onboarding (permissions -> quick guide). Persisted in
+  // localStorage so it only ever shows once, even across browser restarts.
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('jdlx_onboarding_done'))
+  const [postOnboarding, setPostOnboarding] = useState(false)
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('jdlx_onboarding_done', '1')
+    setShowOnboarding(false)
+    if (!user) setPostOnboarding(true)
+  }
 
   // Initialize auth on mount
   useEffect(() => {
@@ -402,6 +432,7 @@ function App() {
         screen must not be inside it or it would vanish too — leaving a white
         page with no fallback UI. */}
     <GlobalErrorOverlay />
+    {showOnboarding && <OnboardingFlow onComplete={handleOnboardingComplete} />}
     <ErrorBoundary>
       <UnderConstructionOverlay />
       <PWAInstalledCelebration />
@@ -413,6 +444,7 @@ function App() {
         <AnalyticsWrapper>
           <AnalyticsTracker />
           <RouteChangeTracker />
+          <PostOnboardingRedirect active={postOnboarding} user={user} />
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/*" element={

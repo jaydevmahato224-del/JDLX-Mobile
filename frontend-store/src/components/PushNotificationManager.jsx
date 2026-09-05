@@ -37,6 +37,9 @@ const PushNotificationManager = () => {
   useEffect(() => {
     let cancelled = false;
     if (!('Notification' in window) || !('PushManager' in window)) return;
+    // On the very first run the onboarding permissions screen is the single
+    // place that asks for notification permission — don't double-prompt here.
+    if (!localStorage.getItem('jdlx_onboarding_done')) return;
     if (localStorage.getItem(PROMPTED_FLAG)) return;
 
     const timer = setTimeout(async () => {

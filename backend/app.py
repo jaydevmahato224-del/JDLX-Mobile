@@ -1108,48 +1108,208 @@ def index():
 
 # --- Routes ---
 
-def process_google_user_login(google_id, email, name, picture, ip_address):
+def _issue_user_session(user_dict, email, ip_address):
+    """Issue a JWT and build user_data for a fully authenticated user.
+
+    Shared by Google OAuth login and the email-OTP signup/login flow so that
+    session duration, admin audit logging, and the returned user payload stay
+    identical everywhere. The caller is responsible for having persisted any
+    DB changes before calling this.
+    """
+    user_role = normalize_role(user_dict.get('role'))
+
+    # Read admin-controlled session duration for regular users (from system_settings).
+    # Default: 8760 hours = 365 days, so store users stay logged in without auto-logout.
+    user_session_hours = 8760
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'user_session_duration_hours'").fetchone()
+            if row and row['value']:
+                parsed = float(row['value'])
+                if parsed and parsed > 0:
+                    user_session_hours = parsed
+        finally:
+            conn.close()
+    except Exception:
+        pass  # never break login flow on settings read failure
+
+    record_login_attempt(email, ip_address, "success")
+    if user_role in ADMIN_ROLES:
+        log_admin_event(
+            user_dict['id'],
+            "admin_login",
+            "auth",
+            user_dict['id'],
+            "Admin login successful",
+        )
+        run_admin_anomaly_check(user_dict['id'], "admin_login")
+
+    # Admin sessions expire in 8 hours (security, unchanged); regular users get the
+    # admin-controlled duration from system_settings (default 8760h = 365 days).
+    is_admin = user_role in ADMIN_ROLES
+    token_expiry = datetime.timedelta(hours=8) if is_admin else datetime.timedelta(hours=user_session_hours)
+    now_utc = datetime.datetime.utcnow()
+    payload = {
+        'user_id': user_dict['id'],
+        'email': user_dict['email'],
+        'role': user_role,
+        'iat': now_utc,
+        'jti': secrets.token_hex(16),
+        'exp': now_utc + token_expiry
+    }
+    jwt_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    user_data = {
+        "id": user_dict.get('id'),
+        "name": user_dict.get('name'),
+        "email": user_dict.get('email'),
+        "profile_image": user_dict.get('profile_image'),
+        "phone": user_dict.get('phone'),
+        "gender": user_dict.get('gender'),
+        "date_of_birth": user_dict.get('date_of_birth'),
+        "email_verified": user_dict.get('email_verified'),
+        "phone_verified": user_dict.get('phone_verified'),
+        "role": user_role
+    }
+    return user_data, jwt_token
+
+
+# Admin-configurable OTP security settings (system_settings keys). These drive
+# the escalating resend cooldown: every resend of an OTP waits longer than the
+# previous one, so automated retry/brute-force attempts slow down naturally.
+OTP_SECURITY_DEFAULTS = {
+    'otp_resend_cooldown_base': 60,   # seconds to wait for the FIRST resend
+    'otp_resend_cooldown_step': 60,   # extra seconds added per resend
+    'otp_resend_cooldown_max': 300,   # cap on the per-resend wait
+    'otp_resend_max': 5,              # max resends before a fresh OTP is required
+    'otp_expiry_seconds': 600,        # OTP validity (matches the SQLite +10 min)
+}
+
+
+def get_otp_security_settings():
+    """Reads OTP security settings from system_settings (admin-editable).
+
+    Values are clamped to sane non-negative numbers; anything unset or unparseable
+    falls back to the defaults, so admin misconfiguration never breaks login.
+    """
+    out = dict(OTP_SECURITY_DEFAULTS)
+    try:
+        conn = get_db()
+        try:
+            rows = conn.execute("SELECT key, value FROM system_settings").fetchall()
+            for r in rows:
+                if r['key'] in out:
+                    try:
+                        parsed = int(float(r['value']))
+                        if parsed >= 0:
+                            out[r['key']] = parsed
+                    except (TypeError, ValueError):
+                        pass
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return out
+
+
+def _otp_cooldown_remaining(settings, resend_count, last_sent_at):
+    """Returns (allowed, wait_seconds) for resending an OTP.
+
+    resend_count is the number of resends already performed on this OTP (0 for a
+    freshly sent OTP). The wait grows after every send: base, base+step,
+    base+2*step… capped at max — so the first resend waits `base`, the second
+    waits `base+step`, and so on. A missing last-sent timestamp (legacy row) is
+    always allowed.
+    """
+    if not last_sent_at:
+        return True, 0
+    count = max(0, int(resend_count or 0))
+    cooldown_needed = min(
+        settings['otp_resend_cooldown_base'] + settings['otp_resend_cooldown_step'] * count,
+        settings['otp_resend_cooldown_max'],
+    )
+    try:
+        last_dt = datetime.datetime.strptime(str(last_sent_at)[:19], '%Y-%m-%d %H:%M:%S')
+        elapsed = (datetime.datetime.utcnow() - last_dt).total_seconds()
+    except Exception:
+        elapsed = cooldown_needed  # can't parse -> treat as still cooling down
+    if elapsed >= cooldown_needed:
+        return True, 0
+    return False, max(1, int(cooldown_needed - elapsed))
+
+
+def _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, require_otp):
+    """Generate + email an OTP confirming an existing account's login/link.
+
+    Reuses the google_link_otps table so /api/auth/google/link-verify completes
+    the flow; OTP is stored hashed, one-time use, attempt-limited there. Only the
+    newest OTP per email+google_id is kept valid, and its expiry follows the
+    admin-configurable otp_expiry_seconds setting.
+    """
+    settings = get_otp_security_settings()
+    import random
+    import string
+    otp = ''.join(random.choices(string.digits, k=6))
+    salt = secrets.token_hex(8)
+    otp_hash = _hash_admin_otp(otp, salt)
+
+    cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
+    cursor.execute(
+        "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at, resend_count, last_sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), 0, datetime('now'))",
+        (email, user['id'], google_id, name or None, picture or None, otp_hash, salt, f'+{settings["otp_expiry_seconds"]} seconds')
+    )
+    conn.commit()
+
+    # Send OTP via email
+    from threading import Thread
+    if require_otp:
+        subject = "JDLX Mobile Login Verification OTP"
+        body = f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
+    else:
+        subject = "Verify Google Account Linking"
+        body = f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
+    Thread(target=send_individual_email, args=(email, user['name'] or 'User', subject, body)).start()
+
+    return {'link_required': True, 'email': email, 'google_id': google_id,
+            'message': 'OTP sent to email. Verify to complete login.'}
+
+
+def process_google_user_login(google_id, email, name, picture, ip_address, require_otp=False):
     conn = get_db()
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
     user = cursor.fetchone()
 
-    if not user and email:
+    if user:
+        if require_otp:
+            # Every existing-account login must be confirmed with an email OTP
+            # before a session starts (customer requirement). The OTP row is
+            # keyed by this google_id; /api/auth/google/link-verify completes
+            # the login after verification.
+            result = _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, require_otp)
+            conn.close()
+            return result
+        # Same google_id, no OTP required: proceed to session issuance below.
+    elif email:
         cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email.lower(),))
         user = cursor.fetchone()
         if user:
             # If user exists with a DIFFERENT google_id, this is a conflict
             if user['google_id'] and user['google_id'] != google_id:
+                if not require_otp:
+                    conn.close()
+                    return {'link_conflict': True, 'email': email, 'existing_google_id': user['google_id']}
+                # require_otp: the OTP below proves ownership of this email, so
+                # re-linking to the newly chosen Google account is safe.
+
+            # If user exists but has NO google_id, require OTP verification before
+            # linking; with require_otp this also confirms every existing login.
+            if not user['google_id'] or require_otp:
+                result = _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, require_otp)
                 conn.close()
-                return {'link_conflict': True, 'email': email, 'existing_google_id': user['google_id']}
-            
-            # If user exists but has NO google_id, require OTP verification before linking
-            if not user['google_id']:
-                # Generate OTP for linking verification
-                import random
-                import string
-                otp = ''.join(random.choices(string.digits, k=6))
-                salt = secrets.token_hex(8)
-                otp_hash = _hash_admin_otp(otp, salt)
-                
-                cursor.execute(
-                    "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))",
-                    (email, user['id'], google_id, name or None, picture or None, otp_hash, salt)
-                )
-                conn.commit()
-                
-                # Send OTP via email
-                from threading import Thread
-                Thread(target=send_individual_email, args=(email, user.get('name') or 'User',
-                    "Verify Google Account Linking",
-                    f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>Expires in 10 minutes."
-                )).start()
-                
-                conn.close()
-                return {'link_required': True, 'email': email, 'google_id': google_id, 
-                        'message': 'OTP sent to email. Verify to link Google account.'}
-            
+                return result
+
             # Same google_id - normal login, update profile info
             cursor.execute(
                 "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
@@ -1193,60 +1353,10 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         upsert_admin_record(cursor, user['id'], user_role)
     else:
         remove_admin_record(cursor, user['id'])
-
-    # Read admin-controlled session duration for regular users (from system_settings).
-    # Default: 8760 hours = 365 days, so store users stay logged in without auto-logout.
-    user_session_hours = 8760
-    try:
-        cursor.execute("SELECT value FROM system_settings WHERE key = 'user_session_duration_hours'")
-        row = cursor.fetchone()
-        if row and row['value']:
-            parsed = float(row['value'])
-            if parsed and parsed > 0:
-                user_session_hours = parsed
-    except Exception:
-        pass  # never break login flow on settings read failure
     conn.commit()
     conn.close()
 
-    record_login_attempt(email, ip_address, "success")
-    if user_role in ADMIN_ROLES:
-        log_admin_event(
-            user_dict['id'],
-            "admin_login",
-            "auth",
-            user_dict['id'],
-            "Admin login successful",
-        )
-        run_admin_anomaly_check(user_dict['id'], "admin_login")
-
-    # Admin sessions expire in 8 hours (security, unchanged); regular users get the
-    # admin-controlled duration from system_settings (default 8760h = 365 days).
-    is_admin = user_role in ADMIN_ROLES
-    token_expiry = datetime.timedelta(hours=8) if is_admin else datetime.timedelta(hours=user_session_hours)
-    now_utc = datetime.datetime.utcnow()
-    payload = {
-        'user_id': user_dict['id'],
-        'email': user_dict['email'],
-        'role': user_role,
-        'iat': now_utc,
-        'jti': secrets.token_hex(16),
-        'exp': now_utc + token_expiry
-    }
-    jwt_token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-    user_data = {
-        "id": user_dict.get('id'),
-        "name": user_dict.get('name'),
-        "email": user_dict.get('email'),
-        "profile_image": user_dict.get('profile_image'),
-        "phone": user_dict.get('phone'),
-        "gender": user_dict.get('gender'),
-        "date_of_birth": user_dict.get('date_of_birth'),
-        "email_verified": user_dict.get('email_verified'),
-        "phone_verified": user_dict.get('phone_verified'),
-        "role": user_role
-    }
-    return user_data, jwt_token
+    return _issue_user_session(user_dict, email, ip_address)
 
 
 # ==============================================================================
@@ -1337,6 +1447,273 @@ def google_link_verify():
         ip_address = get_client_ip()
         user_data, jwt_token = process_google_user_login(google_id, email, row['name'] or '', row['picture'] or '', ip_address)
         
+        resp = jsonify({"user": user_data})
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp
+    finally:
+        conn.close()
+
+
+@app.route('/api/auth/google/link-resend', methods=['POST'])
+@limiter.limit("6 per 10 minutes")
+def google_link_resend():
+    """Resends the Google login/link OTP for an existing account.
+
+    Enumeration-safe: non-existent emails get the same generic success response
+    with no email sent. The resend wait ESCALATES on every resend (base + step
+    per resend, capped at max — admin-configurable), and after otp_resend_max
+    resends a fresh OTP is required. Returns the next cooldown so the store UI
+    can show an accurate security countdown.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    google_id = (data.get('google_id') or '').strip()
+
+    if not email or not google_id:
+        return error_response("Email and Google ID are required", 400)
+    if is_account_locked(email):
+        return error_response("Account temporarily locked. Try again later.", 423)
+
+    settings = get_otp_security_settings()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
+        user = cursor.fetchone()
+        if not user:
+            return success_response(None, "OTP sent to your email.")
+
+        # Escalating cooldown: only unexpired OTP rows count toward the resend
+        # budget; an expired OTP is treated as a fresh request.
+        cursor.execute(
+            "SELECT * FROM google_link_otps WHERE email = ? AND google_id = ? AND expires_at > datetime('now') ORDER BY id DESC LIMIT 1",
+            (email, google_id)
+        )
+        existing = cursor.fetchone()
+        resend_count = 0
+        if existing:
+            resend_count = int(existing['resend_count'] or 0)
+            if resend_count >= settings['otp_resend_max']:
+                return error_response(
+                    "Too many OTP requests. Wait for the current OTP to expire and try again.", 429,
+                    data={'cooldown_seconds': settings['otp_resend_cooldown_max']}
+                )
+            allowed, wait = _otp_cooldown_remaining(settings, resend_count, existing['last_sent_at'])
+            if not allowed:
+                return error_response(f"Please wait {wait}s before requesting another OTP.", 429,
+                                      data={'cooldown_seconds': wait})
+        # Only the newest OTP per email+google_id stays valid: drop previous rows.
+        cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
+
+        # Fresh OTP stores resend_count 0 (first resend waits `base`); each
+        # resend bumps it so the wait escalates: base, base+step, base+2*step…
+        new_count = (resend_count + 1) if existing else 0
+        import random
+        import string
+        otp = ''.join(random.choices(string.digits, k=6))
+        salt = secrets.token_hex(8)
+        otp_hash = _hash_admin_otp(otp, salt)
+
+        cursor.execute(
+            "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at, resend_count, last_sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?, datetime('now'))",
+            (email, user['id'], google_id, user['name'], user['profile_image'], otp_hash, salt,
+             f'+{settings["otp_expiry_seconds"]} seconds', new_count)
+        )
+        conn.commit()
+
+        from threading import Thread
+        Thread(target=send_individual_email, args=(email, user['name'] or 'User',
+            "JDLX Mobile Login Verification OTP",
+            f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
+        )).start()
+
+        next_cooldown = min(
+            settings['otp_resend_cooldown_base'] + settings['otp_resend_cooldown_step'] * new_count,
+            settings['otp_resend_cooldown_max']
+        )
+        return success_response({
+            'cooldown_seconds': next_cooldown,
+            'resend_count': new_count,
+            'expires_in': settings['otp_expiry_seconds'],
+        }, "OTP sent to your email.")
+    except Exception as e:
+        logger.error(f"google_link_resend error: {e}")
+        return error_response("Failed to send OTP", 500)
+    finally:
+        conn.close()
+
+
+@app.route('/api/auth/email/send-otp', methods=['POST'])
+@limiter.limit("6 per 10 minutes")
+def email_send_otp():
+    """Sends an email OTP for customer email-based signup/login.
+
+    Enumeration-safe: the response is the same whether or not an account exists
+    (a new user is created automatically on verify-otp). OTPs are stored hashed
+    with a per-record salt, one active OTP per email, attempt-limited, and
+    failures feed the shared login_guard lockout via verify-otp. The resend wait
+    ESCALATES on every resend (base + step per resend, capped at max — all
+    admin-configurable), and after otp_resend_max resends a fresh OTP is required.
+    The response carries cooldown_seconds so the store UI can show an accurate
+    security countdown.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    if not email or '@' not in email or '.' not in email.split('@')[-1]:
+        return error_response("A valid email is required", 400)
+
+    if is_account_locked(email):
+        return error_response("Account temporarily locked. Try again later.", 423)
+
+    settings = get_otp_security_settings()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # Escalating cooldown: only an UNEXPIRED OTP row counts toward the resend
+        # budget; an expired OTP is treated as a fresh request.
+        cursor.execute(
+            "SELECT * FROM customer_email_otps WHERE email = ? AND expires_at > datetime('now') ORDER BY id DESC LIMIT 1",
+            (email,)
+        )
+        existing = cursor.fetchone()
+        resend_count = 0
+        if existing:
+            resend_count = int(existing['resend_count'] or 0)
+            if resend_count >= settings['otp_resend_max']:
+                return error_response(
+                    "Too many OTP requests. Wait for the current OTP to expire and try again.", 429,
+                    data={'cooldown_seconds': settings['otp_resend_cooldown_max']}
+                )
+            allowed, wait = _otp_cooldown_remaining(settings, resend_count, existing['last_sent_at'])
+            if not allowed:
+                return error_response(f"Please wait {wait}s before requesting another OTP.", 429,
+                                      data={'cooldown_seconds': wait})
+        # Only the newest OTP per email stays valid: drop every previous row.
+        cursor.execute("DELETE FROM customer_email_otps WHERE email = ?", (email,))
+
+        # Fresh OTP stores resend_count 0 (first resend waits `base`); each
+        # resend bumps it so the wait escalates: base, base+step, base+2*step…
+        new_count = (resend_count + 1) if existing else 0
+        import random
+        import string
+        otp = ''.join(random.choices(string.digits, k=6))
+        salt = secrets.token_hex(8)
+        otp_hash = _hash_admin_otp(otp, salt)
+
+        cursor.execute(
+            "INSERT INTO customer_email_otps (email, otp_hash, otp_salt, expires_at, resend_count, last_sent_at) VALUES (?, ?, ?, datetime('now', ?), ?, datetime('now'))",
+            (email, otp_hash, salt, f'+{settings["otp_expiry_seconds"]} seconds', new_count)
+        )
+        conn.commit()
+
+        from threading import Thread
+        Thread(target=send_individual_email, args=(email, email.split('@')[0],
+            "JDLX Mobile Sign In OTP",
+            f"Your OTP to access your JDLX Mobile account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
+        )).start()
+
+        next_cooldown = min(
+            settings['otp_resend_cooldown_base'] + settings['otp_resend_cooldown_step'] * new_count,
+            settings['otp_resend_cooldown_max']
+        )
+        return success_response({
+            'cooldown_seconds': next_cooldown,
+            'resend_count': new_count,
+            'expires_in': settings['otp_expiry_seconds'],
+        }, "OTP sent to your email.")
+    except Exception as e:
+        logger.error(f"email_send_otp error: {e}")
+        return error_response("Failed to send OTP", 500)
+    finally:
+        conn.close()
+
+
+@app.route('/api/auth/email/verify-otp', methods=['POST'])
+@limiter.limit("10 per 10 minutes")
+def email_verify_otp():
+    """Verifies an email OTP and logs the user in.
+
+    First-time signup: creates the customer account (users.google_id is NOT
+    NULL, so a deterministic placeholder is derived from the email). Existing
+    account: just logs in. OTP is one-time use, attempt-limited (5 wrong
+    guesses invalidate it), and expired/missing OTPs get one answer.
+    """
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    otp = (data.get('otp') or '').strip()
+
+    if not email or not otp:
+        return error_response("Email and OTP are required", 400)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT * FROM customer_email_otps WHERE email = ? AND expires_at > datetime('now') ORDER BY id DESC LIMIT 1",
+            (email,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("DELETE FROM customer_email_otps WHERE email = ?", (email,))
+            conn.commit()
+            return error_response("OTP has expired. Please request a new one.", 401)
+
+        expected_hash = _hash_admin_otp(otp, row['otp_salt'])
+        if not hmac.compare_digest(expected_hash, row['otp_hash']):
+            new_attempts = int(row['attempts'] or 0) + 1
+            cursor.execute("UPDATE customer_email_otps SET attempts = ? WHERE id = ?", (new_attempts, row['id']))
+            if new_attempts >= OTP_MAX_ATTEMPTS:
+                cursor.execute("DELETE FROM customer_email_otps WHERE id = ?", (row['id'],))
+                record_login_attempt(email, get_client_ip(), "failed")
+            conn.commit()
+            return error_response("Invalid OTP", 401)
+
+        # Atomically claim the OTP (one-time use). If a concurrent request
+        # already consumed it, fail closed instead of issuing a second session.
+        cursor.execute("DELETE FROM customer_email_otps WHERE id = ? AND expires_at > datetime('now')", (row['id'],))
+        if cursor.rowcount != 1:
+            conn.commit()
+            return error_response("OTP has expired. Please request a new one.", 401)
+
+        ip_address = get_client_ip()
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
+        user = cursor.fetchone()
+
+        if not user:
+            # First-time signup: create the account. users.google_id is NOT NULL
+            # UNIQUE, so use a deterministic placeholder derived from the email;
+            # a real Google id can replace it later via the Google OTP-link flow.
+            placeholder_google_id = 'email_' + hashlib.sha256(email.encode()).hexdigest()[:20]
+            name = email.split('@')[0]
+            cursor.execute(
+                "INSERT INTO users (google_id, name, email, email_verified) VALUES (?, ?, ?, 1)",
+                (placeholder_google_id, name, email)
+            )
+            conn.commit()
+            cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
+            user = cursor.fetchone()
+
+            if user:
+                from threading import Thread
+                Thread(target=send_welcome_email, args=(email, name)).start()
+
+                # Referral code apply (additive)
+                try:
+                    ref_code = request.json.get('referral_code') if request.is_json else None
+                    if ref_code:
+                        from utils.referral import apply_referral_code
+                        apply_referral_code(user['id'], ref_code)
+                except Exception:
+                    pass  # never break signup flow
+
+            maybe_bootstrap_super_admin(cursor, user['id'], user['email'])
+            conn.commit()
+            cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))
+            user = cursor.fetchone()
+
+        user_dict = dict(user)
+        user_data, jwt_token = _issue_user_session(user_dict, email, ip_address)
+
         resp = jsonify({"user": user_data})
         resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
         return resp
@@ -1611,8 +1988,11 @@ def google_callback():
             )
             return redirect(f"{frontend_url}/login?error=account_locked")
 
-        # 3. Process Login
-        result = process_google_user_login(google_id, email, name, picture, ip_address)
+        # 3. Process Login. require_otp=True makes every EXISTING customer
+        # account confirm via email OTP before a session starts (new Google
+        # signups still auto-create without OTP, unchanged). Admin/warehouse
+        # callers pass require_otp=False and keep their old behaviour.
+        result = process_google_user_login(google_id, email, name, picture, ip_address, require_otp=True)
         
         # Handle link_required or link_conflict from process_google_user_login
         if isinstance(result, dict):

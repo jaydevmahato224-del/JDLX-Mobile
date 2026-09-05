@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send, Clock } from 'lucide-react'
+import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send, Clock, ShieldCheck } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
@@ -61,7 +61,14 @@ export default function AdminSettings() {
     construction_mode_message: 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!',
 
     // User Session / Auto-Logout Settings
-    user_session_duration_hours: '8760'
+    user_session_duration_hours: '8760',
+
+    // OTP Security (login/signup OTP cooldown — escalating on every resend)
+    otp_resend_cooldown_base: '60',   // seconds to wait before the FIRST resend
+    otp_resend_cooldown_step: '60',   // extra seconds added per resend
+    otp_resend_cooldown_max: '300',   // cap on the per-resend wait
+    otp_resend_max: '5',              // max resends before a fresh OTP is required
+    otp_expiry_seconds: '600'         // OTP validity in seconds
   })
 
   // Helper Toggle Component
@@ -183,7 +190,12 @@ export default function AdminSettings() {
         theme_tertiary_color: '#10b981',
         pwa_install_prompt_enabled: 'true',
         pwa_banner_title: 'Install JDLX Mobile',
-        pwa_banner_description: 'Get the full premium experience on your home screen.'
+        pwa_banner_description: 'Get the full premium experience on your home screen.',
+        otp_resend_cooldown_base: '60',
+        otp_resend_cooldown_step: '60',
+        otp_resend_cooldown_max: '300',
+        otp_resend_max: '5',
+        otp_expiry_seconds: '600'
       }))
     }
   }
@@ -207,6 +219,7 @@ export default function AdminSettings() {
     { id: 'delivery', label: 'Delivery & Logistics', icon: Truck, description: 'COD, pincodes, Shiprocket' },
     { id: 'app', label: 'App Experience', icon: Smartphone, description: 'PWA, Ticker, Under Construction' },
     { id: 'sessions', label: 'Sessions & Login', icon: Clock, description: 'Auto-logout, session duration' },
+    { id: 'otp', label: 'OTP Security', icon: ShieldCheck, description: 'Login OTP cooldown & expiry' },
     { id: 'content', label: 'Legal & Policies', icon: FileText, description: 'Terms & conditions, About us content' },
     { id: 'brand', label: 'Brand & Footer', icon: Globe, description: 'Support, social handles, story' },
   ]
@@ -1023,6 +1036,143 @@ export default function AdminSettings() {
                   <li>• Admin panel & warehouse staff sessions keep their existing security limits (8h / 7 days) — unchanged.</li>
                   <li>• Users are only logged out when they press "Logout" or when the session duration is reached.</li>
                 </ul>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB: OTP SECURITY */}
+        {activeTab === 'otp' && (
+          <section className="ui-card-standard p-6 md:p-10 animate-in fade-in duration-300">
+            <div className="mb-10">
+              <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                <ShieldCheck className="w-7 h-7 text-primary" />
+                OTP Security
+              </h2>
+              <p className="text-slate-500 font-medium mt-1">
+                Control the login/signup OTP behavior — the resend cooldown grows on every resend so automated
+                retry / brute-force attempts slow down automatically.
+              </p>
+            </div>
+
+            <div className="space-y-8">
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Base cooldown */}
+                <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                  <h3 className="font-bold text-slate-800">Resend Cooldown (first)</h3>
+                  <p className="text-xs text-slate-500 mt-1">Seconds a user must wait before their <b>first</b> OTP resend. Default 60.</p>
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Seconds</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={settings.otp_resend_cooldown_base || ''}
+                      onChange={(e) => handleChange('otp_resend_cooldown_base', e.target.value)}
+                      className="w-40 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Cooldown step */}
+                <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                  <h3 className="font-bold text-slate-800">Cooldown Increase per Resend</h3>
+                  <p className="text-xs text-slate-500 mt-1">Extra seconds added after every resend. Default 60 (60s → 120s → 180s…).</p>
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Seconds</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={settings.otp_resend_cooldown_step || ''}
+                      onChange={(e) => handleChange('otp_resend_cooldown_step', e.target.value)}
+                      className="w-40 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Max cooldown cap */}
+                <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                  <h3 className="font-bold text-slate-800">Max Cooldown Cap</h3>
+                  <p className="text-xs text-slate-500 mt-1">The longest wait a resend can ever reach. Default 300s (5 min).</p>
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Seconds</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={settings.otp_resend_cooldown_max || ''}
+                      onChange={(e) => handleChange('otp_resend_cooldown_max', e.target.value)}
+                      className="w-40 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Max resends */}
+                <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                  <h3 className="font-bold text-slate-800">Max Resends per OTP</h3>
+                  <p className="text-xs text-slate-500 mt-1">After this many resends, further resends are blocked until the OTP expires. Default 5.</p>
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Count</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={settings.otp_resend_max || ''}
+                      onChange={(e) => handleChange('otp_resend_max', e.target.value)}
+                      className="w-40 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* OTP validity */}
+              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                <h3 className="font-bold text-slate-800">OTP Validity (Expiry)</h3>
+                <p className="text-xs text-slate-500 mt-1">How long an OTP stays valid before it expires and a new one is needed.</p>
+                <div className="mt-4 space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Seconds</label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="number"
+                      min="30"
+                      value={settings.otp_expiry_seconds || ''}
+                      onChange={(e) => handleChange('otp_expiry_seconds', e.target.value)}
+                      className="w-40 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-primary transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleChange('otp_expiry_seconds', '300')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary transition-all"
+                    >5 min</button>
+                    <button
+                      type="button"
+                      onClick={() => handleChange('otp_expiry_seconds', '600')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-amber-400/60 bg-amber-50 text-amber-700 hover:border-amber-500 transition-all"
+                    >10 min</button>
+                    <button
+                      type="button"
+                      onClick={() => handleChange('otp_expiry_seconds', '900')}
+                      className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-primary hover:text-primary transition-all"
+                    >15 min</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Escalation preview */}
+              <div className="p-6 rounded-3xl bg-amber-50/60 border border-amber-200/60">
+                <h3 className="font-bold text-slate-800">Resend wait sequence with current settings</h3>
+                {(() => {
+                  const base = parseInt(settings.otp_resend_cooldown_base) || 60
+                  const step = parseInt(settings.otp_resend_cooldown_step) || 60
+                  const cap = parseInt(settings.otp_resend_cooldown_max) || 300
+                  const seq = Array.from({ length: 5 }, (_, i) => Math.min(base + step * i, cap))
+                  return (
+                    <ul className="mt-3 space-y-2 text-sm text-slate-600 font-medium">
+                      <li>• First resend waits <b>{seq[0]}s</b></li>
+                      <li>• Second resend waits <b>{seq[1]}s</b></li>
+                      <li>• Third resend waits <b>{seq[2]}s</b></li>
+                      <li>• Fourth resend waits <b>{seq[3]}s</b></li>
+                      <li>• Further resends cap at <b>{cap}s</b> — and stop entirely after max resends</li>
+                    </ul>
+                  )
+                })()}
               </div>
             </div>
           </section>

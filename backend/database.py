@@ -1103,6 +1103,26 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_google_link_otps_email ON google_link_otps(email)")
+    ensure_columns('google_link_otps', [('resend_count', 'INTEGER DEFAULT 0'), ('last_sent_at', 'TIMESTAMP')])
+
+    # --- Customer Email OTP (email-based signup/login without Google) ---
+    # Same hardening as the other OTP tables: hashed with per-record salt,
+    # one active OTP per email (old rows purged on new request), attempt-limited,
+    # one-time use, rate-limited at the endpoint level. resend_count + last_sent_at
+    # power the escalating resend cooldown (admin-configurable via system_settings).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS customer_email_otps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        otp_hash TEXT NOT NULL,
+        otp_salt TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        resend_count INTEGER DEFAULT 0,
+        last_sent_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_customer_email_otps_email ON customer_email_otps(email)")
+    ensure_columns('customer_email_otps', [('resend_count', 'INTEGER DEFAULT 0'), ('last_sent_at', 'TIMESTAMP')])
 
 
     # --- Settings & Marketing ---

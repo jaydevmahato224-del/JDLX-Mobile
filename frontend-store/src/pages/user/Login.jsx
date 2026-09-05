@@ -273,6 +273,18 @@ function Login() {
         }
     };
 
+    // ─── OTP help / spam-folder tip (shared by signup + google-link flows) ────
+    const otpHelpNote = (
+        <div className="w-full mt-3 rounded-2xl bg-[var(--color-surface-container)] border border-[var(--color-surface-high)] px-4 py-3 text-left">
+            <p className="text-[11px] font-bold text-[var(--color-on-surface)]">📩 Didn't get the email?</p>
+            <ul className="mt-1.5 space-y-1 text-[11px] text-[var(--color-on-surface-variant)] leading-relaxed">
+                <li>• Check your <b className="text-[var(--color-on-surface)]">Spam</b> or <b className="text-[var(--color-on-surface)]">Promotions</b> folder</li>
+                <li>• Add <b className="text-[var(--color-on-surface)]">jdlxofficial@gmail.com</b> to your contacts so future OTPs always arrive</li>
+                <li>• Delivery can take up to a minute — use <b className="text-[var(--color-on-surface)]">Resend OTP</b> after the countdown if needed</li>
+            </ul>
+        </div>
+    );
+
     // ─── OTP entry screen (shared by signup + google-link flows) ─────────────
     const otpScreen = (email, otp, setOtp, onSubmit, title, subtitle, cta, busy) => (
         <form onSubmit={onSubmit} className="w-full mt-4 flex flex-col items-center gap-4">
@@ -320,6 +332,7 @@ function Login() {
                     )}
 
                     {otpResendRow(handleResendLinkOtp, sending)}
+                    {otpHelpNote}
 
                     <p className="text-xs text-gray-400 mt-4 leading-relaxed">
                         By continuing, you agree to our Terms of Service and Privacy Policy.
@@ -394,6 +407,7 @@ function Login() {
                     )}
 
                     {otpResendRow(handleResendSignupOtp, sending)}
+                    {otpHelpNote}
                 </div>
             </div>
         );

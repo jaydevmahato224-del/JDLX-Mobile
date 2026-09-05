@@ -1,4 +1,5 @@
 import os
+import re
 import datetime
 import html as _html
 import smtplib
@@ -461,20 +462,32 @@ def send_user_status_update_email(to_email, user_name, new_status, reason=None):
         return False
 
 def send_individual_email(to_email, user_name, subject, message):
+    """Sends a simple transactional email (OTP codes, admin notices).
+
+    Sends BOTH a plain-text and an HTML part (multipart/alternative) — emails
+    with a text alternative are far less likely to be flagged as spam by Gmail
+    than HTML-only mail, and it keeps recipients who disable HTML readable.
+    `message` is intentionally NOT escaped: it is server-generated HTML.
+    """
     if not GMAIL_USER or not GMAIL_PASS:
         print("[MAIL ERROR] SMTP credentials missing in environment (.env)")
         return False
         
     print(f"[MAIL LOG] Preparing individual email for {to_email} (User: {user_name})")
     
-    msg = MIMEMultipart()
+    msg = MIMEMultipart('alternative')
     msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
     msg['To'] = to_email
     msg['Subject'] = f"JDLX Mobile: {subject}"
-    
-    # NOTE: `message` is intentionally NOT escaped — it is server/admin-generated
-    # HTML (OTP codes, admin notices). Do not interpolate raw user input here.
+
     message_html = (message or '').replace('\n', '<br/>')
+
+    # Plain-text version (tags stripped) so the mail carries a text part.
+    plain_message = re.sub(r'<[^>]+>', '', message or '')
+    plain_message = plain_message.replace('\xa0', ' ').strip()
+    text_part = f"Hello {user_name},\n\n{plain_message}\n\nRegards,\nJDLX Mobile Team"
+    msg.attach(MIMEText(text_part, 'plain'))
+
     body = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
         <h2 style="color: #001f3f;">Hello {_esc(user_name)},</h2>

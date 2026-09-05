@@ -1263,7 +1263,7 @@ def _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, r
     # Send OTP via email
     from threading import Thread
     if require_otp:
-        subject = "JDLX Mobile Login Verification OTP"
+        subject = "Login Verification OTP"
         body = f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
     else:
         subject = "Verify Google Account Linking"
@@ -1523,7 +1523,7 @@ def google_link_resend():
 
         from threading import Thread
         Thread(target=send_individual_email, args=(email, user['name'] or 'User',
-            "JDLX Mobile Login Verification OTP",
+            "Login Verification OTP",
             f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
         )).start()
 
@@ -1608,7 +1608,7 @@ def email_send_otp():
 
         from threading import Thread
         Thread(target=send_individual_email, args=(email, email.split('@')[0],
-            "JDLX Mobile Sign In OTP",
+            "Sign in OTP",
             f"Your OTP to access your JDLX Mobile account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
         )).start()
 

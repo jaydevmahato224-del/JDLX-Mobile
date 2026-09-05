@@ -24,7 +24,7 @@ const PAGES = [
     title: 'Fast Delivery, Live Tracking',
     points: [
       '📍 See where your order is — live tracking',
-      '⚡ Same-day & express delivery options',
+      '📅 Scheduled doorstep delivery — order anytime, delivered on time',
       '🔐 Secure OTP-verified delivery — 100% safe',
     ],
   },
@@ -101,13 +101,23 @@ export default function OnboardingGuide({ onComplete }) {
           ))}
         </div>
 
-        {/* Next / Get started */}
-        <button
-          onClick={next}
-          className="mt-8 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-[var(--color-on-primary)] font-bold rounded-full px-6 py-3.5 text-sm shadow-lg shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 transition-all active:scale-[0.98]"
-        >
-          {isLast ? 'Get Started 🚀' : 'Next →'}
-        </button>
+        {/* Prev / Next / Get started */}
+        <div className="mt-8 w-full flex items-center gap-3">
+          {page > 0 && (
+            <button
+              onClick={() => setPage(page - 1)}
+              className="flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold bg-[var(--color-surface-container)] border border-[var(--color-surface-high)] text-[var(--color-on-surface)] hover:border-amber-500 hover:text-amber-600 transition-all active:scale-[0.98]"
+            >
+              ← Back
+            </button>
+          )}
+          <button
+            onClick={next}
+            className={`flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-[var(--color-on-primary)] font-bold rounded-full px-6 py-3.5 text-sm shadow-lg shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 transition-all active:scale-[0.98] ${page === 0 ? 'w-full' : 'flex-1'}`}
+          >
+            {isLast ? 'Get Started 🚀' : 'Next →'}
+          </button>
+        </div>
       </div>
     </div>
   )

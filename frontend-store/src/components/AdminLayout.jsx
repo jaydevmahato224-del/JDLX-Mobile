@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
+import NotificationBell from './NotificationBell'
 
 function AdminLayout({ children }) {
     const location = useLocation();

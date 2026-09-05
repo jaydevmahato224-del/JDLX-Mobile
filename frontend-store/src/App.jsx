@@ -417,7 +417,6 @@ function App() {
             <Routes>
               <Route path="/*" element={
                 <>
-                  <OAuthCallbackBridge />
                   <Layout>
                     <Routes>
                       {/* Public Routes */}

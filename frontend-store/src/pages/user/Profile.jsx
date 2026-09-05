@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
-import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle, CheckCircle2, Shield } from 'lucide-react'
+import { ShoppingBag, ChevronRight, User, Mail, Package, MapPin, Settings, Heart, Wallet, Bell, Lock, HelpCircle, Gift, LogOut, Sun, Moon, Info, FileText, Download, MessageSquare, MessageCircle, ClipboardList, RotateCcw, Bug, AlertCircle, CheckCircle2, Shield, X, Smartphone } from 'lucide-react'
 
 import { usePWAInstall } from '../../hooks/usePWAInstall'
 import useScrollLock from '../../hooks/useScrollLock'

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, RefreshCw, AlertTriangle, CheckCircle, Clock, Package, UploadCloud, Users, FileText, ChevronRight, X, Save, Edit2, Trash2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, AlertTriangle, CheckCircle, Clock, Package, UploadCloud, Users, FileText, ChevronRight, X, Save, Edit2, Trash2, Brain } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'

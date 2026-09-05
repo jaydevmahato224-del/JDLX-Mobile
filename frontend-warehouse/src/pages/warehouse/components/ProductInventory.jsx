@@ -9,6 +9,7 @@ import {
     Zap,
     Percent,
     ArrowRight,
+    X,
 } from 'lucide-react'
 import { apiFetch } from '../../../utils/apiFetch'
 import { toast } from 'react-hot-toast'

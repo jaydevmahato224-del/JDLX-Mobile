@@ -1260,15 +1260,23 @@ def _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, r
     )
     conn.commit()
 
-    # Send OTP via email
-    from threading import Thread
+    # Send the OTP over SMTP synchronously. A background thread used to send it,
+    # but any thread failure (broken stdout, SMTP outage) silently left the user
+    # on the OTP screen with an OTP row and no email. Synchronous send means the
+    # failure propagates back to the login flow, which can tell the user.
     if require_otp:
         subject = "Login Verification OTP"
         body = f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
     else:
         subject = "Verify Google Account Linking"
         body = f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
-    Thread(target=send_individual_email, args=(email, user['name'] or 'User', subject, body)).start()
+    send_ok = send_individual_email(email, user['name'] or 'User', subject, body)
+    if not send_ok:
+        # Don't leave an OTP row for a code that was never emailed.
+        cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
+        conn.commit()
+        return {'link_required': True, 'email_send_failed': True, 'email': email, 'google_id': google_id,
+                'message': 'Failed to send the OTP email. Please try again.'}
 
     return {'link_required': True, 'email': email, 'google_id': google_id,
             'message': 'OTP sent to email. Verify to complete login.'}
@@ -1521,11 +1529,17 @@ def google_link_resend():
         )
         conn.commit()
 
-        from threading import Thread
-        Thread(target=send_individual_email, args=(email, user['name'] or 'User',
+        # Send the OTP over SMTP synchronously so a failed send reaches the user
+        # instead of being swallowed by a background thread.
+        send_ok = send_individual_email(email, user['name'] or 'User',
             "Login Verification OTP",
             f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
-        )).start()
+        )
+        if not send_ok:
+            # Don't leave an OTP row for a code that was never emailed.
+            cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
+            conn.commit()
+            return error_response("Could not send the OTP email right now. Please try again in a moment.", 500)
 
         next_cooldown = min(
             settings['otp_resend_cooldown_base'] + settings['otp_resend_cooldown_step'] * new_count,
@@ -1538,6 +1552,11 @@ def google_link_resend():
         }, "OTP sent to your email.")
     except Exception as e:
         logger.error(f"google_link_resend error: {e}")
+        try:
+            cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
+            conn.commit()
+        except Exception:
+            pass
         return error_response("Failed to send OTP", 500)
     finally:
         conn.close()
@@ -1606,11 +1625,18 @@ def email_send_otp():
         )
         conn.commit()
 
-        from threading import Thread
-        Thread(target=send_individual_email, args=(email, email.split('@')[0],
+        # Send the OTP over SMTP synchronously so a failed send surfaces to the
+        # caller instead of being silently swallowed by a background thread
+        # (a dead thread previously left an OTP row with no email behind).
+        send_ok = send_individual_email(email, email.split('@')[0],
             "Sign in OTP",
             f"Your OTP to access your JDLX Mobile account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
-        )).start()
+        )
+        if not send_ok:
+            # Don't leave an OTP row for a code that was never emailed.
+            cursor.execute("DELETE FROM customer_email_otps WHERE email = ?", (email,))
+            conn.commit()
+            return error_response("Could not send the OTP email right now. Please try again in a moment.", 500)
 
         next_cooldown = min(
             settings['otp_resend_cooldown_base'] + settings['otp_resend_cooldown_step'] * new_count,
@@ -1623,6 +1649,13 @@ def email_send_otp():
         }, "OTP sent to your email.")
     except Exception as e:
         logger.error(f"email_send_otp error: {e}")
+        # If the insert succeeded but sending crashed, drop the stale row so no
+        # unusable OTP lingers for this email.
+        try:
+            cursor.execute("DELETE FROM customer_email_otps WHERE email = ?", (email,))
+            conn.commit()
+        except Exception:
+            pass
         return error_response("Failed to send OTP", 500)
     finally:
         conn.close()
@@ -1996,6 +2029,11 @@ def google_callback():
         
         # Handle link_required or link_conflict from process_google_user_login
         if isinstance(result, dict):
+            if result.get('email_send_failed'):
+                # The OTP could not be emailed (SMTP down / credentials missing):
+                # send the user back with a clear error instead of an OTP screen
+                # that can never be completed.
+                return redirect(f"{frontend_url}/login?error=otp_email_failed&email={result.get('email', '')}&google_id={result.get('google_id', '')}")
             if result.get('link_required'):
                 return redirect(f"{frontend_url}/login?link_required=true&email={result['email']}&google_id={result['google_id']}")
             if result.get('link_conflict'):

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import threading
 import datetime
@@ -13,6 +14,26 @@ load_dotenv()
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
+
+
+def _log(*args):
+    """Log without ever crashing the caller.
+
+    Email sends run in background threads. If the process's stdout is a broken
+    pipe (e.g. `python app.py 2>&1 | head -30` where `head` has exited), a plain
+    print() raises BrokenPipeError and kills the thread BEFORE the SMTP send —
+    the OTP row exists but the email is never sent. This helper swallows output
+    errors so a logging failure can never silently block a send.
+    """
+    try:
+        print(*args)
+        sys.stdout.flush()
+    except Exception:
+        try:
+            sys.stderr.write(" ".join(str(a) for a in args) + "\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
 
 # --- Persistent SMTP connection pool ------------------------------------------
 # Opening a fresh Gmail SMTP connection (TCP + TLS + auth) takes ~2-3s per
@@ -75,14 +96,14 @@ def _smtp_send(to_email, msg_string):
             _get_smtp().sendmail(GMAIL_USER, to_email, msg_string)
             return True
         except Exception as first_err:
-            print(f"[MAIL RETRY] SMTP connection issue ({first_err}); reconnecting and retrying once.")
+            _log(f"[MAIL RETRY] SMTP connection issue ({first_err}); reconnecting and retrying once.")
             _close_smtp()
             try:
                 _get_smtp().sendmail(GMAIL_USER, to_email, msg_string)
                 return True
             except Exception as e:
                 _close_smtp()
-                print(f"[MAIL ERROR] Failed to send individual email to {to_email}: {str(e)}")
+                _log(f"[MAIL ERROR] Failed to send individual email to {to_email}: {str(e)}")
                 return False
 
 
@@ -147,10 +168,10 @@ def send_order_email(to_email, order_details):
         text = msg.as_string()
         server.sendmail(GMAIL_USER, to_email, text)
         server.quit()
-        print("Order email sent successfully.")
+        _log("Order email sent successfully.")
         return True
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        _log(f"Failed to send email: {e}")
         return False
 
 def send_warehouse_application_email(to_email, status, owner_name, notes=None):
@@ -188,10 +209,10 @@ def send_warehouse_application_email(to_email, status, owner_name, notes=None):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"Warehouse application email ({status}) sent to {to_email}.")
+        _log(f"Warehouse application email ({status}) sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"Failed to send warehouse email: {e}")
+        _log(f"Failed to send warehouse email: {e}")
         return False
 
 def send_warehouse_registration_confirmation_email(to_email, owner_name, warehouse_name):
@@ -216,10 +237,10 @@ def send_warehouse_registration_confirmation_email(to_email, owner_name, warehou
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"Warehouse registration confirmation email sent to {to_email}.")
+        _log(f"Warehouse registration confirmation email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"Failed to send warehouse registration confirmation email: {e}")
+        _log(f"Failed to send warehouse registration confirmation email: {e}")
         return False
 
 def send_review_thank_you_email(to_email, user_name, product_name, rating, custom_subject=None, custom_body=None):
@@ -266,7 +287,7 @@ def send_review_thank_you_email(to_email, user_name, product_name, rating, custo
         server.quit()
         return True
     except Exception as e:
-        print(f"Failed to send review thank you email: {e}")
+        _log(f"Failed to send review thank you email: {e}")
         return False
 
 def send_warehouse_kyc_pending_email(to_email, owner_name, warehouse_name):
@@ -305,10 +326,10 @@ def send_warehouse_kyc_pending_email(to_email, owner_name, warehouse_name):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[MAIL LOG] Warehouse KYC pending email sent to {to_email}.")
+        _log(f"[MAIL LOG] Warehouse KYC pending email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"[MAIL ERROR] Failed to send warehouse KYC pending email: {e}")
+        _log(f"[MAIL ERROR] Failed to send warehouse KYC pending email: {e}")
         return False
 
 def send_delivery_application_email(to_email, status, partner_name, notes=None):
@@ -358,10 +379,10 @@ def send_delivery_application_email(to_email, status, partner_name, notes=None):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"Delivery application email ({status}) sent to {to_email}.")
+        _log(f"Delivery application email ({status}) sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"Failed to send delivery email: {e}")
+        _log(f"Failed to send delivery email: {e}")
         return False
 
 def send_delivery_registration_confirmation_email(to_email, partner_name):
@@ -399,10 +420,10 @@ def send_delivery_registration_confirmation_email(to_email, partner_name):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"Delivery registration confirmation email sent to {to_email}.")
+        _log(f"Delivery registration confirmation email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"Failed to send delivery registration email: {e}")
+        _log(f"Failed to send delivery registration email: {e}")
         return False
 
 def send_delivery_welcome_email(to_email, partner_name):
@@ -432,16 +453,16 @@ def send_delivery_welcome_email(to_email, partner_name):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"Delivery welcome email sent to {to_email}.")
+        _log(f"Delivery welcome email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"Failed to send delivery welcome email: {e}")
+        _log(f"Failed to send delivery welcome email: {e}")
         return False
 
 def send_welcome_email(to_email, user_name):
     """Sends a premium welcome email to newly registered users."""
     if not GMAIL_USER or not GMAIL_PASS:
-        print("[MAIL ERROR] SMTP credentials missing for Welcome Email")
+        _log("[MAIL ERROR] SMTP credentials missing for Welcome Email")
         return False
 
     msg = MIMEMultipart()
@@ -490,10 +511,10 @@ def send_welcome_email(to_email, user_name):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[MAIL SUCCESS] Welcome email sent to {to_email}.")
+        _log(f"[MAIL SUCCESS] Welcome email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"[MAIL ERROR] Failed to send welcome email: {str(e)}")
+        _log(f"[MAIL ERROR] Failed to send welcome email: {str(e)}")
         return False
 
 def send_user_status_update_email(to_email, user_name, new_status, reason=None):
@@ -528,10 +549,10 @@ def send_user_status_update_email(to_email, user_name, new_status, reason=None):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[MAIL LOG] User status update email ({new_status}) sent to {to_email}.")
+        _log(f"[MAIL LOG] User status update email ({new_status}) sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"[MAIL ERROR] Failed to send user status email to {to_email}: {e}")
+        _log(f"[MAIL ERROR] Failed to send user status email to {to_email}: {e}")
         return False
 
 def send_individual_email(to_email, user_name, subject, message):
@@ -543,10 +564,10 @@ def send_individual_email(to_email, user_name, subject, message):
     `message` is intentionally NOT escaped: it is server-generated HTML.
     """
     if not GMAIL_USER or not GMAIL_PASS:
-        print("[MAIL ERROR] SMTP credentials missing in environment (.env)")
+        _log("[MAIL ERROR] SMTP credentials missing in environment (.env)")
         return False
         
-    print(f"[MAIL LOG] Preparing individual email for {to_email} (User: {user_name})")
+    _log(f"[MAIL LOG] Preparing individual email for {to_email} (User: {user_name})")
     
     msg = MIMEMultipart('alternative')
     msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
@@ -578,7 +599,7 @@ def send_individual_email(to_email, user_name, subject, message):
     # the pooled connection went stale.
     ok = _smtp_send(to_email, msg.as_string())
     if ok:
-        print(f"[MAIL SUCCESS] Individual email sent to {to_email}.")
+        _log(f"[MAIL SUCCESS] Individual email sent to {to_email}.")
     return ok
 
 def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, reason=None):
@@ -637,10 +658,10 @@ def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, re
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[MAIL LOG] Warehouse {action} email sent to {to_email}.")
+        _log(f"[MAIL LOG] Warehouse {action} email sent to {to_email}.")
         return True
     except Exception as e:
-        print(f"[MAIL ERROR] Failed to send warehouse {action} email: {e}")
+        _log(f"[MAIL ERROR] Failed to send warehouse {action} email: {e}")
         return False
 
 def send_bulk_notification_email(recipient_emails, subject, message):
@@ -677,16 +698,16 @@ def send_bulk_notification_email(recipient_emails, subject, message):
             try:
                 server.sendmail(GMAIL_USER, to_email, msg.as_string())
                 success_count += 1
-                print(f"[MAIL LOG] Bulk mail sent to {to_email}")
+                _log(f"[MAIL LOG] Bulk mail sent to {to_email}")
             except Exception as e:
                 fail_count += 1
-                print(f"[MAIL ERROR] Bulk mail failed for {to_email}: {e}")
+                _log(f"[MAIL ERROR] Bulk mail failed for {to_email}: {e}")
         
         server.quit()
-        print(f"[MAIL LOG] Bulk email process finished. Success: {success_count}, Fail: {fail_count}")
+        _log(f"[MAIL LOG] Bulk email process finished. Success: {success_count}, Fail: {fail_count}")
         return success_count, fail_count
     except Exception as e:
-        print(f"[MAIL ERROR] Failed to start bulk email process: {e}")
+        _log(f"[MAIL ERROR] Failed to start bulk email process: {e}")
         return 0, len(recipient_emails)
 
 def send_low_stock_catchy_email(to_email, user_name, product_name, stock_left, 
@@ -754,10 +775,10 @@ def send_low_stock_catchy_email(to_email, user_name, product_name, stock_left,
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[LOW STOCK MAIL] Sent to {to_email} for {product_name}")
+        _log(f"[LOW STOCK MAIL] Sent to {to_email} for {product_name}")
         return True
     except Exception as e:
-        print(f"[LOW STOCK MAIL ERROR] Failed: {e}")
+        _log(f"[LOW STOCK MAIL ERROR] Failed: {e}")
         return False
 def send_availability_subscription_confirmation(to_email, product_name):
     msg = MIMEMultipart()
@@ -783,7 +804,7 @@ def send_availability_subscription_confirmation(to_email, product_name):
         server.quit()
         return True
     except Exception as e:
-        print(f"Failed to send alert confirmation: {e}")
+        _log(f"Failed to send alert confirmation: {e}")
         return False
 
 def send_product_restock_alert(to_email, product_name):
@@ -812,7 +833,7 @@ def send_product_restock_alert(to_email, product_name):
         server.quit()
         return True
     except Exception as e:
-        print(f"Failed to send restock alert: {e}")
+        _log(f"Failed to send restock alert: {e}")
         return False
 
 def send_security_logout_email(to_email, user_name):
@@ -860,10 +881,10 @@ def send_security_logout_email(to_email, user_name):
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
         server.quit()
-        print(f"[SECURITY MAIL] Global logout notification sent to {to_email}")
+        _log(f"[SECURITY MAIL] Global logout notification sent to {to_email}")
         return True
     except Exception as e:
-        print(f"[SECURITY MAIL ERROR] Failed to send logout notification: {e}")
+        _log(f"[SECURITY MAIL ERROR] Failed to send logout notification: {e}")
         return False
 
 def send_staff_billing_setup_email(to_email, staff_name, warehouse_name, setup_link, role_name="Billing Agent"):
@@ -928,11 +949,11 @@ def send_staff_billing_setup_email(to_email, staff_name, warehouse_name, setup_l
             server.login(GMAIL_USER, GMAIL_PASS)
             server.sendmail(GMAIL_USER, to_email, msg.as_string())
             server.quit()
-            print(f"[STAFF MAIL SUCCESS] Sent billing setup email to {to_email}")
+            _log(f"[STAFF MAIL SUCCESS] Sent billing setup email to {to_email}")
         else:
-            print(f"[STAFF MAIL SIMULATED] Setup link for {to_email}: {setup_link}")
+            _log(f"[STAFF MAIL SIMULATED] Setup link for {to_email}: {setup_link}")
         return True
     except Exception as e:
-        print(f"[STAFF MAIL ERROR] Failed to send email to {to_email}: {e}")
+        _log(f"[STAFF MAIL ERROR] Failed to send email to {to_email}: {e}")
         return False
 

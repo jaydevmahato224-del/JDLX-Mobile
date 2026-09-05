@@ -234,6 +234,40 @@ try:
     conn.commit()
     conn.close()
 
+    print("== 12. SMTP send failure surfaces + no orphan OTP row is left ==")
+    orig_send = app_module.send_individual_email
+    app_module.send_individual_email = lambda to, name, subject, message: sent.append((to, subject, 'FAIL')) or False
+    try:
+        r = post('/api/auth/email/send-otp', json={"email": TEST_EMAIL})
+        body = r.get_json() or {}
+        check("send-otp failure -> 500 (not silent)", r.status_code == 500, f"({r.status_code} {body.get('error')})")
+        conn = db_conn()
+        cnt = conn.execute("SELECT COUNT(*) FROM customer_email_otps WHERE email = ?", (TEST_EMAIL,)).fetchone()[0]
+        conn.close()
+        check("no orphan OTP row after send failure", cnt == 0, f"(rows={cnt})")
+
+        # Google login OTP path: failure must come back to the flow as a dict
+        # flag and leave no google_link_otps row behind.
+        result = app_module.process_google_user_login('google_test_1', TEST_EMAIL, 'Test', None, '127.0.0.1', require_otp=True)
+        check("google OTP failure surfaces email_send_failed", isinstance(result, dict) and result.get('email_send_failed') is True, f"{result}")
+        conn = db_conn()
+        cnt = conn.execute("SELECT COUNT(*) FROM google_link_otps WHERE email = ?", (TEST_EMAIL,)).fetchone()[0]
+        conn.close()
+        check("no orphan google_link_otps row after send failure", cnt == 0, f"(rows={cnt})")
+
+        r = post('/api/auth/email/send-otp', json={"email": TEST_EMAIL})
+        check("recovery: next send after sender restored would still fail here (failing sender active)", r.status_code == 500, f"({r.status_code})")
+    finally:
+        app_module.send_individual_email = orig_send
+
+    # Restored sender: a fresh request succeeds again.
+    r = post('/api/auth/email/send-otp', json={"email": TEST_EMAIL})
+    check("after sender restored, send-otp -> 200", r.status_code == 200, f"({r.status_code})")
+    conn = db_conn()
+    conn.execute("DELETE FROM customer_email_otps WHERE email = ?", (TEST_EMAIL,))
+    conn.commit()
+    conn.close()
+
 except Exception as e:
     import traceback
     traceback.print_exc()

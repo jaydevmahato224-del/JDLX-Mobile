@@ -91,7 +91,12 @@ function Login() {
         // Handle auth error redirect from backend
         const error = params.get('error');
         if (error) {
-            toast.error("Google login failed. Please try again.");
+            if (error === 'otp_email_failed') {
+                // Backend could not send the OTP email (SMTP down / not configured).
+                toast.error("We couldn't send the OTP email to this account. Please try again in a moment.");
+            } else {
+                toast.error("Google login failed. Please try again.");
+            }
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }

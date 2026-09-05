@@ -113,6 +113,32 @@ def _smtp_send(to_email, msg_string):
                 return False
 
 
+def warm_smtp_pool():
+    """Open the pooled SMTP connection in the background during app startup.
+
+    On a cold boot (Render's free tier sleeps the instance, and init_db against
+    Turso can take ~60-75s) the very first OTP request used to pay the whole
+    ~15-20s Gmail connect cost on top of boot — occasionally exceeding the
+    timeout and failing with "Could not send the OTP email". Warming the
+    connection in a daemon thread while the app boots means a ready connection
+    exists by the time the first email needs to go out. Never blocks shutdown;
+    any failure is logged and the pool simply connects lazily on first send.
+    """
+    if not GMAIL_USER or not GMAIL_PASS:
+        return
+
+    def _warm():
+        try:
+            with _smtp_lock:
+                if _smtp_conn is None:
+                    _get_smtp()
+                    _log("[MAIL WARM] SMTP connection ready.")
+        except Exception as e:
+            _log(f"[MAIL WARM] Background pre-warm failed ({e}); will connect lazily on first send.")
+
+    threading.Thread(target=_warm, name="smtp-prewarm", daemon=True).start()
+
+
 def _esc(value):
     """HTML-escapes a user-controlled value for safe interpolation into an email body."""
     if value is None:
@@ -962,4 +988,10 @@ def send_staff_billing_setup_email(to_email, staff_name, warehouse_name, setup_l
     except Exception as e:
         _log(f"[STAFF MAIL ERROR] Failed to send email to {to_email}: {e}")
         return False
+
+
+# Pre-warm the pooled SMTP connection at import time (fire-and-forget) so that
+# on a cold boot the first OTP send finds a ready connection instead of paying
+# the full Gmail connect cost (~15-20s from datacenter IPs) on top of boot.
+warm_smtp_pool()
 

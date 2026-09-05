@@ -75,13 +75,13 @@ async function requestPermission(key) {
 }
 
 const STATUS_META = {
-  granted: { label: 'Allowed', cls: 'text-emerald-600 bg-emerald-50 border-emerald-200', icon: '✓' },
-  denied: { label: 'Blocked', cls: 'text-red-600 bg-red-50 border-red-200', icon: '✕' },
-  default: { label: 'Not asked', cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: '○' },
-  prompt: { label: 'Not asked', cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: '○' },
-  unknown: { label: 'Not asked', cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: '○' },
-  unavailable: { label: 'Not available', cls: 'text-gray-400 bg-gray-100 border-gray-200', icon: '–' },
-  checking: { label: 'Checking…', cls: 'text-gray-500 bg-gray-100 border-gray-200', icon: '…' },
+  granted: { label: 'Allowed', cls: 'text-emerald-700 bg-emerald-100 border-emerald-200', icon: '✓' },
+  denied: { label: 'Blocked', cls: 'text-red-700 bg-red-100 border-red-200', icon: '✕' },
+  default: { label: 'Not asked', cls: 'text-amber-700 bg-amber-100 border-amber-200', icon: '○' },
+  prompt: { label: 'Not asked', cls: 'text-amber-700 bg-amber-100 border-amber-200', icon: '○' },
+  unknown: { label: 'Not asked', cls: 'text-amber-700 bg-amber-100 border-amber-200', icon: '○' },
+  unavailable: { label: 'Not available', cls: 'text-gray-500 bg-gray-200 border-gray-300', icon: '–' },
+  checking: { label: 'Checking…', cls: 'text-gray-500 bg-gray-200 border-gray-300', icon: '…' },
 }
 
 export default function OnboardingPermissions({ onComplete }) {
@@ -134,15 +134,17 @@ export default function OnboardingPermissions({ onComplete }) {
   const blocked = PERMISSIONS.some((p) => statuses[p.key] === 'denied')
 
   return (
-    <div className="fixed inset-0 z-[10050] overflow-y-auto bg-gradient-to-b from-[#0b1220] via-[#101a30] to-[#0b1220] text-white">
-      <div className="min-h-full flex flex-col items-center justify-center px-6 py-10 max-w-md mx-auto">
+    // Colors come from the app theme (var(--color-surface) etc. swap between
+    // light and dark automatically via the .dark class on the app root).
+    <div className="fixed inset-0 z-[10050] overflow-y-auto flex bg-gradient-to-b from-[var(--color-surface)] via-[var(--color-surface-container)] to-[var(--color-surface)] text-[var(--color-on-surface)]">
+      <div className="m-auto w-full max-w-md flex flex-col items-center px-6 py-10">
         {/* Logo */}
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-3xl shadow-lg shadow-amber-500/20 mb-5">
           🛒
         </div>
         <h1 className="text-2xl font-black tracking-tight text-center">Set up JDLX Mobile</h1>
-        <p className="text-sm text-slate-400 mt-2 text-center leading-relaxed">
-          These permissions help us deliver a faster, smoother shopping experience. App ko better banane ke liye allow karo.
+        <p className="text-sm text-[var(--color-on-surface-variant)] mt-2 text-center leading-relaxed">
+          Allow these to unlock the full JDLX Mobile experience — order updates, faster delivery and more.
         </p>
 
         {/* Permission list */}
@@ -154,16 +156,19 @@ export default function OnboardingPermissions({ onComplete }) {
             const canAsk = supported && (s === 'default' || s === 'prompt' || s === 'unknown')
             const asking = requestingKey === p.key
             return (
-              <div key={p.key} className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5">
-                <div className="w-11 h-11 shrink-0 rounded-xl bg-white/10 flex items-center justify-center text-xl">
+              <div
+                key={p.key}
+                className="flex items-center gap-4 rounded-2xl px-4 py-3.5 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)]"
+              >
+                <div className="w-11 h-11 shrink-0 rounded-xl bg-[var(--color-surface-container)] flex items-center justify-center text-xl">
                   {p.emoji}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm">{p.title}</div>
-                  <div className="text-xs text-slate-400 mt-0.5 leading-snug">{p.desc}</div>
+                  <div className="text-xs text-[var(--color-on-surface-variant)] mt-0.5 leading-snug">{p.desc}</div>
                   {s === 'denied' && supported && (
-                    <div className="text-[10px] text-red-300/80 mt-1 leading-snug">
-                      Browser ne block kar diya — settings se allow karo. Continue par bhi app chalega.
+                    <div className="text-[10px] text-[var(--color-error)] mt-1 leading-snug">
+                      Blocked by the browser — allow it from site settings. The app still works if you continue.
                     </div>
                   )}
                 </div>
@@ -171,11 +176,11 @@ export default function OnboardingPermissions({ onComplete }) {
                   <button
                     onClick={() => handleRequest(p.key)}
                     disabled={!!requestingKey}
-                    className="shrink-0 px-3.5 py-2 rounded-full bg-white/10 border border-white/15 text-xs font-bold hover:bg-white/20 transition-colors disabled:opacity-50"
+                    className="shrink-0 px-3.5 py-2 rounded-full bg-[var(--color-surface-container)] border border-[var(--color-surface-high)] text-xs font-bold text-[var(--color-on-surface)] hover:border-amber-500 hover:text-amber-600 transition-colors disabled:opacity-50"
                   >
                     {asking ? (
                       <span className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span className="h-3 w-3 border-2 border-[var(--color-on-surface-variant)] border-t-[var(--color-on-surface)] rounded-full animate-spin" />
                         Asking…
                       </span>
                     ) : 'Allow'}
@@ -192,8 +197,8 @@ export default function OnboardingPermissions({ onComplete }) {
 
         {/* Guidance when something got blocked */}
         {blocked && (
-          <p className="w-full mt-4 text-[11px] text-slate-400 text-center leading-relaxed">
-            💡 Blocked permission ko browser/phone settings → Site settings se wapas allow kiya ja sakta hai.
+          <p className="w-full mt-4 text-[11px] text-[var(--color-on-surface-variant)] text-center leading-relaxed">
+            💡 You can re-enable a blocked permission anytime from the browser/phone site settings.
           </p>
         )}
 
@@ -201,13 +206,13 @@ export default function OnboardingPermissions({ onComplete }) {
         <div className="w-full mt-8 space-y-3">
           <button
             onClick={onComplete}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-[#0b1220] font-bold rounded-full px-6 py-3.5 text-sm shadow-lg shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 transition-all active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-[var(--color-on-primary)] font-bold rounded-full px-6 py-3.5 text-sm shadow-lg shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 transition-all active:scale-[0.98]"
           >
             {blocked ? 'Continue Anyway →' : allSatisfied ? 'All set ✓' : 'Continue →'}
           </button>
           {blocked && (
-            <p className="text-center text-[11px] text-slate-500">
-              Permissions optional hain — kabhi bhi settings se manage kar sakte ho.
+            <p className="text-center text-[11px] text-[var(--color-on-surface-variant)]">
+              Permissions are optional — manage them anytime from site settings.
             </p>
           )}
         </div>

@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import threading
 import datetime
 import html as _html
 import smtplib
@@ -11,6 +13,77 @@ load_dotenv()
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
+
+# --- Persistent SMTP connection pool ------------------------------------------
+# Opening a fresh Gmail SMTP connection (TCP + TLS + auth) takes ~2-3s per
+# email. Keeping ONE connection alive per process and reusing it makes every
+# send roughly twice as fast (OTPs arrive sooner). The lock serialises sends so
+# parallel background threads never share a connection mid-command; on a stale
+# connection the send is retried once over a freshly opened one. Each gunicorn
+# worker process owns its own connection, so no cross-process sharing.
+_smtp_lock = threading.Lock()
+_smtp_conn = None
+_SMTP_IDLE_MAX_SECONDS = 240  # Gmail drops idle connections; reconnect if old
+
+
+def _open_smtp():
+    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+    server.starttls()
+    server.login(GMAIL_USER, GMAIL_PASS)
+    server._jdlx_last_used = time.time()
+    return server
+
+
+def _close_smtp():
+    global _smtp_conn
+    if _smtp_conn is not None:
+        try:
+            _smtp_conn.quit()
+        except Exception:
+            try:
+                _smtp_conn.close()
+            except Exception:
+                pass
+        _smtp_conn = None
+
+
+def _get_smtp():
+    global _smtp_conn
+    if _smtp_conn is None:
+        _smtp_conn = _open_smtp()
+    else:
+        # Gmail closes connections it hasn't heard from in a while; drop old ones
+        # so the send retry opens a fresh connection instead of failing twice.
+        try:
+            idle = time.time() - getattr(_smtp_conn, '_jdlx_last_used', 0)
+        except Exception:
+            idle = 0
+        if idle > _SMTP_IDLE_MAX_SECONDS:
+            _close_smtp()
+            _smtp_conn = _open_smtp()
+    try:
+        _smtp_conn._jdlx_last_used = time.time()
+    except Exception:
+        pass
+    return _smtp_conn
+
+
+def _smtp_send(to_email, msg_string):
+    """Send via the pooled connection, retrying once on a stale connection."""
+    with _smtp_lock:
+        try:
+            _get_smtp().sendmail(GMAIL_USER, to_email, msg_string)
+            return True
+        except Exception as first_err:
+            print(f"[MAIL RETRY] SMTP connection issue ({first_err}); reconnecting and retrying once.")
+            _close_smtp()
+            try:
+                _get_smtp().sendmail(GMAIL_USER, to_email, msg_string)
+                return True
+            except Exception as e:
+                _close_smtp()
+                print(f"[MAIL ERROR] Failed to send individual email to {to_email}: {str(e)}")
+                return False
 
 
 def _esc(value):
@@ -501,18 +574,12 @@ def send_individual_email(to_email, user_name, subject, message):
     """
     msg.attach(MIMEText(body, 'html'))
 
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.set_debuglevel(0) # Set to 1 for more verbose debugging
-        server.starttls()
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, to_email, msg.as_string())
-        server.quit()
+    # Reuse the persistent connection (fast path); _smtp_send retries once if
+    # the pooled connection went stale.
+    ok = _smtp_send(to_email, msg.as_string())
+    if ok:
         print(f"[MAIL SUCCESS] Individual email sent to {to_email}.")
-        return True
-    except Exception as e:
-        print(f"[MAIL ERROR] Failed to send individual email to {to_email}: {str(e)}")
-        return False
+    return ok
 
 def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, reason=None):
     msg = MIMEMultipart()

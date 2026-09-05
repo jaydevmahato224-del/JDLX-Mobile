@@ -15,6 +15,12 @@ load_dotenv()
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
 
+# Gmail's SMTP servers occasionally accept connections very slowly (TCP + TLS +
+# EHLO can take 15-20s under load / rate-limiting). A short timeout then kills
+# sends that would otherwise succeed. 30s covers slow connects while still
+# bounding how long a hung send can block a request.
+_SMTP_TIMEOUT_SECONDS = 30
+
 
 def _log(*args):
     """Log without ever crashing the caller.
@@ -48,7 +54,7 @@ _SMTP_IDLE_MAX_SECONDS = 240  # Gmail drops idle connections; reconnect if old
 
 
 def _open_smtp():
-    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
     server.starttls()
     server.login(GMAIL_USER, GMAIL_PASS)
     server._jdlx_last_used = time.time()
@@ -162,7 +168,7 @@ def send_order_email(to_email, order_details):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         text = msg.as_string()
@@ -204,7 +210,7 @@ def send_warehouse_application_email(to_email, status, owner_name, notes=None):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -232,7 +238,7 @@ def send_warehouse_registration_confirmation_email(to_email, owner_name, warehou
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -280,7 +286,7 @@ def send_review_thank_you_email(to_email, user_name, product_name, rating, custo
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -321,7 +327,7 @@ def send_warehouse_kyc_pending_email(to_email, owner_name, warehouse_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -374,7 +380,7 @@ def send_delivery_application_email(to_email, status, partner_name, notes=None):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -415,7 +421,7 @@ def send_delivery_registration_confirmation_email(to_email, partner_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -448,7 +454,7 @@ def send_delivery_welcome_email(to_email, partner_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -506,7 +512,7 @@ def send_welcome_email(to_email, user_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -544,7 +550,7 @@ def send_user_status_update_email(to_email, user_name, new_status, reason=None):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -653,7 +659,7 @@ def send_warehouse_action_email(to_email, owner_name, warehouse_name, action, re
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -669,7 +675,7 @@ def send_bulk_notification_email(recipient_emails, subject, message):
     fail_count = 0
     
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         
@@ -770,7 +776,7 @@ def send_low_stock_catchy_email(to_email, user_name, product_name, stock_left,
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -797,7 +803,7 @@ def send_availability_subscription_confirmation(to_email, product_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -826,7 +832,7 @@ def send_product_restock_alert(to_email, product_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -876,7 +882,7 @@ def send_security_logout_email(to_email, user_name):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
@@ -944,7 +950,7 @@ def send_staff_billing_setup_email(to_email, staff_name, warehouse_name, setup_l
 
     try:
         if GMAIL_USER and GMAIL_PASS:
-            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
             server.starttls()
             server.login(GMAIL_USER, GMAIL_PASS)
             server.sendmail(GMAIL_USER, to_email, msg.as_string())

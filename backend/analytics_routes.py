@@ -200,3 +200,33 @@ def post_duration():
         return jsonify({"ok": True}), 200
     finally:
         conn.close()
+
+
+@analytics_bp.route('/api/onboarding/source', methods=['POST'])
+def post_onboarding_source():
+    """Records where a new user heard about JDLX Mobile.
+
+    Fired once from the first-run onboarding screen. All fields optional except
+    source, and storage failures never surface to the UI (fire-and-forget).
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    source = (data.get('source') or '').strip().lower()
+    if source not in ('friends', 'relatives', 'social_media', 'other'):
+        return jsonify({"error": "Invalid source"}), 400
+
+    conn = get_db()
+    try:
+        conn.execute('''
+            INSERT INTO onboarding_sources (user_id, session_id, source, platform, detail)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            data.get('user_id'),
+            data.get('session_id'),
+            source,
+            (data.get('platform') or '').strip()[:50] or None,
+            (data.get('detail') or '').strip()[:300] or None,
+        ))
+        conn.commit()
+        return jsonify({"ok": True}), 200
+    finally:
+        conn.close()

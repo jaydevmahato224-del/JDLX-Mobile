@@ -1,9 +1,24 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ShoppingBag, Users, TrendingUp, Package, FolderTree, Truck, Warehouse, Check, Undo2, RefreshCw, BarChart3, ShieldCheck, KeyRound, History, ShieldAlert, HardDriveDownload, LifeBuoy } from 'lucide-react'
+import { ShoppingBag, Users, TrendingUp, Package, FolderTree, Truck, Warehouse, Check, Undo2, RefreshCw, BarChart3, ShieldCheck, KeyRound, History, ShieldAlert, HardDriveDownload, LifeBuoy, Megaphone } from 'lucide-react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { API_BASE_URL } from '../../config'
 import adminLogo from '../../assets/admin-logo.svg'
 import { apiFetch } from '../../utils/apiFetch'
+
+// Onboarding source -> label/emoji/color used by the acquisition chart.
+const SOURCE_META = {
+    friends: { label: 'Friends & Family', emoji: '👨‍👩‍👧‍👦', color: '#22c55e' },
+    relatives: { label: 'Relatives', emoji: '👪', color: '#8b5cf6' },
+    social_media: { label: 'Social Media', emoji: '📱', color: '#f59e0b' },
+    other: { label: 'Other', emoji: '💡', color: '#64748b' },
+};
+const PLATFORM_META = {
+    whatsapp: { label: '💬 WhatsApp', color: '#22c55e' },
+    instagram: { label: '📸 Instagram', color: '#e1306c' },
+    facebook: { label: '👍 Facebook', color: '#3b82f6' },
+    youtube: { label: '▶️ YouTube', color: '#ef4444' },
+};
 
 function AdminDashboard() {
     const [stats, setStats] = useState({
@@ -30,6 +45,8 @@ function AdminDashboard() {
         suspicious_activity: [],
         failed_login_attempts: []
     });
+    // Where new users say they heard about JDLX Mobile (first-run onboarding)
+    const [sourceStats, setSourceStats] = useState({ sources: [], platforms: [], total: 0, days: 90 });
 
     useEffect(() => {
         apiFetch('/admin/stats')
@@ -69,6 +86,14 @@ function AdminDashboard() {
             .then(result => {
                 const data = Array.isArray(result) ? result : (result.data || []);
                 if (!data.error) setRecentOrders(data)
+            })
+            .catch(err => console.error(err));
+
+        apiFetch('/admin/analytics/onboarding-sources')
+            .then(res => res.json())
+            .then(result => {
+                const data = result.data || result;
+                if (!data.error) setSourceStats(data)
             })
             .catch(err => console.error(err));
     }, []);
@@ -128,6 +153,100 @@ function AdminDashboard() {
                     <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Low Stock</p>
                     <h2 className="text-2xl font-black text-red-600">{systemStats.low_stock_products || stats.low_stock_count}</h2>
                 </div>
+            </div>
+
+            {/* Where users come from (onboarding acquisition) */}
+            <div className="ui-card-premium p-6 md:p-8 flex flex-col gap-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-500/10 rounded-xl">
+                            <Megaphone className="w-6 h-6 text-amber-500" />
+                        </div>
+                        <div>
+                            <h3 className="ui-h2 text-gray-900">How Users Find Us</h3>
+                            <p className="text-xs text-gray-500 font-medium mt-0.5">Where new users heard about JDLX Mobile (last {sourceStats.days || 90} days)</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-50 border border-amber-200/60">
+                        <span className="text-2xl font-black text-amber-600 tracking-tighter">{sourceStats.total || 0}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Users</span>
+                    </div>
+                </div>
+
+                {sourceStats.sources?.length ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                        {/* Donut of sources */}
+                        <div className="relative h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={sourceStats.sources.map(s => ({
+                                            name: (SOURCE_META[s.source] || {}).label || s.source,
+                                            value: s.count,
+                                            color: (SOURCE_META[s.source] || {}).color || '#94a3b8',
+                                        }))}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        innerRadius={62}
+                                        outerRadius={92}
+                                        paddingAngle={3}
+                                        strokeWidth={0}
+                                    >
+                                        {sourceStats.sources.map((s, i) => (
+                                            <Cell key={s.source || i} fill={(SOURCE_META[s.source] || {}).color || '#94a3b8'} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid #e2e8f0', fontSize: 13, fontWeight: 600 }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-3xl font-black text-gray-900 tracking-tighter">{sourceStats.total || 0}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total</span>
+                            </div>
+                        </div>
+
+                        {/* Source breakdown bars */}
+                        <div className="flex flex-col gap-4">
+                            {sourceStats.sources.map(s => {
+                                const meta = SOURCE_META[s.source] || { label: s.source, emoji: '•', color: '#94a3b8' };
+                                const pct = sourceStats.total ? Math.round((s.count / sourceStats.total) * 100) : 0;
+                                return (
+                                    <div key={s.source}>
+                                        <div className="flex items-center justify-between text-sm mb-1.5">
+                                            <span className="font-bold text-gray-700">{meta.emoji} {meta.label}</span>
+                                            <span className="text-gray-500 font-semibold">{s.count} · {pct}%</span>
+                                        </div>
+                                        <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: meta.color }} />
+                                        </div>
+                                    </div>
+                                )
+                            })}
+
+                            {/* Social platform split (when social media picked) */}
+                            {sourceStats.platforms?.length > 0 && (
+                                <div className="mt-3 pt-4 border-t border-gray-100">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Social Media Breakdown</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {sourceStats.platforms.map(p => (
+                                            <span key={p.platform} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white"
+                                                style={{ color: (PLATFORM_META[p.platform] || {}).color || '#64748b', borderColor: 'rgba(0,0,0,0.06)' }}>
+                                                {(PLATFORM_META[p.platform] || {}).label || p.platform}
+                                                <span className="text-gray-400 font-black">{p.count}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="py-12 text-center rounded-3xl border-2 border-dashed border-gray-200">
+                        <p className="text-3xl mb-2">📣</p>
+                        <p className="text-sm font-bold text-gray-500">No data yet</p>
+                        <p className="text-xs text-gray-400 mt-1">This chart fills in once users complete the onboarding question.</p>
+                    </div>
+                )}
             </div>
 
             <div className="ui-card-premium p-8 flex flex-col gap-5 border-red-100/30 bg-red-50/5">

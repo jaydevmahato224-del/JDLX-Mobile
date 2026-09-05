@@ -1140,6 +1140,20 @@ def init_db():
 
     # --- User Interactions ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_interactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, session_id TEXT, interaction_type TEXT NOT NULL, target_id TEXT, category TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
+    # --- Onboarding source (where users heard about JDLX Mobile) ---
+    # Recorded on the first-run "How did you hear about us?" screen. source is
+    # friends | relatives | social_media | other; platform holds the social
+    # network (whatsapp/instagram/facebook/youtube) and detail the free-text.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS onboarding_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        session_id TEXT,
+        source TEXT NOT NULL,
+        platform TEXT,
+        detail TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS wishlist (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, product_id INTEGER NOT NULL, variant_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, product_id, variant_id), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id), FOREIGN KEY(variant_id) REFERENCES product_variants(id))''')
     ensure_columns('wishlist', [('variant_id', 'INTEGER REFERENCES product_variants(id)')])
     # Backfill unique constraint for existing databases: drop old index, create new

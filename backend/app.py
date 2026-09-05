@@ -6336,6 +6336,56 @@ def analytics_traffic_sources():
         return jsonify({"success": False, "error": str(e)}), 200
 
 
+@app.route('/api/admin/analytics/onboarding-sources', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def analytics_onboarding_sources():
+    """Where users say they heard about JDLX Mobile (onboarding screen).
+
+    source: friends | relatives | social_media | other; platform carries the
+    social network (whatsapp/instagram/facebook/youtube) when social_media was
+    chosen. Optional ?days= filter (default 90, max 365).
+    """
+    try:
+        days = 90
+        try:
+            days = max(1, min(365, int(request.args.get('days', 90))))
+        except Exception:
+            pass
+        conn = get_db()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                SELECT source, COUNT(*) AS count
+                FROM onboarding_sources
+                WHERE created_at >= datetime('now', ?)
+                GROUP BY source
+                ORDER BY count DESC
+            ''', (f'-{days} days',))
+            sources = [dict(row) for row in cursor.fetchall()]
+
+            cursor.execute('''
+                SELECT platform, COUNT(*) AS count
+                FROM onboarding_sources
+                WHERE platform IS NOT NULL AND platform != ''
+                  AND created_at >= datetime('now', ?)
+                GROUP BY platform
+                ORDER BY count DESC
+            ''', (f'-{days} days',))
+            platforms = [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+        return jsonify({"success": True, "data": {
+            "sources": sources,
+            "platforms": platforms,
+            "total": sum(int(s['count']) for s in sources),
+            "days": days,
+        }}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
 @app.route('/api/admin/analytics/devices', methods=['GET'])
 @token_required
 @require_admin()

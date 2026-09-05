@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { User, ChevronLeft, Heart as HeartIcon, Wallet } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, resolveMediaUrl } from '../config'
 import NotificationBell from './NotificationBell'
 import PushPermissionBanner from './PushPermissionBanner'
 import LiquidBottomNav from './LiquidBottomNav'
@@ -10,7 +10,6 @@ import PWAInstallBanner from './PWAInstallBanner'
 import LocationManager from './LocationManager'
 import TermsGate from './TermsGate'
 import Footer from './Footer'
-import ReleaseUpdateModal from './ReleaseUpdateModal'
 import { apiFetch } from '../utils/apiFetch'
 
 function Layout({ children }) {
@@ -29,6 +28,13 @@ function Layout({ children }) {
   const [, setTickerText] = useState('PREMIUM SHOPPING EXPERIENCE • SAFE & TRUSTED ORDER FULFILLMENT')
   const [, setLoadingSettings] = useState(true)
   const [walletBalance, setWalletBalance] = useState(0)
+
+  // Profile-picture fallback: if the avatar fails to load, drop back to the
+  // plain User icon (and re-try as soon as the user/profile image changes).
+  const [avatarFailed, setAvatarFailed] = useState(false)
+  useEffect(() => {
+    setAvatarFailed(false)
+  }, [user?.id, user?.profile_image])
 
   // Floating back button visibility: hide while scrolling down, slide back in
   // with the reverse animation as soon as the user scrolls up again (and always
@@ -158,7 +164,16 @@ function Layout({ children }) {
                 className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] px-3 sm:px-4 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 transition-all hover:shadow-sm active:scale-95"
                 aria-label="Account"
               >
-                <User className="h-4 w-4" />
+                {user?.profile_image && !avatarFailed ? (
+                  <img
+                    src={resolveMediaUrl(user.profile_image)}
+                    onError={() => setAvatarFailed(true)}
+                    className="h-6 w-6 rounded-full object-cover ring-1 ring-[var(--color-outline-variant)]"
+                    alt=""
+                  />
+                ) : (
+                  <User className="h-4 w-4" />
+                )}
                 <span className="hidden min-[420px]:inline">{user ? 'Account' : 'Login'}</span>
               </Link>
             </div>
@@ -199,7 +214,6 @@ function Layout({ children }) {
       <LiquidBottomNav cartItemCount={cartItemCount} user={user} />
 
       <TermsGate />
-      <ReleaseUpdateModal />
       <PWAInstallBanner />
       <LocationManager />
     </div>

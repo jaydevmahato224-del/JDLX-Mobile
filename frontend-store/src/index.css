@@ -11,7 +11,7 @@
    below. Tailwind v4's `dark:` variant defaults to `@media (prefers-color-scheme)`,
    which would make every `dark:` utility follow the OS instead of our in-app toggle.
    This custom-variant re-points `dark:` at the `.dark` class so `dark:` utilities
-   (Cart, ReleaseUpdateModal, PushPermissionBanner, etc.) track the app theme switch. */
+   (Cart, PushPermissionBanner, etc.) track the app theme switch. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ------------------------------------------------------------------------------

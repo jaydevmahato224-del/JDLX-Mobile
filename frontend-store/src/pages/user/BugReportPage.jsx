@@ -4,9 +4,9 @@ import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, Smartphone, Monitor, ShieldCheck, Globe, ChevronDown, Check, Link2 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function BugReportPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -110,7 +110,7 @@ function BugReportPage() {
         try {
             const res = await fetch(`${API_BASE_URL}/bug-report`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
+                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

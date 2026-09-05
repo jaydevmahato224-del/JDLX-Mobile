@@ -12,6 +12,7 @@ import { trackBeginCheckout, trackPurchase } from '../../utils/analytics'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 import AddressPicker from '../../components/AddressPicker'
 import WalletCheckout from '../../components/WalletCheckout'
+import { apiFetch } from '../../utils/apiFetch'
 import { toast } from 'react-hot-toast'
 
 function Checkout() {
@@ -97,12 +98,10 @@ function Checkout() {
         }
 
         const fetchAddresses = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+            const user = useStore.getState().user;
+            if (!user) return;
             try {
-                const res = await fetch(`${API_BASE_URL}/address/user`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch('/address/user');
                 if (res.ok) {
                     const data = await res.json();
                     const addresses = Array.isArray(data) ? data : [];
@@ -279,15 +278,10 @@ function Checkout() {
     const handlePayment = async (orderId) => {
         try {
             setIsProcessing(true);
-            const token = localStorage.getItem('token');
 
             // Step 1: Create Razorpay order
-            const res = await fetch(`${API_BASE_URL}/payment/create-order`, {
+            const res = await apiFetch('/payment/create-order', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ order_id: orderId })
             });
 
@@ -323,12 +317,8 @@ function Checkout() {
                 handler: async (response) => {
                     try {
                         // Step 3: Verify payment
-                        const verifyRes = await fetch(`${API_BASE_URL}/payment/verify`, {
+                        const verifyRes = await apiFetch('/payment/verify', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
                             body: JSON.stringify({
                                 order_id: orderId,
                                 razorpay_order_id: response.razorpay_order_id,
@@ -345,12 +335,8 @@ function Checkout() {
                             // Record offer usage if applied
                             if (appliedOffer) {
                                 try {
-                                    await fetch(`${API_BASE_URL}/offers/record-usage`, {
+                                    await apiFetch('/offers/record-usage', {
                                         method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${token}`
-                                        },
                                         body: JSON.stringify({
                                             offer_id: appliedOffer.offer_id,
                                             order_id: orderId,
@@ -411,6 +397,8 @@ function Checkout() {
             return;
         }
 
+        try {
+
         if (hasOutOfStockItems) {
             toast.error("One or more cart items are out of stock. Remove them before checkout.");
             setIsProcessing(false);
@@ -461,43 +449,8 @@ function Checkout() {
             }
         }
 
-        const token = useStore.getState().token;
-
-        try {
-            const manualAddressText = `${formData.flatNo}, ${formData.area}${formData.landmark ? `, Near ${formData.landmark}` : ''}, ${formData.city}, ${formData.state} - ${formData.pincode}`;
-            
-            const orderPayload = {
-                items: cart.map(item => ({ 
-                    id: item.id, 
-                    qty: item.qty, 
-                    price: item.price, 
-                    variant_id: item.variant_id || null,
-                    device_model: item.device_model || null,
-                    fitting_charge: item.fitting ? (item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40) : 0
-                })),
-                address: selectedAddressId ? formData.address : manualAddressText,
-                pincode: formData.pincode,
-                address_id: selectedAddressId,
-                phone: formData.phone,
-                total_amount: subtotal,
-                fitting_charge: fittingTotal,
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                email: formData.email,
-                delivery_type: 'scheduled',
-                customer_name: formData.name,
-                payment_type: paymentMethod,
-                offer_id: appliedOffer ? appliedOffer.offer_id : null,
-                discount_applied: discountAmount,
-                wallet_amount: walletAmount
-            };
-
-            const orderRes = await fetch(`${API_BASE_URL}/checkout`, {
+        const orderRes = await apiFetch('/checkout', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(orderPayload)
             });
 
@@ -1123,11 +1076,8 @@ function Checkout() {
                             address: addr.address,
                             pincode: extractedPin 
                         }));
-                        setCoords({ latitude: addr.latitude, longitude: addr.longitude });
-                        const token = localStorage.getItem('token');
-                        fetch(`${API_BASE_URL}/address/user`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        })
+setCoords({ latitude: addr.latitude, longitude: addr.longitude });
+                        apiFetch('/address/user')
                             .then(res => res.json())
                             .then(data => {
                                 setSavedAddresses(data);
@@ -1141,6 +1091,6 @@ function Checkout() {
             )}
         </div>
     )
-}
 
+}
 export default Checkout

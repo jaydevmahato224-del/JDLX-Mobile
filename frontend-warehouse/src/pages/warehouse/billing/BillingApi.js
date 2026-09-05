@@ -1,20 +1,10 @@
 import { API_BASE_URL } from '../../../config'
-
-// Staff/billing-agent sessions store the token under these keys.
-export function getBillingToken() {
-  return (
-    localStorage.getItem('warehouseToken') ||
-    localStorage.getItem('warehouse_token') ||
-    localStorage.getItem('staff_token')
-  )
-}
+import { apiFetch } from '../../../utils/apiFetch'
 
 export async function billingFetch(path, options = {}) {
-  const token = getBillingToken()
-  const res = await fetch(`${API_BASE_URL}/warehouse/billing${path}`, {
+  const res = await apiFetch(`${API_BASE_URL}/warehouse/billing${path}`, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
@@ -47,12 +37,12 @@ export const billingApi = {
 // Optional damage-proof image upload for a billing line item (multipart — no
 // JSON content-type so the browser sets the boundary). Returns the saved URL.
 export async function billingUploadDamageImage(file) {
-  const token = getBillingToken()
   const form = new FormData()
   form.append('file', file)
   const res = await fetch(`${API_BASE_URL}/warehouse/billing/damage-upload`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` },
+    // Don't set Content-Type for FormData - browser sets it with boundary
+    credentials: 'include',
     body: form,
   })
   const data = await res.json().catch(() => ({}))

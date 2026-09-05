@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { apiFetch } from '../utils/apiFetch'
 
 /**
  * Generate a session fingerprint based on browser characteristics.
@@ -23,23 +24,6 @@ function generateSessionFingerprint() {
 }
 
 /**
- * Basic JWT structure validation (does NOT verify signature — that's the server's job).
- * Checks: 3-part structure, valid base64, not expired.
- */
-function isTokenStructureValid(token) {
-    if (!token || typeof token !== 'string') return false;
-    const parts = token.split('.');
-    if (parts.length !== 3) return false;
-    try {
-        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-        if (payload.exp && payload.exp * 1000 < Date.now()) return false;
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Safely parse JSON from localStorage — malformed data must never crash the app
  * at store-init time (which would white-screen the whole admin panel).
  */
@@ -53,7 +37,6 @@ function safeParse(key) {
 
 export const useStore = create((set, get) => ({
     user: safeParse('user'),
-    token: localStorage.getItem('token') || null,
     adminUser: safeParse('adminUser'),
     adminToken: localStorage.getItem('adminToken') || null,
     warehouseUser: safeParse('warehouseUser'),
@@ -62,67 +45,51 @@ export const useStore = create((set, get) => ({
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
     isReauthenticating: false,
     cart: [],
-    setUser: (user, token) => {
-        if (user && token) {
+    setUser: (user) => {
+        if (user) {
             localStorage.setItem('user', JSON.stringify(user));
-            localStorage.setItem('token', token);
         } else {
             localStorage.removeItem('user');
-            localStorage.removeItem('token');
         }
-        set({ user, token });
+        set({ user });
     },
     logout: () => {
         localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        set({ user: null, token: null, cart: [] });
+        apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        set({ user: null, cart: [] });
     },
-    setAdminUser: (adminUser, adminToken) => {
-        if (adminUser && adminToken) {
-            // Validate token structure before storing
-            if (!isTokenStructureValid(adminToken)) {
-                console.error('Admin login blocked: invalid token structure');
-                return;
-            }
+    setAdminUser: (adminUser) => {
+        if (adminUser) {
             localStorage.setItem('adminUser', JSON.stringify(adminUser));
-            localStorage.setItem('adminToken', adminToken);
             // Store session fingerprint for tamper detection
             localStorage.setItem('adminSessionFingerprint', generateSessionFingerprint());
         } else {
             localStorage.removeItem('adminUser');
-            localStorage.removeItem('adminToken');
             localStorage.removeItem('adminSessionFingerprint');
         }
-        set({ adminUser, adminToken });
+        set({ adminUser });
     },
     setReauthenticating: (val) => set({ isReauthenticating: val }),
     adminLogout: () => {
         localStorage.removeItem('adminUser');
-        localStorage.removeItem('adminToken');
         localStorage.removeItem('adminSessionFingerprint');
-        set({ adminUser: null, adminToken: null });
+        apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        set({ adminUser: null });
     },
     /**
      * Validates the current admin session:
-     * - Token structure (3-part JWT, not expired)
      * - Session fingerprint (same device/browser)
      * Returns true if valid, auto-logs out and returns false if not.
      */
     validateAdminSession: () => {
         const state = get();
-        if (!state.adminToken || !state.adminUser) return false;
-
-        // Check token structure & expiry
-        if (!isTokenStructureValid(state.adminToken)) {
-            console.warn('Admin session expired or token invalid');
-            get().adminLogout();
-            return false;
-        }
+        if (!state.adminUser) return false;
 
         // Check session fingerprint
         const storedFingerprint = localStorage.getItem('adminSessionFingerprint');
-        if (storedFingerprint && storedFingerprint !== generateSessionFingerprint()) {
-            console.warn('Session fingerprint mismatch — possible session theft');
+        const currentFingerprint = generateSessionFingerprint();
+        if (storedFingerprint && storedFingerprint !== currentFingerprint) {
+            console.warn('Admin session fingerprint mismatch - possible token theft');
             get().adminLogout();
             return false;
         }

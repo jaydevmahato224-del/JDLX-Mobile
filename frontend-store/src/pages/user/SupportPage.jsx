@@ -14,9 +14,9 @@ import {
     History,
     AlertCircle
 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function SupportPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -35,9 +35,7 @@ function SupportPage() {
     const fetchTickets = useCallback(async () => {
         setLoadingTickets(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/support/tickets`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await apiFetch('/support/tickets');
             const data = await res.json();
             if (res.ok) {
                 setTickets(data.data || data);
@@ -47,7 +45,7 @@ function SupportPage() {
         } finally {
             setLoadingTickets(false);
         }
-    }, [token]);
+    }, []);
 
     useEffect(() => {
         if (!user) {
@@ -72,15 +70,11 @@ function SupportPage() {
 
         setSubmitting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/support/ticket`, {
+            const res = await apiFetch('/support/ticket', {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
                 body: JSON.stringify(form)
             });
-            const data = await res.json();
+                const data = await res.json();
             
             if (res.ok) {
                 toast.success("Ticket created successfully");

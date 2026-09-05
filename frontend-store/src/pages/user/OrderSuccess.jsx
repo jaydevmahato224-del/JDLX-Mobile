@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { CheckCircle2, Package, ShoppingBag, ArrowRight, Home, Truck, ShieldCheck } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import LoadingScreen from '../../components/LoadingScreen'
+import { apiFetch } from '../../utils/apiFetch'
 
 function OrderSuccess() {
   const { orderId } = useParams()
@@ -12,11 +13,8 @@ function OrderSuccess() {
 
   useEffect(() => {
     const fetchOrder = async () => {
-      const token = localStorage.getItem('token')
       try {
-        const res = await fetch(`${API_BASE_URL}/order/${orderId}/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const res = await apiFetch(`/order/${orderId}/status`)
         const data = await res.json()
         if (res.ok) {
           setOrder(data)

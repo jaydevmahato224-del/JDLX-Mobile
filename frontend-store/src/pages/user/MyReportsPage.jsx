@@ -13,9 +13,9 @@ import {
     XCircle,
     Info
 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function MyReportsPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -30,9 +30,7 @@ function MyReportsPage() {
 
         const fetchReports = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/order-reports`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await apiFetch('/order-reports');
                 const data = await res.json();
                 if (res.ok) {
                     setReports(data.data || data);
@@ -45,7 +43,7 @@ function MyReportsPage() {
         };
 
         fetchReports();
-    }, [user, navigate, token]);
+    }, [user, navigate]);
 
     const getStatusStyles = (status) => {
         const s = status?.toLowerCase();

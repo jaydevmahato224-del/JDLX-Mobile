@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
+import { apiFetch } from '../../utils/apiFetch'
 
 const isReadNotification = (notification) => Boolean(Number(notification.read_status ?? notification.is_read ?? 0));
 
@@ -33,17 +34,11 @@ function Notifications() {
     const enablePush = async () => {
         setSubmitting(true);
         try {
-            const activeToken = token || localStorage.getItem('token');
-            if (!activeToken || activeToken === 'null' || activeToken === 'undefined') {
-                navigate('/login');
-                return;
-            }
             const { subscribeToPush } = await import('../../push');
             const sub = await subscribeToPush();
             if (!sub) { setPushState('denied'); return; }
-            await window.fetch(`${API_BASE_URL}/notifications/register-token`, {
+            await apiFetch('/notifications/register-token', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activeToken}` },
                 body: JSON.stringify({ subscription: sub, device_type: 'web' })
             });
             setPushState('granted');
@@ -55,17 +50,14 @@ function Notifications() {
     };
 
     const fetchNotes = useCallback(async () => {
-        const activeToken = token || localStorage.getItem('token');
-        if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
-        const res = await window.fetch(`${API_BASE_URL}/user/notifications`, { headers: { Authorization: `Bearer ${activeToken}` } });
+        const res = await apiFetch('/user/notifications');
         if (res.ok) setNotes(await res.json());
-    }, [token]);
+    }, []);
     useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
     const markAll = async () => {
-        await window.fetch(`${API_BASE_URL}/user/notifications`, {
+        await apiFetch('/user/notifications', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({})
         });
         fetchNotes();

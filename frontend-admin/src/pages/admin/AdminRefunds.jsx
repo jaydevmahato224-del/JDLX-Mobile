@@ -3,18 +3,16 @@ import { ArrowLeft, RefreshCcw, CheckCircle, XCircle, Clock, AlertCircle } from 
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminRefunds() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
-    const token = useStore(state => state.adminToken || state.token);
 
-    const fetchRequests = async () => {
+const fetchRequests = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/refund-requests`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch('/admin/refund-requests');
             const data = await res.json();
             if (res.ok) setRequests(data);
         } catch (error) {
@@ -27,16 +25,12 @@ function AdminRefunds() {
     useEffect(() => {
         fetchRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-    }, [token]);
+    }, []);
 
     const handleAction = async (requestId, status) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/refund/${requestId}`, {
+            const res = await apiFetch(`/admin/refund/${requestId}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ status })
             });
             if (res.ok) fetchRequests();

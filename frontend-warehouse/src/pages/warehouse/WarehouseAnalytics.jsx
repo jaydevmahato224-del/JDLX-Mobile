@@ -27,20 +27,18 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 const WarehouseAnalytics = () => {
-    const { warehouseToken, warehouseLogout } = useStore()
+    const { warehouseLogout } = useStore()
     const [loading, setLoading] = useState(true)
     const [analytics, setAnalytics] = useState(null)
     const [, setError] = useState('')
 
     const fetchAnalytics = useCallback(async () => {
-        if (!warehouseToken) return
         setLoading(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/analytics`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` }
-            })
+            const response = await apiFetch('/warehouse/analytics')
             if (response.status === 401 || response.status === 403) {
                 warehouseLogout()
                 return
@@ -53,7 +51,7 @@ const WarehouseAnalytics = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseToken, warehouseLogout])
+    }, [warehouseLogout])
 
     useEffect(() => {
         fetchAnalytics()

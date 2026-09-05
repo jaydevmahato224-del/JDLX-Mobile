@@ -10,16 +10,15 @@ import {
     CheckCircle2, 
     Loader2, 
     RotateCcw, 
-    Undo2, 
     Calendar,
     ArrowLeft,
     Coins,
     ChevronDown,
     Check
 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function RefundRequestPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -61,9 +60,7 @@ function RefundRequestPage() {
             }
             
             try {
-                const res = await fetch(`${API_BASE_URL}/my-orders`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await apiFetch('/my-orders');
                 const data = await res.json();
                 if (res.ok) {
                     setOrders(data.data || data);
@@ -76,16 +73,14 @@ function RefundRequestPage() {
         };
 
         initialize();
-    }, [user, navigate, checkEligibility, token]);
+    }, [user, navigate, checkEligibility]);
 
     const checkEligibility = useCallback(async (orderId) => {
         if (!orderId) return;
         setLoadingEligibility(true);
         setErrorMsg(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/refund-eligibility/${orderId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/refund-eligibility/${orderId}`);
             const data = await res.json();
             if (res.ok) {
                 const result = data.data || data;
@@ -99,7 +94,7 @@ function RefundRequestPage() {
         } finally {
             setLoadingEligibility(false);
         }
-    }, [token]);
+    }, []);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -141,7 +136,7 @@ function RefundRequestPage() {
         try {
             const res = await fetch(`${API_BASE_URL}/refund-request`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
+                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

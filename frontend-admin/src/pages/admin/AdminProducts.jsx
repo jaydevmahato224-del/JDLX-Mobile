@@ -3,6 +3,7 @@ import { Package, Save, ArrowLeft, Trash2, Plus, Search, Filter, ShieldCheck, Un
 import { Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminProducts() {
     const [products, setProducts] = useState([]);
@@ -44,10 +45,7 @@ function AdminProducts() {
 
     const fetchProducts = async () => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/inventory`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch('/admin/inventory');
             const data = await res.json();
             setProducts(Array.isArray(data) ? data : (data.data || []));
         } catch (err) {
@@ -57,7 +55,7 @@ function AdminProducts() {
 
     const fetchCategories = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/categories`);
+            const res = await apiFetch('/categories');
             const data = await res.json();
             setCategories(Array.isArray(data) ? data : (data.data || []));
         } catch (err) {
@@ -151,18 +149,13 @@ function AdminProducts() {
             })
         };
 
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        const url = editingProduct 
-            ? `${API_BASE_URL}/admin/products/${editingProduct.id}`
-            : `${API_BASE_URL}/admin/products`;
+        const url = editingProduct
+            ? `/admin/products/${editingProduct.id}`
+            : '/admin/products';
         
         try {
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method: editingProduct ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(payload)
             });
 

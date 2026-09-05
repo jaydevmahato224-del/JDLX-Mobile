@@ -21,6 +21,7 @@ import {
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../../config';
 import { useStore } from '../../store/useStore';
+import { apiFetch } from '../../utils/apiFetch'
 
 const AdminDatabase = () => {
   const [tables, setTables] = useState([]);
@@ -36,15 +37,11 @@ const AdminDatabase = () => {
   const [sqlQuery, setSqlQuery] = useState('');
   const [queryResult, setQueryResult] = useState(null);
   const [activeTab, setActiveTab] = useState('browser'); // 'browser' or 'query'
-  
-  const adminToken = useStore(state => state.adminToken);
 
   const fetchTables = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/db/tables`, {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-      });
+      const response = await apiFetch('/admin/db/tables');
       const result = await response.json();
       if (result.success) {
         setTables(result.data);
@@ -59,14 +56,12 @@ const AdminDatabase = () => {
     } finally {
       setLoading(false);
     }
-  }, [adminToken, selectedTable]);
+  }, [selectedTable]);
 
   const fetchTableData = useCallback(async (tableName, page = 1) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/db/table/${tableName}?page=${page}&per_page=20`, {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-      });
+      const response = await apiFetch(`/admin/db/table/${tableName}?page=${page}&per_page=20`);
       const result = await response.json();
       if (result.success) {
         setSchema(result.data.schema);
@@ -95,12 +90,8 @@ const AdminDatabase = () => {
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/db/table/${selectedTable}/${currentRow.id}`, {
+      const response = await apiFetch(`/admin/db/table/${selectedTable}/${currentRow.id}`, {
         method: 'PUT',
-        headers: { 
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(currentRow)
       });
       const result = await response.json();
@@ -120,9 +111,8 @@ const AdminDatabase = () => {
     if (!window.confirm('Are you sure you want to delete this row? This action cannot be undone.')) return;
     
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/db/table/${selectedTable}/${rowId}`, {
+      const response = await apiFetch(`/admin/db/table/${selectedTable}/${rowId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${adminToken}` }
       });
       const result = await response.json();
       if (result.success) {
@@ -139,12 +129,8 @@ const AdminDatabase = () => {
   const handleAdd = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/db/table/${selectedTable}`, {
+      const response = await apiFetch(`/admin/db/table/${selectedTable}`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(currentRow)
       });
       const result = await response.json();
@@ -164,12 +150,8 @@ const AdminDatabase = () => {
     if (!sqlQuery.trim()) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/db/query`, {
+      const response = await apiFetch('/admin/db/query', {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ query: sqlQuery })
       });
       const result = await response.json();

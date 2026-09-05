@@ -3,11 +3,11 @@ import { create } from 'zustand'
 import { API_BASE_URL } from '../config'
 import { getDeviceModelValue } from '../utils/stickerCustomization'
 import { refreshRecentlyViewed } from '../utils/recentlyViewedSync'
+import { apiFetch } from '../utils/apiFetch'
 
 let processingSync = false;
 
 const syncCartWithServer = async (productId, quantity, action = 'add', variantId = null) => {
-    const token = localStorage.getItem('token');
     let sessionId = localStorage.getItem('sessionId');
     if (!sessionId) {
         sessionId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -15,12 +15,8 @@ const syncCartWithServer = async (productId, quantity, action = 'add', variantId
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/cart`, {
+        const response = await apiFetch('/cart', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-            },
             body: JSON.stringify({ product_id: productId, quantity, action, session_id: sessionId, variant_id: variantId })
         });
         return response.ok;
@@ -50,7 +46,6 @@ const safeParse = (key) => {
 
 export const useStore = create((set, get) => ({
     user: safeParse('user'),
-    token: localStorage.getItem('token') || null,
     adminUser: safeParse('adminUser'),
     adminToken: localStorage.getItem('adminToken') || null,
     warehouseUser: safeParse('warehouseUser'),
@@ -76,7 +71,6 @@ export const useStore = create((set, get) => ({
         if (!cachedCart || cachedCart.length === 0) {
             set({ isCartLoaded: false });
         }
-        const state = get();
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
             sessionId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -84,11 +78,7 @@ export const useStore = create((set, get) => ({
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/cart?session_id=${sessionId}&_t=${Date.now()}`, {
-                headers: { 
-                    ...(state.token ? { 'Authorization': `Bearer ${state.token}` } : {})
-                }
-            });
+            const res = await apiFetch(`/cart?session_id=${sessionId}&_t=${Date.now()}`);
             const json = await res.json();
 
             if (res.ok && json.success) {
@@ -173,25 +163,50 @@ export const useStore = create((set, get) => ({
             set({ _fetchCartInProgress: false });
         }
     },
-    setUser: (user, token) => {
-        if (user && token) {
+    setUser: (user) => {
+        if (user) {
             localStorage.setItem('user', JSON.stringify(user));
-            localStorage.setItem('token', token);
             // Auto-fetch cart and wishlist after login
-            set({ user, token });
+            set({ user });
             get().fetchCart();
             get().fetchWishlist();
         } else {
             localStorage.removeItem('user');
-            localStorage.removeItem('token');
-            set({ user, token });
+            set({ user: null });
         }
     },
-    logout: () => {
+    initAuth: async () => {
+        // Verify session on app mount by calling backend
+        try {
+            const res = await apiFetch('/api/auth/verify-token');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.valid) {
+                    // Fetch user data
+                    const userRes = await apiFetch('/user/profile');
+                    if (userRes.ok) {
+                        const userData = await userRes.json();
+                        set({ user: userData });
+                        localStorage.setItem('user', JSON.stringify(userData));
+                        get().fetchCart();
+                        get().fetchWishlist();
+                        return true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.debug('Auth init failed:', e);
+        }
+        // Clear stale user data if auth failed
         localStorage.removeItem('user');
-        localStorage.removeItem('token');
+        set({ user: null });
+        return false;
+    },
+    logout: async () => {
+        localStorage.removeItem('user');
         localStorage.removeItem('cart');
-        set({ user: null, token: null, cart: [] });
+        await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        set({ user: null, cart: [] });
     },
     setAdminUser: (adminUser, adminToken) => {
         if (adminUser && adminToken) {
@@ -560,13 +575,8 @@ export const useStore = create((set, get) => ({
     // Wishlist Logic
     wishlist: safeParse('wishlist') || [],
     fetchWishlist: async () => {
-        const state = get();
-        const token = state.token || localStorage.getItem('token');
-        if (!token || token === 'null' || token === 'undefined') return;
         try {
-            const res = await fetch(`${API_BASE_URL}/wishlist?_t=${Date.now()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/wishlist?_t=${Date.now()}`);
             const data = await res.json();
             if (res.ok) {
                 const normalized = Array.isArray(data) ? data : (data.data || []);
@@ -579,18 +589,13 @@ export const useStore = create((set, get) => ({
     },
     toggleWishlist: async (product) => {
         const state = get();
-        if (!state.token) {
-            toast.error('Please login to use wishlist');
-            return;
-        }
-
+        
         const isInWishlist = state.wishlist.some(item => String(item.id) === String(product.id));
         
         try {
             if (isInWishlist) {
-                const res = await fetch(`${API_BASE_URL}/wishlist/${product.id}`, {
+                const res = await apiFetch(`/wishlist/${product.id}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${state.token}` }
                 });
                 if (res.ok) {
                     const newWishlist = state.wishlist.filter(item => String(item.id) !== String(product.id));
@@ -598,12 +603,8 @@ export const useStore = create((set, get) => ({
                     localStorage.setItem('wishlist', JSON.stringify(newWishlist));
                 }
             } else {
-                const res = await fetch(`${API_BASE_URL}/wishlist`, {
+                const res = await apiFetch('/wishlist', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${state.token}`
-                    },
                     body: JSON.stringify({ product_id: product.id })
                 });
                 if (res.ok) {
@@ -646,20 +647,16 @@ export const useStore = create((set, get) => ({
         return [];
     },
     applyAutomaticOffers: async (cartTotal, productIds, items) => {
-        const state = get();
-        if (!state.token || cartTotal <= 0) return null;
+        if (cartTotal <= 0) return null;
         try {
-            const res = await fetch(`${API_BASE_URL}/offers/apply-automatic`, {
+            const res = await apiFetch('/offers/apply-automatic', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${state.token}`
-                },
                 body: JSON.stringify({ cart_total: cartTotal, product_ids: productIds, items: items || [] })
             });
             const json = await res.json();
             if (res.ok && json.data && json.data.applied_offer) {
                 // Only auto-apply if it's better than current applied offer
+                const state = get();
                 const currentDiscount = state.appliedOffer ? state.appliedOffer.discount_amount : 0;
                 const autoOffer = json.data.applied_offer;
                 if (autoOffer.discount_amount > currentDiscount || (!state.appliedOffer?.code && autoOffer.discount_amount > 0)) {
@@ -673,17 +670,9 @@ export const useStore = create((set, get) => ({
         return null;
     },
     applyCoupon: async (code, cartTotal, productIds, items) => {
-        const state = get();
-        if (!state.token) {
-            return { valid: false, message: 'Please login to apply coupons' };
-        }
         try {
-            const res = await fetch(`${API_BASE_URL}/offers/validate-coupon`, {
+            const res = await apiFetch('/offers/validate-coupon', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${state.token}`
-                },
                 body: JSON.stringify({ coupon_code: code, cart_total: cartTotal, product_ids: productIds, items: items || [] })
             });
             const json = await res.json();

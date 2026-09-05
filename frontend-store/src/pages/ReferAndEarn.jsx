@@ -3,19 +3,18 @@ import { Share2, Copy, CheckCircle2, Gift, Users, Trophy, ChevronRight } from 'l
 import { toast } from 'react-hot-toast';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
+import { apiFetch } from '../utils/apiFetch'
 
 const ReferAndEarn = () => {
   const [refData, setRefData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState(false);
-  const token = useStore(state => state.token);
+  const user = useStore(state => state.user);
 
   useEffect(() => {
     const fetchRefData = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/referral/my-code`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await apiFetch('/referral/my-code');
         if (res.ok) {
           const data = await res.json();
           setRefData(data);
@@ -27,8 +26,8 @@ const ReferAndEarn = () => {
       }
     };
 
-    if (token) fetchRefData();
-  }, [token]);
+    if (user) fetchRefData();
+  }, [user]);
 
   const copyToClipboard = (text, message) => {
     navigator.clipboard.writeText(text);

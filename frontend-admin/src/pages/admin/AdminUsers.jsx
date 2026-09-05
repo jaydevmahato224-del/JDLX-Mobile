@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Search, Filter, ShieldAlert, CheckCircle, Ban, X, Mail, Send, AlertTriangle, Info, Bell, LogOut, Loader2 } from 'lucide-react';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../../utils/apiFetch';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -51,10 +52,7 @@ const AdminUsers = () => {
         try {
             if (!append) setLoading(true);
             setError('');
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/users?page=${pageNum}&limit=20&search=${encodeURIComponent(searchTerm)}&status=${statusFilter}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/admin/users?page=${pageNum}&limit=20&search=${encodeURIComponent(searchTerm)}&status=${statusFilter}`);
             if (!res.ok) {
                 const message = res.status === 401 ? 'Your admin session expired. Please log in again.' : 'Failed to fetch users';
                 throw new Error(message);
@@ -91,13 +89,8 @@ const AdminUsers = () => {
 
         try {
             setUpdatingStatus(true);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/status`, {
+            const res = await apiFetch(`/admin/users/${userId}/status`, {
                 method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({ status: action, reason })
             });
 
@@ -126,13 +119,8 @@ const AdminUsers = () => {
         try {
             setSendingMail(true);
             setMailBanner(null);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/users/${selectedUser.id}/send-email`, {
+            const res = await apiFetch(`/admin/users/${selectedUser.id}/send-email`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({ subject: mailSubject, message: mailMessage })
             });
 
@@ -155,10 +143,8 @@ const AdminUsers = () => {
 
         try {
             setActionLoading(userId);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/logout-all`, {
+            const res = await apiFetch(`/admin/users/${userId}/logout-all`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (res.ok) {
@@ -180,10 +166,7 @@ const AdminUsers = () => {
         setMailBanner(null);
         try {
             setDetailsLoading(true);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/users/${user.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/admin/users/${user.id}`);
             if (res.ok) {
                 const data = await res.json();
                 setSelectedUser(data);
@@ -206,13 +189,8 @@ const AdminUsers = () => {
         try {
             setSendingBulk(true);
             setBulkStatus(null);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/notifications/bulk`, {
+            const res = await apiFetch('/admin/notifications/bulk', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({ subject: bulkSubject, message: bulkMessage })
             });
 
@@ -240,13 +218,8 @@ const AdminUsers = () => {
         try {
             setSendingInApp(true);
             setInAppStatus(null);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/notifications/in-app-broadcast`, {
+            const res = await apiFetch('/admin/notifications/in-app-broadcast', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({ title: inAppTitle, message: inAppMessage, type: 'SYSTEM', send_push: inAppSendPush })
             });
             const data = await res.json();
@@ -265,10 +238,7 @@ const AdminUsers = () => {
     const fetchMailHistory = async (pageNum = 1, append = false) => {
         try {
             setHistoryLoading(true);
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/mail-history?page=${pageNum}&limit=5`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/admin/mail-history?page=${pageNum}&limit=5`);
             if (res.ok) {
                 const data = await res.json();
                 setMailHistory(prev => append ? [...prev, ...data.history] : data.history);
@@ -494,13 +464,8 @@ const AdminUsers = () => {
                                                         onClick={async () => {
                                                             try {
                                                                 setUpdatingStatus(true);
-                                                                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-                                                                const res = await fetch(`${API_BASE_URL}/admin/users/${selectedUser.id}/cod-restriction`, {
+                                                                const res = await apiFetch(`/admin/users/${selectedUser.id}/cod-restriction`, {
                                                                     method: 'PATCH',
-                                                                    headers: {
-                                                                        'Authorization': `Bearer ${token}`,
-                                                                        'Content-Type': 'application/json'
-                                                                    },
                                                                     body: JSON.stringify({ restricted: !selectedUser.cod_restricted })
                                                                 });
                                                                 if (res.ok) {

@@ -3,9 +3,9 @@ import { ArrowLeft, History } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminActivityLogs() {
-  const token = useStore((state) => state.adminToken || state.token)
   const [logs, setLogs] = useState([])
   const [admins, setAdmins] = useState([])
   const [actions, setActions] = useState([])
@@ -14,7 +14,6 @@ function AdminActivityLogs() {
   const [error, setError] = useState('')
 
   const fetchLogs = async (nextFilters = filters) => {
-    if (!token) return
     setLoading(true)
     setError('')
     try {
@@ -23,9 +22,7 @@ function AdminActivityLogs() {
       if (nextFilters.action) params.set('action', nextFilters.action)
       const query = params.toString()
 
-      const res = await fetch(`${API_BASE_URL}/admin/activity-logs${query ? `?${query}` : ''}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch(`/admin/activity-logs${query ? `?${query}` : ''}`)
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Failed to load activity logs')
@@ -46,7 +43,7 @@ function AdminActivityLogs() {
   useEffect(() => {
     fetchLogs()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-  }, [token])
+  }, [])
 
   const applyFilters = (e) => {
     e.preventDefault()

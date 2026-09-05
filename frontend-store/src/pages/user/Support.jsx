@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
+import { apiFetch } from '../../utils/apiFetch'
+import { apiFetch } from '../../utils/apiFetch'
 
 function Support() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
     const [tickets, setTickets] = useState([]);
@@ -17,16 +18,15 @@ function Support() {
     // Named fetchData (not `fetch`) so the browser's global fetch API is not
     // shadowed — a local `fetch` would recursively call itself and overflow.
     const fetchData = useCallback(async () => {
-        const res = await fetch(`${API_BASE_URL}/user/support`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch('/user/support');
         if (res.ok) setTickets(await res.json());
-    }, [token]);
+    }, []);
     useEffect(() => { fetchData(); }, [fetchData]);
 
     const submit = async e => {
         e.preventDefault();
-        await fetch(`${API_BASE_URL}/user/support`, {
+        await apiFetch('/user/support', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify(form)
         });
         setForm({ subject: '', message: '' });

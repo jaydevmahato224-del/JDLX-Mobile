@@ -8,7 +8,8 @@ import toast from 'react-hot-toast';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
 import SalesHistory from './billing/SalesHistory';
 import InvoiceModal from './billing/InvoiceModal';
-import { billingUploadDamageImage } from './billing/BillingApi';
+import { billingUploadDamageImage, billingFetch } from './billing/BillingApi';
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function StaffBilling() {
   const [products, setProducts] = useState([]);
@@ -48,12 +49,6 @@ export default function StaffBilling() {
   const [, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
 
-  // Auth token check
-  const getToken = () =>
-    localStorage.getItem('warehouseToken') ||
-    localStorage.getItem('warehouse_token') ||
-    localStorage.getItem('staff_token');
-
   // NOTE: must be declared BEFORE the useEffect below. `const` lives in the
   // temporal dead zone until this line runs — if the effect (or its deps array)
   // referenced it earlier, the whole POS page crashed on mount with
@@ -62,13 +57,7 @@ export default function StaffBilling() {
     setLoading(true);
     setError(null);
     try {
-      const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/warehouse/billing/products`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const res = await apiFetch('/warehouse/billing/products');
 
       if (res.status === 403) {
         setError('Access Denied: You do not have permission to access the Billing System.');
@@ -96,13 +85,7 @@ export default function StaffBilling() {
   const fetchRecentProducts = useCallback(async () => {
     setRecentLoading(true);
     try {
-      const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/warehouse/billing/recent-products`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const res = await apiFetch('/warehouse/billing/recent-products');
       if (!res.ok) throw new Error('Failed to load recent products');
       const data = await res.json();
       setRecentProducts(Array.isArray(data) ? data : []);
@@ -313,7 +296,6 @@ export default function StaffBilling() {
 
     setIsSubmitting(true);
     try {
-      const token = getToken();
       const payload = {
         customer_name: customerName || 'Counter Customer',
         customer_phone: customerPhone,
@@ -330,12 +312,8 @@ export default function StaffBilling() {
         }))
       };
 
-      const res = await fetch(`${API_BASE_URL}/warehouse/billing/generate`, {
+      const res = await apiFetch('/warehouse/billing/generate', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(payload)
       });
 

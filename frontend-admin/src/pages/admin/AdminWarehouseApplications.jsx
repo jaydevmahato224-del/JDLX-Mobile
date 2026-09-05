@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 import {
     ResponsiveContainer,
     AreaChart,
@@ -100,9 +101,6 @@ function assetUrl(path) {
 }
 
 function AdminWarehouseApplications() {
-    const storeAdminToken = useStore((state) => state.adminToken)
-    const storeToken = useStore((state) => state.token)
-    const adminToken = storeAdminToken || storeToken
     const adminUser = useStore((state) => state.adminUser)
     const [applications, setApplications] = useState([])
     const [loading, setLoading] = useState(true)
@@ -140,17 +138,9 @@ function AdminWarehouseApplications() {
     }, [])
 
     const fetchApplications = async () => {
-        if (!adminToken) {
-            return
-        }
-
         setLoading(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/admin/warehouse/applications`, {
-                headers: {
-                    Authorization: `Bearer ${adminToken}`,
-                },
-            })
+            const response = await apiFetch('/admin/warehouse/applications')
             const data = await response.json()
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to load warehouse applications.')
@@ -168,17 +158,13 @@ function AdminWarehouseApplications() {
     /* eslint-disable react-hooks/exhaustive-deps -- intentional: fetch on mount only */
     useEffect(() => {
         fetchApplications()
-    }, [adminToken])
+    }, [])
 
     const fetchStats = async (appId) => {
-        if (!adminToken || !appId) return
+        if (!appId) return
         setStatsLoading(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/admin/warehouse/applications/${appId}/stats`, {
-                headers: {
-                    Authorization: `Bearer ${adminToken}`,
-                },
-            })
+            const response = await apiFetch(`/admin/warehouse/applications/${appId}/stats`)
             const data = await response.json()
             if (response.ok) {
                 setStats(data)
@@ -191,14 +177,10 @@ function AdminWarehouseApplications() {
     }
 
     const fetchPerformance = async (appId) => {
-        if (!adminToken || !appId) return
+        if (!appId) return
         setPerfLoading(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/admin/warehouse-performance/${appId}`, {
-                headers: {
-                    Authorization: `Bearer ${adminToken}`,
-                },
-            })
+            const response = await apiFetch(`/admin/warehouse-performance/${appId}`)
             const data = await response.json()
             if (response.ok) {
                 setPerformance(data)
@@ -276,12 +258,8 @@ function AdminWarehouseApplications() {
 
         setActionLoading(action)
         try {
-            const response = await fetch(`${API_BASE_URL}/admin/warehouse/applications/${selectedApplication.id}`, {
+            const response = await apiFetch(`/admin/warehouse/applications/${selectedApplication.id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${adminToken}`,
-                },
                 body: JSON.stringify({
                     action,
                     notes: reviewNotes,
@@ -310,12 +288,8 @@ function AdminWarehouseApplications() {
         setBanner({ type: '', text: '' })
 
         try {
-            const response = await fetch(`${API_BASE_URL}/admin/warehouse/applications/${selectedApplication.id}/send-email`, {
+            const response = await apiFetch(`/admin/warehouse/applications/${selectedApplication.id}/send-email`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${adminToken}`,
-                },
                 body: JSON.stringify({
                     subject: emailSubject,
                     message: emailMessage

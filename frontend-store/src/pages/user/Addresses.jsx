@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom'
 import { MapPin, Plus, Trash2, Edit3, CheckCircle2, ChevronRight, X, Navigation, RefreshCw } from 'lucide-react'
 import MapPicker from '../../components/MapPicker'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 function Addresses() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
     
@@ -37,16 +37,14 @@ function Addresses() {
     const fetchAddresses = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/user/addresses`, { 
-                headers: { Authorization: `Bearer ${token}` } 
-            });
+            const res = await apiFetch('/user/addresses');
             if (res.ok) setAddresses(await res.json());
         } catch {
             toast.error("Failed to load addresses");
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, []);
 
     useEffect(() => { fetchAddresses(); }, [fetchAddresses]);
 
@@ -63,9 +61,8 @@ function Addresses() {
         const body = editing ? { ...form, id: editing } : form;
         
         try {
-            const res = await fetch(`${API_BASE_URL}/user/addresses`, {
+            const res = await apiFetch('/user/addresses', {
                 method,
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(body)
             });
             
@@ -87,9 +84,8 @@ function Addresses() {
         if (!confirm("Are you sure you want to delete this address?")) return;
         
         try {
-            const res = await fetch(`${API_BASE_URL}/user/addresses`, {
+            const res = await apiFetch('/user/addresses', {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ id })
             });
             if (res.ok) {

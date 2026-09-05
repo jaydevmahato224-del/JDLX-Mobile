@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL } from '../config'
 import ReleaseUpdateModal from './ReleaseUpdateModal'
+import { apiFetch } from '../utils/apiFetch'
 
 export default function WarehouseLayout() {
     const location = useLocation();
@@ -36,9 +37,7 @@ export default function WarehouseLayout() {
     const fetchWarehouseSession = useCallback(async () => {
         if (!warehouseToken) return;
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/session`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` },
-            });
+            const response = await apiFetch('/warehouse/session');
             if (response.status === 401 || response.status === 403) {
                 logout();
                 navigate('/warehouse/login', { replace: true });
@@ -57,9 +56,7 @@ export default function WarehouseLayout() {
         if (!warehouseToken) return;
         setNotificationsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/notifications?limit=30`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` },
-            });
+            const response = await apiFetch('/warehouse/notifications?limit=30');
             if (response.status === 401 || response.status === 403) {
                 logout();
                 navigate('/warehouse/login', { replace: true });
@@ -80,9 +77,8 @@ export default function WarehouseLayout() {
     const markNotificationRead = useCallback(async (notificationId) => {
         if (!warehouseToken || !notificationId) return;
         try {
-            await fetch(`${API_BASE_URL}/warehouse/notifications/${notificationId}/read`, {
+            await apiFetch(`/warehouse/notifications/${notificationId}/read`, {
                 method: 'PATCH',
-                headers: { Authorization: `Bearer ${warehouseToken}` },
             });
             setNotifications((prev) =>
                 prev.map((entry) =>
@@ -97,9 +93,8 @@ export default function WarehouseLayout() {
     const markAllNotificationsRead = useCallback(async () => {
         if (!warehouseToken) return;
         try {
-            await fetch(`${API_BASE_URL}/warehouse/notifications/read-all`, {
+            await apiFetch('/warehouse/notifications/read-all', {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${warehouseToken}` },
             });
             setNotifications((prev) => prev.map((entry) => ({ ...entry, is_read: 1 })));
         } catch (error) {

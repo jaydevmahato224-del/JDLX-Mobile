@@ -3,9 +3,9 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import { ChevronRight, Clock, MessageSquare, AlertCircle, CheckCircle2, History } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function MyRequestsPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -20,9 +20,7 @@ function MyRequestsPage() {
 
         const fetchRequests = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/my-requests`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await apiFetch('/my-requests');
                 const data = await res.json();
                 if (res.ok) {
                     setRequests(data.data || data);
@@ -35,7 +33,7 @@ function MyRequestsPage() {
         };
 
         fetchRequests();
-    }, [user, navigate, token]);
+    }, [user, navigate]);
 
     const getStatusStyles = (status) => {
         const s = status?.toLowerCase();

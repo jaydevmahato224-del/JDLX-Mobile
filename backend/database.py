@@ -1074,6 +1074,36 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_otps_email ON admin_otps(email)")
+    # --- System Bridge OTP (DB-backed, survives restarts, hashed OTP, attempt-limited)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS system_bridge_otps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        otp_hash TEXT NOT NULL,
+        otp_salt TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        verified INTEGER DEFAULT 0,
+        session_expiry TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_system_bridge_otps_email ON system_bridge_otps(email)")
+
+    # --- Google OAuth Link OTP (prevents account takeover via email linking)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS google_link_otps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        google_id TEXT NOT NULL,
+        name TEXT,
+        picture TEXT,
+        otp_hash TEXT NOT NULL,
+        otp_salt TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_google_link_otps_email ON google_link_otps(email)")
+
 
     # --- Settings & Marketing ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS system_settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, value TEXT NOT NULL)''')

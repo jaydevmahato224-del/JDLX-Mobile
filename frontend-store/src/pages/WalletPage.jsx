@@ -2,18 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, ShoppingBag } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
+import { apiFetch } from '../utils/apiFetch'
 
 const WalletPage = () => {
   const [wallet, setWallet] = useState({ balance: 0, transactions: [] });
   const [loading, setLoading] = useState(true);
-  const token = useStore(state => state.token);
+  const user = useStore(state => state.user);
 
   useEffect(() => {
     const fetchWallet = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/wallet/balance`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await apiFetch('/wallet/balance');
         if (res.ok) {
           const data = await res.json();
           setWallet(data);
@@ -25,8 +24,8 @@ const WalletPage = () => {
       }
     };
 
-    if (token) fetchWallet();
-  }, [token]);
+    if (user) fetchWallet();
+  }, [user]);
 
   if (loading) return <div className="flex justify-center items-center min-h-[60vh] animate-pulse text-slate-400 font-bold">Accessing Secure Wallet...</div>;
 

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 const PAYOUT_STATUS_STYLES = {
     requested: { label: 'Requested', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
@@ -49,7 +50,7 @@ const formatDate = (value) => {
 }
 
 const WarehouseEarnings = () => {
-    const { warehouseToken, warehouseUser } = useStore()
+    const { warehouseToken, warehouseUser, warehouseLogout } = useStore()
     const [summary, setSummary] = useState(null)
     const [settlements, setSettlements] = useState([])
     const [payouts, setPayouts] = useState([])
@@ -69,9 +70,7 @@ const WarehouseEarnings = () => {
 
     const fetchSummary = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/earnings`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` },
-            })
+            const res = await apiFetch('/warehouse/earnings')
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Failed to load earnings')
             setSummary(data.data || data)
@@ -84,9 +83,7 @@ const WarehouseEarnings = () => {
         try {
             const params = new URLSearchParams({ page: String(p), per_page: String(perPage) })
             if (status) params.set('status', status)
-            const res = await fetch(`${API_BASE_URL}/warehouse/earnings/settlements?${params}`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` },
-            })
+            const res = await apiFetch(`/warehouse/earnings/settlements?${params}`)
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Failed to load settlements')
             const body = data.data || data
@@ -96,33 +93,29 @@ const WarehouseEarnings = () => {
         } catch (err) {
             setMessage({ type: 'error', text: err.message })
         }
-    }, [warehouseToken])
+    }, [])
 
     const fetchPayouts = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/earnings/payouts`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` },
-            })
+            const res = await apiFetch('/warehouse/earnings/payouts')
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Failed to load payouts')
             setPayouts(data.data || data || [])
         } catch (err) {
             setMessage({ type: 'error', text: err.message })
         }
-    }, [warehouseToken])
+    }, [])
 
     useEffect(() => {
-        if (!warehouseToken) return
         setLoading(true)
         Promise.all([fetchSummary(), fetchPayouts()])
             .finally(() => setLoading(false))
         // Settlements are loaded by the filter effect below (runs once on mount).
-    }, [warehouseToken, fetchSummary, fetchPayouts])
+    }, [fetchSummary, fetchPayouts])
 
     useEffect(() => {
-        if (!warehouseToken) return
         fetchSettlements(1, filter)
-    }, [filter, warehouseToken, fetchSettlements])
+    }, [filter, fetchSettlements])
 
     const handleWithdraw = async () => {
         const amount = parseFloat(withdrawAmount)
@@ -137,12 +130,8 @@ const WarehouseEarnings = () => {
         setWithdrawing(true)
         setMessage(null)
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/earnings/withdraw`, {
+            const res = await apiFetch('/warehouse/earnings/withdraw', {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ amount }),
             })
             const data = await res.json()

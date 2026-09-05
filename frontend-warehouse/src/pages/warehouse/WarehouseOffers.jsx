@@ -23,6 +23,7 @@ import {
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 const OFFER_TYPE_META = {
     coupon:    { label: 'Coupon',    icon: Ticket,  badge: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
@@ -78,16 +79,13 @@ export default function WarehouseOffers() {
     const [productSearch, setProductSearch] = useState('')
     const bannerInputRef = useRef(null)
 
-    const warehouseToken = useStore((state) => state.warehouseToken) || localStorage.getItem('warehouseToken') || localStorage.getItem('token')
-
     const loadAll = async () => {
-        if (!warehouseToken) return
         setLoading(true)
         try {
             const [offersRes, productsRes, categoriesRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/warehouse/offers`, { headers: { 'Authorization': `Bearer ${warehouseToken}` } }),
-                fetch(`${API_BASE_URL}/warehouse/offers/products`, { headers: { 'Authorization': `Bearer ${warehouseToken}` } }),
-                fetch(`${API_BASE_URL}/categories`),
+                apiFetch('/warehouse/offers'),
+                apiFetch('/warehouse/offers/products'),
+                apiFetch('/categories'),
             ])
             const offersJson = await offersRes.json()
             if (offersRes.ok) setOffers(offersJson.data || [])
@@ -107,9 +105,9 @@ export default function WarehouseOffers() {
     }
 
     useEffect(() => {
-        if (warehouseToken) loadAll()
+        loadAll()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [warehouseToken])
+    }, [])
 
     const productNameMap = useMemo(() => {
         const map = {}
@@ -192,7 +190,7 @@ export default function WarehouseOffers() {
             fd.append('file', file)
             const res = await fetch(`${API_BASE_URL}/warehouse/upload`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${warehouseToken}` },
+                credentials: 'include',
                 body: fd,
             })
             const json = await res.json()
@@ -250,12 +248,8 @@ export default function WarehouseOffers() {
             const url = editingOffer
                 ? `${API_BASE_URL}/warehouse/offers/${editingOffer.id}`
                 : `${API_BASE_URL}/warehouse/offers`
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${warehouseToken}`,
-                },
                 body: JSON.stringify(payload),
             })
             const json = await res.json()
@@ -272,15 +266,10 @@ export default function WarehouseOffers() {
     }
 
     const toggleStatus = async (offer) => {
-        if (!warehouseToken) return
         const nextActive = offer.is_active === 1 ? 0 : 1
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/offers/${offer.id}`, {
+            const res = await apiFetch(`/warehouse/offers/${offer.id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${warehouseToken}`,
-                },
                 body: JSON.stringify({ ...offer, is_active: nextActive, applicable_ids: Array.isArray(offer.applicable_ids) ? offer.applicable_ids : [] }),
             })
             const json = await res.json()
@@ -293,12 +282,10 @@ export default function WarehouseOffers() {
     }
 
     const handleDelete = async (offer) => {
-        if (!warehouseToken) return
         if (!confirm(`Delete "${offer.title}"? This cannot be undone.`)) return
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/offers/${offer.id}`, {
+            const res = await apiFetch(`/warehouse/offers/${offer.id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${warehouseToken}` },
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || 'Delete failed')

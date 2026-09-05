@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, RefreshCw, AlertTriangle, CheckCircle, Clock, Package, UploadCloud, Users, FileText, ChevronRight, X, Save, Edit2, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminRestocking() {
     const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | suppliers | upload
@@ -23,10 +24,9 @@ function AdminRestocking() {
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const [alertsRes, analyticsRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/admin/restock-alerts`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_BASE_URL}/admin/inventory/restock-analytics`, { headers: { 'Authorization': `Bearer ${token}` } })
+                apiFetch('/admin/restock-alerts'),
+                apiFetch('/admin/inventory/restock-analytics')
             ]);
 
             if (alertsRes.ok) {
@@ -46,21 +46,15 @@ function AdminRestocking() {
 
     const fetchSuppliers = async () => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/suppliers`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const res = await apiFetch('/admin/suppliers');
             if (res.ok) setSuppliers(await res.json());
         } catch (err) { console.error(err); }
     };
 
     const createRequest = async (productId, quantity) => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/restock-request`, {
+            const res = await apiFetch('/admin/restock-request', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ product_id: productId, requested_quantity: quantity })
             });
             const data = await res.json();
@@ -94,10 +88,9 @@ function AdminRestocking() {
         formData.append('file', file);
 
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/admin/inventory/upload-invoice`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
+                credentials: 'include',
                 body: formData
             });
             const data = await res.json();
@@ -123,13 +116,8 @@ function AdminRestocking() {
         if (!ocrData || ocrData.length === 0) return alert("No valid items to restock.");
 
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/inventory/confirm-invoice`, {
+            const res = await apiFetch('/admin/inventory/confirm-invoice', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ items: ocrData, store_id: 1 })
             });
 

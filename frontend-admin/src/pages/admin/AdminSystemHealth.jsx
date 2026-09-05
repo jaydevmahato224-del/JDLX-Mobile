@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Server, Database, HardDrive, Shield, AlertTriangle, RefreshCw, Wrench, CheckCircle, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../utils/apiFetch';
 
 const AdminSystemHealth = () => {
     const [healthData, setHealthData] = useState(null);
@@ -17,16 +18,13 @@ const AdminSystemHealth = () => {
             setLoading(true);
             setError(null);
 
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-
             const [healthRes, logsRes, healingRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/admin/system/health`, { headers }).then(res => {
+                apiFetch('/admin/system/health').then(res => {
                     if (!res.ok) throw new Error('Failed to fetch system health data');
                     return res.json();
                 }),
-                fetch(`${API_BASE_URL}/admin/system/logs`, { headers }).then(res => res.json()),
-                fetch(`${API_BASE_URL}/admin/system/self-healing`, { headers }).then(res => res.json())
+                apiFetch('/admin/system/logs').then(res => res.json()),
+                apiFetch('/admin/system/self-healing').then(res => res.json())
             ]);
 
             setHealthData(healthRes);
@@ -43,10 +41,8 @@ const AdminSystemHealth = () => {
         try {
             setScanning(true);
             setSelfHealing(prev => ({ ...prev, active: true })); // Immediate UI feedback
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/system/self-healing/scan`, {
+            const res = await apiFetch('/admin/system/self-healing/scan', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             await fetchHealthData();
             if (res.ok) alert("System repair completed successfully. Self-Healing Mode has been turned OFF.");

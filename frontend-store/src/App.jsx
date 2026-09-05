@@ -253,31 +253,6 @@ function RouteChangeTracker() {
   return null
 }
 
-// ─── OAuth Callback Bridge ───────────────────────────────────────────────────
-function OAuthCallbackBridge() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const setUser = useStore((state) => state.setUser)
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const oauthToken = params.get('oauth_token')
-    const oauthUser = params.get('oauth_user')
-
-    if (oauthToken && oauthUser) {
-      try {
-        const user = JSON.parse(decodeURIComponent(oauthUser))
-        setUser(user, oauthToken)
-        navigate('/', { replace: true })
-      } catch (error) {
-        console.error('OAuth parsing failed:', error)
-      }
-    }
-  }, [location.search, navigate, setUser])
-
-  return null
-}
-
 // ─── Operational Redirects (Admin/Warehouse Port Logic) ────────────────────────
 function OperationalRedirect() {
   const location = useLocation()
@@ -323,11 +298,12 @@ function AnalyticsWrapper({ children }) {
 
 function App() {
   const theme = useStore((state) => state.theme)
-  const token = useStore((state) => state.token)
+  const user = useStore((state) => state.user)
   const fetchCart = useStore((state) => state.fetchCart)
   const fetchWishlist = useStore((state) => state.fetchWishlist)
   const fetchProducts = useStore((state) => state.fetchProducts)
   const fetchBanners = useStore((state) => state.fetchBanners)
+  const initAuth = useStore((state) => state.initAuth)
   
   const { showPrompt, promptReason, dismissPrompt } = useAppReview()
   
@@ -345,6 +321,14 @@ function App() {
   const [dataReady, setDataReady] = useState(false)
   const [splashFinished, setSplashFinished] = useState(false)
 
+  // Initialize auth on mount
+  useEffect(() => {
+    const init = async () => {
+      await initAuth();
+    };
+    init();
+  }, [initAuth])
+
   // Always load global settings and banners on mount
   useEffect(() => {
     fetchBanners()
@@ -355,12 +339,9 @@ function App() {
     // Otherwise, let individual pages (like Home.jsx) handle their own loading.
     if (!showSplash) {
       setDataReady(true)
-      const hasOAuthParams = window.location.search.includes('oauth_token');
-      if (!hasOAuthParams) {
+      if (user) {
         fetchCart()
-        if (token) {
-          fetchWishlist()
-        }
+        fetchWishlist()
       }
       return
     }
@@ -374,7 +355,7 @@ function App() {
           fetchCart()
         ]
         
-        if (token) {
+        if (user) {
           promises.push(fetchWishlist())
         }
         
@@ -393,7 +374,7 @@ function App() {
     }
 
     preloadData()
-  }, [showSplash, token, fetchCart, fetchWishlist, fetchProducts, fetchBanners])
+  }, [showSplash, user, fetchCart, fetchWishlist, fetchProducts, fetchBanners])
 
   const handleSplashFinish = () => {
     setSplashFinished(true)

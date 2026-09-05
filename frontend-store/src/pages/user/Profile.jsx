@@ -8,13 +8,13 @@ import useScrollLock from '../../hooks/useScrollLock'
 import ReferralSuccessPopup from '../../components/ReferralSuccessPopup'
 import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 function Profile() {
     const navigate = useNavigate();
     const user = useStore(state => state.user);
     const theme = useStore(state => state.theme);
     const toggleTheme = useStore(state => state.toggleTheme);
-    const token = useStore.getState().token;
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -36,9 +36,7 @@ function Profile() {
 
         const fetchReferralInfo = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/referral/my-code`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch('/referral/my-code');
                 if (res.ok) {
                     const data = await res.json();
                     setReferralInfo({ is_referred: data.is_referred, attempts: data.attempts });
@@ -50,9 +48,7 @@ function Profile() {
 
         const fetchOrders = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/user/orders`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch('/user/orders');
                 if (res.ok) {
                     const data = await res.json();
                     setOrders(data);
@@ -69,7 +65,7 @@ function Profile() {
 
         fetchReferralInfo();
         fetchOrders();
-    }, [user, navigate, token]);
+    }, [user, navigate]);
 
     const handleApplyReferral = async (e) => {
         e.preventDefault();
@@ -79,12 +75,8 @@ function Profile() {
         setReferralError('');
 
         try {
-            const res = await fetch(`${API_BASE_URL}/referral/apply-from-profile`, {
+            const res = await apiFetch('/referral/apply-from-profile', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ code: inputCode.trim().toUpperCase() })
             });
 

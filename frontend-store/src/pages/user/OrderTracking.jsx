@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 function OrderTracking() {
     const { orderId } = useParams();
@@ -37,10 +38,7 @@ function OrderTracking() {
     useEffect(() => {
         const fetchTracking = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/order/${orderId}/tracking`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch(`/order/${orderId}/tracking`);
                 if (res.ok) {
                     const data = await res.json();
                     setTrackingInfo(data);
@@ -52,10 +50,7 @@ function OrderTracking() {
 
         const fetchStatus = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/order/${orderId}/status`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch(`/order/${orderId}/status`);
                 if (res.ok) {
                     const data = await res.json();
                     setOrder(data);
@@ -80,10 +75,7 @@ function OrderTracking() {
         if (order?.status === 'OUT_FOR_DELIVERY') {
             const fetchRiderLocation = async () => {
                 try {
-                    const token = localStorage.getItem('token');
-                    const res = await fetch(`${API_BASE_URL}/order/${orderId}/rider-location`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const res = await apiFetch(`/order/${orderId}/rider-location`);
                     if (res.ok) {
                         const data = await res.json();
                         setRiderLocation(data);
@@ -103,10 +95,7 @@ function OrderTracking() {
         if (order?.delivery_partner_id && order?.status !== 'DELIVERED') {
             const fetchRoute = async () => {
                 try {
-                    const token = localStorage.getItem('token');
-                    const res = await fetch(`${API_BASE_URL}/order/${orderId}/route`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const res = await apiFetch(`/order/${orderId}/route`);
                     if (res.ok) {
                         const data = await res.json();
                         setRouteData(data);
@@ -128,10 +117,7 @@ function OrderTracking() {
             if (!order) return;
             setShipmentLoading(true);
             try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/shipment/track/${orderId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch(`/shipment/track/${orderId}`);
                 if (res.ok) {
                     const data = await res.json();
                     setShipmentData(data.data);
@@ -157,13 +143,8 @@ function OrderTracking() {
         }
         setActionLoading(true);
         try {
-            const token = localStorage.getItem("token");
-            const res = await fetch(`${API_BASE_URL}/order/${orderId}/cancel`, {
+            const res = await apiFetch(`/order/${orderId}/cancel`, {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}` 
-                },
                 body: JSON.stringify({ reason: finalReason })
             });
             const data = await res.json();
@@ -185,13 +166,8 @@ function OrderTracking() {
         e.preventDefault();
         setActionLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/order/${orderId}/refund-request`, {
+            const res = await apiFetch(`/order/${orderId}/refund-request`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ reason: refundReason })
             });
             const data = await res.json();

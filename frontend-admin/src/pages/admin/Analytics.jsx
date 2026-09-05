@@ -3,6 +3,7 @@ import { TrendingUp, Users, LogOut, Clock, Activity, Search, ChevronRight, Globe
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area, Cell, Legend } from 'recharts'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 function Analytics() {
     const [activeTab, setActiveTab] = useState('traffic'); // 'traffic' | 'cancellations'
@@ -42,47 +43,33 @@ function Analytics() {
     const [cancelledSearch, setCancelledSearch] = useState('');
     const [cancelledPeriod, setCancelledPeriod] = useState('monthly'); // 'monthly' | 'weekly' | 'yearly'
 
-    const fetchToken = () => localStorage.getItem('adminToken') || localStorage.getItem('token');
-
     const fetchSummary = useCallback(() => {
-        const token = fetchToken();
-        fetch(`${API_BASE_URL}/admin/analytics/summary`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/analytics/summary')
             .then(res => res.json())
             .then(res => { if (res.success) setSummary(res.data) })
             .catch(err => console.error(err));
     }, []);
 
     const fetchRealtime = useCallback(() => {
-        const token = fetchToken();
-        fetch(`${API_BASE_URL}/admin/analytics/realtime`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/analytics/realtime')
             .then(res => res.json())
             .then(res => { if (res.success) setRealtime(res.data) })
             .catch(err => console.error(err));
     }, []);
 
     const fetchTraffic = useCallback((period) => {
-        const token = fetchToken();
-        fetch(`${API_BASE_URL}/admin/analytics/traffic?period=${period}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch(`/admin/analytics/traffic?period=${period}`)
             .then(res => res.json())
             .then(res => { if (res.success) setTrafficData(res.data) })
             .catch(err => console.error(err));
     }, []);
 
     const fetchOtherData = useCallback(() => {
-        const token = fetchToken();
         const endpoints = ['top-pages', 'traffic-sources', 'devices', 'searches', 'funnel', 'user-journeys'];
         const setters = [setTopPages, setSources, setDevices, setSearches, setFunnel, setJourneys];
 
         endpoints.forEach((endpoint, idx) => {
-            fetch(`${API_BASE_URL}/admin/analytics/${endpoint}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
+            apiFetch(`/admin/analytics/${endpoint}`)
                 .then(res => res.json())
                 .then(res => { if (res.success) setters[idx](res.data) })
                 .catch(err => console.error(err));
@@ -91,10 +78,7 @@ function Analytics() {
 
     const fetchCancelledAnalytics = useCallback(() => {
         setCancelledLoading(true);
-        const token = fetchToken();
-        fetch(`${API_BASE_URL}/admin/cancelled-analytics`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/cancelled-analytics')
             .then(res => res.json())
             .then(res => {
                 if (res.error) {

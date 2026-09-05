@@ -12,9 +12,9 @@ import {
     Layout,
     ArrowLeft
 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function MyBugReportsPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -29,9 +29,7 @@ function MyBugReportsPage() {
 
         const fetchReports = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/my-bug-reports`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await apiFetch('/my-bug-reports');
                 const data = await res.json();
                 if (res.ok) {
                     setReports(data.data || data);
@@ -44,7 +42,7 @@ function MyBugReportsPage() {
         };
 
         fetchReports();
-    }, [user, navigate, token]);
+    }, [user, navigate]);
 
     const getStatusStyles = (status) => {
         const s = status?.toLowerCase();

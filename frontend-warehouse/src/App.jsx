@@ -88,53 +88,6 @@ const LoadingSpinner = () => (
   </div>
 )
 
-/**
- * Dedicated OAuth Callback component to handle secure login processing for warehouse partners.
- */
-function OAuthCallback() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const setWarehouseUser = useStore((state) => state.setWarehouseUser)
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const oauthToken = params.get('oauth_token')
-    const oauthUser = params.get('oauth_user')
-
-    if (!oauthToken || !oauthUser) {
-      navigate('/warehouse/login', { replace: true })
-      return
-    }
-
-    try {
-      const user = JSON.parse(decodeURIComponent(oauthUser))
-      const warehouseRoles = ['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']
-      const lowerRole = (user.role || '').toLowerCase()
-
-      if (warehouseRoles.includes(lowerRole)) {
-        // Set state synchronously before navigation
-        setWarehouseUser(user, oauthToken)
-        navigate('/warehouse/dashboard', { replace: true })
-      } else {
-        alert('Unauthorized: You do not have warehouse partner permissions.')
-        navigate('/warehouse/login', { replace: true })
-      }
-    } catch (error) {
-      console.error('OAuth callback parsing failed:', error)
-      navigate('/warehouse/login', { replace: true })
-    }
-  }, [location.search, navigate, setWarehouseUser])
-
-  return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="w-12 h-12 text-amber-500 animate-spin" />
-        <p className="text-amber-500/70 font-medium animate-pulse">Establishing secure partner session...</p>
-      </div>
-    </div>
-  )
-}
-
 function RouteChangeTracker() {
   const location = useLocation()
   const startLoading = useLoadingStore((state) => state.startLoading)
@@ -188,7 +141,6 @@ function App() {
               <DeliveryRequest />
             </Suspense>
           } />
-          <Route path="/oauth/callback" element={<OAuthCallback />} />
 
           {/* Protected Warehouse Routes */}
           <Route element={<WarehouseLayoutWrapper />}>

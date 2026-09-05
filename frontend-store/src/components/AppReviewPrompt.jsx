@@ -3,12 +3,12 @@ import { Star, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../utils/apiFetch'
 
 export default function AppReviewPrompt({ show, onDismiss }) {
     const [rating, setRating] = useState(0);
     const [reviewText, setReviewText] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const token = useStore.getState().token;
     const googleReviewUrl = import.meta.env.VITE_GOOGLE_REVIEW_URL || 'https://g.page/r/YOUR_GOOGLE_PLACE_ID/review';
 
     if (!show) return null;
@@ -24,12 +24,8 @@ export default function AppReviewPrompt({ show, onDismiss }) {
         const wentToGoogle = rating >= 4;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/app-review/submit`, {
+            const res = await apiFetch('/app-review/submit', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     rating,
                     review_text: reviewText,
@@ -57,12 +53,8 @@ export default function AppReviewPrompt({ show, onDismiss }) {
     const handleMaybeLater = async () => {
         // Submit empty review to dismiss forever as per requirements
         try {
-            await fetch(`${API_BASE_URL}/app-review/submit`, {
+            await apiFetch('/app-review/submit', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     rating: null,
                     review_text: 'dismissed_maybe_later',

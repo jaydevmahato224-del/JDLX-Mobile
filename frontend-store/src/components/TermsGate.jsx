@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { FileText, ShieldCheck, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
+import { apiFetch } from '../utils/apiFetch'
 
 function parseTermsVersion(settingsData) {
   const raw = settingsData?.terms_and_conditions_version
@@ -25,8 +26,8 @@ function TermsGate() {
     // Read the freshest user from the store instead of the subscribed `user`
     // so the effect only re-runs when the user id changes (user?.id dep below).
     const currentUser = useStore.getState().user
-    const activeToken = token || localStorage.getItem('token');
-    if (!currentUser || !activeToken || activeToken === 'null' || activeToken === 'undefined') {
+    const userFromStore = useStore.getState().user
+    if (!currentUser || !userFromStore) {
       setOpen(false)
       return
     }
@@ -35,7 +36,7 @@ function TermsGate() {
       try {
         const [settingsRes, profileRes] = await Promise.all([
           fetch(`${API_BASE_URL}/settings`),
-          fetch(`${API_BASE_URL}/user/profile`, { headers: { Authorization: `Bearer ${activeToken}` } }),
+          apiFetch('/user/profile'),
         ])
 
         const settingsJson = await settingsRes.json().catch(() => null)
@@ -48,10 +49,7 @@ function TermsGate() {
         let freshAcceptedVersion = Number(currentUser?.terms_accepted_version || 0)
 
         if (profileRes.ok && profileJson) {
-          // Pass the resolved token (activeToken), NOT the render-time store
-          // snapshot: if the store token was momentarily null while localStorage
-          // still had a valid one, setUser(user, null) would wipe the session.
-          setUser(profileJson, activeToken)
+          setUser(profileJson)
           freshAcceptedVersion = Number(profileJson.terms_accepted_version || 0)
         }
         
@@ -62,23 +60,21 @@ function TermsGate() {
     }
 
     run()
-  }, [user?.id, token, setUser])
+  }, [user?.id, setUser])
 
   const accept = async () => {
-    if (!token) return
     try {
       setSubmitting(true)
       setErr('')
-      const res = await fetch(`${API_BASE_URL}/user/terms/accept`, {
+      const res = await apiFetch('/user/terms/accept', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
         setErr(json?.error || 'Failed to accept terms')
         return
       }
-      setUser(json, token)
+      setUser(json)
       setOpen(false)
     } catch {
       setErr('Connection error while accepting terms')

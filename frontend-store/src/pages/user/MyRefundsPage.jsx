@@ -14,9 +14,9 @@ import {
     Package,
     ArrowRight
 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function MyRefundsPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -31,9 +31,7 @@ function MyRefundsPage() {
 
         const fetchRequests = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/refund-requests`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await apiFetch('/refund-requests');
                 const data = await res.json();
                 if (res.ok) {
                     setRequests(data.data || data);
@@ -46,7 +44,7 @@ function MyRefundsPage() {
         };
 
         fetchRequests();
-    }, [user, navigate, token]);
+    }, [user, navigate]);
 
     const getStatusStyles = (status) => {
         const s = status?.toLowerCase();

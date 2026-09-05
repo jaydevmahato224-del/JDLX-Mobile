@@ -875,8 +875,7 @@ def warehouse_auth_google():
             return error_response("Not authorized", 403, data={"email": email, "name": name})
 
         jwt_token = issue_warehouse_token(wh["id"], email, wh["warehouse_role"])
-        return jsonify({
-            "token": jwt_token,
+        resp = jsonify({
             "user": {
                 "id": wh["id"],
                 "store_id": wh["store_id"],
@@ -892,7 +891,9 @@ def warehouse_auth_google():
                 "service_radius_km": wh["service_radius_km"],
                 "profile_kyc_status": wh["profile_kyc_status"],
             },
-        }), 200
+        })
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp, 200
     finally:
         conn.close()
 
@@ -1035,8 +1036,9 @@ def partner_auth_google_callback():
             encoded_user = quote(json.dumps(user_obj))
             
             # Redirect to the Admin Frontend on port 5174
-            final_redirect = f"{admin_frontend}/admin/dashboard?oauth_token={jwt_token}&oauth_user={encoded_user}"
-            return redirect(final_redirect)
+            resp = redirect(f"{admin_frontend}/admin/dashboard")
+            resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+            return resp
         finally:
             conn.close()
 
@@ -1058,6 +1060,33 @@ def partner_auth_google_callback():
             if not wh:
                 return redirect(f"{warehouse_frontend}/warehouse/login?error=not_authorized")
 
+            # Check if warehouse has google_id linked
+            wh_google_id = wh.get('google_id') if 'google_id' in wh.keys() else None
+            if not wh_google_id:
+                # Generate OTP for linking verification
+                import random
+                import string
+                otp = ''.join(random.choices(string.digits, k=6))
+                salt = secrets.token_hex(8)
+                otp_hash = _hash_admin_otp(otp, salt)
+                
+                # Store in google_link_otps table (reuse for warehouse linking)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))",
+                    (email, wh['id'], 'warehouse_' + str(wh['id']), wh.get('owner_name') or wh.get('warehouse_name'), None, otp_hash, salt)
+                )
+                conn.commit()
+                
+                # Send OTP via email
+                from threading import Thread
+                Thread(target=send_individual_email, args=(email, wh.get('owner_name') or wh.get('warehouse_name') or 'Partner',
+                    "Verify Google Account Linking for Warehouse",
+                    f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>Expires in 10 minutes."
+                )).start()
+                
+                return redirect(f"{warehouse_frontend}/warehouse/login?link_required=true&email={email}&google_id=warehouse_{wh['id']}")
+
             jwt_token = issue_warehouse_token(wh["id"], email, wh["warehouse_role"])
             user_obj = {
                 "id": wh["id"],
@@ -1077,7 +1106,9 @@ def partner_auth_google_callback():
                 "profile_kyc_status": wh["profile_kyc_status"],
             }
             encoded_user = quote(json.dumps(user_obj))
-            return redirect(f"{warehouse_frontend}/warehouse/login?oauth_token={jwt_token}&oauth_user={encoded_user}")
+            resp = redirect(f"{warehouse_frontend}/warehouse/dashboard")
+            resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+            return resp
         finally:
             conn.close()
 
@@ -1091,7 +1122,9 @@ def partner_auth_google_callback():
         request_token = jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
         user_obj = {"email": email, "name": name}
         encoded_user = quote(json.dumps(user_obj))
-        return redirect(f"{warehouse_frontend}/warehouse/request?oauth_token={request_token}&oauth_user={encoded_user}")
+        resp = redirect(f"{warehouse_frontend}/warehouse/request")
+        resp.set_cookie('token', request_token, httponly=True, secure=True, samesite='Lax')
+        return resp
 
     elif flow == "delivery_login":
         return redirect(f"{warehouse_frontend}/warehouse/login?error=delivery_under_construction")
@@ -4245,8 +4278,7 @@ def staff_login():
             permissions=perms
         )
         
-        return jsonify({
-            "token": jwt_token,
+        resp = jsonify({
             "user": {
                 "staff_id": staff["staff_id"],
                 "vendor_id": staff["vendor_id"],
@@ -4255,9 +4287,19 @@ def staff_login():
                 "role_name": staff["role_name"],
                 "permissions": perms
             }
-        }), 200
+        })
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp, 200
     finally:
         conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/auth/logout", methods=["POST"])
+def warehouse_auth_logout():
+    """Clears the HttpOnly auth cookie for warehouse sessions."""
+    resp = jsonify({"success": True, "message": "Logged out successfully"})
+    resp.set_cookie('token', '', httponly=True, secure=True, samesite='Lax', expires=0)
+    return resp
 
 
 @warehouse_bp.route("/api/warehouse/staff/<int:staff_id>", methods=["PATCH"])

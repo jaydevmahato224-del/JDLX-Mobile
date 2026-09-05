@@ -3,6 +3,7 @@ import { BadgePercent, Plus, Search, Filter, AlertCircle, Edit, Trash2, Image as
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import toast from 'react-hot-toast'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function AdminOffers() {
     const [offers, setOffers] = useState([])
@@ -29,23 +30,16 @@ export default function AdminOffers() {
         is_active: true
     })
     const [bannerFile, setBannerFile] = useState(null)
-    
-    const adminToken = useStore(state => state.adminToken) || localStorage.getItem('adminToken') || localStorage.getItem('token')
 
     useEffect(() => {
-        if (adminToken) {
-            fetchOffers()
-        }
+        fetchOffers()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-    }, [adminToken])
+    }, [])
 
     const fetchOffers = async () => {
-        if (!adminToken) return
         setLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/offers`, {
-                headers: { 'Authorization': `Bearer ${adminToken}` }
-            })
+            const res = await apiFetch('/admin/offers')
             const json = await res.json()
             if (res.ok) setOffers(json.data)
         } catch {
@@ -84,12 +78,8 @@ export default function AdminOffers() {
             if (!payload.end_date) delete payload.end_date
             if (payload.offer_type !== 'coupon') delete payload.coupon_code
 
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method,
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${adminToken}`
-                },
                 body: JSON.stringify(payload)
             })
             const json = await res.json()
@@ -103,7 +93,7 @@ export default function AdminOffers() {
                 bannerFormData.append('file', bannerFile)
                 await fetch(`${API_BASE_URL}/admin/offers/${offerId}/upload-banner`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${adminToken}` },
+                    credentials: 'include',
                     body: bannerFormData
                 })
             }
@@ -121,9 +111,8 @@ export default function AdminOffers() {
     const handleDelete = async (id) => {
         if (!confirm("Delete this offer? This cannot be undone.")) return
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/offers/${id}`, {
+            const res = await apiFetch(`/admin/offers/${id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${adminToken}` }
             })
             if (res.ok) {
                 toast.success("Offer deleted")
@@ -136,12 +125,8 @@ export default function AdminOffers() {
 
     const toggleStatus = async (offer) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/offers/${offer.id}`, {
+            const res = await apiFetch(`/admin/offers/${offer.id}`, {
                 method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${adminToken}`
-                },
                 body: JSON.stringify({ ...offer, is_active: offer.is_active === 1 ? 0 : 1 })
             })
             if (res.ok) {

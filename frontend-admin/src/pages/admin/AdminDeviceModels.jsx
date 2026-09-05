@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Edit3, Plus, Save, Smartphone, Trash2 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 const blankModel = { name: '', brand: '', type: '', status: 'active' }
-
-function getAdminHeaders() {
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('token')
-    return {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-    }
-}
 
 export default function AdminDeviceModels() {
     const [models, setModels] = useState([])
@@ -30,8 +23,8 @@ export default function AdminDeviceModels() {
         setLoading(true)
         try {
             const [modelsRes, categoriesRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/admin/device-models`, { headers: getAdminHeaders() }),
-                fetch(`${API_BASE_URL}/categories`)
+                apiFetch('/admin/device-models'),
+                apiFetch('/categories')
             ])
             const modelsResult = await modelsRes.json()
             const categoriesResult = await categoriesRes.json()
@@ -48,9 +41,8 @@ export default function AdminDeviceModels() {
 
     const handleCreate = async (event) => {
         event.preventDefault()
-        const response = await fetch(`${API_BASE_URL}/admin/device-models`, {
+        const response = await apiFetch('/admin/device-models', {
             method: 'POST',
-            headers: getAdminHeaders(),
             body: JSON.stringify(newModel)
         })
         if (response.ok) {
@@ -61,9 +53,8 @@ export default function AdminDeviceModels() {
     }
 
     const handleSave = async (id) => {
-        const response = await fetch(`${API_BASE_URL}/admin/device-models/${id}`, {
+        const response = await apiFetch(`/admin/device-models/${id}`, {
             method: 'PATCH',
-            headers: getAdminHeaders(),
             body: JSON.stringify(editValues)
         })
         if (response.ok) {
@@ -75,9 +66,8 @@ export default function AdminDeviceModels() {
 
     const handleDelete = async (id) => {
         if (!window.confirm('Delete this device model?')) return
-        const response = await fetch(`${API_BASE_URL}/admin/device-models/${id}`, {
+        const response = await apiFetch(`/admin/device-models/${id}`, {
             method: 'DELETE',
-            headers: getAdminHeaders()
         })
         if (response.ok) {
             showMessage('Device model deleted')
@@ -86,9 +76,8 @@ export default function AdminDeviceModels() {
     }
 
     const toggleCategory = async (category) => {
-        const response = await fetch(`${API_BASE_URL}/admin/categories/${category.id}`, {
+        const response = await apiFetch(`/admin/categories/${category.id}`, {
             method: 'PATCH',
-            headers: getAdminHeaders(),
             body: JSON.stringify({
                 device_customization_enabled: !category.device_customization_enabled
             })

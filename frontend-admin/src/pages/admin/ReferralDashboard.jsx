@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Gift, CheckCircle, Clock, TrendingUp, IndianRupee, Search, Wallet } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../utils/apiFetch'
 
 const ReferralDashboard = () => {
   const [referrals, setReferrals] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [, setStats] = useState({ total_liability: 0, active_wallets: 0, total_credits: 0, total_debits: 0 });
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [refRes, statsRes, rewardsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/admin/referrals`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${API_BASE_URL}/admin/wallet-stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${API_BASE_URL}/admin/referral-rewards`, { headers: { 'Authorization': `Bearer ${token}` } })
+          apiFetch('/admin/referrals'),
+          apiFetch('/admin/wallet-stats'),
+          apiFetch('/admin/referral-rewards')
         ]);
 
         if (refRes.ok) setReferrals(await refRes.json());
@@ -29,7 +29,7 @@ const ReferralDashboard = () => {
     };
 
     fetchData();
-  }, [token]);
+  }, []);
 
   const completedCount = referrals.filter(r => r.status === 'completed').length;
   // Actual money paid out, straight from the wallet ledger (not a formula).

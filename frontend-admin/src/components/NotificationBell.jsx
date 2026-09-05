@@ -2,22 +2,20 @@ import { useState, useEffect, useRef } from 'react'
 import { Bell, Check, Trash2, Package, Tag, Info } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
+import { apiFetch } from '../utils/apiFetch'
 
 function NotificationBell() {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const dropdownRef = useRef(null);
-    const token = useStore(state => state.token);
     const user = useStore(state => state.user);
 
     useEffect(() => {
         const fetchNotifications = async () => {
-            if (!token) return;
+            if (!user) return;
             try {
-                const res = await fetch(`${API_BASE_URL}/notifications`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch('/notifications');
                 const result = await res.json();
                 if (res.ok) {
                     const data = Array.isArray(result) ? result : (result.data || []);
@@ -32,7 +30,7 @@ function NotificationBell() {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
         return () => clearInterval(interval);
-    }, [token]);
+    }, [user]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -46,9 +44,8 @@ function NotificationBell() {
 
     const markAsRead = async (id) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+            const res = await apiFetch(`/notifications/${id}/read`, {
                 method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 setNotifications(prev => prev.map(n => n.id === id ? { ...n, read_status: 1 } : n));
@@ -61,9 +58,8 @@ function NotificationBell() {
 
     const markAllRead = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+            const res = await apiFetch('/notifications/read-all', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 setNotifications(prev => prev.map(n => ({ ...n, read_status: 1 })));

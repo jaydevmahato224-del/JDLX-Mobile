@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MapPin, Navigation, X, Check, Search, Save } from 'lucide-react'
 import { API_BASE_URL } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 
 function AddressPicker({ onSelect, onClose }) {
     const [location, setLocation] = useState({ lat: 28.6139, lng: 77.2090 }); // Default Delhi
@@ -32,13 +33,8 @@ function AddressPicker({ onSelect, onClose }) {
         if (!addressText) return;
         setSaving(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/address/add`, {
+            const res = await apiFetch('/address/add', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     latitude: location.lat,
                     longitude: location.lng,
@@ -48,6 +44,8 @@ function AddressPicker({ onSelect, onClose }) {
             });
             if (res.ok) {
                 await res.json();
+
+(Showing lines 30-50 of 133. Use offset=51 to continue.)
                 onSelect({ address: addressText, latitude: location.lat, longitude: location.lng });
                 onClose();
             }

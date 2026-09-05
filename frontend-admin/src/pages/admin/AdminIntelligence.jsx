@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, RefreshCw, LineChart, Brain, AlertTriangle, TrendingUp, PackageSearch } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminIntelligence() {
     const [stats, setStats] = useState(null)
@@ -13,13 +14,9 @@ function AdminIntelligence() {
     const fetchData = async () => {
         setLoading(true)
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-
             // 1. Fetch available stores for the dropdown filter
             if (stores.length === 0) {
-                const storesRes = await fetch(`${API_BASE_URL}/admin/stores`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const storesRes = await apiFetch('/admin/stores');
                 if (storesRes.ok) {
                     const storesData = await storesRes.json();
                     setStores(storesData);
@@ -27,10 +24,10 @@ function AdminIntelligence() {
             }
 
             // 2. Fetch Machine Learning Forecast
-            let url = `${API_BASE_URL}/admin/inventory/demand-forecast`
+            let url = `/admin/inventory/demand-forecast`
             if (storeFilter) url += `?store_id=${storeFilter}`
 
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+            const res = await apiFetch(url)
             if (res.ok) {
                 const data = await res.json()
                 setStats(data)

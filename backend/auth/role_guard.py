@@ -90,6 +90,23 @@ def _current_user_claims():
         claims["role"] = normalize_role(claims.get("role"))
         if _is_admin_disabled(claims.get("user_id"), claims.get("role")):
             return None, ("Account disabled by administrator", 403)
+        # Role ko token se nahi, DB se uthao (role demotion turant effect):
+        user_id = claims.get("user_id")
+        if user_id:
+            try:
+                from database import get_db
+                conn = get_db()
+                try:
+                    row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if row and normalize_role(row["role"]) != claims["role"]:
+                        # Role change ho gaya hai — naya token issue karo, purana reject
+                        return None, ("Session expired. Please login again.", 401)
+                finally:
+                    conn.close()
+            except Exception:
+                # Fail-closed for admin endpoints, fail-open for others
+                if claims.get("role") in ADMIN_ROLES:
+                    return None, ("Session validation failed. Please login again.", 401)
         return claims, None
 
     payload, error = _decode_bearer_token()
@@ -99,6 +116,23 @@ def _current_user_claims():
     payload["role"] = normalize_role(payload.get("role"))
     if _is_admin_disabled(payload.get("user_id"), payload.get("role")):
         return None, ("Account disabled by administrator", 403)
+    # Role ko token se nahi, DB se uthao (role demotion turant effect):
+    user_id = payload.get("user_id")
+    if user_id:
+        try:
+            from database import get_db
+            conn = get_db()
+            try:
+                row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+                if row and normalize_role(row["role"]) != payload["role"]:
+                    # Role change ho gaya hai — naya token issue karo, purana reject
+                    return None, ("Session expired. Please login again.", 401)
+            finally:
+                conn.close()
+        except Exception:
+            # Fail-closed for admin endpoints, fail-open for others
+            if payload.get("role") in ADMIN_ROLES:
+                return None, ("Session validation failed. Please login again.", 401)
     request.user = payload
     return payload, None
 

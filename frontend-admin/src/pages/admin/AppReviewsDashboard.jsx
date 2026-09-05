@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Star, User, Calendar, ExternalLink, MessageSquare, BarChart3, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function AppReviewsDashboard() {
     const [reviews, setReviews] = useState([]);
@@ -12,10 +13,7 @@ export default function AppReviewsDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/app-reviews`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch('/admin/app-reviews');
             const result = await res.json();
             if (res.ok) {
                 const data = result.data || result;

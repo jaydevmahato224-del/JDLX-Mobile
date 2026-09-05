@@ -1,5 +1,6 @@
 import { useAlertStore } from '../store/useAlertStore'
 import { API_BASE_URL } from '../config'
+import { apiFetch } from './apiFetch'
 
 export const apiClient = {
     async request(endpoint, options = {}) {
@@ -12,13 +13,8 @@ export const apiClient = {
             ...options.headers,
         }
 
-        const token = localStorage.getItem('token') || localStorage.getItem('warehouseToken')
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`
-        }
-
         try {
-            const response = await fetch(url, { ...options, headers })
+            const response = await apiFetch(url, { ...options, headers })
             const data = await response.json()
 
             if (!response.ok) {

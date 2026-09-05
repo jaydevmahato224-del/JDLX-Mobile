@@ -38,6 +38,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
+from PIL import Image
 
 # --- Local Module Imports ---
 from database import init_db, get_db as _database_get_db, USE_TURSO
@@ -356,13 +357,42 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def validate_image_file(file_storage):
+    """
+    Validates uploaded image file using Pillow.
+    Returns (is_valid: bool, error_message: str | None).
+    """
+    try:
+        file_storage.seek(0)
+        img = Image.open(file_storage)
+        img.verify()
+        file_storage.seek(0)
+        img = Image.open(file_storage)
+        if img.format not in ('JPEG', 'PNG', 'GIF', 'WEBP'):
+            return False, "Invalid image format"
+        return True, None
+    except Exception:
+        return False, "Invalid image file"
+
+
 # ==============================================================================
 # PRODUCTION SECURITY & PERFORMANCE
 # ==============================================================================
 
 # 1. Secure Headers (XSS, CSP, etc.)
 # Disable CSP for local development if it breaks frontend, but enabled for production readiness
-Talisman(app, content_security_policy=None, force_https=False)
+Talisman(app,
+    force_https=True,
+    content_security_policy={
+        'default-src': "'self'",
+        'script-src': "'self' https://checkout.razorpay.com https://cdn.jsdelivr.net",
+        'img-src': "'self' data: https:",
+        'style-src': "'self' 'unsafe-inline'",
+        'frame-src': "https://checkout.razorpay.com",
+        'connect-src': "'self' https://api.razorpay.com",
+    },
+    force_https_permanent=True,
+)
 
 # 2. Rate Limiting
 disable_rate_limit = os.environ.get("DISABLE_RATE_LIMIT", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -582,10 +612,6 @@ def security_shield_guard():
         return None
 
     ip_address = get_client_ip()
-    
-    # Whitelist local traffic to prevent 429 errors during development
-    if ip_address in ('127.0.0.1', '::1', 'localhost'):
-        return None
 
     allowed, retry_after = check_and_record_request(ip_address)
     if allowed:
@@ -607,8 +633,9 @@ def security_shield_guard():
 # ==============================================================================
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -728,14 +755,18 @@ app.config["PARTNER_OAUTH_CLIENT"] = oauth
 # ==============================================================================
 
 def token_required(f):
-    """Decorator to protect routes with JWT authentication."""
+    """Decorator to protect routes with JWT authentication (cookie or header)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
+        # Prefer HttpOnly cookie; fall back to Authorization header for backward compat
+        token = request.cookies.get('token')
+        if not token:
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
         if not token:
             return error_response('Token is missing!', 401)
         try:
-            token = token.split(" ")[1] # Bearer <token>
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             
             # Global Logout Check: Verify if token was issued before min_token_iat
@@ -781,6 +812,15 @@ def verify_token():
         "role": user.get("role"),
         "expires_at": datetime.datetime.utcfromtimestamp(user.get("exp", 0)).isoformat() if user.get("exp") else None
     })
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def auth_logout():
+    """Clears the HttpOnly auth cookie."""
+    resp = jsonify({"success": True, "message": "Logged out successfully"})
+    resp.set_cookie('token', '', httponly=True, secure=True, samesite='Lax', expires=0)
+    return resp
+
 
 @app.route('/api/admin/request-otp', methods=['POST'])
 @limiter.limit("3 per 10 minutes")
@@ -950,11 +990,9 @@ def admin_verify_otp():
             "Admin re-authenticated via OTP successfully",
         )
 
-        return jsonify({
-            "success": True,
-            "token": jwt_token,
-            "user": user_data
-        })
+        resp = jsonify({"success": True, "user": user_data})
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp
     except Exception as e:
         logger.error(f"admin_verify_otp error: {e}")
         return error_response("Failed to verify OTP", 500)
@@ -1081,6 +1119,38 @@ def process_google_user_login(google_id, email, name, picture, ip_address):
         cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email.lower(),))
         user = cursor.fetchone()
         if user:
+            # If user exists with a DIFFERENT google_id, this is a conflict
+            if user['google_id'] and user['google_id'] != google_id:
+                conn.close()
+                return {'link_conflict': True, 'email': email, 'existing_google_id': user['google_id']}
+            
+            # If user exists but has NO google_id, require OTP verification before linking
+            if not user['google_id']:
+                # Generate OTP for linking verification
+                import random
+                import string
+                otp = ''.join(random.choices(string.digits, k=6))
+                salt = secrets.token_hex(8)
+                otp_hash = _hash_admin_otp(otp, salt)
+                
+                cursor.execute(
+                    "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))",
+                    (email, user['id'], google_id, name or None, picture or None, otp_hash, salt)
+                )
+                conn.commit()
+                
+                # Send OTP via email
+                from threading import Thread
+                Thread(target=send_individual_email, args=(email, user.get('name') or 'User',
+                    "Verify Google Account Linking",
+                    f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>Expires in 10 minutes."
+                )).start()
+                
+                conn.close()
+                return {'link_required': True, 'email': email, 'google_id': google_id, 
+                        'message': 'OTP sent to email. Verify to link Google account.'}
+            
+            # Same google_id - normal login, update profile info
             cursor.execute(
                 "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
                 (google_id, picture or None, name or None, user['id'])
@@ -1212,15 +1282,66 @@ def google_auth():
         picture = idinfo.get('picture', '')
         user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
 
-        return jsonify({
-            "token": jwt_token,
-            "user": user_data
-        })
+        resp = jsonify({"user": user_data})
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp
 
     except ValueError:
         record_login_attempt(email_hint, ip_address, "failed")
         detect_failed_login_anomaly(email_hint, ip_address)
         return error_response("Invalid Google token", 401)
+
+
+@app.route('/api/auth/google/link-verify', methods=['POST'])
+@limiter.limit("10 per 10 minutes")
+def google_link_verify():
+    """Verify OTP to link Google account to existing user account."""
+    data = request.get_json(silent=True) or {}
+    email = data.get('email', '').strip().lower()
+    otp = data.get('otp', '').strip()
+    google_id = data.get('google_id', '').strip()
+    
+    if not email or not otp or not google_id:
+        return error_response("Email, OTP, and Google ID required", 400)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT * FROM google_link_otps WHERE email = ? AND google_id = ? AND expires_at > datetime('now') ORDER BY id DESC LIMIT 1",
+            (email, google_id)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return error_response("Link request expired. Restart Google login.", 401)
+        
+        expected_hash = _hash_admin_otp(otp, row['otp_salt'])
+        if not hmac.compare_digest(expected_hash, row['otp_hash']):
+            new_attempts = int(row['attempts'] or 0) + 1
+            cursor.execute("UPDATE google_link_otps SET attempts = ? WHERE id = ?", (new_attempts, row['id']))
+            if new_attempts >= 5:
+                cursor.execute("DELETE FROM google_link_otps WHERE id = ?", (row['id'],))
+                record_login_attempt(email, get_client_ip(), "failed")
+            conn.commit()
+            return error_response("Invalid OTP", 401)
+        
+        # Success: Link Google account
+        cursor.execute(
+            "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
+            (google_id, row['picture'], row['name'], row['user_id'])
+        )
+        cursor.execute("DELETE FROM google_link_otps WHERE id = ?", (row['id'],))
+        conn.commit()
+        
+        # Complete login
+        ip_address = get_client_ip()
+        user_data, jwt_token = process_google_user_login(google_id, email, row['name'] or '', row['picture'] or '', ip_address)
+        
+        resp = jsonify({"user": user_data})
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp
+    finally:
+        conn.close()
 
 
 @app.route('/login/google', methods=['GET'])
@@ -1369,7 +1490,16 @@ def admin_google_callback():
         if is_account_locked(email):
             return redirect(f"{frontend_url}/admin/login?error=account_locked")
 
-        user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
+        result = process_google_user_login(google_id, email, name, picture, ip_address)
+        
+        # Handle link_required or link_conflict from process_google_user_login
+        if isinstance(result, dict):
+            if result.get('link_required'):
+                return redirect(f"{frontend_url}/admin/login?link_required=true&email={result['email']}&google_id={result['google_id']}")
+            if result.get('link_conflict'):
+                return redirect(f"{frontend_url}/admin/login?error=google_link_conflict&email={result['email']}")
+        
+        user_data, jwt_token = result
         user_role = (user_data.get('role') or '').lower()
 
         admin_roles = {'admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'}
@@ -1391,7 +1521,9 @@ def admin_google_callback():
             pass  # never break login on status read failure
 
         encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
-        return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
+        resp = redirect(f"{frontend_url}/admin/dashboard")
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp
             
     except Exception as exc:
         logger.error(f"Admin Google OAuth callback failed: {str(exc)}", exc_info=True)
@@ -1480,7 +1612,16 @@ def google_callback():
             return redirect(f"{frontend_url}/login?error=account_locked")
 
         # 3. Process Login
-        user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
+        result = process_google_user_login(google_id, email, name, picture, ip_address)
+        
+        # Handle link_required or link_conflict from process_google_user_login
+        if isinstance(result, dict):
+            if result.get('link_required'):
+                return redirect(f"{frontend_url}/login?link_required=true&email={result['email']}&google_id={result['google_id']}")
+            if result.get('link_conflict'):
+                return redirect(f"{frontend_url}/login?error=google_link_conflict&email={result['email']}")
+        
+        user_data, jwt_token = result
 
         # Apply referral code carried through the OAuth state (from a shared
         # ?ref= link). Safe no-op when the code is invalid/already used.
@@ -1532,8 +1673,9 @@ def google_callback():
                 'weather_status': wh['weather_status'],
                 'service_radius_km': wh['service_radius_km'],
             }
-            encoded_wh_user = quote(json.dumps(wh_user, separators=(',', ':')))
-            return redirect(f"{frontend_url}/oauth/callback?oauth_token={wh_token}&oauth_user={encoded_wh_user}")
+            resp = redirect(f"{frontend_url}/warehouse/dashboard")
+            resp.set_cookie('token', wh_token, httponly=True, secure=True, samesite='Lax')
+            return resp
 
         if flow in ('delivery_login', 'delivery'):
             conn = get_db()
@@ -1560,8 +1702,9 @@ def google_callback():
                 'role': 'delivery',
                 'status': dp['status']
             }
-            encoded_dp_user = quote(json.dumps(dp_user, separators=(',', ':')))
-            return redirect(f"{frontend_url}/oauth/callback?oauth_token={dp_token}&oauth_user={encoded_dp_user}")
+            resp = redirect(f"{frontend_url}/delivery/dashboard")
+            resp.set_cookie('token', dp_token, httponly=True, secure=True, samesite='Lax')
+            return resp
 
         if flow in ('warehouse_request', 'warehouse_partner_request'):
             req_payload = {
@@ -1572,8 +1715,9 @@ def google_callback():
             }
             req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
             req_user = {'email': email, 'name': name}
-            encoded_req_user = quote(json.dumps(req_user, separators=(',', ':')))
-            return redirect(f"{frontend_url}/warehouse/request?oauth_token={req_token}&oauth_user={encoded_req_user}")
+            resp = redirect(f"{frontend_url}/warehouse/request")
+            resp.set_cookie('token', req_token, httponly=True, secure=True, samesite='Lax')
+            return resp
 
         if flow == 'delivery_request':
             req_payload = {
@@ -1584,14 +1728,19 @@ def google_callback():
             }
             req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
             req_user = {'email': email, 'name': name}
-            encoded_req_user = quote(json.dumps(req_user, separators=(',', ':')))
-            return redirect(f"{frontend_url}/warehouse/request-delivery?oauth_token={req_token}&oauth_user={encoded_req_user}")
+            resp = redirect(f"{frontend_url}/warehouse/request-delivery")
+            resp.set_cookie('token', req_token, httponly=True, secure=True, samesite='Lax')
+            return resp
 
         if flow == 'admin':
-            return redirect(f"{frontend_url}/oauth/callback?oauth_token={jwt_token}&oauth_user={encoded_user}")
+            resp = redirect(f"{frontend_url}/admin/dashboard")
+            resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+            return resp
 
         # Default: User Flow
-        return redirect(f"{frontend_url}/?oauth_token={jwt_token}&oauth_user={encoded_user}")
+        resp = redirect(f"{frontend_url}/")
+        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        return resp
 
     except Exception as exc:
         logger.error(f"Google OAuth callback failed: {str(exc)}", exc_info=True)
@@ -4735,6 +4884,7 @@ def admin_update_order_status(order_id):
 @app.route('/api/admin/users/<int:user_id>/cod-restriction', methods=['PATCH'])
 @token_required
 @require_admin()
+@require_permission("manage_users")
 def admin_toggle_user_cod_restriction(user_id):
     data = request.json
     restricted = 1 if data.get('restricted') else 0
@@ -4781,6 +4931,9 @@ def user_profile():
         if 'file' in request.files:
             file = request.files['file']
             if file and allowed_file(file.filename):
+                is_valid, error = validate_image_file(file)
+                if not is_valid:
+                    return error_response(error, 400)
                 # 1. Try uploading to persistent cloud storage first
                 try:
                     from services.cloud_image_service import upload_file_object_to_cloud
@@ -7546,6 +7699,9 @@ def admin_upload_image():
     if file.filename == '':
         return error_response("No selected file", 400)
     if file and allowed_file(file.filename):
+        is_valid, error = validate_image_file(file)
+        if not is_valid:
+            return error_response(error, 400)
         # 1. Try uploading to persistent cloud storage first
         try:
             from services.cloud_image_service import upload_file_object_to_cloud
@@ -8658,7 +8814,7 @@ def serve_uploads(filename):
     """Serves uploaded files from the static/uploads directory."""
     # Security: Only allow specific extensions
     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-    if ext not in ALLOWED_EXTENSIONS and ext != 'webp':
+    if ext not in ALLOWED_EXTENSIONS:
         return error_response("File type not allowed", 403)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
@@ -8668,7 +8824,8 @@ init_db()
 if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')
     port = int(os.environ.get('PORT', '5000'))
-    app.run(debug=True, host=host, port=port)
+    debug_mode = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true"}
+    app.run(debug=debug_mode, host=host, port=port)
 
 def trigger_low_stock_notifications(product_id, new_stock, product_name):
     """Wrapper for the inventory service trigger."""

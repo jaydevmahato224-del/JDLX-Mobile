@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, FileText, ShieldCheck, Package, Truck, BarChart, Bike } from 'lucide-react'
+import { Building2, FileText, ShieldCheck, Package, Truck, BarChart, Bike, Loader2 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import toast from 'react-hot-toast'
 
 function WarehouseLogin() {
     const location = useLocation()
@@ -16,6 +17,13 @@ function WarehouseLogin() {
     const [loading, setLoading] = useState(false)
     const [deliveryLoading, setDeliveryLoading] = useState(false)
     // const [errorMsg, setErrorMsg] = useState('') // Removed setErrorMsg
+
+    // Link required state
+    const [linkRequired, setLinkRequired] = useState(false)
+    const [linkEmail, setLinkEmail] = useState('')
+    const [linkGoogleId, setLinkGoogleId] = useState('')
+    const [linkOtp, setLinkOtp] = useState('')
+    const [linkVerifying, setLinkVerifying] = useState(false)
 
     // Handle redirect-based oauth token in URL (legacy support)
     useEffect(() => {
@@ -36,9 +44,20 @@ function WarehouseLogin() {
         }
     }, [navigate, params, setWarehouseUser, warehouseToken])
 
+    // Handle link_required from Google OAuth
+    useEffect(() => {
+        const linkReq = params.get('link_required')
+        if (linkReq === 'true') {
+            setLinkRequired(true)
+            setLinkEmail(params.get('email') || '')
+            setLinkGoogleId(params.get('google_id') || '')
+        }
+    }, [params])
+
     const errorMessage = useMemo(() => {
         if (errorCode === 'not_authorized') return 'Your Google account is not linked to an approved warehouse partner yet.'
         if (errorCode === 'session_expired') return 'Your warehouse session expired. Please sign in again.'
+        if (errorCode === 'google_link_conflict') return 'This Google account is already linked to another account.'
         return ''
     }, [errorCode])
 
@@ -48,6 +67,101 @@ function WarehouseLogin() {
         
         // Redirect browser to Python backend endpoints to bypass JS Origins issues
         window.location.href = `${API_BASE_URL.replace(/\/api\/?$/, '')}/partner/login/google?flow=${flowType}`
+    }
+
+    const handleLinkVerify = async (e) => {
+        e.preventDefault()
+        if (!linkOtp || linkOtp.length !== 6) {
+            toast.error('Please enter the 6-digit OTP')
+            return
+        }
+        setLinkVerifying(true)
+        try {
+            const origin = API_BASE_URL.replace(/\/api\/?$/, '')
+            const res = await fetch(`${origin}/api/auth/google/link-verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: linkEmail, otp: linkOtp, google_id: linkGoogleId })
+            })
+            const data = await res.json()
+            if (res.ok && data.user) {
+                toast.success('Google account linked successfully!')
+                localStorage.setItem('token', data.user.token || '')
+                window.location.href = window.location.origin + '/warehouse/dashboard'
+            } else {
+                toast.error(data.error || 'Verification failed')
+            }
+        } catch (err) {
+            toast.error('Network error. Please try again.')
+        } finally {
+            setLinkVerifying(false)
+        }
+    }
+
+    if (linkRequired) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '24px 16px', fontFamily: "'Inter', sans-serif",
+            }}>
+                <div style={{
+                    width: '100%', maxWidth: '420px',
+                    background: 'rgba(255,255,255,0.04)', backdropFilter: 'blur(24px)',
+                    WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '24px', padding: '40px 36px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                        <div style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '14px', padding: '12px' }}>
+                            <Loader2 size={24} style={{ color: '#fcd34d' }} />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#fcd34d', marginBottom: '4px' }}>Link Account</p>
+                            <h2 style={{ fontSize: '26px', fontWeight: 900, color: '#f1f5f9', fontFamily: "'Manrope', sans-serif" }}>Link Google Account</h2>
+                        </div>
+                    </div>
+                    <p style={{ fontSize: '14px', color: '#94a3b8', lineHeight: 1.6, marginBottom: '28px', textAlign: 'center' }}>
+                        An account with <strong>{linkEmail}</strong> already exists. Enter the OTP sent to this email to link your Google account.
+                    </p>
+
+                    <form onSubmit={handleLinkVerify} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <input
+                            type="text"
+                            maxLength={6}
+                            placeholder="Enter 6-digit OTP"
+                            value={linkOtp}
+                            onChange={(e) => setLinkOtp(e.target.value)}
+                            style={{
+                                width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '12px', padding: '16px 20px', color: '#fff',
+                                fontSize: '20px', fontFamily: 'monospace', letterSpacing: '0.3em', textAlign: 'center',
+                                outline: 'none', fontWeight: 700, boxSizing: 'border-box'
+                            }}
+                            autoFocus
+                        />
+                        <button
+                            type="submit"
+                            disabled={linkVerifying}
+                            style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                padding: '14px 24px', background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                                color: '#000', borderRadius: '12px', border: 'none', width: '100%',
+                                fontWeight: 700, fontSize: '14px', cursor: linkVerifying ? 'not-allowed' : 'pointer',
+                                opacity: linkVerifying ? 0.7 : 1, fontFamily: "'Inter', sans-serif",
+                            }}
+                        >
+                            {linkVerifying ? <Loader2 size={16} style={{ color: '#000' }} /> : 'Verify & Link'}
+                        </button>
+                    </form>
+
+                    <p style={{ fontSize: '12px', color: '#64748b', marginTop: '20px', textAlign: 'center' }}>
+                        By continuing, you agree to our Terms of Service and Privacy Policy.
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     return (

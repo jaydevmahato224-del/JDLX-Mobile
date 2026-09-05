@@ -3,9 +3,9 @@ import { ArrowLeft, Shield, UserPlus, Trash2, Edit, Search, Filter, Power, Power
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminAdmins() {
-  const token = useStore((state) => state.adminToken || state.token)
   const user = useStore((state) => state.user)
 
   const [admins, setAdmins] = useState([])
@@ -29,13 +29,10 @@ function AdminAdmins() {
   const isSuperAdmin = (user?.role || '').toLowerCase() === 'super_admin'
 
   const fetchAdmins = async () => {
-    if (!token) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/admins`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch('/admin/admins')
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Failed to load admins')
@@ -54,16 +51,15 @@ function AdminAdmins() {
   useEffect(() => {
     fetchAdmins()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-  }, [token])
+  }, [])
 
   // ADD ADMIN
   const handleCreate = async (e) => {
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/admins`, {
+      const res = await apiFetch('/admin/admins', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(form),
       })
       const data = await res.json()
@@ -87,9 +83,8 @@ function AdminAdmins() {
     if (!selectedAdmin) return
     setIsSubmitting(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/admins/${selectedAdmin.id}`, {
+      const res = await apiFetch(`/admin/admins/${selectedAdmin.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: form.name, role: form.role }),
       })
       const data = await res.json()
@@ -111,9 +106,8 @@ function AdminAdmins() {
     if (!isSuperAdmin) return
     const newStatus = currentStatus === 'active' ? 'disabled' : 'active'
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/admins/${adminId}/status`, {
+      const res = await apiFetch(`/admin/admins/${adminId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
       })
       const data = await res.json()
@@ -132,9 +126,8 @@ function AdminAdmins() {
     if (!selectedAdmin) return
     setIsSubmitting(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/admins/${selectedAdmin.id}`, {
+      const res = await apiFetch(`/admin/admins/${selectedAdmin.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       if (!res.ok) {

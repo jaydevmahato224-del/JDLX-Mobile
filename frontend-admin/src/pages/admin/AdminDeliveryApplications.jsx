@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { Link } from 'react-router-dom'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminDeliveryApplications() {
     const [applications, setApplications] = useState([])
@@ -25,13 +26,8 @@ function AdminDeliveryApplications() {
         e.preventDefault();
         setActionLoading(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/delivery-partner`, {
+            const res = await apiFetch('/admin/delivery-partner', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(addFormData)
             });
             if (!res.ok) throw new Error('Failed to create partner');
@@ -49,10 +45,7 @@ function AdminDeliveryApplications() {
     const fetchApplications = async () => {
         setLoading(true)
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token')
-            const response = await fetch(`${API_BASE_URL}/admin/delivery/applications?status=${filter}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
+            const response = await apiFetch(`/admin/delivery/applications?status=${filter}`)
             if (!response.ok) throw new Error('Failed to fetch applications')
             const data = await response.json()
             setApplications(data)
@@ -71,13 +64,8 @@ function AdminDeliveryApplications() {
     const handleAction = async (appId, status) => {
         setActionLoading(true)
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token')
-            const response = await fetch(`${API_BASE_URL}/admin/delivery/approve`, {
+            const response = await apiFetch('/admin/delivery/approve', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     application_id: appId,
                     status: status,

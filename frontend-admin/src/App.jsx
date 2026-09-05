@@ -3,7 +3,6 @@ import { Suspense, lazy, useEffect } from 'react'
 import { Loader2, AlertCircle, Server } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 
-
 import ErrorBoundary from './components/ErrorBoundary'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
 import AdminRoute from './components/AdminRoute'
@@ -109,60 +108,11 @@ const AdminDatabase = lazy(() => import('./pages/admin/AdminDatabase'))
 const Analytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminComplaints = lazy(() => import('./pages/admin/AdminComplaints'))
 
-
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center bg-gray-50/50">
     <Loader2 className="w-10 h-10 text-primary animate-spin" />
   </div>
 )
-
-/**
- * Dedicated OAuth Callback component to handle secure login processing.
- * This route is NOT protected, allowing it to process tokens before redirection.
- */
-function OAuthCallback() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const setAdminUser = useStore((state) => state.setAdminUser)
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const oauthToken = params.get('oauth_token')
-    const oauthUser = params.get('oauth_user')
-
-    if (!oauthToken || !oauthUser) {
-      navigate('/admin/login', { replace: true })
-      return
-    }
-
-    try {
-      const user = JSON.parse(decodeURIComponent(oauthUser))
-      const adminRoles = ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']
-      const lowerRole = (user.role || '').toLowerCase()
-
-      if (adminRoles.includes(lowerRole)) {
-        // Set state synchronously before navigation
-        setAdminUser(user, oauthToken)
-        navigate('/admin/dashboard', { replace: true })
-      } else {
-        alert('Unauthorized: You do not have admin permissions.')
-        navigate('/admin/login', { replace: true })
-      }
-    } catch (error) {
-      console.error('OAuth callback parsing failed:', error)
-      navigate('/admin/login', { replace: true })
-    }
-  }, [location.search, navigate, setAdminUser])
-
-  return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
-        <p className="text-white/70 font-medium animate-pulse">Establishing secure session...</p>
-      </div>
-    </div>
-  )
-}
 
 function RouteChangeTracker() {
   const location = useLocation()
@@ -204,7 +154,6 @@ function App() {
           {/* Unprotected Routes */}
           <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/oauth/callback" element={<OAuthCallback />} />
 
           {/* Protected Admin Routes */}
           <Route path="/admin" element={<AdminLayoutWrapper />}>
@@ -299,16 +248,6 @@ function App() {
                 <AdminDarkStores />
               </AdminRoute>
             } />
-            <Route path="warehouse-applications" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
-                <AdminWarehouseApplications />
-              </AdminRoute>
-            } />
-            <Route path="delivery-applications" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'delivery_admin']}>
-                <AdminDeliveryApplications />
-              </AdminRoute>
-            } />
             <Route path="restocking" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'inventory_admin']}>
                 <AdminRestocking />
@@ -330,7 +269,7 @@ function App() {
               </AdminRoute>
             } />
             <Route path="activity-logs" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin']}>
+              <AdminRoute allowedRoles={['super_admin']}>
                 <AdminActivityLogs />
               </AdminRoute>
             } />
@@ -349,6 +288,61 @@ function App() {
                 <AdminRecovery />
               </AdminRoute>
             } />
+            <Route path="intelligence" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin']}>
+                <AdminIntelligence />
+              </AdminRoute>
+            } />
+            <Route path="banners" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'inventory_admin']}>
+                <AdminBanners />
+              </AdminRoute>
+            } />
+            <Route path="notifications" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+                <AdminNotifications />
+              </AdminRoute>
+            } />
+            <Route path="reviews" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+                <AdminReviews />
+              </AdminRoute>
+            } />
+            <Route path="app-reviews" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+                <AppReviewsDashboard />
+              </AdminRoute>
+            } />
+            <Route path="device-models" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'inventory_admin']}>
+                <AdminDeviceModels />
+              </AdminRoute>
+            } />
+            <Route path="database" element={
+              <AdminRoute allowedRoles={['super_admin']}>
+                <AdminDatabase />
+              </AdminRoute>
+            } />
+            <Route path="analytics" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+                <Analytics />
+              </AdminRoute>
+            } />
+            <Route path="intelligence" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin']}>
+                <AdminIntelligence />
+              </AdminRoute>
+            } />
+            <Route path="complaints" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+                <AdminComplaints />
+              </AdminRoute>
+            } />
+            <Route path="shipments" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'delivery_admin']}>
+                <AdminShipments />
+              </AdminRoute>
+            } />
             <Route path="settings" element={
               <AdminRoute allowedRoles={['super_admin']}>
                 <AdminSettings />
@@ -359,25 +353,17 @@ function App() {
                 <AdminServerControl />
               </AdminRoute>
             } />
-            <Route path="banners" element={
+            <Route path="warehouse-applications" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
-                <AdminBanners />
+                <AdminWarehouseApplications />
               </AdminRoute>
             } />
-            <Route path="notifications" element={
+            <Route path="delivery-applications" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
-                <AdminNotifications />
+                <AdminDeliveryApplications />
               </AdminRoute>
             } />
-            <Route path="database" element={
-              <AdminRoute allowedRoles={['super_admin']}>
-                <AdminDatabase />
-              </AdminRoute>
-            } />
-
           </Route>
-
-          <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
         </Routes>
       </Router>
     </ErrorBoundary>

@@ -3,9 +3,9 @@ import { ArrowLeft, LifeBuoy, ShieldAlert, CheckCircle2, Database, FileArchive, 
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminRecovery() {
-  const token = useStore((state) => state.adminToken || state.token)
   const user = useStore((state) => state.user)
   const isSuperAdmin = (user?.role || '').toLowerCase() === 'super_admin'
 
@@ -22,14 +22,12 @@ function AdminRecovery() {
     return { db, files }
   }, [items])
 
-  const loadBackups = async () => {
-    if (!token || !isSuperAdmin) return
+const loadBackups = async () => {
+    if (!isSuperAdmin) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/recovery/backups`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch('/admin/recovery/backups')
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Failed to load recovery backups')
@@ -57,7 +55,7 @@ function AdminRecovery() {
   useEffect(() => {
     loadBackups()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-  }, [token, isSuperAdmin])
+  }, [isSuperAdmin])
 
   const verifyBackup = async (path) => {
     if (!path) {
@@ -66,12 +64,8 @@ function AdminRecovery() {
     }
     setVerifyResult(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/recovery/verify`, {
+      const res = await apiFetch('/admin/recovery/verify', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ path }),
       })
       const data = await res.json()
@@ -92,12 +86,8 @@ function AdminRecovery() {
     }
     if (!confirm('Restore database from selected backup? Current state will be snapshotted first.')) return
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/recovery/restore/database`, {
+      const res = await apiFetch('/admin/recovery/restore/database', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ path: selectedDb }),
       })
       const data = await res.json()
@@ -119,12 +109,8 @@ function AdminRecovery() {
     }
     if (!confirm('Restore files from selected backup? Current state will be snapshotted first.')) return
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/recovery/restore/files`, {
+      const res = await apiFetch('/admin/recovery/restore/files', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ path: selectedFile }),
       })
       const data = await res.json()
@@ -146,12 +132,8 @@ function AdminRecovery() {
     }
     if (!confirm('Run FULL system restore? This should be used only for disaster recovery.')) return
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/recovery/restore/full`, {
+      const res = await apiFetch('/admin/recovery/restore/full', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           database_path: selectedDb,
           file_path: selectedFile,

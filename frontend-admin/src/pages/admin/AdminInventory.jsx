@@ -2,6 +2,7 @@ import React, { useState, useEffect, Component } from 'react';
 import { Package, AlertCircle, Save, ArrowLeft, Search, ChevronLeft, ChevronRight, Power, PowerOff, TrendingUp, AlertTriangle, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../utils/apiFetch';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -53,10 +54,9 @@ function InventoryContent() {
         setLoading(true);
         setFetchError(false);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const [invRes, statsRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/admin/inventory`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_BASE_URL}/admin/inventory/stats`, { headers: { 'Authorization': `Bearer ${token}` } })
+                apiFetch('/admin/inventory'),
+                apiFetch('/admin/inventory/stats')
             ]);
 
             const result = await invRes.json();
@@ -96,13 +96,8 @@ function InventoryContent() {
 
     const handleSave = async (id) => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/inventory/${id}`, {
+            const res = await apiFetch(`/admin/inventory/${id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(editValues)
             });
 
@@ -123,13 +118,8 @@ function InventoryContent() {
     const toggleStatus = async (id, currentStatus) => {
         const newStatus = currentStatus === 'available' ? 'disabled' : 'available';
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/inventory/${id}`, {
+            const res = await apiFetch(`/admin/inventory/${id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ status: newStatus })
             });
 

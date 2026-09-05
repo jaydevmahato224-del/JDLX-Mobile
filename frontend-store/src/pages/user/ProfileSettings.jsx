@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { ChevronDown, Check } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function ProfileSettings() {
     const navigate = useNavigate();
     const user = useStore(state => state.user);
     const setUser = useStore(state => state.setUser);
-    const token = useStore.getState().token;
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -24,15 +24,8 @@ function ProfileSettings() {
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const activeToken = token || localStorage.getItem('token');
-            if (!activeToken || activeToken === 'null' || activeToken === 'undefined') {
-                setLoading(false);
-                return;
-            }
             try {
-                const res = await fetch(`${API_BASE_URL}/user/profile`, {
-                    headers: { 'Authorization': `Bearer ${activeToken}` }
-                });
+                const res = await apiFetch('/user/profile');
                 if (res.ok) {
                     const data = await res.json();
                     setProfile(data);
@@ -45,7 +38,7 @@ function ProfileSettings() {
             }
         };
         fetchProfile();
-    }, [token]);
+    }, []);
 
     const handleFileChange = e => {
         const file = e.target.files[0];
@@ -64,14 +57,13 @@ function ProfileSettings() {
             }
         });
         try {
-            const res = await fetch(`${API_BASE_URL}/user/profile`, {
+            const res = await apiFetch('/user/profile', {
                 method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
             if (res.ok) {
                 const updated = await res.json();
-                setUser(updated, token);
+                setUser(updated);
                 setProfile(updated);
                 setForm(updated);
                 setMessage('Profile updated successfully');

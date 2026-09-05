@@ -3,16 +3,16 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { Link } from 'react-router-dom'
 import { MapPin, ChevronRight } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function MyOrders() {
-    const token = useStore.getState().token;
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/user/orders`, { headers: { Authorization: `Bearer ${token}` } });
+                const res = await apiFetch('/user/orders');
                 if (res.ok) setOrders(await res.json());
             } catch (e) {
                 console.error(e);
@@ -21,7 +21,7 @@ function MyOrders() {
             }
         };
         fetchOrders();
-    }, [token]);
+    }, []);
 
     if (loading) return <div>Loading orders...</div>;
 

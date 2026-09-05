@@ -14,10 +14,10 @@ import {
     CheckCircle2,
     Lock
 } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function TicketDetailPage() {
     const { ticketId } = useParams();
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
     const messagesEndRef = useRef(null);
@@ -33,9 +33,7 @@ function TicketDetailPage() {
 
     const fetchTicketDetails = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/support/tickets/${ticketId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/support/tickets/${ticketId}`);
             const json = await res.json();
             if (res.ok) {
                 setData(json.data || json);
@@ -49,7 +47,7 @@ function TicketDetailPage() {
         } finally {
             setLoading(false);
         }
-    }, [ticketId, token, navigate]);
+    }, [ticketId, navigate]);
 
     useEffect(() => {
         if (!user) {
@@ -69,12 +67,8 @@ function TicketDetailPage() {
 
         setSubmitting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/support/tickets/${ticketId}/reply`, {
+            const res = await apiFetch(`/support/tickets/${ticketId}/reply`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
                 body: JSON.stringify({ message: reply })
             });
             const json = await res.json();

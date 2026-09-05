@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Star, MessageSquare, ShieldCheck, User, Send } from 'lucide-react'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
+import { apiFetch } from '../utils/apiFetch'
 
 function ReviewSection({ productId, averageRating, totalReviews }) {
     const [reviews, setReviews] = useState([]);
@@ -11,12 +12,11 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    const token = useStore(state => state.token);
     const user = useStore(state => state.user);
 
     const fetchReviews = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/review/product/${productId}`);
+            const res = await apiFetch(`/review/product/${productId}`);
             const data = await res.json();
             if (res.ok) {
                 setReviews(data);
@@ -35,19 +35,15 @@ function ReviewSection({ productId, averageRating, totalReviews }) {
         setError(null);
         setSuccess(false);
 
-        if (!token) {
+        if (!user) {
             setError("Please login to leave a review.");
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/review/add`, {
+            const res = await apiFetch('/review/add', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     product_id: productId,
                     rating,

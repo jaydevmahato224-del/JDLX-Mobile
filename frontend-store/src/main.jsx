@@ -8,6 +8,7 @@ import { initPerformanceManager } from './utils/performanceManager'
 import initAppShellBehavior from './utils/appShell'
 import { useStore } from './store/useStore'
 import { API_BASE_URL } from './config'
+import { apiFetch } from './utils/apiFetch'
 
 // Initialize 60/90/120fps display rate detection and runtime performance optimizations
 initFrameRateDetection();
@@ -35,16 +36,10 @@ window.addEventListener('beforeinstallprompt', (e) => {
 const APP_INSTALLED_FLAG = 'jdlx_app_installed';
 
 async function reportAppInstalled() {
-  const { token } = useStore.getState();
-  if (!token) return; // flushed automatically once the user logs in
+  const { user } = useStore.getState();
+  if (!user) return; // flushed automatically once the user logs in
   try {
-    await fetch(`${API_BASE_URL}/user/app-installed`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    await apiFetch('/user/app-installed', { method: 'POST' });
     localStorage.removeItem(APP_INSTALLED_FLAG);
   } catch (err) {
     // Keep the flag so a later visit retries the report.
@@ -61,13 +56,13 @@ window.addEventListener('appinstalled', () => {
 // Flush a pending install report when the user logs in (they may have installed
 // the app while logged out, or the earlier report failed).
 useStore.subscribe((state, prev) => {
-  if (state.token && !prev.token && localStorage.getItem(APP_INSTALLED_FLAG)) {
+  if (state.user && !prev.user && localStorage.getItem(APP_INSTALLED_FLAG)) {
     reportAppInstalled();
   }
 });
-// Also catch the case where the token already exists at page load (page refresh
+// Also catch the case where the user already exists at page load (page refresh
 // right after installing while logged in).
-if (typeof window !== 'undefined' && useStore.getState().token && localStorage.getItem(APP_INSTALLED_FLAG)) {
+if (typeof window !== 'undefined' && useStore.getState().user && localStorage.getItem(APP_INSTALLED_FLAG)) {
   reportAppInstalled();
 }
 

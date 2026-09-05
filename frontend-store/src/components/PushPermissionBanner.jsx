@@ -3,6 +3,7 @@ import { BellRing, X, Settings } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
+import { apiFetch } from '../utils/apiFetch'
 
 // Dismissal is session-scoped on purpose: closing the banner stops it nagging
 // during the current visit, but it returns on the next visit until the user
@@ -69,14 +70,10 @@ const PushPermissionBanner = () => {
         // Register the subscription with the backend so pushes are delivered
         // to this user (works immediately when logged in; otherwise the
         // existing subscription is picked up automatically on next login).
-        if (token && user) {
+        if (user) {
           try {
-            await fetch(`${API_BASE_URL}/notifications/register-token`, {
+            await apiFetch('/notifications/register-token', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
               body: JSON.stringify({ subscription: sub, device_type: 'web' })
             });
           } catch (err) {

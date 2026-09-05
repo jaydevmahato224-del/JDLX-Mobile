@@ -1,8 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import toast from "react-hot-toast"
 import { API_BASE_URL } from '../../config'
 
 function Login() {
+    const [linkRequired, setLinkRequired] = useState(false);
+    const [linkEmail, setLinkEmail] = useState('');
+    const [linkGoogleId, setLinkGoogleId] = useState('');
+    const [linkOtp, setLinkOtp] = useState('');
+
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const refCode = params.get('ref');
@@ -17,6 +22,15 @@ function Login() {
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }
+
+        // Handle link_required from Google OAuth
+        const linkReq = params.get('link_required');
+        if (linkReq === 'true') {
+            setLinkRequired(true);
+            setLinkEmail(params.get('email') || '');
+            setLinkGoogleId(params.get('google_id') || '');
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
     }, []);
 
     const handleGoogleLogin = () => {
@@ -29,6 +43,71 @@ function Login() {
         const refQuery = refCode ? `&ref=${encodeURIComponent(refCode)}` : '';
         window.location.href = `${origin}/login/google?flow=user&frontend_url=${frontendUrl}${refQuery}`;
     };
+
+    const handleLinkVerify = async (e) => {
+        e.preventDefault();
+        if (!linkOtp || linkOtp.length !== 6) {
+            toast.error('Please enter the 6-digit OTP');
+            return;
+        }
+        try {
+            const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+            const res = await fetch(`${origin}/api/auth/google/link-verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: linkEmail, otp: linkOtp, google_id: linkGoogleId })
+            });
+            const data = await res.json();
+            if (res.ok && data.user) {
+                toast.success('Google account linked successfully!');
+                // Store token and redirect
+                localStorage.setItem('token', data.user.token || '');
+                window.location.href = window.location.origin;
+            } else {
+                toast.error(data.error || 'Verification failed');
+            }
+        } catch (err) {
+            toast.error('Network error. Please try again.');
+        }
+    };
+
+    if (linkRequired) {
+        return (
+            <div className="container-standard flex flex-col items-center justify-center min-h-[70vh]">
+                <div className="glass-card w-full max-w-sm p-8 text-center flex flex-col items-center gap-6">
+                    <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mb-2 shadow-inner">
+                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-[var(--color-on-surface)] tracking-tight">Link Google Account</h1>
+                        <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">An account with {linkEmail} already exists. Enter the OTP sent to this email to link your Google account.</p>
+                    </div>
+
+                    <form onSubmit={handleLinkVerify} className="w-full mt-4 flex flex-col items-center gap-4">
+                        <input
+                            type="text"
+                            maxLength={6}
+                            placeholder="Enter 6-digit OTP"
+                            value={linkOtp}
+                            onChange={(e) => setLinkOtp(e.target.value)}
+                            className="w-[320px] max-w-full bg-[var(--color-surface-card)] border border-gray-300 rounded-full px-6 py-3 text-center text-2xl font-mono tracking-widest text-[var(--color-on-surface)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                            autoFocus
+                        />
+                        <button 
+                            type="submit"
+                            className="flex items-center justify-center gap-3 w-[320px] max-w-full bg-primary text-white rounded-full px-6 py-3 font-medium hover:bg-primary/90 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                        >
+                            Verify & Link
+                        </button>
+                    </form>
+
+                    <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+                        By continuing, you agree to our Terms of Service and Privacy Policy.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container-standard flex flex-col items-center justify-center min-h-[70vh]">

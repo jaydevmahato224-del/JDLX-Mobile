@@ -32,6 +32,7 @@ import {
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
+import { apiFetch } from '../../utils/apiFetch'
 
 // Move Modal Components OUTSIDE to prevent re-definition on every render
 const VendorModal = ({ 
@@ -257,7 +258,7 @@ const CategoryModal = ({
 
 const WarehouseProcurement = () => {
     const navigate = useNavigate()
-    const { warehouseToken, warehouseLogout } = useStore()
+    const { warehouseLogout } = useStore()
     const [purchases, setPurchases] = useState([])
     const [storeInfo, setStoreInfo] = useState({ name: '', nextIndex: 1 })
     const [loading, setLoading] = useState(true)
@@ -299,12 +300,9 @@ const WarehouseProcurement = () => {
     }
 
     const fetchPurchases = useCallback(async () => {
-        if (!warehouseToken) return
         setLoading(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/purchases`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` }
-            })
+            const response = await apiFetch('/warehouse/purchases')
             if (response.status === 401 || response.status === 403) {
                 warehouseLogout()
                 return
@@ -320,20 +318,17 @@ const WarehouseProcurement = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseToken, warehouseLogout])
+    }, [warehouseLogout])
 
     const fetchCategories = useCallback(async () => {
-        if (!warehouseToken) return
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/categories`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` }
-            })
+            const response = await apiFetch('/warehouse/categories')
             const result = await response.json()
             if (response.ok) setCategories(result.data || [])
         } catch (err) {
             console.error('Failed to fetch categories:', err)
         }
-    }, [warehouseToken])
+    }, [])
 
     useEffect(() => {
         fetchPurchases()
@@ -352,9 +347,7 @@ const WarehouseProcurement = () => {
             setIsSearchingVendor(true)
             setVendorSearchAttempted(true)
             try {
-                const response = await fetch(`${API_BASE_URL}/warehouse/vendors/search?q=${vendorName}`, {
-                    headers: { Authorization: `Bearer ${warehouseToken}` }
-                })
+                const response = await apiFetch(`/warehouse/vendors/search?q=${vendorName}`)
                 const result = await response.json()
                 setFoundVendors(result.data || [])
             } catch (err) {
@@ -365,7 +358,7 @@ const WarehouseProcurement = () => {
         }, 300)
 
         return () => clearTimeout(timer)
-    }, [vendorName, warehouseToken, selectedVendor])
+    }, [vendorName, selectedVendor])
 
     const handleQuickAddVendor = () => {
         setIsEditingVendor(false)
@@ -393,17 +386,13 @@ const WarehouseProcurement = () => {
         setSubmitting(true)
         try {
             const url = isEditingVendor 
-                ? `${API_BASE_URL}/warehouse/vendors/${selectedVendor.id}`
-                : `${API_BASE_URL}/warehouse/vendors`
+                ? `/warehouse/vendors/${selectedVendor.id}`
+                : '/warehouse/vendors'
             
             const method = isEditingVendor ? 'PUT' : 'POST'
 
-            const response = await fetch(url, {
+            const response = await apiFetch(url, {
                 method: method,
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify(vendorForm)
             })
             const result = await response.json()
@@ -448,7 +437,7 @@ const WarehouseProcurement = () => {
         try {
             const response = await fetch(`${API_BASE_URL}/warehouse/scan-invoice`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${warehouseToken}` },
+                credentials: 'include',
                 body: formData
             })
             const result = await response.json()
@@ -484,12 +473,8 @@ const WarehouseProcurement = () => {
     const handleUpdateCategory = async (productId, category) => {
         setSubmitting(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/products/${productId}/category`, {
+            const response = await apiFetch(`/warehouse/products/${productId}/category`, {
                 method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({ category })
             });
             
@@ -618,14 +603,10 @@ const WarehouseProcurement = () => {
             return;
         }
 
-        setSubmitting(true)
+setSubmitting(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/purchases`, {
+            const response = await apiFetch('/warehouse/purchases', {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({
                     vendor_name: vendorName,
                     invoice_no: invoiceNo,

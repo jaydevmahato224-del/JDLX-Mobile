@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { Bell, Mail, Edit, Save, X, AlertCircle, Info, CheckCircle2, Send, Smartphone, Users } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function AdminNotifications() {
-    const token = useStore((state) => state.adminToken);
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingTemplate, setEditingTemplate] = useState(null);
@@ -29,9 +29,8 @@ export default function AdminNotifications() {
         }
         setSendingInApp(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/notifications/in-app-broadcast`, {
+            const res = await apiFetch('/admin/notifications/in-app-broadcast', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(broadcast),
             });
             const data = await res.json();
@@ -54,9 +53,8 @@ export default function AdminNotifications() {
         }
         setSendingEmail(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/notifications/bulk`, {
+            const res = await apiFetch('/admin/notifications/bulk', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(emailBroadcast),
             });
             const data = await res.json();
@@ -74,9 +72,7 @@ export default function AdminNotifications() {
     const fetchTemplates = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE_URL}/admin/notification-templates`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch('/admin/notification-templates');
             const data = await res.json();
             if (res.ok) {
                 setTemplates(data);
@@ -92,12 +88,8 @@ export default function AdminNotifications() {
         e.preventDefault();
         setSaving(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/notification-templates/${editingTemplate.template_key}`, {
+            const res = await apiFetch(`/admin/notification-templates/${editingTemplate.template_key}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(editingTemplate)
             });
             if (res.ok) {

@@ -17,9 +17,10 @@ import {
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 const WarehouseOrders = () => {
-    const { warehouseToken, warehouseLogout } = useStore()
+    const { warehouseLogout } = useStore()
     const [orders, setOrders] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
@@ -35,12 +36,9 @@ const WarehouseOrders = () => {
     }
 
     const fetchOrders = useCallback(async () => {
-        if (!warehouseToken) return
         setLoading(true)
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/orders`, {
-                headers: { Authorization: `Bearer ${warehouseToken}` }
-            })
+            const response = await apiFetch('/warehouse/orders')
             if (response.status === 401 || response.status === 403) {
                 warehouseLogout()
                 return
@@ -53,22 +51,17 @@ const WarehouseOrders = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseToken, warehouseLogout])
+    }, [warehouseLogout])
 
     useEffect(() => {
         fetchOrders()
     }, [fetchOrders])
 
     const handleUpdateStatus = async (assignmentId, newStatus) => {
-        if (!warehouseToken) return
         setUpdatingId(assignmentId)
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/orders/${assignmentId}/status`, {
+            const response = await apiFetch(`/warehouse/orders/${assignmentId}/status`, {
                 method: 'PATCH',
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({ status: newStatus })
             })
             const result = await response.json()

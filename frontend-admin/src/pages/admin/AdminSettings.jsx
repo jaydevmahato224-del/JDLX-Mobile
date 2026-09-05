@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send, Clock } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function AdminSettings() {
   const user = useStore((state) => state.adminUser)
-  const token = useStore((state) => state.adminToken)
   
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -116,9 +116,7 @@ export default function AdminSettings() {
 
   const fetchPincodeRules = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/pincode-rules`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      const res = await apiFetch('/admin/pincode-rules')
       const json = await res.json()
       if (res.ok) setPincodeRules(json)
     } catch (err) {
@@ -129,12 +127,8 @@ export default function AdminSettings() {
   const handleAddPincodeRule = async () => {
     if (!newPincode.pincode) return
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/pincode-rules`, {
+      const res = await apiFetch('/admin/pincode-rules', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({ 
           pincode: newPincode.pincode, 
           cod_allowed: newPincode.cod_allowed === 'true' ? 1 : 0 
@@ -151,9 +145,8 @@ export default function AdminSettings() {
 
   const handleDeletePincodeRule = async (pincode) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/pincode-rules/${pincode}`, {
+      const res = await apiFetch(`/admin/pincode-rules/${pincode}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) fetchPincodeRules()
     } catch {
@@ -164,12 +157,8 @@ export default function AdminSettings() {
   const handleSave = async () => {
     try {
       setSaving(true)
-      const res = await fetch(`${API_BASE_URL}/admin/settings`, {
+      const res = await apiFetch('/admin/settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify(settings)
       })
       const json = await res.json()

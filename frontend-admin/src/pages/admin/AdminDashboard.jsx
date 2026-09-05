@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ShoppingBag, Users, TrendingUp, Package, FolderTree, Truck, Warehouse, Check, Undo2, RefreshCw, BarChart3, ShieldCheck, KeyRound, History, ShieldAlert, HardDriveDownload, LifeBuoy } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import adminLogo from '../../assets/admin-logo.svg'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminDashboard() {
     const [stats, setStats] = useState({
@@ -31,10 +32,7 @@ function AdminDashboard() {
     });
 
     useEffect(() => {
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        fetch(`${API_BASE_URL}/admin/stats`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/stats')
             .then(res => res.json())
             .then(result => {
                 const data = result.data || result;
@@ -42,9 +40,7 @@ function AdminDashboard() {
             })
             .catch(err => console.error(err));
 
-        fetch(`${API_BASE_URL}/admin/warehouse-analytics`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/warehouse-analytics')
             .then(res => res.json())
             .then(result => {
                 const data = result.data || result;
@@ -52,9 +48,7 @@ function AdminDashboard() {
             })
             .catch(err => console.error(err));
 
-        fetch(`${API_BASE_URL}/admin/system-stats`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/system-stats')
             .then(res => res.json())
             .then(result => {
                 const data = result.data || result;
@@ -62,9 +56,7 @@ function AdminDashboard() {
             })
             .catch(err => console.error(err));
 
-        fetch(`${API_BASE_URL}/admin/security-alerts`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/security-alerts')
             .then(res => res.json())
             .then(result => {
                 const data = result.data || result;
@@ -72,9 +64,7 @@ function AdminDashboard() {
             })
             .catch(err => console.error(err));
 
-        fetch(`${API_BASE_URL}/admin/recent-orders`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/recent-orders')
             .then(res => res.json())
             .then(result => {
                 const data = Array.isArray(result) ? result : (result.data || []);

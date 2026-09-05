@@ -4,12 +4,12 @@ import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
 import ImageCropperModal from '../../components/ImageCropperModal'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function AdminBanners() {
   const [banners, setBanners] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const adminToken = useStore((state) => state.adminToken)
 
   const [form, setForm] = useState({
     id: null,
@@ -33,7 +33,7 @@ export default function AdminBanners() {
 
   const fetchBanners = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/banners`)
+      const res = await apiFetch('/banners')
       const json = await res.json()
       if (json.success) {
         setBanners(json.data || [])
@@ -66,9 +66,7 @@ export default function AdminBanners() {
     try {
       const res = await fetch(`${API_BASE_URL}/admin/upload`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${adminToken}`
-        },
+        credentials: 'include',
         body: formData
       })
       const json = await res.json()
@@ -86,11 +84,8 @@ export default function AdminBanners() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this banner?')) return
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/banners/${id}`, {
+      const res = await apiFetch(`/admin/banners/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${adminToken}`
-        }
       })
       const json = await res.json()
       if (json.success) {
@@ -107,12 +102,8 @@ export default function AdminBanners() {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/banners`, {
+      const res = await apiFetch('/admin/banners', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`
-        },
         body: JSON.stringify(form)
       })
       const json = await res.json()

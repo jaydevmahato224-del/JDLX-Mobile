@@ -2,6 +2,7 @@ import React, { useState, useEffect, Component } from 'react';
 import { ArrowLeft, Warehouse, Plus, MapPin, Package, Save, Check, X, ChevronLeft, ChevronRight, Edit2, Trash2, Power, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../utils/apiFetch';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -54,22 +55,10 @@ function DarkStoresContent() {
 
     const navigate = useNavigate();
 
-    const getAuthToken = () => {
-        try {
-            return localStorage.getItem('adminToken') || localStorage.getItem('token');
-        } catch (e) {
-            console.warn('LocalStorage inaccessible:', e);
-            return null;
-        }
-    };
-
     const fetchStores = async () => {
         setLoading(true);
         try {
-            const token = getAuthToken();
-            const res = await fetch(`${API_BASE_URL}/admin/stores`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch('/admin/stores');
             const data = await res.json();
             if (Array.isArray(data)) {
                 setStores(data);
@@ -87,15 +76,12 @@ function DarkStoresContent() {
     const fetchInventory = async (storeId) => {
         if (!storeId) return;
         try {
-            const token = getAuthToken();
             if (String(storeId).startsWith('partner_')) {
                 setInventory([]);
                 return;
             }
             const actualId = String(storeId).replace('store_', '');
-            const res = await fetch(`${API_BASE_URL}/admin/store-inventory/${actualId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/admin/store-inventory/${actualId}`);
             const data = await res.json();
             setInventory(Array.isArray(data) ? data : []);
         } catch (err) {
@@ -116,14 +102,12 @@ function DarkStoresContent() {
 
     const handleStoreSubmit = async (e) => {
         e.preventDefault();
-        const token = getAuthToken();
-        const url = isEditingStore ? `${API_BASE_URL}/admin/stores/${storeFormData.id}` : `${API_BASE_URL}/admin/stores`;
+        const url = isEditingStore ? `/admin/stores/${storeFormData.id}` : '/admin/stores';
         const method = isEditingStore ? 'PUT' : 'POST';
 
         try {
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(storeFormData)
             });
 
@@ -147,10 +131,8 @@ function DarkStoresContent() {
         if (!window.confirm("Are you sure you want to permanently delete this dark store? All isolated inventory mappings will be wiped.")) return;
 
         try {
-            const token = getAuthToken();
-            const res = await fetch(`${API_BASE_URL}/admin/stores/${id}`, {
+            const res = await apiFetch(`/admin/stores/${id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
             if (res.ok) {
@@ -187,12 +169,10 @@ function DarkStoresContent() {
 
     const handleUpdateStock = async (productId, stock) => {
         if (!selectedStore || !productId) return;
-        const token = getAuthToken();
         try {
             const actualId = String(selectedStore.id).replace('store_', '');
-            await fetch(`${API_BASE_URL}/admin/store-inventory/${actualId}`, {
+            await apiFetch(`/admin/store-inventory/${actualId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ product_id: productId, stock: parseInt(stock) })
             });
             setEditingInventory(null);

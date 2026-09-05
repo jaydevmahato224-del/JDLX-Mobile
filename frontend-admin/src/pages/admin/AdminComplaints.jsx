@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Search, Filter, Eye, X, MessageSquare, Clock, Calendar, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminComplaints() {
     const [complaints, setComplaints] = useState([]);
@@ -19,12 +20,8 @@ function AdminComplaints() {
 
     const fetchComplaints = () => {
         setLoading(true);
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        if (!token) return;
 
-        fetch(`${API_BASE_URL}/admin/complaints`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiFetch('/admin/complaints')
             .then(res => res.json())
             .then(res => {
                 if (res.success) {
@@ -42,13 +39,8 @@ function AdminComplaints() {
         if (!selectedComplaint) return;
         setUpdateLoading(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/complaints/${selectedComplaint.id}`, {
+            const res = await apiFetch(`/admin/complaints/${selectedComplaint.id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     status: statusToUpdate,
                     admin_reply: replyText

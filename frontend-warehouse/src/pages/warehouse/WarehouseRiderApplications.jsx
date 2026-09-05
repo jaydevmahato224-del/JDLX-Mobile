@@ -16,10 +16,11 @@ import {
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
+import { apiFetch } from '../../utils/apiFetch'
 
 const WarehouseRiderApplications = () => {
     const navigate = useNavigate()
-    const { warehouseToken, warehouseLogout } = useStore()
+    const { warehouseLogout } = useStore()
     const [applications, setApplications] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -27,12 +28,9 @@ const WarehouseRiderApplications = () => {
     const [searchTerm, setSearchTerm] = useState('')
 
     const fetchApplications = useCallback(async () => {
-        if (!warehouseToken) return
         setLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/delivery-applications`, {
-                headers: { 'Authorization': `Bearer ${warehouseToken}` }
-            })
+            const res = await apiFetch('/warehouse/delivery-applications')
             if (res.status === 401 || res.status === 403) {
                 warehouseLogout()
                 navigate('/warehouse/login')
@@ -46,7 +44,7 @@ const WarehouseRiderApplications = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseToken, warehouseLogout, navigate])
+    }, [warehouseLogout, navigate])
 
     useEffect(() => {
         fetchApplications()
@@ -55,12 +53,8 @@ const WarehouseRiderApplications = () => {
     const handleApproval = async (appId, approvalStatus) => {
         setProcessingId(appId)
         try {
-            const res = await fetch(`${API_BASE_URL}/warehouse/delivery/approve`, {
+            const res = await apiFetch('/warehouse/delivery/approve', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${warehouseToken}`
-                },
                 body: JSON.stringify({
                     application_id: appId,
                     status: approvalStatus // 'approved_by_store' or 'rejected'

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import AccessDenied from './AccessDenied'
-import { API_BASE_URL } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import { Loader2 } from 'lucide-react'
 
 // Default fallback if no specific roles are required (any valid admin)
@@ -13,7 +13,6 @@ let _lastVerifiedAt = 0
 const VERIFY_INTERVAL_MS = 5 * 60 * 1000 // Re-verify every 5 minutes
 
 function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
-  const token = useStore((state) => state.adminToken)
   const user = useStore((state) => state.adminUser)
   const adminLogout = useStore((state) => state.adminLogout)
   const validateAdminSession = useStore((state) => state.validateAdminSession)
@@ -29,9 +28,9 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
   })
 
   useEffect(() => {
-    if (!token) return
+    if (!user) return
 
-    // Client-side validation first (fast — checks expiry + fingerprint)
+    // Client-side validation first (fast — checks fingerprint)
     if (!validateAdminSession()) {
       return // validateAdminSession already calls adminLogout
     }
@@ -44,14 +43,10 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
 
     let cancelled = false
 
-    // Use the original fetch to avoid the global interceptor triggering logout loops
     const verifyWithServer = async () => {
       setVerifying(true)
-      const originalFetch = window.__originalFetch || window.fetch
       try {
-        const res = await originalFetch(`${API_BASE_URL}/auth/verify-token`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        const res = await apiFetch('/auth/verify-token')
         if (cancelled) return
         if (res.status === 401) {
           useStore.getState().setReauthenticating(true)
@@ -71,9 +66,9 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
     verifyWithServer()
 
     return () => { cancelled = true }
-  }, [token, adminLogout, validateAdminSession])
+  }, [user, adminLogout, validateAdminSession])
 
-  if (!token) {
+  if (!user) {
     return <Navigate to="/admin/login" replace />
   }
 

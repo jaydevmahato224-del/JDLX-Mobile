@@ -11,6 +11,7 @@ import LocationManager from './LocationManager'
 import TermsGate from './TermsGate'
 import Footer from './Footer'
 import ReleaseUpdateModal from './ReleaseUpdateModal'
+import { apiFetch } from '../utils/apiFetch'
 
 function Layout({ children }) {
   const location = useLocation()
@@ -22,7 +23,6 @@ function Layout({ children }) {
   const wishlistCount = useStore((state) => state.wishlist.length)
   const user = useStore((state) => state.user)
   const theme = useStore((state) => state.theme)
-  const token = useStore((state) => state.token)
 
   // Ticker banner was removed earlier; the setter is kept so the settings
   // fetch below still works, but the value itself is no longer rendered.
@@ -56,11 +56,9 @@ function Layout({ children }) {
 
   useEffect(() => {
     const fetchWallet = async () => {
-      if (!token) return;
+      if (!user) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/wallet/balance`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const res = await apiFetch('/wallet/balance')
         if (res.ok) {
           const data = await res.json()
           setWalletBalance(data.balance)
@@ -70,12 +68,12 @@ function Layout({ children }) {
       }
     }
     fetchWallet()
-  }, [token])
+  }, [user])
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/settings`)
+        const res = await apiFetch('/settings')
         const json = await res.json()
         if (res.ok && json.data?.ticker_text) {
           setTickerText(json.data.ticker_text)

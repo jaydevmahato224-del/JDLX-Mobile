@@ -3,9 +3,9 @@ import { ArrowLeft, KeyRound, Plus, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminPermissions() {
-  const token = useStore((state) => state.adminToken || state.token)
   const [admins, setAdmins] = useState([])
   const [selectedAdminId, setSelectedAdminId] = useState('')
   const [permissions, setPermissions] = useState([])
@@ -14,9 +14,7 @@ function AdminPermissions() {
   const [message, setMessage] = useState('')
 
   const fetchAdmins = useCallback(async () => {
-    const res = await fetch(`${API_BASE_URL}/admin/list`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await apiFetch('/admin/list')
     const data = await res.json()
     if (res.ok) {
       setAdmins(data)
@@ -26,13 +24,11 @@ function AdminPermissions() {
     } else {
       setMessage(data.error || 'Failed to load admins')
     }
-  }, [token, selectedAdminId])
+  }, [selectedAdminId])
 
   const fetchPermissions = useCallback(async (adminId) => {
     if (!adminId) return
-    const res = await fetch(`${API_BASE_URL}/admin/permissions?admin_id=${adminId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await apiFetch(`/admin/permissions?admin_id=${adminId}`)
     const data = await res.json()
     if (res.ok) {
       setPermissions(data.permissions || [])
@@ -44,29 +40,24 @@ function AdminPermissions() {
     } else {
       setMessage(data.error || 'Failed to load permissions')
     }
-  }, [token])
+  }, [])
 
   useEffect(() => {
-    if (!token) return
     // Wrapped so the fetch isn't invoked synchronously from the effect body
     const load = () => fetchAdmins()
     load()
-  }, [token, fetchAdmins])
+  }, [fetchAdmins])
 
   useEffect(() => {
-    if (!token || !selectedAdminId) return
+    if (!selectedAdminId) return
     // Wrapped so the fetch isn't invoked synchronously from the effect body
     const load = () => fetchPermissions(selectedAdminId)
     load()
-  }, [selectedAdminId, token, fetchPermissions])
+  }, [selectedAdminId, fetchPermissions])
 
   const assignPermission = async () => {
-    const res = await fetch(`${API_BASE_URL}/admin/permissions`, {
+    const res = await apiFetch('/admin/permissions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
       body: JSON.stringify({
         admin_id: Number(selectedAdminId),
         permission: newPermission,
@@ -82,12 +73,8 @@ function AdminPermissions() {
   }
 
   const removePermission = async (permission) => {
-    const res = await fetch(`${API_BASE_URL}/admin/permissions`, {
+    const res = await apiFetch('/admin/permissions', {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
       body: JSON.stringify({
         admin_id: Number(selectedAdminId),
         permission,

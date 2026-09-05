@@ -3,9 +3,9 @@ import { ArrowLeft, Database, Download, HardDriveDownload, ShieldAlert } from 'l
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminBackups() {
-  const token = useStore((state) => state.adminToken || state.token)
   const user = useStore((state) => state.user)
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState([])
@@ -14,13 +14,11 @@ function AdminBackups() {
   const isSuperAdmin = (user?.role || '').toLowerCase() === 'super_admin'
 
   const loadBackups = async () => {
-    if (!token || !isSuperAdmin) return
+    if (!isSuperAdmin) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/backups`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch('/admin/backups')
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Failed to load backups')
@@ -39,16 +37,12 @@ function AdminBackups() {
   useEffect(() => {
     loadBackups()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-  }, [token, isSuperAdmin])
+  }, [isSuperAdmin])
 
   const triggerBackup = async (mode = 'full') => {
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/backup/create`, {
+      const res = await apiFetch('/admin/backup/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ mode }),
       })
       const data = await res.json()
@@ -66,7 +60,7 @@ function AdminBackups() {
     try {
       const res = await fetch(
         `${API_BASE_URL}/admin/backups/download?path=${encodeURIComponent(relativePath)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { credentials: 'include' }
       )
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))

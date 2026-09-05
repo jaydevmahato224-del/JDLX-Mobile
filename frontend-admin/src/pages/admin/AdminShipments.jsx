@@ -3,9 +3,9 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { Truck, Package, User, MapPin, Calendar, ExternalLink, Search, Filter, Loader2, RefreshCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminShipments() {
-    const token = useStore.getState().adminToken;
     const [shipments, setShipments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -17,9 +17,7 @@ function AdminShipments() {
             const url = new URL(`${API_BASE_URL}/admin/shipment/list`);
             if (statusFilter) url.searchParams.append('status', statusFilter);
             
-            const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(url);
             const data = await res.json();
             if (res.ok) {
                 setShipments(data.data);

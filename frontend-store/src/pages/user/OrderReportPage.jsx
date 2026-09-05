@@ -4,9 +4,9 @@ import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, PackageSearch, ChevronDown, Check } from 'lucide-react'
+import { apiFetch } from '../../utils/apiFetch'
 
 function OrderReportPage() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
 
@@ -35,9 +35,7 @@ function OrderReportPage() {
 
         const fetchOrders = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/my-orders`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await apiFetch('/my-orders');
                 const data = await res.json();
                 if (res.ok) {
                     const fetchedOrders = data.data || data;
@@ -59,7 +57,7 @@ function OrderReportPage() {
         };
 
         fetchOrders();
-    }, [user, navigate, token]);
+    }, [user, navigate]);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -95,7 +93,7 @@ function OrderReportPage() {
         try {
             const res = await fetch(`${API_BASE_URL}/order-report`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
+                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

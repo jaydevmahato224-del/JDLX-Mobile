@@ -3,9 +3,9 @@ import { ArrowLeft, ShieldAlert, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminAuditLogs() {
-  const token = useStore((state) => state.adminToken || state.token)
   const user = useStore((state) => state.user)
   const [logs, setLogs] = useState([])
   const [admins, setAdmins] = useState([])
@@ -17,7 +17,6 @@ function AdminAuditLogs() {
   const isSuperAdmin = (user?.role || '').toLowerCase() === 'super_admin'
 
   const fetchLogs = async (nextFilters = filters) => {
-    if (!token) return
     setLoading(true)
     setError('')
     try {
@@ -28,9 +27,7 @@ function AdminAuditLogs() {
       if (nextFilters.q) params.set('q', nextFilters.q)
       const query = params.toString()
 
-      const res = await fetch(`${API_BASE_URL}/admin/audit-logs${query ? `?${query}` : ''}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await apiFetch(`/admin/audit-logs${query ? `?${query}` : ''}`)
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Failed to load audit logs')
@@ -51,7 +48,7 @@ function AdminAuditLogs() {
   useEffect(() => {
     fetchLogs()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
-  }, [token])
+  }, [])
 
   const applyFilters = (e) => {
     e.preventDefault()
@@ -61,9 +58,8 @@ function AdminAuditLogs() {
   const clearLogs = async () => {
     if (!window.confirm('Clear all audit logs? This action cannot be undone.')) return
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/audit-logs/clear`, {
+      const res = await apiFetch('/admin/audit-logs/clear', {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       if (!res.ok) {

@@ -19,6 +19,7 @@ import TerminalStatus from './components/TerminalStatus'
 import InventoryAlerts from './components/InventoryAlerts'
 import ScoreCards from './components/ScoreCards'
 import LoadingScreen from '../../components/LoadingScreen'
+import { apiFetch } from '../../utils/apiFetch'
 
 const EMPTY_DASHBOARD = {
     cards: {
@@ -46,7 +47,7 @@ const NAV_ITEMS = [
 
 const WarehouseDashboard = () => {
     const navigate = useNavigate()
-    const { warehouseUser, warehouseToken, warehouseLogout } = useStore()
+    const { warehouseUser, warehouseLogout } = useStore()
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState(EMPTY_DASHBOARD)
     const [actionError, setActionError] = useState('')
@@ -56,11 +57,7 @@ const WarehouseDashboard = () => {
         if (!warehouseToken) return
 
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/dashboard`, {
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                },
-            })
+            const response = await apiFetch('/warehouse/dashboard')
             if (response.status === 401 || response.status === 403) {
                 warehouseLogout()
                 navigate('/warehouse/login', { replace: true })
@@ -92,10 +89,10 @@ const WarehouseDashboard = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseToken, warehouseLogout, navigate])
+    }, [warehouseLogout, navigate])
 
     useEffect(() => {
-        if (!warehouseToken) {
+        if (!warehouseUser) {
             navigate('/warehouse/login')
             return
         }
@@ -103,7 +100,7 @@ const WarehouseDashboard = () => {
 
         const interval = setInterval(fetchDashboardData, 30000)
         return () => clearInterval(interval)
-    }, [warehouseToken, navigate, fetchDashboardData])
+    }, [warehouseUser, navigate, fetchDashboardData])
 
     const handleUpdateStatus = async (orderId, status) => {
         if (!warehouseToken) return
@@ -111,12 +108,8 @@ const WarehouseDashboard = () => {
         setUpdatingOrderId(orderId)
         setActionError('')
         try {
-            const response = await fetch(`${API_BASE_URL}/warehouse/orders/${orderId}/status`, {
+            const response = await apiFetch(`/warehouse/orders/${orderId}/status`, {
                 method: 'PATCH',
-                headers: {
-                    Authorization: `Bearer ${warehouseToken}`,
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ status }),
             })
 

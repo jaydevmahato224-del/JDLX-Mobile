@@ -3,9 +3,9 @@ import { Star, ThumbsUp, CheckCircle2, MessageSquare, AlertCircle, Send, X, Came
 import { API_BASE_URL, resolveMediaUrl } from '../config'
 import { useStore } from '../store/useStore'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../utils/apiFetch'
 
 export default function ProductReviews({ productId }) {
-    const token = useStore((state) => state.token);
     const [reviews, setReviews] = useState([]);
     const [stats, setStats] = useState({ total: 0, average: 0, distribution: {} });
     const [loading, setLoading] = useState(true);
@@ -28,9 +28,7 @@ export default function ProductReviews({ productId }) {
     const fetchReviews = useCallback(async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE_URL}/review/product/${productId}`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
+            const res = await apiFetch(`/review/product/${productId}`);
             const data = await res.json();
             if (res.ok) {
                 setReviews(data.reviews || []);
@@ -41,7 +39,7 @@ export default function ProductReviews({ productId }) {
         } finally {
             setLoading(false);
         }
-    }, [productId, token]);
+    }, [productId]);
 
     useEffect(() => {
         fetchReviews();
@@ -56,16 +54,11 @@ export default function ProductReviews({ productId }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (rating === 0) return toast.error('Please select a rating');
-        if (!token) return toast.error('Please login to submit a review');
 
         setSubmitting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/review/add`, {
+            const res = await apiFetch('/review/add', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     product_id: productId,
                     rating,
@@ -243,13 +236,11 @@ export default function ProductReviews({ productId }) {
                                         onClick={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
-                                            if (!token) return toast.error('Please login to like reviews');
                                             
                                             (async () => {
                                                 try {
-                                                    const res = await fetch(`${API_BASE_URL}/review/helpful/${rev.id}`, { 
+                                                    const res = await apiFetch(`/review/helpful/${rev.id}`, { 
                                                         method: 'POST',
-                                                        headers: { 'Authorization': `Bearer ${token}` }
                                                     });
                                                     const data = await res.json();
                                                     if (res.ok) {

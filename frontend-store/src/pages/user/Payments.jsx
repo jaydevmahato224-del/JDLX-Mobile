@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
+import { apiFetch } from '../../utils/apiFetch'
 
 function Payments() {
-    const token = useStore.getState().token;
     const user = useStore(state => state.user);
     const navigate = useNavigate();
     const [methods, setMethods] = useState([]);
@@ -17,16 +17,15 @@ function Payments() {
     // Named fetchData (not `fetch`) so the browser's global fetch API is not
     // shadowed — a local `fetch` would recursively call itself and overflow.
     const fetchData = useCallback(async () => {
-        const res = await fetch(`${API_BASE_URL}/user/payments`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch('/user/payments');
         if (res.ok) setMethods(await res.json());
-    }, [token]);
+    }, []);
     useEffect(() => { fetchData(); }, [fetchData]);
 
     const add = async e => {
         e.preventDefault();
-        const res = await fetch(`${API_BASE_URL}/user/payments`, {
+        const res = await apiFetch('/user/payments', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify(form)
         });
         if (res.ok) {
@@ -36,9 +35,8 @@ function Payments() {
     };
 
     const remove = async id => {
-        await fetch(`${API_BASE_URL}/user/payments`, {
+        await apiFetch('/user/payments', {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ id })
         });
         fetchData();

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Search, Filter, Trash2, Star, MessageSquare, User, Package, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminReviews() {
     const [reviews, setReviews] = useState([]);
@@ -13,10 +14,7 @@ function AdminReviews() {
     const fetchReviews = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/reviews`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch('/admin/reviews');
             const data = await res.json();
             if (res.ok) {
                 // Handle both {data: [...]} and [...] formats
@@ -38,10 +36,8 @@ function AdminReviews() {
         if (!window.confirm('Are you sure you want to delete this review? This action cannot be undone.')) return;
         
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/reviews/${reviewId}`, {
+            const res = await apiFetch(`/admin/reviews/${reviewId}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 setReviews(prev => prev.filter(r => r.id !== reviewId));

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { apiFetch } from '../utils/apiFetch'
 
 const safeParse = (key) => {
         try {
@@ -11,7 +12,6 @@ const safeParse = (key) => {
 
 export const useStore = create((set) => ({
     user: safeParse('user'),
-    token: localStorage.getItem('token') || null,
     adminUser: safeParse('adminUser'),
     adminToken: localStorage.getItem('adminToken') || null,
     // Staff/billing-agent sessions are stored under staff_token / warehouse_token
@@ -22,45 +22,39 @@ export const useStore = create((set) => ({
     warehouseRequestUser: safeParse('warehouseRequestUser'),
     warehouseRequestToken: localStorage.getItem('warehouseRequestToken') || null,
     cart: [],
-    setUser: (user, token) => {
-        if (user && token) {
+    setUser: (user) => {
+        if (user) {
             localStorage.setItem('user', JSON.stringify(user));
-            localStorage.setItem('token', token);
         } else {
             localStorage.removeItem('user');
-            localStorage.removeItem('token');
         }
-        set({ user, token });
+        set({ user });
     },
     logout: () => {
         localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        set({ user: null, token: null, cart: [] });
+        apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        set({ user: null, cart: [] });
     },
-    setAdminUser: (adminUser, adminToken) => {
-        if (adminUser && adminToken) {
+    setAdminUser: (adminUser) => {
+        if (adminUser) {
             localStorage.setItem('adminUser', JSON.stringify(adminUser));
-            localStorage.setItem('adminToken', adminToken);
         } else {
             localStorage.removeItem('adminUser');
-            localStorage.removeItem('adminToken');
         }
-        set({ adminUser, adminToken });
+        set({ adminUser });
     },
     adminLogout: () => {
         localStorage.removeItem('adminUser');
-        localStorage.removeItem('adminToken');
-        set({ adminUser: null, adminToken: null });
+        apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        set({ adminUser: null });
     },
-    setWarehouseUser: (warehouseUser, warehouseToken) => {
-        if (warehouseUser && warehouseToken) {
+    setWarehouseUser: (warehouseUser) => {
+        if (warehouseUser) {
             localStorage.setItem('warehouseUser', JSON.stringify(warehouseUser));
-            localStorage.setItem('warehouseToken', warehouseToken);
         } else {
             localStorage.removeItem('warehouseUser');
-            localStorage.removeItem('warehouseToken');
         }
-        set({ warehouseUser, warehouseToken });
+        set({ warehouseUser });
     },
     warehouseLogout: () => {
         // Clear both the partner (camelCase) and staff (snake_case) session
@@ -70,17 +64,16 @@ export const useStore = create((set) => ({
         localStorage.removeItem('warehouse_user');
         localStorage.removeItem('warehouse_token');
         localStorage.removeItem('staff_token');
+        apiFetch('/api/warehouse/auth/logout', { method: 'POST' }).catch(() => {});
         set({ warehouseUser: null, warehouseToken: null });
     },
-    setWarehouseRequestUser: (warehouseRequestUser, warehouseRequestToken) => {
-        if (warehouseRequestUser && warehouseRequestToken) {
+    setWarehouseRequestUser: (warehouseRequestUser) => {
+        if (warehouseRequestUser) {
             localStorage.setItem('warehouseRequestUser', JSON.stringify(warehouseRequestUser));
-            localStorage.setItem('warehouseRequestToken', warehouseRequestToken);
         } else {
             localStorage.removeItem('warehouseRequestUser');
-            localStorage.removeItem('warehouseRequestToken');
         }
-        set({ warehouseRequestUser, warehouseRequestToken });
+        set({ warehouseRequestUser });
     },
     clearWarehouseRequestUser: () => {
         localStorage.removeItem('warehouseRequestUser');

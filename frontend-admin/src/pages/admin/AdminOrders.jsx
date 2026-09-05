@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Packag
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminOrders() {
     const [orders, setOrders] = useState([]);
@@ -28,13 +29,8 @@ function AdminOrders() {
         if (!window.confirm("Create Shiprocket shipment for this order?")) return;
         setShipmentCreating(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/shipment/create`, {
+            const res = await apiFetch('/admin/shipment/create', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ order_id: orderId, weight_kg: weight })
             });
             const data = await res.json();
@@ -54,10 +50,8 @@ function AdminOrders() {
     const handleAssignCourier = async (orderId) => {
         setCourierAssigning(true);
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/shipment/assign-courier/${orderId}`, {
+            const res = await apiFetch(`/admin/shipment/assign-courier/${orderId}`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
             if (res.ok) {
@@ -74,13 +68,10 @@ function AdminOrders() {
     };
 
     const fetchOrders = (silent = false) => {
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        if (!token) return;
-
         // Only show skeleton on first load, not on silent background polls
         if (!silent) setLoading(true);
 
-        let url = `${API_BASE_URL}/admin/orders?status=${statusFilter}&payment_status=${paymentFilter}`;
+        let url = `/admin/orders?status=${statusFilter}&payment_status=${paymentFilter}`;
         if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
         if (dateRange !== 'all') {
             const today = new Date();
@@ -95,7 +86,7 @@ function AdminOrders() {
             url += `&start_date=${start.toISOString().split('T')[0]}&end_date=${today.toISOString().split('T')[0]}`;
         }
 
-        fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+        apiFetch(url)
             .then(res => {
                 if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
                 return res.json();
@@ -154,9 +145,7 @@ function AdminOrders() {
     };
 
     const fetchPartners = () => {
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        if (!token) return;
-        fetch(`${API_BASE_URL}/admin/delivery-partners`, { headers: { 'Authorization': `Bearer ${token}` } })
+        apiFetch('/admin/delivery-partners')
             .then(res => res.json())
             .then(data => setDeliveryPartners(Array.isArray(data) ? data : []))
             .catch(console.error);
@@ -174,10 +163,7 @@ function AdminOrders() {
 
     const fetchOrderDetails = async (orderId) => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await apiFetch(`/admin/orders/${orderId}`);
             if (res.ok) {
                 const data = await res.json();
                 setSelectedOrder(data);
@@ -189,13 +175,8 @@ function AdminOrders() {
 
     const updateStatus = async (orderId, status) => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/order/${orderId}/status`, {
+            const res = await apiFetch(`/admin/order/${orderId}/status`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify({ status })
             });
             if (res.ok) {
@@ -211,14 +192,9 @@ function AdminOrders() {
 
     const assignPartner = async (orderId) => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const payload = selectedPartner ? { delivery_partner_id: selectedPartner } : {};
-            const res = await fetch(`${API_BASE_URL}/admin/order/${orderId}/assign-delivery`, {
+            const res = await apiFetch(`/admin/order/${orderId}/assign-delivery`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify(payload)
             });
             if (!res.ok) {

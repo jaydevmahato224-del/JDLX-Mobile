@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../utils/apiFetch'
 
 // Storage flag so we only auto-prompt the notification permission once per
 // browser (never nag on every visit).
 const PROMPTED_FLAG = 'jdlx_push_permission_prompted';
 
 const PushNotificationManager = () => {
-  const { token, user } = useStore();
+  const { user } = useStore();
   const subscriptionRef = useRef(null);
 
   // Foreground toasts: the push service worker posts a message to open tabs
@@ -60,18 +61,14 @@ const PushNotificationManager = () => {
   // Once logged in, make sure the browser subscription is registered with the
   // backend so pushes can actually be delivered to this user.
   const registerSubscription = useCallback(async () => {
-    if (!token || !user) return;
+    if (!user) return;
     try {
       const { subscribeToPush, isPushConfigured } = await import('../push');
       if (!isPushConfigured()) return;
       const sub = subscriptionRef.current || (await subscribeToPush());
       if (!sub) return;
-      await fetch(`${API_BASE_URL}/notifications/register-token`, {
+      await apiFetch('/notifications/register-token', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({
           subscription: sub,
           device_type: 'web'
@@ -80,13 +77,13 @@ const PushNotificationManager = () => {
     } catch (error) {
       console.error('Error registering push subscription:', error);
     }
-  }, [token, user]);
+  }, [user]);
 
   useEffect(() => {
-    if (token && user) {
+    if (user) {
       registerSubscription();
     }
-  }, [token, user, registerSubscription]);
+  }, [user, registerSubscription]);
 
   return null; // This component doesn't render anything
 };

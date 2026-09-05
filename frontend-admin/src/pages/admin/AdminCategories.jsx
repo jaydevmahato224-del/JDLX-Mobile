@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { FolderTree, Save, ArrowLeft, Trash2, Plus, Image as ImageIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 function AdminCategories() {
     const [categories, setCategories] = useState([]);
@@ -40,13 +41,8 @@ function AdminCategories() {
     const handleAdd = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/categories`, {
+            const res = await apiFetch('/admin/categories', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(newCategory)
             });
 
@@ -77,13 +73,8 @@ function AdminCategories() {
 
     const handleSave = async (id) => {
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/categories/${id}`, {
+            const res = await apiFetch(`/admin/categories/${id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
                 body: JSON.stringify(editValues)
             });
 
@@ -105,12 +96,8 @@ function AdminCategories() {
         if (!window.confirm('Are you sure you want to delete this category? This will unlink products in this category.')) return;
 
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/admin/categories/${id}`, {
+            const res = await apiFetch(`/admin/categories/${id}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
             });
 
             if (res.ok) {

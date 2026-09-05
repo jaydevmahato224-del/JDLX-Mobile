@@ -7,6 +7,7 @@ import {
   Power, Trash2, Send, Clock
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function BillingAgents() {
   const [agents, setAgents] = useState([])
@@ -20,18 +21,10 @@ export default function BillingAgents() {
   const [email, setEmail] = useState('')
   const [lastCreated, setLastCreated] = useState(null)
 
-  const getToken = () =>
-    localStorage.getItem('warehouseToken') ||
-    localStorage.getItem('warehouse_token') ||
-    localStorage.getItem('staff_token')
-
   const fetchAgents = useCallback(async () => {
     setLoading(true)
     try {
-      const token = getToken()
-      const res = await fetch(`${API_BASE_URL}/warehouse/staff`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await apiFetch('/warehouse/staff')
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to load billing agents')
@@ -53,10 +46,7 @@ export default function BillingAgents() {
   const ensureBillingRole = async () => {
     // Reuse the existing roles API — find (or create) a Billing Agent role with
     // the "billing" permission so the agent can access the POS endpoints.
-    const token = getToken()
-    const rolesRes = await fetch(`${API_BASE_URL}/warehouse/roles`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const rolesRes = await apiFetch('/warehouse/roles')
     if (!rolesRes.ok) throw new Error('Could not load roles')
     const roles = await rolesRes.json()
 
@@ -66,12 +56,8 @@ export default function BillingAgents() {
 
     if (billingRole) return billingRole.role_id
 
-    const createRes = await fetch(`${API_BASE_URL}/warehouse/roles`, {
+    const createRes = await apiFetch('/warehouse/roles', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify({
         role_name: 'Billing Agent',
         permissions: ['billing']
@@ -101,15 +87,10 @@ export default function BillingAgents() {
 
     setSubmitting(true)
     try {
-      const token = getToken()
       const role_id = await ensureBillingRole()
 
-      const res = await fetch(`${API_BASE_URL}/warehouse/staff`, {
+      const res = await apiFetch('/warehouse/staff', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           name: trimmedName,
           login_email: trimmedEmail,
@@ -151,13 +132,8 @@ export default function BillingAgents() {
 
     setBusyAction(`toggle:${agent.staff_id}`)
     try {
-      const token = getToken()
-      const res = await fetch(`${API_BASE_URL}/warehouse/staff/${agent.staff_id}`, {
+      const res = await apiFetch(`/warehouse/staff/${agent.staff_id}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ status: nextStatus })
       })
       const data = await res.json()
@@ -182,10 +158,8 @@ export default function BillingAgents() {
 
     setBusyAction(`delete:${agent.staff_id}`)
     try {
-      const token = getToken()
-      const res = await fetch(`${API_BASE_URL}/warehouse/staff/${agent.staff_id}`, {
+      const res = await apiFetch(`/warehouse/staff/${agent.staff_id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
       })
       const data = await res.json()
       if (!res.ok) {
@@ -204,10 +178,8 @@ export default function BillingAgents() {
   const handleResendInvite = async (agent) => {
     setBusyAction(`resend:${agent.staff_id}`)
     try {
-      const token = getToken()
-      const res = await fetch(`${API_BASE_URL}/warehouse/staff/${agent.staff_id}/resend-invite`, {
+      const res = await apiFetch(`/warehouse/staff/${agent.staff_id}/resend-invite`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
       })
       const data = await res.json()
       if (!res.ok) {

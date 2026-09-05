@@ -18,6 +18,7 @@ import {
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
 import { useStore } from '../../store/useStore'
+import { apiFetch } from '../../utils/apiFetch'
 
 const PAYOUT_STATUS_STYLES = {
     requested: { label: 'Requested', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -46,9 +47,8 @@ const formatDate = (value) => {
 }
 
 export default function AdminVendorPayouts() {
-    const adminToken = useStore(state => state.adminToken) || localStorage.getItem('adminToken') || localStorage.getItem('token')
-    const adminUser = useStore(state => state.adminUser)
-    const isSuperAdmin = adminUser?.role?.toLowerCase() === 'super_admin'
+const adminUser = useStore(state => state.adminUser)
+const isSuperAdmin = adminUser?.role?.toLowerCase() === 'super_admin'
 
     const [overview, setOverview] = useState(null)
     const [payouts, setPayouts] = useState([])
@@ -63,11 +63,8 @@ export default function AdminVendorPayouts() {
     const [notes, setNotes] = useState({})
 
     const fetchOverview = useCallback(async () => {
-        if (!adminToken) return
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/vendor/overview`, {
-                headers: { Authorization: `Bearer ${adminToken}` },
-            })
+            const res = await apiFetch('/admin/vendor/overview')
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || json.message || 'Failed to load overview')
             setOverview(json.data)
@@ -77,43 +74,34 @@ export default function AdminVendorPayouts() {
         } catch (e) {
             toast.error(e.message)
         }
-    }, [adminToken])
+    }, [])
 
     const fetchPayouts = useCallback(async (status) => {
-        if (!adminToken) return
         try {
             const params = status ? `?status=${status}` : ''
-            const res = await fetch(`${API_BASE_URL}/admin/vendor/payouts${params}`, {
-                headers: { Authorization: `Bearer ${adminToken}` },
-            })
+            const res = await apiFetch(`/admin/vendor/payouts${params}`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || json.message || 'Failed to load payouts')
             setPayouts(json.data || [])
         } catch (e) {
             toast.error(e.message)
         }
-    }, [adminToken])
+    }, [])
 
     useEffect(() => {
-        if (!adminToken) return
         setLoading(true)
         Promise.all([fetchOverview(), fetchPayouts('requested')]).finally(() => setLoading(false))
-    }, [adminToken, fetchOverview, fetchPayouts])
+    }, [fetchOverview, fetchPayouts])
 
     useEffect(() => {
-        if (!adminToken) return
         fetchPayouts(payoutFilter)
-    }, [payoutFilter, adminToken, fetchPayouts])
+    }, [payoutFilter, fetchPayouts])
 
     const handlePayoutDecision = async (payout, decision) => {
         setProcessingId(payout.id)
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/vendor/payouts/${payout.id}/${decision === 'paid' ? 'approve' : 'reject'}`, {
+            const res = await apiFetch(`/admin/vendor/payouts/${payout.id}/${decision === 'paid' ? 'approve' : 'reject'}`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${adminToken}`,
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ admin_note: notes[payout.id] || '' }),
             })
             const json = await res.json()
@@ -136,12 +124,8 @@ export default function AdminVendorPayouts() {
         }
         setSavingCommission(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/vendor/commission`, {
+            const res = await apiFetch('/admin/vendor/commission', {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${adminToken}`,
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ commission_rate: rate }),
             })
             const json = await res.json()
@@ -163,9 +147,7 @@ export default function AdminVendorPayouts() {
         setExpandedWh(wh.id)
         setLoadingWh(wh.id)
         try {
-            const res = await fetch(`${API_BASE_URL}/admin/vendor/settlements?warehouse_id=${wh.id}&limit=50`, {
-                headers: { Authorization: `Bearer ${adminToken}` },
-            })
+            const res = await apiFetch(`/admin/vendor/settlements?warehouse_id=${wh.id}&limit=50`)
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || json.message || 'Failed to load settlements')
             setWhSettlements((prev) => ({ ...prev, [wh.id]: json.data || [] }))

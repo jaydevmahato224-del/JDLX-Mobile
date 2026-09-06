@@ -5,7 +5,18 @@ import { API_BASE_URL } from '../config'
  * and sets common headers. Use this instead of raw fetch for all API calls.
  */
 export async function apiFetch(endpoint, options = {}) {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`
+  let url
+  if (endpoint.startsWith('http')) {
+    url = endpoint
+  } else {
+    // Guard against double `/api/api/...`: API_BASE_URL already ends with
+    // `/api`, so an endpoint that also starts with `/api/` must not be
+    // prefixed again (this broke auth/OTP calls with a 404 + CORS error).
+    const base = /\/api(\/|$)/.test(endpoint)
+      ? API_BASE_URL.replace(/\/api\/?$/, '')
+      : API_BASE_URL
+    url = `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+  }
   
   const defaultHeaders = {
     'Content-Type': 'application/json',

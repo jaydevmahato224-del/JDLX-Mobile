@@ -36,6 +36,14 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL")
 RESEND_FROM_NAME = os.environ.get("RESEND_FROM_NAME", "JDLX Mobile")
 
+# Provider override for OTP/individual emails. MAIL_PROVIDER=smtp forces the
+# Gmail SMTP path even when RESEND_API_KEY / MAILERSEND_API_KEY are present
+# (useful when the API provider is failing and you want to fall back to SMTP
+# without deleting the keys from the environment). Default "auto" keeps the
+# previous behavior: Resend -> MailerSend -> Gmail SMTP.
+MAIL_PROVIDER = os.environ.get("MAIL_PROVIDER", "auto").strip().lower()
+_FORCE_SMTP = MAIL_PROVIDER in ("smtp", "gmail", "gmail_smtp")
+
 # Gmail's SMTP servers occasionally accept connections very slowly (TCP + TLS +
 # EHLO can take 15-20s under load / rate-limiting). A short timeout then kills
 # sends that would otherwise succeed. 30s covers slow connects while still
@@ -237,7 +245,7 @@ def warm_smtp_pool():
     """
     if not GMAIL_USER or not GMAIL_PASS:
         return
-    if MAILERSEND_API_KEY or RESEND_API_KEY:
+    if (MAILERSEND_API_KEY or RESEND_API_KEY) and not _FORCE_SMTP:
         # API-based providers need no SMTP connection; skip pointless Gmail warm-up.
         return
 
@@ -733,15 +741,16 @@ def send_individual_email(to_email, user_name, subject, message):
 
     # When an HTTP-API provider (Resend, then MailerSend) is configured, the
     # OTP/individual email goes through it - immune to Gmail's datacenter-IP
-    # SMTP block. Otherwise the previous Gmail SMTP path below runs unchanged.
-    if RESEND_API_KEY:
+    # SMTP block. MAIL_PROVIDER=smtp overrides this and always uses Gmail SMTP.
+    # Otherwise the previous Gmail SMTP path below runs unchanged.
+    if RESEND_API_KEY and not _FORCE_SMTP:
         ok = _resend_send(to_email, full_subject, body, text_part)
         if ok:
             _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via Resend.")
         else:
             _log(f"[MAIL ERROR] Individual email failed for {to_email} via Resend.")
         return ok
-    if MAILERSEND_API_KEY:
+    if MAILERSEND_API_KEY and not _FORCE_SMTP:
         ok = _mailersend_send(to_email, full_subject, body, text_part)
         if ok:
             _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via MailerSend.")

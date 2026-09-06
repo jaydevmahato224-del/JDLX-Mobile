@@ -2065,7 +2065,7 @@ def google_callback():
             )
             return redirect(f"{frontend_url}/login?error=account_locked")
 
-        # 3. Process Login. require_otp=True makes every EXISTING customer
+        # 3. Process Login
         result = process_google_user_login(google_id, email, name, picture, ip_address)
         
         # Handle link_conflict from process_google_user_login
@@ -2073,8 +2073,6 @@ def google_callback():
             if result.get('email_send_failed'):
                 return redirect(f"{frontend_url}/login?error=otp_email_failed&email={result.get('email', '')}&google_id={result.get('google_id', '')}")
             return redirect(f"{frontend_url}/login?error=google_link_conflict&email={result['email']}")
-            if result.get('link_conflict'):
-                return redirect(f"{frontend_url}/login?error=google_link_conflict&email={result['email']}")
         
         user_data, jwt_token = result
 
@@ -2192,8 +2190,8 @@ def google_callback():
             resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
             return resp
 
-        # Default: User Flow
-        resp = redirect(f"{frontend_url}/")
+        # Default: User Flow - redirect to profile after login
+        resp = redirect(f"{frontend_url}/profile")
         resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
         return resp
 

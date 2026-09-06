@@ -229,9 +229,9 @@ const OrderSuccess = lazy(() => import('./pages/user/OrderSuccess'))
 
 // ─── Protected Route Wrapper ──────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
-  const token = useStore((state) => state.token)
+  const user = useStore((state) => state.user)
   const location = useLocation()
-  if (!token) return <Navigate to="/login" state={{ from: location }} replace />
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   return children
 }
 

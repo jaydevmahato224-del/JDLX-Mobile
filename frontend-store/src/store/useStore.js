@@ -176,6 +176,15 @@ export const useStore = create((set, get) => ({
         }
     },
     initAuth: async () => {
+        // If user already cached in localStorage, skip API call
+        const cachedUser = safeParse('user');
+        if (cachedUser) {
+            set({ user: cachedUser });
+            get().fetchCart();
+            get().fetchWishlist();
+            return true;
+        }
+        
         // Verify session on app mount by calling backend
         try {
             const res = await apiFetch('/api/auth/verify-token');
@@ -195,7 +204,8 @@ export const useStore = create((set, get) => ({
                 }
             }
         } catch (e) {
-            console.debug('Auth init failed:', e);
+            // Silently fail - user is not logged in, that's OK
+            // Don't log to console to avoid cluttering during normal use
         }
         // Clear stale user data if auth failed
         localStorage.removeItem('user');

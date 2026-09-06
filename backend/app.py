@@ -380,9 +380,10 @@ def validate_image_file(file_storage):
 # ==============================================================================
 
 # 1. Secure Headers (XSS, CSP, etc.)
-# Disable CSP for local development if it breaks frontend, but enabled for production readiness
+# Disable force_https for local development (breaks HTTP localhost), enable for production
+force_https = os.environ.get("FORCE_HTTPS", "").strip().lower() not in {"0", "false", "no", "off"} and not app.debug
 Talisman(app,
-    force_https=True,
+    force_https=force_https,
     content_security_policy={
         'default-src': "'self'",
         'script-src': "'self' https://checkout.razorpay.com https://cdn.jsdelivr.net",
@@ -391,7 +392,7 @@ Talisman(app,
         'frame-src': "https://checkout.razorpay.com",
         'connect-src': "'self' https://api.razorpay.com",
     },
-    force_https_permanent=True,
+    force_https_permanent=force_https,
 )
 
 # 2. Rate Limiting

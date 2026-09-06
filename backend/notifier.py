@@ -1,11 +1,13 @@
 import os
 import re
 import sys
+import json
 import time
 import threading
 import datetime
 import html as _html
 import smtplib
+import urllib.request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -14,6 +16,25 @@ load_dotenv()
 
 GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASS = os.environ.get("GMAIL_PASS")
+
+# MailerSend (transactional email HTTP API) is used for OTP/individual emails
+# when configured. Gmail's SMTP servers throttle/block auth from datacenter IPs
+# (e.g. Render's outbound range), which made OTP sends time out on the live
+# server even though the same credentials work from a home connection. The
+# MailerSend REST API runs over plain HTTPS (port 443), so it is not subject to
+# that SMTP block. When MAILERSEND_API_KEY is unset, behavior is unchanged and
+# Gmail SMTP is used exactly as before.
+MAILERSEND_API_KEY = os.environ.get("MAILERSEND_API_KEY")
+MAILERSEND_FROM_EMAIL = os.environ.get("MAILERSEND_FROM_EMAIL")
+MAILERSEND_FROM_NAME = os.environ.get("MAILERSEND_FROM_NAME", "JDLX Mobile")
+
+# Resend (transactional email HTTP API) is preferred when configured. Same
+# rationale as MailerSend: delivery over HTTPS avoids the Gmail SMTP block of
+# datacenter IPs. When neither provider key is set, Gmail SMTP is used exactly
+# as before.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL")
+RESEND_FROM_NAME = os.environ.get("RESEND_FROM_NAME", "JDLX Mobile")
 
 # Gmail's SMTP servers occasionally accept connections very slowly (TCP + TLS +
 # EHLO can take 15-20s under load / rate-limiting). A short timeout then kills
@@ -113,6 +134,96 @@ def _smtp_send(to_email, msg_string):
                 return False
 
 
+_MAILERSEND_TIMEOUT_SECONDS = 20
+
+
+def _mailersend_send(to_email, subject, html_body, text_body):
+    """Send one email through the MailerSend REST API (no SMTP involved).
+
+    The From address must belong to a domain verified in the MailerSend account
+    (env MAILERSEND_FROM_EMAIL). Returns True only when MailerSend accepted the
+    message; every failure is logged so the caller can surface a real error.
+    """
+    if not MAILERSEND_API_KEY:
+        return False
+    if not MAILERSEND_FROM_EMAIL:
+        _log("[MAIL ERROR] MAILERSEND_FROM_EMAIL not set - cannot send via MailerSend.")
+        return False
+
+    payload = {
+        "from": {"email": MAILERSEND_FROM_EMAIL, "name": MAILERSEND_FROM_NAME},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "text": text_body,
+        "html": html_body,
+    }
+    req = urllib.request.Request(
+        "https://api.mailersend.com/v1/email",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {MAILERSEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_MAILERSEND_TIMEOUT_SECONDS) as resp:
+            resp.read()
+            status = resp.status
+        if status in (200, 201, 202):
+            return True
+        _log(f"[MAIL ERROR] MailerSend returned HTTP {status} for {to_email}")
+        return False
+    except Exception as e:
+        _log(f"[MAIL ERROR] MailerSend send failed for {to_email}: {str(e)}")
+        return False
+
+
+_RESEND_TIMEOUT_SECONDS = 20
+
+
+def _resend_send(to_email, subject, html_body, text_body):
+    """Send one email through the Resend REST API (no SMTP involved).
+
+    The From address must belong to a domain verified in the Resend account
+    (env RESEND_FROM_EMAIL, e.g. "JDLX Mobile <no-reply@jdlxmobile.in>").
+    Returns True only when Resend accepted the message.
+    """
+    if not RESEND_API_KEY:
+        return False
+    if not RESEND_FROM_EMAIL:
+        _log("[MAIL ERROR] RESEND_FROM_EMAIL not set - cannot send via Resend.")
+        return False
+
+    payload = {
+        "from": RESEND_FROM_EMAIL,
+        "to": [to_email],
+        "subject": subject,
+        "text": text_body,
+        "html": html_body,
+    }
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_RESEND_TIMEOUT_SECONDS) as resp:
+            resp.read()
+            status = resp.status
+        if status in (200, 201, 202):
+            return True
+        _log(f"[MAIL ERROR] Resend returned HTTP {status} for {to_email}")
+        return False
+    except Exception as e:
+        _log(f"[MAIL ERROR] Resend send failed for {to_email}: {str(e)}")
+        return False
+
+
 def warm_smtp_pool():
     """Open the pooled SMTP connection in the background during app startup.
 
@@ -125,6 +236,9 @@ def warm_smtp_pool():
     any failure is logged and the pool simply connects lazily on first send.
     """
     if not GMAIL_USER or not GMAIL_PASS:
+        return
+    if MAILERSEND_API_KEY or RESEND_API_KEY:
+        # API-based providers need no SMTP connection; skip pointless Gmail warm-up.
         return
 
     def _warm():
@@ -595,24 +709,15 @@ def send_individual_email(to_email, user_name, subject, message):
     than HTML-only mail, and it keeps recipients who disable HTML readable.
     `message` is intentionally NOT escaped: it is server-generated HTML.
     """
-    if not GMAIL_USER or not GMAIL_PASS:
-        _log("[MAIL ERROR] SMTP credentials missing in environment (.env)")
-        return False
-        
     _log(f"[MAIL LOG] Preparing individual email for {to_email} (User: {user_name})")
-    
-    msg = MIMEMultipart('alternative')
-    msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
-    msg['To'] = to_email
-    msg['Subject'] = f"JDLX Mobile: {subject}"
 
+    full_subject = f"JDLX Mobile: {subject}"
     message_html = (message or '').replace('\n', '<br/>')
 
     # Plain-text version (tags stripped) so the mail carries a text part.
     plain_message = re.sub(r'<[^>]+>', '', message or '')
     plain_message = plain_message.replace('\xa0', ' ').strip()
     text_part = f"Hello {user_name},\n\n{plain_message}\n\nRegards,\nJDLX Mobile Team"
-    msg.attach(MIMEText(text_part, 'plain'))
 
     body = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
@@ -625,6 +730,34 @@ def send_individual_email(to_email, user_name, subject, message):
         <p>Best Regards,<br/><b>JDLX Mobile Team</b></p>
     </div>
     """
+
+    # When an HTTP-API provider (Resend, then MailerSend) is configured, the
+    # OTP/individual email goes through it - immune to Gmail's datacenter-IP
+    # SMTP block. Otherwise the previous Gmail SMTP path below runs unchanged.
+    if RESEND_API_KEY:
+        ok = _resend_send(to_email, full_subject, body, text_part)
+        if ok:
+            _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via Resend.")
+        else:
+            _log(f"[MAIL ERROR] Individual email failed for {to_email} via Resend.")
+        return ok
+    if MAILERSEND_API_KEY:
+        ok = _mailersend_send(to_email, full_subject, body, text_part)
+        if ok:
+            _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via MailerSend.")
+        else:
+            _log(f"[MAIL ERROR] Individual email failed for {to_email} via MailerSend.")
+        return ok
+
+    if not GMAIL_USER or not GMAIL_PASS:
+        _log("[MAIL ERROR] SMTP credentials missing in environment (.env)")
+        return False
+
+    msg = MIMEMultipart('alternative')
+    msg['From'] = f"JDLX Mobile <{GMAIL_USER}>"
+    msg['To'] = to_email
+    msg['Subject'] = full_subject
+    msg.attach(MIMEText(text_part, 'plain'))
     msg.attach(MIMEText(body, 'html'))
 
     # Reuse the persistent connection (fast path); _smtp_send retries once if

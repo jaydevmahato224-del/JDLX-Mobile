@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import toast from "react-hot-toast"
 import { API_BASE_URL } from '../../config'
+import { useStore } from '../../store/useStore'
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -13,6 +15,23 @@ const GoogleIcon = () => (
 
 function Login() {
     const [error, setError] = useState('')
+    const navigate = useNavigate()
+    const location = useLocation()
+    const user = useStore((state) => state.user)
+
+    // After the Google OAuth round-trip the backend redirects to /profile,
+    // which is a protected route. On a fresh login the user object is not in
+    // the store yet (initAuth restores it asynchronously from the session
+    // cookie), so ProtectedRoute bounces us to /login BEFORE auth finishes.
+    // Once the session is restored this redirects to the page the user
+    // originally tried to reach (e.g. /profile) instead of leaving them
+    // stranded on the login screen.
+    useEffect(() => {
+        if (user) {
+            const from = location.state?.from?.pathname || '/profile'
+            navigate(from, { replace: true })
+        }
+    }, [user, navigate, location.state?.from?.pathname])
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)

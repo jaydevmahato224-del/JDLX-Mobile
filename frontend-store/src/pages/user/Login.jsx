@@ -475,7 +475,7 @@ function Login() {
 
     // ─── Signup details screen (name, age, mobile — after OTP) ──────────
     if (mode === 'signup-details') {
-        const detailField = (label, value, onChange, props = {}) => (
+        const detailField = (value, onChange, props = {}) => (
             <input
                 value={value}
                 onChange={onChange}
@@ -498,11 +498,11 @@ function Login() {
                     </div>
 
                     <form onSubmit={handleSaveDetails} className="w-full mt-4 flex flex-col items-center gap-3">
-                        {detailField('First name', details.firstName, (e) => setDetails({ ...details, firstName: e.target.value }), { type: 'text', placeholder: 'First name *', maxLength: 50, autoFocus: true })}
-                        {detailField('Last name', details.lastName, (e) => setDetails({ ...details, lastName: e.target.value }), { type: 'text', placeholder: 'Last name', maxLength: 50 })}
+                        {detailField(details.firstName, (e) => setDetails({ ...details, firstName: e.target.value }), { type: 'text', placeholder: 'First name *', maxLength: 50, autoFocus: true })}
+                        {detailField(details.lastName, (e) => setDetails({ ...details, lastName: e.target.value }), { type: 'text', placeholder: 'Last name', maxLength: 50 })}
                         <div className="flex gap-3 w-[320px] max-w-full">
-                            {detailField('Age', details.age, (e) => setDetails({ ...details, age: e.target.value.replace(/\D/g, '').slice(0, 3) }), { type: 'text', inputMode: 'numeric', placeholder: 'Age *' })}
-                            {detailField('Mobile', details.phone, (e) => setDetails({ ...details, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }), { type: 'text', inputMode: 'numeric', placeholder: 'Mobile no. *' })}
+                            {detailField(details.age, (e) => setDetails({ ...details, age: e.target.value.replace(/\D/g, '').slice(0, 3) }), { type: 'text', inputMode: 'numeric', placeholder: 'Age *' })}
+                            {detailField(details.phone, (e) => setDetails({ ...details, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }), { type: 'text', inputMode: 'numeric', placeholder: 'Mobile no. *' })}
                         </div>
                         <button
                             type="submit"

@@ -677,7 +677,8 @@ def send_welcome_email(to_email, user_name):
     # emails: Gmail SMTP is throttled/blocked from datacenter IPs like Render's,
     # which silently swallowed welcome emails. Falls back to SMTP unchanged.
     full_subject = msg['Subject']
-    if _api_send(to_email, full_subject, body, body):
+    text_version = re.sub(r'<[^>]+>', '', body).replace('\xa0', ' ').strip()
+    if _api_send(to_email, full_subject, body, text_version):
         _log(f"[MAIL SUCCESS] Welcome email sent to {to_email} via HTTPS API.")
         return True
 

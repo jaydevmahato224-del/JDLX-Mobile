@@ -1242,50 +1242,6 @@ def _otp_cooldown_remaining(settings, resend_count, last_sent_at):
     return False, max(1, int(cooldown_needed - elapsed))
 
 
-def _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, require_otp):
-    """Generate + email an OTP confirming an existing account's login/link.
-
-    Reuses the google_link_otps table so /api/auth/google/link-verify completes
-    the flow; OTP is stored hashed, one-time use, attempt-limited there. Only the
-    newest OTP per email+google_id is kept valid, and its expiry follows the
-    admin-configurable otp_expiry_seconds setting.
-    """
-    settings = get_otp_security_settings()
-    import random
-    import string
-    otp = ''.join(random.choices(string.digits, k=6))
-    salt = secrets.token_hex(8)
-    otp_hash = _hash_admin_otp(otp, salt)
-
-    cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
-    cursor.execute(
-        "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at, resend_count, last_sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), 0, datetime('now'))",
-        (email, user['id'], google_id, name or None, picture or None, otp_hash, salt, f'+{settings["otp_expiry_seconds"]} seconds')
-    )
-    conn.commit()
-
-    # Send the OTP over SMTP synchronously. A background thread used to send it,
-    # but any thread failure (broken stdout, SMTP outage) silently left the user
-    # on the OTP screen with an OTP row and no email. Synchronous send means the
-    # failure propagates back to the login flow, which can tell the user.
-    if require_otp:
-        subject = "Login Verification OTP"
-        body = f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
-    else:
-        subject = "Verify Google Account Linking"
-        body = f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
-    send_ok = send_individual_email(email, user['name'] or 'User', subject, body)
-    if not send_ok:
-        # Don't leave an OTP row for a code that was never emailed.
-        cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))
-        conn.commit()
-        return {'link_required': True, 'email_send_failed': True, 'email': email, 'google_id': google_id,
-                'message': 'Failed to send the OTP email. Please try again.'}
-
-    return {'link_required': True, 'email': email, 'google_id': google_id,
-            'message': 'OTP sent to email. Verify to complete login.'}
-
-
 def process_google_user_login(google_id, email, name, picture, ip_address, require_otp=False):
     conn = get_db()
     cursor = conn.cursor()
@@ -1294,35 +1250,24 @@ def process_google_user_login(google_id, email, name, picture, ip_address, requi
     user = cursor.fetchone()
 
     if user:
-        if require_otp:
-            # Every existing-account login must be confirmed with an email OTP
-            # before a session starts (customer requirement). The OTP row is
-            # keyed by this google_id; /api/auth/google/link-verify completes
-            # the login after verification.
-            result = _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, require_otp)
-            conn.close()
-            return result
-        # Same google_id, no OTP required: proceed to session issuance below.
+        # Existing account: update profile info and log in directly
+        cursor.execute(
+            "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
+            (google_id, picture or None, name or None, user['id'])
+        )
+        conn.commit()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))
+        user = cursor.fetchone()
     elif email:
         cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email.lower(),))
         user = cursor.fetchone()
         if user:
             # If user exists with a DIFFERENT google_id, this is a conflict
             if user['google_id'] and user['google_id'] != google_id:
-                if not require_otp:
-                    conn.close()
-                    return {'link_conflict': True, 'email': email, 'existing_google_id': user['google_id']}
-                # require_otp: the OTP below proves ownership of this email, so
-                # re-linking to the newly chosen Google account is safe.
-
-            # If user exists but has NO google_id, require OTP verification before
-            # linking; with require_otp this also confirms every existing login.
-            if not user['google_id'] or require_otp:
-                result = _send_google_link_otp(cursor, conn, user, google_id, email, name, picture, require_otp)
                 conn.close()
-                return result
+                return {'link_conflict': True, 'email': email, 'existing_google_id': user['google_id']}
 
-            # Same google_id - normal login, update profile info
+            # User exists but has NO google_id — link it directly
             cursor.execute(
                 "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
                 (google_id, picture or None, name or None, user['id'])
@@ -1331,29 +1276,37 @@ def process_google_user_login(google_id, email, name, picture, ip_address, requi
             cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))
             user = cursor.fetchone()
 
+            # If OTP required and user exists, trigger OTP (for admin/warehouse)
+        # If user doesn't exist at all (neither by google_id nor email), create new
+        if not user:
+            cursor.execute(
+                "INSERT INTO users (google_id, name, email, profile_image) VALUES (?, ?, ?, ?)",
+                (google_id, name, email, picture)
+            )
+            conn.commit()
+            cursor.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
+            user = cursor.fetchone()
+
+            # New User: Trigger Welcome Email in background
+            if user and email:
+                from threading import Thread
+                Thread(target=send_welcome_email, args=(email, name or 'User')).start()
+
+            # Referral code apply (additive)
+            try:
+                ref_code = request.args.get('ref') or (request.json.get('referral_code') if request.is_json else None)
+                if ref_code:
+                    from utils.referral import apply_referral_code
+                    apply_referral_code(user['id'], ref_code)
+            except Exception:
+                pass  # never break signup flow
+
+    # Update profile if new user was created via INSERT above
     if not user:
-        cursor.execute(
-            "INSERT INTO users (google_id, name, email, profile_image) VALUES (?, ?, ?, ?)",
-            (google_id, name, email, picture)
-        )
-        conn.commit()
         cursor.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
         user = cursor.fetchone()
-        
-        # New User: Trigger Welcome Email in background
-        if user and email:
-            from threading import Thread
-            Thread(target=send_welcome_email, args=(email, name or 'User')).start()
 
-        # Referral code apply (additive)
-        try:
-            ref_code = request.args.get('ref') or (request.json.get('referral_code') if request.is_json else None)
-            if ref_code:
-                from utils.referral import apply_referral_code
-                apply_referral_code(user['id'], ref_code)
-        except Exception:
-            pass  # never break signup flow
-
+    # Continue with session issuance for all cases (existing or new)
     maybe_bootstrap_super_admin(cursor, user['id'], user['email'])
     conn.commit()
     cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))
@@ -1369,11 +1322,6 @@ def process_google_user_login(google_id, email, name, picture, ip_address, requi
     conn.close()
 
     return _issue_user_session(user_dict, email, ip_address)
-
-
-# ==============================================================================
-# AUTHENTICATION ROUTES
-# ==============================================================================
 
 @app.route('/api/auth/google', methods=['POST'])
 def google_auth():
@@ -2001,12 +1949,9 @@ def admin_google_callback():
 
         result = process_google_user_login(google_id, email, name, picture, ip_address)
         
-        # Handle link_required or link_conflict from process_google_user_login
-        if isinstance(result, dict):
-            if result.get('link_required'):
-                return redirect(f"{frontend_url}/admin/login?link_required=true&email={result['email']}&google_id={result['google_id']}")
-            if result.get('link_conflict'):
-                return redirect(f"{frontend_url}/admin/login?error=google_link_conflict&email={result['email']}")
+        # Handle link_conflict from process_google_user_login
+        if isinstance(result, dict) and 'link_conflict' in result:
+            return redirect(f"{frontend_url}/admin/login?error=google_link_conflict&email={result['email']}")
         
         user_data, jwt_token = result
         user_role = (user_data.get('role') or '').lower()
@@ -2121,20 +2066,13 @@ def google_callback():
             return redirect(f"{frontend_url}/login?error=account_locked")
 
         # 3. Process Login. require_otp=True makes every EXISTING customer
-        # account confirm via email OTP before a session starts (new Google
-        # signups still auto-create without OTP, unchanged). Admin/warehouse
-        # callers pass require_otp=False and keep their old behaviour.
-        result = process_google_user_login(google_id, email, name, picture, ip_address, require_otp=True)
+        result = process_google_user_login(google_id, email, name, picture, ip_address)
         
-        # Handle link_required or link_conflict from process_google_user_login
-        if isinstance(result, dict):
+        # Handle link_conflict from process_google_user_login
+        if isinstance(result, dict) and 'link_conflict' in result:
             if result.get('email_send_failed'):
-                # The OTP could not be emailed (SMTP down / credentials missing):
-                # send the user back with a clear error instead of an OTP screen
-                # that can never be completed.
                 return redirect(f"{frontend_url}/login?error=otp_email_failed&email={result.get('email', '')}&google_id={result.get('google_id', '')}")
-            if result.get('link_required'):
-                return redirect(f"{frontend_url}/login?link_required=true&email={result['email']}&google_id={result['google_id']}")
+            return redirect(f"{frontend_url}/login?error=google_link_conflict&email={result['email']}")
             if result.get('link_conflict'):
                 return redirect(f"{frontend_url}/login?error=google_link_conflict&email={result['email']}")
         

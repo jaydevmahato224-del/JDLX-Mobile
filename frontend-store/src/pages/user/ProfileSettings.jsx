@@ -116,6 +116,14 @@ function ProfileSettings() {
                     onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
                     className="input"
                 />
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Age"
+                    value={form.age || ''}
+                    onChange={e => setForm(prev => ({ ...prev, age: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                    className="input"
+                />
                 <div className="relative">
                     <button
                         type="button"

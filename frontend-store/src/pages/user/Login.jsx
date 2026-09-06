@@ -60,9 +60,13 @@ const BackButton = ({ onClick }) => (
 )
 
 function Login() {
-    const [mode, setMode] = useState('choice'); // choice | signup-email | signup-otp | link-required
+    const [mode, setMode] = useState('choice'); // choice | signup-email | signup-otp | signup-details | link-required
     const [signupEmail, setSignupEmail] = useState('');
     const [signupOtp, setSignupOtp] = useState('');
+    // Profile details collected right after the OTP step so the account is
+    // created with the user's real name (used everywhere + in our emails).
+    const [details, setDetails] = useState({ firstName: '', lastName: '', age: '', phone: '' });
+    const [savingDetails, setSavingDetails] = useState(false);
     const [sending, setSending] = useState(false);
     const [verifying, setVerifying] = useState(false);
     const resendCooldown = useCountdown();
@@ -175,9 +179,21 @@ function Login() {
             });
             const data = await res.json();
             if (res.ok && data.user) {
-                toast.success('Welcome to JDLX Mobile! 🎉');
-                // Full reload so initAuth picks up the HttpOnly cookie session.
-                window.location.href = window.location.origin;
+                if (data.is_new_user) {
+                    // Brand-new account: before entering the store, collect the
+                    // profile details (name / age / mobile) so the account — and
+                    // every email we send — uses the name the user chose.
+                    const u = data.user || {};
+                    setDetails((d) => ({
+                        ...d,
+                        phone: d.phone || (u.phone ? String(u.phone).replace(/\D/g, '').slice(0, 10) : ''),
+                    }));
+                    setMode('signup-details');
+                } else {
+                    // Returning user: nothing to collect, go straight in.
+                    toast.success(`Welcome back, ${(data.user.name || '').split(' ')[0]}! 👋`);
+                    window.location.href = window.location.origin;
+                }
             } else {
                 toast.error(data.error || 'Verification failed. Please try again.');
             }
@@ -185,6 +201,51 @@ function Login() {
             toast.error('Network error. Please try again.');
         } finally {
             setVerifying(false);
+        }
+    };
+
+    // ─── Profile details after signup OTP (first/last name, age, mobile) ──
+    const handleSaveDetails = async (e) => {
+        e.preventDefault();
+        if (!details.firstName.trim()) {
+            toast.error('Please enter your first name');
+            return;
+        }
+        const ageNum = Number(details.age);
+        if (!details.age || !Number.isInteger(ageNum) || ageNum < 1 || ageNum > 120) {
+            toast.error('Please enter a valid age (1–120)');
+            return;
+        }
+        const digits = details.phone.replace(/\D/g, '');
+        if (digits.length !== 10) {
+            toast.error('Please enter a valid 10-digit mobile number');
+            return;
+        }
+        setSavingDetails(true);
+        try {
+            // Dedicated authenticated endpoint: verify-otp already issued the
+            // session cookie, so this just persists the profile details.
+            const res = await apiFetch('/api/auth/email/save-signup-details', {
+                method: 'POST',
+                body: JSON.stringify({
+                    first_name: details.firstName.trim(),
+                    last_name: details.lastName.trim(),
+                    age: String(ageNum),
+                    phone: digits,
+                }),
+            });
+            const data = await res.json();
+            if (res.ok && data.user) {
+                toast.success(`Welcome to JDLX Mobile, ${details.firstName.trim()}! 🎉`);
+                // Full reload so initAuth picks up the saved profile.
+                window.location.href = window.location.origin;
+            } else {
+                toast.error(data.error || 'Could not save your details. Please try again.');
+            }
+        } catch (err) {
+            toast.error('Network error. Please try again.');
+        } finally {
+            setSavingDetails(false);
         }
     };
 
@@ -290,8 +351,8 @@ function Login() {
         </div>
     );
 
-    // ─── OTP entry screen (shared by signup + google-link flows) ─────────────
-    const otpScreen = (email, otp, setOtp, onSubmit, title, subtitle, cta, busy) => (
+    // ─── OTP entry form (shared by signup + google-link flows) ────────────
+    const otpScreen = (onSubmit, cta, busy) => (
         <form onSubmit={onSubmit} className="w-full mt-4 flex flex-col items-center gap-4">
             <input
                 type="text"
@@ -331,10 +392,7 @@ function Login() {
                         <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">An account with {linkEmail} already exists. We sent a 6-digit OTP to this email — enter it to complete login.</p>
                     </div>
 
-                    {otpScreen(
-                        linkEmail, linkOtp, setLinkOtp, handleLinkVerify,
-                        null, null, 'Verify & Login', verifying
-                    )}
+                    {otpScreen(handleLinkVerify, 'Verify & Login', verifying)}
 
                     {otpResendRow(handleResendLinkOtp, sending)}
                     {otpHelpNote}
@@ -406,13 +464,63 @@ function Login() {
                         <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">We sent a 6-digit OTP to <b className="text-[var(--color-on-surface)]">{signupEmail}</b>. Enter it below to continue.</p>
                     </div>
 
-                    {otpScreen(
-                        signupEmail, signupOtp, setSignupOtp, handleVerifyOtp,
-                        null, null, 'Verify & Create Account', verifying
-                    )}
+                    {otpScreen(handleVerifyOtp, 'Verify & Create Account', verifying)}
 
                     {otpResendRow(handleResendSignupOtp, sending)}
                     {otpHelpNote}
+                </div>
+            </div>
+        );
+    }
+
+    // ─── Signup details screen (name, age, mobile — after OTP) ──────────
+    if (mode === 'signup-details') {
+        const detailField = (label, value, onChange, props = {}) => (
+            <input
+                value={value}
+                onChange={onChange}
+                className="w-[320px] max-w-full bg-[var(--color-surface-card)] border border-gray-300 rounded-full px-6 py-3 text-center text-[var(--color-on-surface)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                {...props}
+            />
+        );
+
+        return (
+            <div className="container-standard flex flex-col items-center justify-center min-h-[70vh]">
+                <div className="glass-card w-full max-w-sm p-8 text-center flex flex-col items-center gap-6">
+                    <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mb-2 shadow-inner text-3xl">
+                        👤
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-[var(--color-on-surface)] tracking-tight">Complete Your Profile</h1>
+                        <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">
+                            Email verified ✅. Tell us your name, age and mobile number so we can personalise your experience.
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleSaveDetails} className="w-full mt-4 flex flex-col items-center gap-3">
+                        {detailField('First name', details.firstName, (e) => setDetails({ ...details, firstName: e.target.value }), { type: 'text', placeholder: 'First name *', maxLength: 50, autoFocus: true })}
+                        {detailField('Last name', details.lastName, (e) => setDetails({ ...details, lastName: e.target.value }), { type: 'text', placeholder: 'Last name', maxLength: 50 })}
+                        <div className="flex gap-3 w-[320px] max-w-full">
+                            {detailField('Age', details.age, (e) => setDetails({ ...details, age: e.target.value.replace(/\D/g, '').slice(0, 3) }), { type: 'text', inputMode: 'numeric', placeholder: 'Age *' })}
+                            {detailField('Mobile', details.phone, (e) => setDetails({ ...details, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }), { type: 'text', inputMode: 'numeric', placeholder: 'Mobile no. *' })}
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={savingDetails}
+                            className="mt-2 flex items-center justify-center gap-3 w-[320px] max-w-full bg-primary text-white rounded-full px-6 py-3 font-medium hover:bg-primary/90 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+                        >
+                            {savingDetails ? (
+                                <>
+                                    <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Saving…
+                                </>
+                            ) : 'Start Shopping'}
+                        </button>
+                    </form>
+
+                    <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                        Your name will appear on your profile and in emails we send you.
+                    </p>
                 </div>
             </div>
         );

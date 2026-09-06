@@ -190,6 +190,20 @@ def _mailersend_send(to_email, subject, html_body, text_body):
 _RESEND_TIMEOUT_SECONDS = 20
 
 
+def _api_send(to_email, subject, html_body, text_body):
+    """Try every configured HTTPS email API provider in priority order.
+
+    Returns True when one of them accepts the message, False when none are
+    configured or all fail (the caller then falls back to Gmail SMTP).
+    """
+    if not _FORCE_SMTP:
+        if RESEND_API_KEY and _resend_send(to_email, subject, html_body, text_body):
+            return True
+        if MAILERSEND_API_KEY and _mailersend_send(to_email, subject, html_body, text_body):
+            return True
+    return False
+
+
 def _resend_send(to_email, subject, html_body, text_body):
     """Send one email through the Resend REST API (no SMTP involved).
 
@@ -659,6 +673,14 @@ def send_welcome_email(to_email, user_name):
     """
     msg.attach(MIMEText(body, 'html'))
 
+    # HTTPS API providers first (Resend/MailerSend) — same reasoning as OTP
+    # emails: Gmail SMTP is throttled/blocked from datacenter IPs like Render's,
+    # which silently swallowed welcome emails. Falls back to SMTP unchanged.
+    full_subject = msg['Subject']
+    if _api_send(to_email, full_subject, body, body):
+        _log(f"[MAIL SUCCESS] Welcome email sent to {to_email} via HTTPS API.")
+        return True
+
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587, timeout=_SMTP_TIMEOUT_SECONDS)
         server.starttls()
@@ -742,21 +764,13 @@ def send_individual_email(to_email, user_name, subject, message):
     # When an HTTP-API provider (Resend, then MailerSend) is configured, the
     # OTP/individual email goes through it - immune to Gmail's datacenter-IP
     # SMTP block. MAIL_PROVIDER=smtp overrides this and always uses Gmail SMTP.
-    # Otherwise the previous Gmail SMTP path below runs unchanged.
-    if RESEND_API_KEY and not _FORCE_SMTP:
-        ok = _resend_send(to_email, full_subject, body, text_part)
-        if ok:
-            _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via Resend.")
-        else:
-            _log(f"[MAIL ERROR] Individual email failed for {to_email} via Resend.")
-        return ok
-    if MAILERSEND_API_KEY and not _FORCE_SMTP:
-        ok = _mailersend_send(to_email, full_subject, body, text_part)
-        if ok:
-            _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via MailerSend.")
-        else:
-            _log(f"[MAIL ERROR] Individual email failed for {to_email} via MailerSend.")
-        return ok
+    # If the API providers fail (rate limit, outage), fall back to SMTP so a
+    # provider hiccup can't stop OTP logins entirely.
+    if _api_send(to_email, full_subject, body, text_part):
+        _log(f"[MAIL SUCCESS] Individual email sent to {to_email} via HTTPS API.")
+        return True
+    if (RESEND_API_KEY or MAILERSEND_API_KEY) and not _FORCE_SMTP:
+        _log(f"[MAIL ERROR] API provider(s) failed for {to_email}; falling back to SMTP.")
 
     if not GMAIL_USER or not GMAIL_PASS:
         _log("[MAIL ERROR] SMTP credentials missing in environment (.env)")

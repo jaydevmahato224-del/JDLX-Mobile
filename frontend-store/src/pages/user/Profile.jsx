@@ -203,6 +203,12 @@ function Profile() {
                         <Mail className="w-3.5 h-3.5" />
                         {user.email}
                     </p>
+                    {(user.phone || user.age) && (
+                        <p className="text-sm font-medium text-[var(--color-on-surface-variant)] opacity-70 flex items-center justify-center sm:justify-start gap-2">
+                            <Smartphone className="w-3.5 h-3.5" />
+                            {user.phone}{user.phone && user.age ? ' · ' : ''}{user.age ? `${user.age} yrs` : ''}
+                        </p>
+                    )}
                     {(user.about || '').trim() && (
                         <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)] opacity-70 pt-2 max-w-xl">
                             {(user.about || '').trim()}

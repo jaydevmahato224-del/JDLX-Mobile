@@ -1168,6 +1168,7 @@ def _issue_user_session(user_dict, email, ip_address):
         "phone": user_dict.get('phone'),
         "gender": user_dict.get('gender'),
         "date_of_birth": user_dict.get('date_of_birth'),
+        "age": user_dict.get('age'),
         "email_verified": user_dict.get('email_verified'),
         "phone_verified": user_dict.get('phone_verified'),
         "role": user_role
@@ -1626,10 +1627,15 @@ def email_send_otp():
         )
         conn.commit()
 
+        # Greet returning users by their saved account name; brand-new emails
+        # (no account yet) fall back to the email prefix.
+        existing_user = cursor.execute("SELECT name FROM users WHERE LOWER(email) = ?", (email,)).fetchone()
+        greeting_name = ((existing_user['name'] if existing_user else '') or '').strip() or email.split('@')[0]
+
         # Send the OTP over SMTP synchronously so a failed send surfaces to the
         # caller instead of being silently swallowed by a background thread
         # (a dead thread previously left an OTP row with no email behind).
-        send_ok = send_individual_email(email, email.split('@')[0],
+        send_ok = send_individual_email(email, greeting_name,
             "Sign in OTP",
             f"Your OTP to access your JDLX Mobile account: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
         )
@@ -1671,6 +1677,12 @@ def email_verify_otp():
     NULL, so a deterministic placeholder is derived from the email). Existing
     account: just logs in. OTP is one-time use, attempt-limited (5 wrong
     guesses invalidate it), and expired/missing OTPs get one answer.
+
+    Accepts optional signup details collected by the store UI after the OTP
+    step: first_name, last_name, age, phone. For a NEW account these are saved
+    immediately so the display name (and every email we send) uses the name the
+    user actually chose instead of the email prefix. For an existing account the
+    name is left untouched, but empty phone/age fields are filled in.
     """
     data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
@@ -1712,25 +1724,38 @@ def email_verify_otp():
         ip_address = get_client_ip()
         cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
         user = cursor.fetchone()
+        is_new_user = False
+        def _clean_signup_text(value, max_len):
+            text = (value or '').strip()
+            return ' '.join(text.split())[:max_len] or None
+
+        first_name = _clean_signup_text(data.get('first_name'), 50)
+        last_name = _clean_signup_text(data.get('last_name'), 50)
+        age_raw = str(data.get('age') or '').strip()
+        age = int(age_raw) if age_raw.isdigit() and 1 <= int(age_raw) <= 120 else None
+        phone = _clean_signup_text(data.get('phone'), 15)
+        if phone and not phone.replace('+', '').replace(' ', '').replace('-', '').isdigit():
+            phone = None
+        full_name = ' '.join(p for p in (first_name, last_name) if p) or None
 
         if not user:
+            is_new_user = True
             # First-time signup: create the account. users.google_id is NOT NULL
             # UNIQUE, so use a deterministic placeholder derived from the email;
             # a real Google id can replace it later via the Google OTP-link flow.
             placeholder_google_id = 'email_' + hashlib.sha256(email.encode()).hexdigest()[:20]
-            name = email.split('@')[0]
+            # Prefer the name the user just entered over the email prefix so the
+            # welcome email and every later greeting use their real name.
+            name = full_name or email.split('@')[0]
             cursor.execute(
-                "INSERT INTO users (google_id, name, email, email_verified) VALUES (?, ?, ?, 1)",
-                (placeholder_google_id, name, email)
+                "INSERT INTO users (google_id, name, email, email_verified, age, phone) VALUES (?, ?, ?, 1, ?, ?)",
+                (placeholder_google_id, name, email, age, phone)
             )
             conn.commit()
             cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
             user = cursor.fetchone()
 
             if user:
-                from threading import Thread
-                Thread(target=send_welcome_email, args=(email, name)).start()
-
                 # Referral code apply (additive)
                 try:
                     ref_code = request.json.get('referral_code') if request.is_json else None
@@ -1744,13 +1769,84 @@ def email_verify_otp():
             conn.commit()
             cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))
             user = cursor.fetchone()
+        else:
+            # Existing account: never overwrite their saved name/details, but
+            # fill in phone/age if the profile didn't have them yet.
+            updates, params = [], []
+            if phone and not (user['phone'] or '').strip():
+                updates.append('phone = ?')
+                params.append(phone)
+            if age is not None and user['age'] is None:
+                updates.append('age = ?')
+                params.append(age)
+            if updates:
+                params.append(user['id'])
+                cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", tuple(params))
+                conn.commit()
+                cursor.execute("SELECT * FROM users WHERE id = ?", (user['id'],))
+                user = cursor.fetchone()
 
         user_dict = dict(user)
         user_data, jwt_token = _issue_user_session(user_dict, email, ip_address)
 
-        resp = jsonify({"user": user_data})
+        resp = jsonify({"user": user_data, "is_new_user": is_new_user})
         resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
         return resp
+    finally:
+        conn.close()
+
+
+@app.route('/api/auth/email/save-signup-details', methods=['POST'])
+@token_required
+def email_save_signup_details():
+    """Saves the profile details collected right after the email-OTP signup.
+
+    Called by the store with the session cookie issued by verify-otp. Stores
+    the user-chosen first/last name (as the display name), age and mobile so
+    the profile page and every email we send use the name the user picked
+    instead of the email prefix.
+    """
+    user_id = request.user['user_id']
+    data = request.get_json(silent=True) or {}
+
+    def _clean(value, max_len):
+        text = (value or '').strip()
+        return ' '.join(text.split())[:max_len] or None
+
+    first_name = _clean(data.get('first_name'), 50)
+    last_name = _clean(data.get('last_name'), 50)
+    full_name = ' '.join(p for p in (first_name, last_name) if p)
+    age_raw = str(data.get('age') or '').strip()
+    age = int(age_raw) if age_raw.isdigit() and 1 <= int(age_raw) <= 120 else None
+    phone = _clean(data.get('phone'), 15)
+    if phone and not phone.replace('+', '').replace(' ', '').replace('-', '').isdigit():
+        phone = None
+
+    if not full_name:
+        return error_response("First name is required", 400)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE users SET name = ?, age = ?, phone = ? WHERE id = ?",
+                       (full_name, age, phone, user_id))
+        conn.commit()
+        cursor.execute(
+            "SELECT id, name, email, profile_image, phone, gender, date_of_birth, age, email_verified, phone_verified FROM users WHERE id = ?",
+            (user_id,)
+        )
+        user = cursor.fetchone()
+
+        # Welcome email goes out AFTER the details are saved so it greets the
+        # user by the name they actually chose (not the email prefix).
+        if user:
+            from threading import Thread
+            Thread(target=send_welcome_email, args=(user['email'], user['name'])).start()
+
+        return jsonify(dict(user))
+    except Exception as e:
+        logger.error(f"email_save_signup_details error: {e}")
+        return error_response("Could not save your details. Please try again.", 500)
     finally:
         conn.close()
 
@@ -5330,7 +5426,7 @@ def user_profile():
         try:
             conn = get_db()
             cursor = conn.cursor()
-            cursor.execute("SELECT id, name, email, profile_image, phone, gender, date_of_birth, about, terms_accepted_version, terms_accepted_at, email_verified, phone_verified FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT id, name, email, profile_image, phone, gender, date_of_birth, age, about, terms_accepted_version, terms_accepted_at, email_verified, phone_verified FROM users WHERE id = ?", (user_id,))
             user = cursor.fetchone()
             conn.close()
             if not user:
@@ -5345,6 +5441,8 @@ def user_profile():
         gender = data.get('gender')
         dob = data.get('date_of_birth')
         about = data.get('about')
+        age_raw = str(data.get('age') or '').strip()
+        age = int(age_raw) if age_raw.isdigit() and 1 <= int(age_raw) <= 120 else None
         
         image_url = None
         if 'file' in request.files:
@@ -5392,6 +5490,9 @@ def user_profile():
             if dob:
                 updates.append('date_of_birth = ?')
                 params.append(dob)
+            if age is not None:
+                updates.append('age = ?')
+                params.append(age)
             if about is not None:
                 updates.append('about = ?')
                 params.append(str(about)[:500])
@@ -5404,7 +5505,7 @@ def user_profile():
                 cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", tuple(params))
                 conn.commit()
                 
-            cursor.execute("SELECT id, name, email, profile_image, phone, gender, date_of_birth, about, terms_accepted_version, terms_accepted_at, email_verified, phone_verified FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT id, name, email, profile_image, phone, gender, date_of_birth, age, about, terms_accepted_version, terms_accepted_at, email_verified, phone_verified FROM users WHERE id = ?", (user_id,))
             user = cursor.fetchone()
             conn.close()
             return jsonify(dict(user))

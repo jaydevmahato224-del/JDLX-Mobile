@@ -22,7 +22,9 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from jwt_config import get_jwt_secret
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
+# Load .env only in development; Render injects env vars directly in production.
+if os.environ.get("RENDER") != "true":
+    load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # --- Third-Party Imports ---
 import razorpay

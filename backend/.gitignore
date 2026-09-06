@@ -10,4 +10,5 @@ jdlx.db
 *.lock
 static/uploads/
 .jwt_secret
+send_test_email.py
 

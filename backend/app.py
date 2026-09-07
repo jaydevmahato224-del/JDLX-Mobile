@@ -384,6 +384,15 @@ def validate_image_file(file_storage):
 # 1. Secure Headers (XSS, CSP, etc.)
 # Disable force_https for local development (breaks HTTP localhost), enable for production
 force_https = os.environ.get("FORCE_HTTPS", "").strip().lower() not in {"0", "false", "no", "off"} and not app.debug
+
+def get_cookie_settings():
+    """Return cookie settings based on environment (secure only in production HTTPS)."""
+    return {
+        'httponly': True,
+        'secure': force_https,
+        'samesite': 'Lax'
+    }
+
 Talisman(app,
     force_https=force_https,
     content_security_policy={
@@ -821,7 +830,8 @@ def verify_token():
 def auth_logout():
     """Clears the HttpOnly auth cookie."""
     resp = jsonify({"success": True, "message": "Logged out successfully"})
-    resp.set_cookie('token', '', httponly=True, secure=True, samesite='Lax', expires=0)
+    cookie_settings = get_cookie_settings()
+    resp.set_cookie('token', '', **cookie_settings, expires=0)
     return resp
 
 
@@ -994,7 +1004,8 @@ def admin_verify_otp():
         )
 
         resp = jsonify({"success": True, "user": user_data})
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        cookie_settings = get_cookie_settings()
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
     except Exception as e:
         logger.error(f"admin_verify_otp error: {e}")
@@ -1353,7 +1364,8 @@ def google_auth():
         user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
 
         resp = jsonify({"user": user_data})
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        cookie_settings = get_cookie_settings()
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
 
     except ValueError:
@@ -1408,7 +1420,8 @@ def google_link_verify():
         user_data, jwt_token = process_google_user_login(google_id, email, row['name'] or '', row['picture'] or '', ip_address)
         
         resp = jsonify({"user": user_data})
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        cookie_settings = get_cookie_settings()
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
     finally:
         conn.close()
@@ -1740,7 +1753,8 @@ def email_verify_otp():
         user_data, jwt_token = _issue_user_session(user_dict, email, ip_address)
 
         resp = jsonify({"user": user_data, "is_new_user": is_new_user})
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        cookie_settings = get_cookie_settings()
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
     finally:
         conn.close()
@@ -1975,8 +1989,9 @@ def admin_google_callback():
             pass  # never break login on status read failure
 
         encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
+        cookie_settings = get_cookie_settings()
         resp = redirect(f"{frontend_url}/admin/dashboard")
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
             
     except Exception as exc:
@@ -2126,8 +2141,9 @@ def google_callback():
                 'weather_status': wh['weather_status'],
                 'service_radius_km': wh['service_radius_km'],
             }
+            cookie_settings = get_cookie_settings()
             resp = redirect(f"{frontend_url}/warehouse/dashboard")
-            resp.set_cookie('token', wh_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', wh_token, **cookie_settings)
             return resp
 
         if flow in ('delivery_login', 'delivery'):
@@ -2155,8 +2171,9 @@ def google_callback():
                 'role': 'delivery',
                 'status': dp['status']
             }
+            cookie_settings = get_cookie_settings()
             resp = redirect(f"{frontend_url}/delivery/dashboard")
-            resp.set_cookie('token', dp_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', dp_token, **cookie_settings)
             return resp
 
         if flow in ('warehouse_request', 'warehouse_partner_request'):
@@ -2168,8 +2185,9 @@ def google_callback():
             }
             req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
             req_user = {'email': email, 'name': name}
+            cookie_settings = get_cookie_settings()
             resp = redirect(f"{frontend_url}/warehouse/request")
-            resp.set_cookie('token', req_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', req_token, **cookie_settings)
             return resp
 
         if flow == 'delivery_request':
@@ -2181,18 +2199,21 @@ def google_callback():
             }
             req_token = jwt.encode(req_payload, SECRET_KEY, algorithm='HS256')
             req_user = {'email': email, 'name': name}
+            cookie_settings = get_cookie_settings()
             resp = redirect(f"{frontend_url}/warehouse/request-delivery")
-            resp.set_cookie('token', req_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', req_token, **cookie_settings)
             return resp
 
         if flow == 'admin':
+            cookie_settings = get_cookie_settings()
             resp = redirect(f"{frontend_url}/admin/dashboard")
-            resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', jwt_token, **cookie_settings)
             return resp
 
         # Default: User Flow - redirect to profile after login
+        cookie_settings = get_cookie_settings()
         resp = redirect(f"{frontend_url}/profile")
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
 
     except Exception as exc:

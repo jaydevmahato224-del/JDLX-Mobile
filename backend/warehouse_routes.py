@@ -70,6 +70,22 @@ ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 warehouse_bp = Blueprint("warehouse", __name__)
 
 
+def get_wh_cookie_settings():
+    """Return cookie settings based on environment (secure only in production HTTPS)."""
+    # Check FORCE_HTTPS env var and debug mode (similar to app.py)
+    force_https = os.environ.get("FORCE_HTTPS", "").strip().lower() not in {"0", "false", "no", "off"}
+    # In debug mode (local dev), don't force secure cookies
+    if os.environ.get("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}:
+        force_https = False
+    return {
+        'httponly': True,
+        'secure': force_https,
+        'samesite': 'Lax'
+    }
+
+
+
+
 
 # ── DB helper ────────────────────────────────────────────────────────────────
 
@@ -892,7 +908,8 @@ def warehouse_auth_google():
                 "profile_kyc_status": wh["profile_kyc_status"],
             },
         })
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        cookie_settings = get_wh_cookie_settings()
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp, 200
     finally:
         conn.close()
@@ -1036,8 +1053,9 @@ def partner_auth_google_callback():
             encoded_user = quote(json.dumps(user_obj))
             
             # Redirect to the Admin Frontend on port 5174
+            cookie_settings = get_wh_cookie_settings()
             resp = redirect(f"{admin_frontend}/admin/dashboard")
-            resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', jwt_token, **cookie_settings)
             return resp
         finally:
             conn.close()
@@ -1106,8 +1124,9 @@ def partner_auth_google_callback():
                 "profile_kyc_status": wh["profile_kyc_status"],
             }
             encoded_user = quote(json.dumps(user_obj))
+            cookie_settings = get_wh_cookie_settings()
             resp = redirect(f"{warehouse_frontend}/warehouse/dashboard")
-            resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+            resp.set_cookie('token', jwt_token, **cookie_settings)
             return resp
         finally:
             conn.close()
@@ -1122,8 +1141,9 @@ def partner_auth_google_callback():
         request_token = jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
         user_obj = {"email": email, "name": name}
         encoded_user = quote(json.dumps(user_obj))
+        cookie_settings = get_wh_cookie_settings()
         resp = redirect(f"{warehouse_frontend}/warehouse/request")
-        resp.set_cookie('token', request_token, httponly=True, secure=True, samesite='Lax')
+        resp.set_cookie('token', request_token, **cookie_settings)
         return resp
 
     elif flow == "delivery_login":
@@ -4288,7 +4308,8 @@ def staff_login():
                 "permissions": perms
             }
         })
-        resp.set_cookie('token', jwt_token, httponly=True, secure=True, samesite='Lax')
+        cookie_settings = get_wh_cookie_settings()
+        resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp, 200
     finally:
         conn.close()
@@ -4298,7 +4319,8 @@ def staff_login():
 def warehouse_auth_logout():
     """Clears the HttpOnly auth cookie for warehouse sessions."""
     resp = jsonify({"success": True, "message": "Logged out successfully"})
-    resp.set_cookie('token', '', httponly=True, secure=True, samesite='Lax', expires=0)
+    cookie_settings = get_wh_cookie_settings()
+    resp.set_cookie('token', '', **cookie_settings, expires=0)
     return resp
 
 

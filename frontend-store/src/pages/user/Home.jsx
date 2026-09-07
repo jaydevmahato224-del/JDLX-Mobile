@@ -5,6 +5,7 @@ import { ChevronRight, RefreshCw, ShoppingBag, Plus, Minus, Heart as HeartIcon, 
 
 import BlurImage from '../../components/BlurImage'
 import PaginationLoader from '../../components/PaginationLoader'
+import PremiumLoader from '../../components/PremiumLoader'
 import ProductEmptyState from '../../components/ProductEmptyState'
 import ProductErrorState from '../../components/ProductErrorState'
 import ProductLoadingGrid from '../../components/ProductLoadingGrid'
@@ -831,12 +832,7 @@ export default function Home() {
         </div>
         
         {isWakingUp && initialLoading && !hasLoadedOnce && (
-          <div className="flex items-center gap-3 justify-center py-4 bg-amber-50/50 border border-amber-100/60 rounded-[20px] shadow-sm animate-pulse">
-            <Zap size={14} className="text-amber-500 animate-bounce" />
-            <p className="text-[10px] font-black text-amber-700 uppercase tracking-[0.2em]">
-              Waking up cloud server... Hang tight, almost ready! ✨
-            </p>
-          </div>
+          <PremiumLoader />
         )}
         
         {initialLoading && !hasLoadedOnce ? (

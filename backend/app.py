@@ -395,6 +395,14 @@ def get_cookie_settings():
 
 Talisman(app,
     force_https=force_https,
+    # CRITICAL: Talisman's default session_cookie_secure=True force-sets
+    # SESSION_COOKIE_SECURE=True on EVERY request when debug is off, silently
+    # overriding the app.config value above. On plain-HTTP localhost that makes
+    # the Flask session cookie (which carries the OAuth CSRF nonce) Secure-only,
+    # so the browser drops it and the Google login round-trip breaks. Tie it to
+    # the same env-aware flag as the auth cookie so prod keeps Secure and
+    # localhost works.
+    session_cookie_secure=force_https,
     content_security_policy={
         'default-src': "'self'",
         'script-src': "'self' https://checkout.razorpay.com https://cdn.jsdelivr.net",

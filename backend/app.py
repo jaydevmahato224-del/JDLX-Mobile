@@ -386,10 +386,25 @@ def validate_image_file(file_storage):
 force_https = os.environ.get("FORCE_HTTPS", "").strip().lower() not in {"0", "false", "no", "off"} and not app.debug
 
 def get_cookie_settings():
-    """Return cookie settings based on environment (secure only in production HTTPS)."""
+    """Return cookie settings based on environment.
+
+    Production (Render): the API lives on *.onrender.com while the storefront
+    is served from jdlxmobile.in / *.vercel.app — a cross-site context. Browsers
+    only attach cookies on cross-site requests when they are SameSite=None AND
+    Secure, so the auth cookie must use both or every post-login API call (and
+    the OAuth round-trip itself) loses the session and bounces back to /login.
+    Localhost: frontend and backend are same-site (localhost:5173 -> :5000), so
+    SameSite=Lax without Secure is correct and keeps cookies on plain HTTP.
+    """
+    if force_https:
+        return {
+            'httponly': True,
+            'secure': True,
+            'samesite': 'None'
+        }
     return {
         'httponly': True,
-        'secure': force_https,
+        'secure': False,
         'samesite': 'Lax'
     }
 

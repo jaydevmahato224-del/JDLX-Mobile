@@ -17,7 +17,7 @@ export async function apiFetch(endpoint, options = {}) {
       : API_BASE_URL
     url = `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
   }
-  
+
   const warehouseToken = localStorage.getItem('warehouseToken') || localStorage.getItem('warehouse_token') || localStorage.getItem('staff_token')
   const defaultHeaders = {
     'Content-Type': 'application/json',

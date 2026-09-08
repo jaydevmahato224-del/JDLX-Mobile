@@ -1102,19 +1102,30 @@ def partner_auth_google_callback():
                 # Store in google_link_otps table (reuse for warehouse linking)
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))",
+                    "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at, last_sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'), datetime('now'))",
                     (email, wh['id'], 'warehouse_' + str(wh['id']), wh['owner_name'] or wh['warehouse_name'], None, otp_hash, salt)
                 )
                 conn.commit()
-                
-                # Send OTP via email
-                from threading import Thread
-                Thread(target=send_individual_email, args=(email, wh['owner_name'] or wh['warehouse_name'] or 'Partner',
+
+                # Send the OTP over SMTP SYNCHRONOUSLY and check the result — a
+                # background thread used to swallow failures, leaving an OTP row
+                # with no email delivered (user stuck on the OTP page forever).
+                send_ok = send_individual_email(
+                    email,
+                    wh['owner_name'] or wh['warehouse_name'] or 'Partner',
                     "Verify Google Account Linking for Warehouse",
                     f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>Expires in 10 minutes."
-                )).start()
-                
-                return redirect(f"{warehouse_frontend}/warehouse/login?link_required=true&email={email}&google_id=warehouse_{wh['id']}")
+                )
+                if not send_ok:
+                    # Don't leave an OTP row for a code that was never emailed.
+                    try:
+                        cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, 'warehouse_' + str(wh['id'])))
+                        conn.commit()
+                    except Exception:
+                        pass
+                    return redirect(f"{warehouse_frontend}/warehouse/login?error=otp_send_failed&email={quote(email)}")
+
+                return redirect(f"{warehouse_frontend}/warehouse/login?link_required=true&email={quote(email)}&google_id=warehouse_{wh['id']}")
 
             jwt_token = issue_warehouse_token(wh["id"], email, wh["warehouse_role"])
             user_obj = {

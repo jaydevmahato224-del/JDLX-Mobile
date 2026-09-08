@@ -6,6 +6,9 @@ Covers the pieces that c1d8ba0 broke:
   2. google_link_verify must link warehouses.google_id (not users) and
      return a warehouse partner session.
   3. The warehouses table has a google_id column.
+  4. The callback sends the OTP SYNCHRONOUSLY and cleans up the row when the
+     send fails (a background thread used to swallow failures silently).
+  5. google_link_resend handles warehouse_ google_ids (partner not in users).
 """
 import os
 import sys
@@ -100,7 +103,110 @@ payload = jwt.decode(token, get_jwt_secret(), algorithms=["HS256"])
 assert payload.get("type") == "warehouse" and payload.get("warehouse_id") == wh_id
 print("issue_warehouse_token OK (type=warehouse)")
 
-# Cleanup
+# Reset google_id so the callback test below re-enters the OTP branch
+conn.execute("UPDATE warehouses SET google_id = NULL WHERE id = ?", (wh_id,))
+conn.commit()
+
+# ── Flask test client: callback (sync send) + warehouse resend ──────────────
+import app as app_module
+
+emails_sent = []
+def _fake_send(to, name, subject, message):
+    emails_sent.append({"to": to, "subject": subject, "message": message})
+    return True
+app_module.send_individual_email = _fake_send
+# The callback reads send_individual_email via the module-global import in
+# warehouse_routes, so patch that binding too.
+warehouse_routes.send_individual_email = _fake_send
+
+class _FakeOAuthPartner:
+    def __init__(self, fail_token=False):
+        self.fail_token = fail_token
+        self.calls = []
+    def authorize_access_token(self):
+        self.calls.append("token")
+        if self.fail_token:
+            raise RuntimeError("mock token failure")
+        return {"access_token": "x", "userinfo": {"email": "wh-otp-test@example.com", "name": "Test Owner"}}
+    def userinfo(self):
+        self.calls.append("userinfo")
+        return {"email": "wh-otp-test@example.com", "name": "Test Owner"}
+
+class _FakeOAuth:
+    def __init__(self, partner):
+        self.google_partner = partner
+
+client = app_module.app.test_client()
+_SECURE = {"wsgi.url_scheme": "https"}
+
+def _env():
+    return {**_SECURE, "REMOTE_ADDR": "10.9.9.9"}
+
+def _run_callback(fake_partner):
+    app_module.app.config["PARTNER_OAUTH_CLIENT"] = _FakeOAuth(fake_partner)
+    with client.session_transaction() as sess:
+        sess["partner_oauth_flow"] = "warehouse_login"
+    return client.get("/partner/auth/google/callback?code=mock&state=mock",
+                      environ_overrides=_env(), follow_redirects=False)
+
+# 6) Callback with a fresh (unlinked) warehouse → OTP sent synchronously
+#    and redirect carries link_required + email + google_id.
+conn.execute("DELETE FROM google_link_otps WHERE email = ?", ("wh-otp-test@example.com",))
+conn.commit()
+emails_sent.clear()
+r = _run_callback(_FakeOAuthPartner())
+assert r.status_code == 302, f"callback should redirect, got {r.status_code}"
+loc = r.headers.get("Location", "")
+assert "link_required=true" in loc, f"expected link_required redirect, got {loc}"
+assert "google_id=warehouse_" + str(wh_id) in loc, f"expected warehouse google_id in redirect, got {loc}"
+assert len(emails_sent) == 1, f"OTP email should be sent synchronously, got {len(emails_sent)} sends"
+assert "OTP" in emails_sent[0]["message"]
+otp_row = conn.execute(
+    "SELECT otp_hash, last_sent_at FROM google_link_otps WHERE email = ? AND google_id = ?",
+    ("wh-otp-test@example.com", "warehouse_" + str(wh_id))
+).fetchone()
+assert otp_row is not None, "OTP row should exist after successful send"
+assert otp_row["last_sent_at"] is not None, "last_sent_at should be recorded"
+print("Callback sends OTP synchronously + records last_sent_at + redirects to link_required")
+
+# 7) Callback when the send FAILS → OTP row removed, redirect carries error
+def _failing_send(to, name, subject, message):
+    return False
+warehouse_routes.send_individual_email = _failing_send
+app_module.send_individual_email = _failing_send
+emails_sent.clear()
+r = _run_callback(_FakeOAuthPartner())
+assert r.status_code == 302, f"callback should redirect, got {r.status_code}"
+loc = r.headers.get("Location", "")
+assert "otp_send_failed" in loc, f"expected otp_send_failed redirect, got {loc}"
+orphan = conn.execute(
+    "SELECT COUNT(*) AS n FROM google_link_otps WHERE email = ? AND google_id = ?",
+    ("wh-otp-test@example.com", "warehouse_" + str(wh_id))
+).fetchone()
+assert orphan["n"] == 0, "no orphan OTP row should remain after failed send"
+print("Callback send failure → OTP row cleaned up + error redirect")
+warehouse_routes.send_individual_email = _fake_send
+app_module.send_individual_email = _fake_send
+
+# 8) Warehouse resend: partner exists only in warehouses, not users → a fresh
+#    OTP is generated and emailed (no fake enumeration success without send).
+conn.execute("DELETE FROM google_link_otps WHERE email = ?", ("wh-otp-test@example.com",))
+conn.commit()
+emails_sent.clear()
+r = client.post("/api/auth/google/link-resend",
+                json={"email": "wh-otp-test@example.com", "google_id": "warehouse_" + str(wh_id)},
+                environ_overrides=_env())
+assert r.status_code == 200, f"resend should succeed, got {r.status_code}: {r.get_data(as_text=True)[:200]}"
+assert len(emails_sent) == 1, f"resend should email the OTP, got {len(emails_sent)} sends"
+otp_row2 = conn.execute(
+    "SELECT resend_count FROM google_link_otps WHERE email = ? AND google_id = ?",
+    ("wh-otp-test@example.com", "warehouse_" + str(wh_id))
+).fetchone()
+assert otp_row2 is not None and otp_row2["resend_count"] == 0, "fresh resend row should exist"
+print("google_link_resend handles warehouse google_id (sends real OTP)")
+
+# Cleanup (temp DB — disable FK checks so child rows don't block removal)
+conn.execute("PRAGMA foreign_keys = OFF")
 conn.execute("DELETE FROM google_link_otps WHERE email = ?", ("wh-otp-test@example.com",))
 conn.execute("DELETE FROM warehouses WHERE id = ?", (wh_id,))
 conn.commit()

@@ -1517,10 +1517,27 @@ def google_link_resend():
     conn = get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
-        user = cursor.fetchone()
-        if not user:
-            return success_response(None, "OTP sent to your email.")
+        is_warehouse = str(google_id).startswith('warehouse_')
+        user = None
+        wh = None
+        if is_warehouse:
+            # Warehouse Google-linking resend: the partner may not exist as a
+            # customer in `users`, so look up the warehouse record directly.
+            cursor.execute(
+                "SELECT * FROM warehouses WHERE LOWER(email) = ?", (email,)
+            )
+            wh = cursor.fetchone()
+            if not wh:
+                return success_response(None, "OTP sent to your email.")
+        else:
+            cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
+            user = cursor.fetchone()
+            if not user:
+                return success_response(None, "OTP sent to your email.")
+
+        recipient_name = (wh['owner_name'] or wh['warehouse_name'] if wh else user['name']) or 'User'
+        recipient_id = wh['id'] if wh else user['id']
+        recipient_picture = None if wh else user['profile_image']
 
         # Escalating cooldown: only unexpired OTP rows count toward the resend
         # budget; an expired OTP is treated as a fresh request.
@@ -1555,17 +1572,22 @@ def google_link_resend():
 
         cursor.execute(
             "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at, resend_count, last_sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?, datetime('now'))",
-            (email, user['id'], google_id, user['name'], user['profile_image'], otp_hash, salt,
+            (email, recipient_id, google_id, recipient_name, recipient_picture, otp_hash, salt,
              f'+{settings["otp_expiry_seconds"]} seconds', new_count)
         )
         conn.commit()
 
         # Send the OTP over SMTP synchronously so a failed send reaches the user
         # instead of being swallowed by a background thread.
-        send_ok = send_individual_email(email, user['name'] or 'User',
-            "Login Verification OTP",
-            f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b><br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes."
-        )
+        if is_warehouse:
+            subject = "Verify Google Account Linking for Warehouse"
+            body = (f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b>"
+                    f"<br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes.")
+        else:
+            subject = "Login Verification OTP"
+            body = (f"Your OTP to sign in to JDLX Mobile: <b style='font-size:24px'>{otp}</b>"
+                    f"<br>It will expire in {int(settings['otp_expiry_seconds'] / 60)} minutes.")
+        send_ok = send_individual_email(email, recipient_name, subject, body)
         if not send_ok:
             # Don't leave an OTP row for a code that was never emailed.
             cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, google_id))

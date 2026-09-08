@@ -73,6 +73,7 @@ function WarehouseLogin() {
         if (errorCode === 'not_authorized') return 'Your Google account is not linked to an approved warehouse partner yet.'
         if (errorCode === 'session_expired') return 'Your warehouse session expired. Please sign in again.'
         if (errorCode === 'google_link_conflict') return 'This Google account is already linked to another account.'
+        if (errorCode === 'otp_send_failed') return 'Could not send the OTP email. Please check your email address and try again.'
         return ''
     }, [errorCode])
 
@@ -110,6 +111,27 @@ function WarehouseLogin() {
                 window.location.href = window.location.origin + '/warehouse/dashboard'
             } else {
                 toast.error(data.error || 'Verification failed')
+            }
+        } catch (err) {
+            toast.error('Network error. Please try again.')
+        } finally {
+            setLinkVerifying(false)
+        }
+    }
+
+    const handleLinkResend = async () => {
+        setLinkVerifying(true)
+        try {
+            const res = await fetch(`${API_ORIGIN}/api/auth/google/link-resend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: linkEmail, google_id: linkGoogleId })
+            })
+            const data = await res.json()
+            if (res.ok) {
+                toast.success('OTP resent. Check your email inbox (and spam folder).')
+            } else {
+                toast.error(data.error || 'Could not resend the OTP. Please wait and try again.')
             }
         } catch (err) {
             toast.error('Network error. Please try again.')
@@ -215,6 +237,19 @@ function WarehouseLogin() {
                             {linkVerifying ? <Loader2 size={16} style={{ color: '#000' }} /> : 'Verify & Link'}
                         </button>
                     </form>
+
+                    <button
+                        type="button"
+                        onClick={handleLinkResend}
+                        disabled={linkVerifying}
+                        style={{
+                            background: 'none', border: 'none', cursor: linkVerifying ? 'not-allowed' : 'pointer',
+                            color: '#5eead4', fontSize: '13px', fontWeight: 600, textAlign: 'center',
+                            marginTop: '12px', textDecoration: 'underline', fontFamily: "'Inter', sans-serif", opacity: linkVerifying ? 0.6 : 1,
+                        }}
+                    >
+                        Didn't get the OTP? Resend
+                    </button>
 
                     <p style={{ fontSize: '12px', color: '#64748b', marginTop: '20px', textAlign: 'center' }}>
                         By continuing, you agree to our Terms of Service and Privacy Policy.

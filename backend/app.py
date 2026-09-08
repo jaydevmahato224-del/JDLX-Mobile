@@ -2229,8 +2229,9 @@ def google_callback():
                 'weather_status': wh['weather_status'],
                 'service_radius_km': wh['service_radius_km'],
             }
+            encoded_user = quote(json.dumps(wh_user, separators=(',', ':')))
             cookie_settings = get_cookie_settings()
-            resp = redirect(f"{frontend_url}/warehouse/dashboard")
+            resp = redirect(f"{frontend_url}/warehouse/login?oauth_token={quote(wh_token)}&oauth_user={encoded_user}")
             resp.set_cookie('token', wh_token, **cookie_settings)
             return resp
 

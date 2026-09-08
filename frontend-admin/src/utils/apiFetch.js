@@ -18,8 +18,10 @@ export async function apiFetch(endpoint, options = {}) {
     url = `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
   }
   
+  const adminToken = localStorage.getItem('adminToken') || localStorage.getItem('admin_token')
   const defaultHeaders = {
     'Content-Type': 'application/json',
+    ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {}),
     ...options.headers,
   }
 

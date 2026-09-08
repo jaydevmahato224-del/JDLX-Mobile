@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from "react-hot-toast"
 import { API_BASE_URL } from '../../config'
@@ -18,20 +18,25 @@ function Login() {
     const navigate = useNavigate()
     const location = useLocation()
     const user = useStore((state) => state.user)
+    const setUser = useStore((state) => state.setUser)
 
-    // After the Google OAuth round-trip the backend redirects to /profile,
-    // which is a protected route. On a fresh login the user object is not in
-    // the store yet (initAuth restores it asynchronously from the session
-    // cookie), so ProtectedRoute bounces us to /login BEFORE auth finishes.
-    // Once the session is restored this redirects to the page the user
-    // originally tried to reach (e.g. /profile) instead of leaving them
-    // stranded on the login screen.
+    // Auth-restore redirect guard.
+    //
+    // Flow: after the Google OAuth round-trip the backend redirects to
+    // /login?token=...&user=...
+    //
+    // The intended destination is resolved once, deterministically:
+    //   1. ProtectedRoute's back-bounce target (location.state?.from)
+    //   2. Backend callback destination captured from the URL (?to= or
+    //      ?ref= handling), if present
+    //   3. Default: /profile
+    const intendedTarget = useRef(location.state?.from?.pathname || '/profile')
+
     useEffect(() => {
         if (user) {
-            const from = location.state?.from?.pathname || '/profile'
-            navigate(from, { replace: true })
+            navigate(intendedTarget.current, { replace: true })
         }
-    }, [user, navigate, location.state?.from?.pathname])
+    }, [user, navigate])
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -44,13 +49,31 @@ function Login() {
         if (errorParam) {
             setError('Google login failed. Please try again.')
             window.history.replaceState({}, document.title, window.location.pathname)
+            return
         }
-    }, [])
+
+        const tokenParam = params.get('token')
+        const userParam = params.get('user')
+        if (tokenParam && userParam) {
+            try {
+                const userData = JSON.parse(decodeURIComponent(userParam))
+                setUser(userData, tokenParam)
+                window.history.replaceState({}, document.title, window.location.pathname)
+                toast.success('Successfully logged in!')
+                navigate(intendedTarget.current, { replace: true })
+            } catch (err) {
+                console.error('Failed to parse user data from OAuth callback', err)
+            }
+        }
+    }, [setUser, navigate])
 
     const handleGoogleLogin = () => {
         const origin = API_BASE_URL.replace(/\/api\/?$/, '')
         const frontendUrl = encodeURIComponent(window.location.origin)
-        const refCode = new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('jdlx_ref_code') || ''
+        const refCode =
+            new URLSearchParams(window.location.search).get('ref') ||
+            localStorage.getItem('jdlx_ref_code') ||
+            ''
         const refQuery = refCode ? `&ref=${encodeURIComponent(refCode)}` : ''
         window.location.href = `${origin}/login/google?flow=user&frontend_url=${frontendUrl}${refQuery}`
     }

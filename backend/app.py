@@ -1386,7 +1386,7 @@ def google_auth():
         picture = idinfo.get('picture', '')
         user_data, jwt_token = process_google_user_login(google_id, email, name, picture, ip_address)
 
-        resp = jsonify({"user": user_data})
+        resp = jsonify({"user": user_data, "token": jwt_token})
         cookie_settings = get_cookie_settings()
         resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
@@ -2233,9 +2233,11 @@ def google_callback():
             resp.set_cookie('token', jwt_token, **cookie_settings)
             return resp
 
-        # Default: User Flow - redirect to profile after login
+        # Default: User Flow - redirect to login with token and user parameters so frontend can restore session instantly
+        encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
         cookie_settings = get_cookie_settings()
-        resp = redirect(f"{frontend_url}/profile")
+        target_url = f"{frontend_url}/login?token={quote(jwt_token)}&user={encoded_user}"
+        resp = redirect(target_url)
         resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
 

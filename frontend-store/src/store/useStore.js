@@ -163,15 +163,19 @@ export const useStore = create((set, get) => ({
             set({ _fetchCartInProgress: false });
         }
     },
-    setUser: (user) => {
+    setUser: (user, token = null) => {
         if (user) {
             localStorage.setItem('user', JSON.stringify(user));
+            if (token) {
+                localStorage.setItem('userToken', token);
+            }
             // Auto-fetch cart and wishlist after login
             set({ user });
             get().fetchCart();
             get().fetchWishlist();
         } else {
             localStorage.removeItem('user');
+            localStorage.removeItem('userToken');
             set({ user: null });
         }
     },
@@ -209,11 +213,13 @@ export const useStore = create((set, get) => ({
         }
         // Clear stale user data if auth failed
         localStorage.removeItem('user');
+        localStorage.removeItem('userToken');
         set({ user: null });
         return false;
     },
     logout: async () => {
         localStorage.removeItem('user');
+        localStorage.removeItem('userToken');
         localStorage.removeItem('cart');
         await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         set({ user: null, cart: [] });

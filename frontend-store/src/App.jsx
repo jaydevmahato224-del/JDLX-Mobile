@@ -231,7 +231,13 @@ const OrderSuccess = lazy(() => import('./pages/user/OrderSuccess'))
 function ProtectedRoute({ children }) {
   const user = useStore((state) => state.user)
   const location = useLocation()
-  if (!user) return <Navigate to="/login" state={{ from: location }} replace />
+  if (!user) {
+    const params = new URLSearchParams(location.search)
+    if (params.has('token') && params.has('user')) {
+      return <Navigate to={`/login${location.search}`} state={{ from: location }} replace />
+    }
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
   return children
 }
 

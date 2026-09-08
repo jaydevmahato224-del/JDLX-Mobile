@@ -1091,41 +1091,24 @@ def partner_auth_google_callback():
 
             # Check if warehouse has google_id linked
             wh_google_id = wh['google_id'] if 'google_id' in wh.keys() else None
-            if not wh_google_id:
-                # Generate OTP for linking verification
-                import random
-                import string
-                otp = ''.join(random.choices(string.digits, k=6))
-                salt = secrets.token_hex(8)
-                otp_hash = _hash_warehouse_otp(otp, salt)
-                
-                # Store in google_link_otps table (reuse for warehouse linking)
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at, last_sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'), datetime('now'))",
-                    (email, wh['id'], 'warehouse_' + str(wh['id']), wh['owner_name'] or wh['warehouse_name'], None, otp_hash, salt)
-                )
-                conn.commit()
+            google_id_val = user_info.get("sub") or user_info.get("id") or f"google_{wh['id']}"
 
-                # Send the OTP over SMTP SYNCHRONOUSLY and check the result — a
-                # background thread used to swallow failures, leaving an OTP row
-                # with no email delivered (user stuck on the OTP page forever).
-                send_ok = send_individual_email(
-                    email,
-                    wh['owner_name'] or wh['warehouse_name'] or 'Partner',
-                    "Verify Google Account Linking for Warehouse",
-                    f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>Expires in 10 minutes."
-                )
-                if not send_ok:
-                    # Don't leave an OTP row for a code that was never emailed.
-                    try:
-                        cursor.execute("DELETE FROM google_link_otps WHERE email = ? AND google_id = ?", (email, 'warehouse_' + str(wh['id'])))
-                        conn.commit()
-                    except Exception:
-                        pass
-                    return redirect(f"{warehouse_frontend}/warehouse/login?error=otp_send_failed&email={quote(email)}")
-
-                return redirect(f"{warehouse_frontend}/warehouse/login?link_required=true&email={quote(email)}&google_id=warehouse_{wh['id']}")
+            # Auto-link the verified Google account to the warehouse record if not set yet,
+            # since Google OAuth has already verified ownership of this email address.
+            if not wh_google_id or str(wh_google_id).startswith('warehouse_'):
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE warehouses SET google_id = ? WHERE id = ?", (google_id_val, wh['id']))
+                    conn.commit()
+                    # Re-fetch updated row
+                    wh = conn.execute(
+                        """SELECT w.*, ds.id AS store_id, ds.store_code
+                           FROM warehouses w
+                           LEFT JOIN dark_stores ds ON w.warehouse_name = ds.name
+                           WHERE w.id = ?""", (wh['id'],)
+                    ).fetchone()
+                except Exception as update_err:
+                    current_app.logger.warning(f"Failed to auto-link warehouse google_id: {update_err}")
 
             jwt_token = issue_warehouse_token(wh["id"], email, wh["warehouse_role"])
             user_obj = {

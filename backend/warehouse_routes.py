@@ -24,6 +24,8 @@ import logging
 import sqlite3
 import subprocess
 import traceback
+import hashlib
+import secrets
 from jwt_config import get_jwt_secret
 from auth.role_guard import ADMIN_ROLES, normalize_role
 from functools import wraps
@@ -82,6 +84,15 @@ def get_wh_cookie_settings():
         'secure': force_https,
         'samesite': 'Lax'
     }
+
+
+def _hash_warehouse_otp(otp, salt):
+    """Hash a warehouse Google-linking OTP.
+
+    Must stay identical to app._hash_admin_otp so google_link_verify can
+    compare the stored hash.
+    """
+    return hashlib.sha256(f"{salt}:{otp}".encode()).hexdigest()
 
 
 
@@ -1079,26 +1090,26 @@ def partner_auth_google_callback():
                 return redirect(f"{warehouse_frontend}/warehouse/login?error=not_authorized")
 
             # Check if warehouse has google_id linked
-            wh_google_id = wh.get('google_id') if 'google_id' in wh.keys() else None
+            wh_google_id = wh['google_id'] if 'google_id' in wh.keys() else None
             if not wh_google_id:
                 # Generate OTP for linking verification
                 import random
                 import string
                 otp = ''.join(random.choices(string.digits, k=6))
                 salt = secrets.token_hex(8)
-                otp_hash = _hash_admin_otp(otp, salt)
+                otp_hash = _hash_warehouse_otp(otp, salt)
                 
                 # Store in google_link_otps table (reuse for warehouse linking)
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO google_link_otps (email, user_id, google_id, name, picture, otp_hash, otp_salt, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))",
-                    (email, wh['id'], 'warehouse_' + str(wh['id']), wh.get('owner_name') or wh.get('warehouse_name'), None, otp_hash, salt)
+                    (email, wh['id'], 'warehouse_' + str(wh['id']), wh['owner_name'] or wh['warehouse_name'], None, otp_hash, salt)
                 )
                 conn.commit()
                 
                 # Send OTP via email
                 from threading import Thread
-                Thread(target=send_individual_email, args=(email, wh.get('owner_name') or wh.get('warehouse_name') or 'Partner',
+                Thread(target=send_individual_email, args=(email, wh['owner_name'] or wh['warehouse_name'] or 'Partner',
                     "Verify Google Account Linking for Warehouse",
                     f"Your OTP to link Google account: <b style='font-size:24px'>{otp}</b><br>Expires in 10 minutes."
                 )).start()
@@ -1125,7 +1136,11 @@ def partner_auth_google_callback():
             }
             encoded_user = quote(json.dumps(user_obj))
             cookie_settings = get_wh_cookie_settings()
-            resp = redirect(f"{warehouse_frontend}/warehouse/dashboard")
+            # Redirect to the login page with the session in query params — the
+            # warehouse frontend restores it from there (legacy oauth_token/
+            # oauth_user handling in WarehouseLogin), since the partner panel is
+            # Bearer-header based and can't read the HttpOnly cookie.
+            resp = redirect(f"{warehouse_frontend}/warehouse/login?oauth_token={quote(jwt_token)}&oauth_user={encoded_user}")
             resp.set_cookie('token', jwt_token, **cookie_settings)
             return resp
         finally:

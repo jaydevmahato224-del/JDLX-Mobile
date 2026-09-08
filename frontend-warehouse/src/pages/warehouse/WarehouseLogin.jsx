@@ -99,7 +99,14 @@ function WarehouseLogin() {
             const data = await res.json()
             if (res.ok && data.user) {
                 toast.success('Google account linked successfully!')
-                localStorage.setItem('token', data.user.token || '')
+                // Warehouse flow: link-verify returns the warehouse partner
+                // session ({ user, token }), not a customer session. Persist it
+                // under the warehouse keys so WarehouseRoute grants access.
+                const token = data.token || data.user?.token || ''
+                localStorage.setItem('warehouseToken', token)
+                localStorage.setItem('warehouse_token', token)
+                localStorage.setItem('warehouseUser', JSON.stringify(data.user))
+                useStore.getState().setWarehouseUser(data.user, token)
                 window.location.href = window.location.origin + '/warehouse/dashboard'
             } else {
                 toast.error(data.error || 'Verification failed')

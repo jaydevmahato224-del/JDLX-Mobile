@@ -48,13 +48,21 @@ export const useStore = create((set) => ({
         apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         set({ adminUser: null });
     },
-    setWarehouseUser: (warehouseUser) => {
+    setWarehouseUser: (warehouseUser, token = null) => {
         if (warehouseUser) {
             localStorage.setItem('warehouseUser', JSON.stringify(warehouseUser));
+            if (token) {
+                localStorage.setItem('warehouseToken', token);
+                localStorage.setItem('warehouse_token', token);
+            }
         } else {
             localStorage.removeItem('warehouseUser');
+            if (token === null) {
+                localStorage.removeItem('warehouseToken');
+                localStorage.removeItem('warehouse_token');
+            }
         }
-        set({ warehouseUser });
+        set({ warehouseUser, ...(token ? { warehouseToken: token } : {}) });
     },
     warehouseLogout: () => {
         // Clear both the partner (camelCase) and staff (snake_case) session

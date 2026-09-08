@@ -1431,6 +1431,49 @@ def google_link_verify():
             return error_response("Invalid OTP", 401)
         
         # Success: Link Google account
+        if str(google_id).startswith('warehouse_'):
+            # Warehouse Google-linking flow: persist the link on the warehouse
+            # record and complete the session as a warehouse partner, not a
+            # customer (users table).
+            from warehouse_routes import get_wh_cookie_settings as _wh_cookie
+            cursor.execute(
+                "UPDATE warehouses SET google_id = ? WHERE id = ?",
+                (google_id, row['user_id'])
+            )
+            cursor.execute("DELETE FROM google_link_otps WHERE id = ?", (row['id'],))
+            conn.commit()
+
+            wh = conn.execute(
+                """SELECT w.*, ds.id AS store_id, ds.store_code
+                   FROM warehouses w
+                   LEFT JOIN dark_stores ds ON w.warehouse_name = ds.name
+                   WHERE w.id = ?""", (row['user_id'],)
+            ).fetchone()
+            if not wh:
+                return error_response("Warehouse not found", 404)
+
+            jwt_token = issue_warehouse_token(wh["id"], email, wh["warehouse_role"])
+            user_obj = {
+                "id": wh["id"],
+                "store_id": wh["store_id"],
+                "partner_id": wh["partner_id"],
+                "warehouse_name": wh["warehouse_name"],
+                "owner_name": wh["owner_name"],
+                "email": wh["email"],
+                "warehouse_role": wh["warehouse_role"],
+                "role": wh["warehouse_role"],
+                "address": wh["address"],
+                "pincode": wh["pincode"],
+                "warehouse_capacity": wh["warehouse_capacity"],
+                "operations_status": wh["operations_status"],
+                "weather_status": wh["weather_status"],
+                "service_radius_km": wh["service_radius_km"],
+                "profile_kyc_status": wh["profile_kyc_status"],
+            }
+            resp = jsonify({"user": user_obj, "token": jwt_token})
+            resp.set_cookie('token', jwt_token, **_wh_cookie())
+            return resp
+
         cursor.execute(
             "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
             (google_id, row['picture'], row['name'], row['user_id'])

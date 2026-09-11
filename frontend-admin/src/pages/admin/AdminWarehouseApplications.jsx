@@ -201,7 +201,7 @@ function AdminWarehouseApplications() {
             setStats(null)
             setPerformance(null)
         }
-    }, [selectedId, adminToken])
+    }, [selectedId])
 
     const filteredApplications = useMemo(() => {
         return applications.filter((application) => {

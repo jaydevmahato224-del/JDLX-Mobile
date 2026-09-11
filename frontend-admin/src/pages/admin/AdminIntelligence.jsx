@@ -194,7 +194,11 @@ function AdminIntelligence() {
                             </div>
 
                             <div className="mt-4 pt-4 border-t border-gray-100">
-                                <button className="w-full py-3 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-gray-800 transition-colors flex items-center justify-center gap-2">
+                                <button
+                                    onClick={() => navigate('/admin/restocking')}
+                                    className="w-full py-3 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                                    title="Open the Restocking workbench to act on these directives"
+                                >
                                     <PackageSearch className="w-4 h-4" /> Forward Directives to Replenishment
                                 </button>
                             </div>

@@ -254,7 +254,7 @@ function App() {
               </AdminRoute>
             } />
             <Route path="refunds" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'support_admin']}>
                 <AdminRefunds />
               </AdminRoute>
             } />
@@ -269,7 +269,7 @@ function App() {
               </AdminRoute>
             } />
             <Route path="activity-logs" element={
-              <AdminRoute allowedRoles={['super_admin']}>
+              <AdminRoute allowedRoles={['super_admin', 'admin']}>
                 <AdminActivityLogs />
               </AdminRoute>
             } />
@@ -299,7 +299,7 @@ function App() {
               </AdminRoute>
             } />
             <Route path="notifications" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'support_admin']}>
                 <AdminNotifications />
               </AdminRoute>
             } />
@@ -326,11 +326,6 @@ function App() {
             <Route path="analytics" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
                 <Analytics />
-              </AdminRoute>
-            } />
-            <Route path="intelligence" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin']}>
-                <AdminIntelligence />
               </AdminRoute>
             } />
             <Route path="complaints" element={

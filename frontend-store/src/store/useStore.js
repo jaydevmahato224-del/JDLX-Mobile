@@ -46,6 +46,12 @@ const safeParse = (key) => {
 
 export const useStore = create((set, get) => ({
     user: safeParse('user'),
+    // Restored: several components (Cart, Wishlist, Home, useAppReview, …)
+    // select `state.token` to tell a logged-in user apart from a guest. The
+    // field went missing in the HttpOnly-cookie refactor, which made every
+    // `token` check evaluate to undefined — Cart showed the login modal for
+    // logged-in users and Wishlist redirected everyone to /login.
+    token: localStorage.getItem('userToken') || null,
     adminUser: safeParse('adminUser'),
     adminToken: localStorage.getItem('adminToken') || null,
     warehouseUser: safeParse('warehouseUser'),
@@ -127,7 +133,11 @@ export const useStore = create((set, get) => ({
                         existsOnServer.device_model = localItem.device_model || existsOnServer.device_model;
                         existsOnServer.fitting = localItem.fitting || existsOnServer.fitting;
                         if (localItem.qty !== existsOnServer.qty) {
-                            existsOnServer.qty = Math.max(localItem.qty, existsOnServer.qty);
+                            // Keep the higher of local/server qty (existing merge
+                            // behavior) but never exceed the available stock, so
+                            // a stale local cart can't inflate quantity past
+                            // what's actually in inventory.
+                            existsOnServer.qty = Math.min(Math.max(localItem.qty, existsOnServer.qty), Math.max(1, existsOnServer.stock));
                             itemsToSync.push({ item: existsOnServer, action: 'update' });
                         }
                     }
@@ -170,13 +180,13 @@ export const useStore = create((set, get) => ({
                 localStorage.setItem('userToken', token);
             }
             // Auto-fetch cart and wishlist after login
-            set({ user });
+            set({ user, token: token || localStorage.getItem('userToken') });
             get().fetchCart();
             get().fetchWishlist();
         } else {
             localStorage.removeItem('user');
             localStorage.removeItem('userToken');
-            set({ user: null });
+            set({ user: null, token: null });
         }
     },
     initAuth: async () => {
@@ -214,7 +224,7 @@ export const useStore = create((set, get) => ({
         // Clear stale user data if auth failed
         localStorage.removeItem('user');
         localStorage.removeItem('userToken');
-        set({ user: null });
+        set({ user: null, token: null });
         return false;
     },
     logout: async () => {
@@ -222,7 +232,7 @@ export const useStore = create((set, get) => ({
         localStorage.removeItem('userToken');
         localStorage.removeItem('cart');
         await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        set({ user: null, cart: [] });
+        set({ user: null, cart: [], token: null });
     },
     setAdminUser: (adminUser, adminToken) => {
         if (adminUser && adminToken) {
@@ -362,7 +372,11 @@ export const useStore = create((set, get) => ({
             if (!item) return;
 
             const maxQty = getAvailableStock(item);
-            finalQty = Math.max(1, Math.min(requestedQty, maxQty));
+            // In-stock items are clamped to [1, stock]. When an item has 0
+            // available stock, keep its current quantity instead of forcing it
+            // to 1 — the cart renders these lines as "sold out/unavailable"
+            // and shouldn't silently rewrite the user's quantity.
+            finalQty = maxQty > 0 ? Math.max(1, Math.min(requestedQty, maxQty)) : item.qty;
 
             // Update local state IMMEDIATELY for responsiveness
             set((state) => {
@@ -605,6 +619,13 @@ export const useStore = create((set, get) => ({
     },
     toggleWishlist: async (product) => {
         const state = get();
+        
+        // Guests can't persist a wishlist server-side; without this guard the
+        // API call 401s silently while the UI still toasts "Added to wishlist".
+        if (!state.user) {
+            toast.error('Please login to save favorites');
+            return;
+        }
         
         const isInWishlist = state.wishlist.some(item => String(item.id) === String(product.id));
         

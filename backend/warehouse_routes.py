@@ -1740,13 +1740,66 @@ def warehouse_analytics():
             (wh_id,),
         ).fetchone()["n"]
 
-        return jsonify({
+        # --- Real operational metrics (additive; original fields preserved) ---
+        totals = conn.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN assignment_status NOT IN ('assigned', 'rejected')
+                            THEN 1 ELSE 0 END) AS accepted,
+                   SUM(CASE WHEN assignment_status = 'rejected'
+                            THEN 1 ELSE 0 END) AS rejected,
+                   SUM(CASE WHEN assignment_status = 'packed'
+                            THEN 1 ELSE 0 END) AS packed
+            FROM warehouse_order_assignments
+            WHERE warehouse_id = ?
+            """,
+            (wh_id,),
+        ).fetchone()
+
+        stock = conn.execute(
+            """
+            SELECT COUNT(*) AS total_skus,
+                   SUM(CASE WHEN stock_quantity > 0 THEN 1 ELSE 0 END) AS active_skus,
+                   SUM(CASE WHEN stock_quantity <= 0 THEN 1 ELSE 0 END) AS stocked_out_skus
+            FROM warehouse_inventory
+            WHERE warehouse_id = ?
+            """,
+            (wh_id,),
+        ).fetchone()
+
+        wh_row = conn.execute(
+            "SELECT warehouse_capacity FROM warehouses WHERE id = ?",
+            (wh_id,),
+        ).fetchone()
+
+        total_skus = stock["total_skus"] or 0
+        active_skus = stock["active_skus"] or 0
+        warehouse_capacity = (wh_row["warehouse_capacity"] if wh_row else None) or None
+
+        response = {
             "status_breakdown": {
                 row["assignment_status"]: row["count"]
                 for row in status_rows
             },
             "low_stock_skus": low_stock,
-        }), 200
+            "total_assignments": totals["total"] or 0,
+            "accepted_assignments": totals["accepted"] or 0,
+            "rejected_assignments": totals["rejected"] or 0,
+            "pending_dispatch": totals["packed"] or 0,
+            "stock_health": {
+                "total_skus": total_skus,
+                "active_skus": active_skus,
+                "stocked_out_skus": stock["stocked_out_skus"] or 0,
+                "low_stock_skus": low_stock,
+            },
+        }
+        if warehouse_capacity and warehouse_capacity > 0:
+            response["capacity"] = {
+                "warehouse_capacity": warehouse_capacity,
+                "active_skus": active_skus,
+                "utilization_pct": round(min(100.0, (active_skus / warehouse_capacity) * 100.0), 1),
+            }
+        return jsonify(response), 200
     except Exception as e:
         current_app.logger.error(f"ERROR in warehouse_analytics: {str(e)}", exc_info=True)
         return error_response(str(e), 500)
@@ -2014,6 +2067,7 @@ def get_warehouse_orders():
             SELECT woa.id, woa.order_id, o.order_number, woa.assignment_status, woa.created_at,
                    o.total_amount, o.delivery_address, o.customer_phone as phone, o.delivery_type,
                    o.order_status, o.cancellation_reason,
+                   s.awb_code, s.courier_name, s.tracking_url,
                    GROUP_CONCAT(
                        p.name || ' (x' || oi.quantity || ')' ||
                        CASE
@@ -2034,6 +2088,7 @@ def get_warehouse_orders():
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN products p ON p.id = oi.product_id
             LEFT JOIN categories c ON c.id = p.category_id
+            LEFT JOIN shipments s ON s.order_id = woa.order_id
             WHERE woa.warehouse_id = ?
         """
         params = [wh_id]
@@ -3402,6 +3457,246 @@ def warehouse_update_order_status(assignment_id):
             "assignment_status": new_status,
             "order_status": mapped_order_status,
         }), 200
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/orders/<int:assignment_id>/dispatch", methods=["PATCH"])
+@require_warehouse_auth
+def warehouse_dispatch_to_shiprocket(assignment_id):
+    """Pack-ready handoff to Shiprocket.
+
+    This is the trigger the warehouse manager fires after packing an order:
+    it creates the Shiprocket order, assigns the best courier, generates the
+    AWB, stores the customer tracking URL and moves the assignment to
+    'dispatched' (order -> SHIPPED). The courier partner now sees the package
+    in Shiprocket and schedules the pickup from the warehouse.
+
+    Idempotent: calling it again for an already-dispatched assignment returns
+    the stored AWB details instead of creating a duplicate Shiprocket order.
+    """
+    import requests
+    from shiprocket_client import SHIPROCKET_API, sr_headers
+
+    wh_id = _get_current_warehouse_id()
+    data = request.get_json(silent=True) or {}
+    try:
+        weight_kg = float(data.get("weight_kg") or 0.5)
+    except (TypeError, ValueError):
+        weight_kg = 0.5
+    if weight_kg <= 0:
+        weight_kg = 0.5
+
+    conn = get_db()
+    try:
+        assignment = conn.execute(
+            """SELECT id, order_id, assignment_status
+               FROM warehouse_order_assignments
+               WHERE id = ? AND warehouse_id = ?""",
+            (assignment_id, wh_id),
+        ).fetchone()
+        if not assignment:
+            return error_response("Warehouse order not found", 404)
+
+        current_status = assignment["assignment_status"]
+        if current_status not in ("packed", "dispatched"):
+            return error_response("Order must be packed before Shiprocket dispatch", 400)
+
+        order = conn.execute(
+            """SELECT o.id, o.order_number, o.total_amount, o.delivery_address,
+                      o.customer_name, COALESCE(o.customer_phone, o.phone) as phone,
+                      o.payment_type, o.order_status,
+                      u.name as user_name, u.email as user_email
+               FROM orders o
+               LEFT JOIN users u ON u.id = o.user_id
+               WHERE o.id = ?""",
+            (assignment["order_id"],),
+        ).fetchone()
+        if not order:
+            return error_response("Order not found", 404)
+        if (order["order_status"] or "").upper() == "CANCELLED":
+            return error_response("Cancelled orders cannot be dispatched", 400)
+
+        item = conn.execute(
+            """SELECT p.name, oi.quantity, oi.price
+               FROM order_items oi
+               JOIN products p ON p.id = oi.product_id
+               WHERE oi.order_id = ?
+               LIMIT 1""",
+            (assignment["order_id"],),
+        ).fetchone()
+        if not item:
+            return error_response("Order has no items", 400)
+
+        headers = sr_headers()
+        if not headers.get("Authorization"):
+            return error_response("Shiprocket is not configured. Please contact the platform admin.", 503)
+
+        # 1. Create the Shiprocket order (skipped when it already exists)
+        shipment = conn.execute(
+            """SELECT id, shiprocket_order_id, shiprocket_shipment_id, awb_code,
+                      courier_name, tracking_url
+               FROM shipments WHERE order_id = ?""",
+            (assignment["order_id"],),
+        ).fetchone()
+
+        sr_order_id = shipment["shiprocket_order_id"] if shipment else None
+        sr_shipment_id = shipment["shiprocket_shipment_id"] if shipment else None
+
+        if not sr_shipment_id:
+            cod_row = conn.execute(
+                "SELECT value FROM system_settings WHERE key = 'cod_enabled_shiprocket'"
+            ).fetchone()
+            cod_allowed = bool(cod_row) and str(cod_row["value"]).lower() == "true"
+            payment_method = (
+                "COD"
+                if (order["payment_type"] or "").upper() == "COD" and cod_allowed
+                else "Prepaid"
+            )
+
+            payload = {
+                "order_id": f"JDLX-{assignment['order_id']}",
+                "order_date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "pickup_location": "warehouse",
+                "channel_id": os.environ.get("SHIPROCKET_CHANNEL_ID"),
+                "billing_customer_name": order["customer_name"] or order["user_name"] or "Valued Customer",
+                "billing_last_name": "",
+                "billing_address": order["delivery_address"] or "",
+                "billing_city": "Unknown",
+                "billing_pincode": "",
+                "billing_state": "Unknown",
+                "billing_country": "India",
+                "billing_email": order["user_email"] or "",
+                "billing_phone": order["phone"] or "",
+                "shipping_is_billing": True,
+                "order_items": [{
+                    "name": item["name"],
+                    "sku": f"SKU-{assignment['order_id']}",
+                    "units": item["quantity"],
+                    "selling_price": item["price"],
+                }],
+                "payment_method": payment_method,
+                "sub_total": float(order["total_amount"] or 0),
+                "length": 10,
+                "breadth": 10,
+                "height": 5,
+                "weight": weight_kg,
+            }
+            if sr_order_id:
+                payload["sr_order_id"] = sr_order_id
+
+            res = requests.post(
+                f"{SHIPROCKET_API}/orders/create/adhoc",
+                json=payload, headers=headers, timeout=30,
+            )
+            sr_data = res.json()
+            if res.status_code not in (200, 201):
+                return error_response(sr_data.get("message", "Shiprocket order creation failed"), 502)
+            sr_order_id = sr_data.get("order_id") or sr_order_id
+            sr_shipment_id = sr_data.get("shipment_id") or sr_shipment_id
+            if not sr_shipment_id:
+                return error_response("Shiprocket did not return a shipment id", 502)
+
+            if shipment:
+                conn.execute(
+                    """UPDATE shipments
+                       SET shiprocket_order_id = ?, shiprocket_shipment_id = ?,
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ?""",
+                    (sr_order_id, sr_shipment_id, shipment["id"]),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO shipments (order_id, shiprocket_order_id, shiprocket_shipment_id, status)
+                       VALUES (?, ?, ?, 'created')""",
+                    (assignment["order_id"], sr_order_id, sr_shipment_id),
+                )
+            conn.commit()
+
+        # 2. Assign best courier + generate AWB (skipped when AWB already exists)
+        shipment = conn.execute(
+            """SELECT id, shiprocket_order_id, shiprocket_shipment_id, awb_code,
+                      courier_name, tracking_url
+               FROM shipments WHERE order_id = ?""",
+            (assignment["order_id"],),
+        ).fetchone()
+
+        awb_code = shipment["awb_code"]
+        courier_name = shipment["courier_name"]
+        tracking_url = shipment["tracking_url"]
+
+        if not awb_code:
+            ser = requests.get(
+                f"{SHIPROCKET_API}/courier/serviceability/",
+                params={"shipment_id": sr_shipment_id},
+                headers=headers, timeout=30,
+            )
+            serviceability = ser.json()
+            couriers = (serviceability.get("data") or {}).get("available_courier_companies") or []
+            if serviceability.get("status") != 200 or not couriers:
+                return error_response("No courier available for this route. Please try again later.", 502)
+
+            best_courier = couriers[0]
+            assign_res = requests.post(
+                f"{SHIPROCKET_API}/shipments/assign/courier",
+                json={"shipment_id": sr_shipment_id, "courier_id": best_courier["courier_company_id"]},
+                headers=headers, timeout=30,
+            )
+            assign_data = assign_res.json()
+            if assign_data.get("status") != 200:
+                return error_response(assign_data.get("message") or "Courier assignment failed", 502)
+
+            awb_res = requests.post(
+                f"{SHIPROCKET_API}/courier/generate/awb",
+                json={"shipment_id": sr_shipment_id},
+                headers=headers, timeout=30,
+            )
+            awb_data = awb_res.json()
+            awb_code = (awb_data.get("response") or {}).get("data", {}).get("awb_code")
+            if not awb_code:
+                return error_response("AWB generation failed", 502)
+
+            tracking_url = (
+                (awb_data.get("response") or {}).get("data", {}).get("courier_tracking_url")
+                or f"https://shiprocket.co/tracking/{awb_code}"
+            )
+            courier_name = best_courier.get("courier_name") or courier_name
+
+            conn.execute(
+                """UPDATE shipments
+                   SET awb_code = ?, courier_name = ?, courier_id = ?, status = 'assigned',
+                       tracking_url = COALESCE(?, tracking_url), updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                (awb_code, courier_name, best_courier["courier_company_id"], tracking_url, shipment["id"]),
+            )
+            conn.commit()
+
+        # 3. Move the assignment to dispatched (same side effects as the
+        #    status PATCH endpoint: order -> SHIPPED + shipped_at).
+        if current_status == "packed":
+            conn.execute(
+                "UPDATE warehouse_order_assignments SET assignment_status = 'dispatched' WHERE id = ?",
+                (assignment_id,),
+            )
+            conn.execute(
+                """UPDATE orders
+                   SET order_status = 'SHIPPED', shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)
+                   WHERE id = ?""",
+                (assignment["order_id"],),
+            )
+        conn.commit()
+
+        return success_response({
+            "assignment_id": assignment_id,
+            "assignment_status": "dispatched" if current_status == "packed" else current_status,
+            "shiprocket_order_id": sr_order_id,
+            "awb_code": awb_code,
+            "courier_name": courier_name,
+            "tracking_url": tracking_url or (f"https://shiprocket.co/tracking/{awb_code}" if awb_code else None),
+        }, "Package handed off to Shiprocket. The courier will schedule the pickup.")
+    except Exception as e:
+        current_app.logger.error(f"ERROR in warehouse_dispatch_to_shiprocket: {str(e)}", exc_info=True)
+        return error_response(str(e), 500)
     finally:
         conn.close()
 

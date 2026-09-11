@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, RefreshCcw, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
@@ -14,7 +15,18 @@ const fetchRequests = async () => {
         try {
             const res = await apiFetch('/admin/refund-requests');
             const data = await res.json();
-            if (res.ok) setRequests(data);
+            if (res.ok) {
+                // Backend (admin_db.py blueprint) wraps lists in success_response:
+                // { success, data, message }. Normalize so requests is always an array.
+                let list = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+                // Status casing is mixed in the DB (user submit writes 'Pending',
+                // admin actions write 'APPROVED') — normalize for the UI gates,
+                // keep the original value for display.
+                list = list.map(r => ({ ...r, _status: String(r.status || '').toUpperCase() }));
+                setRequests(list);
+            } else {
+                toast.error(data?.message || "Failed to load refund requests");
+            }
         } catch (error) {
             console.error("Failed to fetch refund requests:", error);
         } finally {
@@ -27,20 +39,33 @@ const fetchRequests = async () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: fetch on mount only
     }, []);
 
+    // Backend PATCH /admin/refund/<id> (app.py) validates the UPPERCASE enum
+    // ['APPROVED', 'REJECTED', 'PROCESSED'] and drives wallet credit + customer
+    // notifications off it. Map the card's Title-case status to that enum so
+    // actions don't fail with "Invalid status".
+    const STATUS_TO_API = { APPROVED: 'APPROVED', PROCESSED: 'PROCESSED', REJECTED: 'REJECTED' };
+
     const handleAction = async (requestId, status) => {
         try {
             const res = await apiFetch(`/admin/refund/${requestId}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ status })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: STATUS_TO_API[status] || status })
             });
-            if (res.ok) fetchRequests();
+            if (res.ok) {
+                toast.success(status === 'APPROVED' ? "Refund approved" : status === 'PROCESSED' ? "Refund processed — wallet credited" : "Refund rejected");
+                fetchRequests();
+            } else {
+                const errData = await res.json().catch(() => null);
+                toast.error(errData?.message || `Failed to ${status.toLowerCase()} refund`);
+            }
         } catch (error) {
             console.error(`Failed to ${status} refund:`, error);
         }
     };
 
     const getStatusColor = (status) => {
-        switch (status) {
+        switch (String(status || '').toUpperCase()) {
             case 'PENDING': return 'bg-yellow-100 text-yellow-700';
             case 'APPROVED': return 'bg-blue-100 text-blue-700';
             case 'PROCESSED': return 'bg-green-100 text-green-700';
@@ -82,8 +107,8 @@ const fetchRequests = async () => {
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-800">Order #{req.order_id}</h3>
                                 <div className="flex items-center gap-4 text-sm">
-                                    <p className="text-gray-600">Customer: <span className="font-bold text-gray-800">{req.user_name}</span></p>
-                                    <p className="text-gray-600">Amount: <span className="font-bold text-primary">₹{req.total_amount}</span></p>
+                                    <p className="text-gray-600">Customer: <span className="font-bold text-gray-800">{req.user_name || req.customer_name || '—'}</span></p>
+                                    <p className="text-gray-600">Amount: <span className="font-bold text-primary">₹{req.total_amount ?? req.order_amount ?? '—'}</span></p>
                                 </div>
                                 <div className="bg-gray-50 p-3 rounded-xl">
                                     <p className="text-xs text-gray-500 font-bold uppercase mb-1">Reason:</p>
@@ -92,7 +117,7 @@ const fetchRequests = async () => {
                             </div>
 
                             <div className="flex md:flex-col justify-end gap-2 shrink-0">
-                                {req.status === 'PENDING' && (
+                                {req._status === 'PENDING' && (
                                     <>
                                         <button
                                             onClick={() => handleAction(req.id, 'APPROVED')}
@@ -108,7 +133,7 @@ const fetchRequests = async () => {
                                         </button>
                                     </>
                                 )}
-                                {req.status === 'APPROVED' && (
+                                {req._status === 'APPROVED' && (
                                     <button
                                         onClick={() => handleAction(req.id, 'PROCESSED')}
                                         className="flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-bold hover:bg-green-600 transition-colors"

@@ -399,8 +399,8 @@ function WarehouseRequest() {
                         </h1>
                     </div>
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        <Link to="/warehouse/request-delivery" style={{ padding: '10px 18px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.2)', borderRadius: '12px', color: '#14b8a6', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
-                            Join as Delivery Partner
+                        <Link to="/warehouse/request-delivery" title="Delivery partner onboarding is temporarily closed" style={{ padding: '10px 18px', background: 'rgba(20,184,166,0.1)', border: '1px solid rgba(20,184,166,0.2)', borderRadius: '12px', color: '#14b8a6', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
+                            Join as Delivery Partner (Temporarily Closed)
                         </Link>
                         <Link to="/" style={{ padding: '10px 18px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#cbd5e1', textDecoration: 'none', fontSize: '13px', fontWeight: 600 }}>
                             Back to login

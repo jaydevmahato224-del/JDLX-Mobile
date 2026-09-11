@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Server, Play, Square, RefreshCw, AlertCircle, CheckCircle2, Activity, ShieldCheck, Key, Mail, Lock, X } from 'lucide-react';
 
-const BRIDGE_URL = 'http://localhost:9999/api';
+// System bridge runs on the internal network (localhost:9999) — configurable per
+// environment so production builds don't hardcode a loopback URL.
+const BRIDGE_URL = import.meta.env.VITE_SYSTEM_BRIDGE_URL || 'http://localhost:9999/api';
 
 const AdminServerControl = () => {
     const [services, setServices] = useState(null);
+    const [bridgeError, setBridgeError] = useState(null);
     const [, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
     const [, setError] = useState(null);
@@ -70,10 +73,12 @@ const AdminServerControl = () => {
             if (!res.ok) throw new Error('Bridge unreachable');
             const data = await res.json();
             setServices(data);
+            setBridgeError(null);
             setError(null);
             setIsVerified(true);
             setShowOTP(false);
         } catch {
+            setBridgeError('System Bridge is offline.');
             setError('System Bridge is offline.');
         } finally {
             setLoading(false);
@@ -153,10 +158,22 @@ const AdminServerControl = () => {
         };
     }, [isVerified]);
 
-    return (
-        <div className="max-w-6xl mx-auto p-6 space-y-8">
-            {/* OTP Modal Overlay */}
-            {showOTP && (
+    return (            <div className="max-w-6xl mx-auto p-6 space-y-8">
+                {/* Offline notice: surface failures instead of silently rendering an empty panel */}
+                {bridgeError && (
+                    <div className="flex items-start gap-4 p-6 rounded-2xl bg-amber-50 border border-amber-200">
+                        <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <h3 className="font-black text-amber-900 uppercase tracking-widest text-sm">System Bridge Offline</h3>
+                            <p className="text-sm text-amber-800 mt-1 font-medium">
+                                Server control service se connect nahi ho paya. Yeh feature sirf internal network par kaam karta hai — production/server par yeh page use nahi hota.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* OTP Modal Overlay */}
+                {showOTP && (
                 <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="bg-white rounded-[3rem] p-10 max-w-md w-full shadow-2xl space-y-8 border border-gray-100 relative">
                         {/* Close/Back Button */}

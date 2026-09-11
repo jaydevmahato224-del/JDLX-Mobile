@@ -31,6 +31,7 @@ back to orders.dark_store_id / store_id) receives the settlement.
 import os
 import sys
 from datetime import datetime, timedelta
+from re import match as re_match
 
 # Add parent directory to path so `from database import get_db` works
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -432,9 +433,12 @@ def request_vendor_payout(warehouse_id, amount, conn=None):
             conn.close()
 
 
-def process_vendor_payout(payout_id, decision, admin_note=None, conn=None):
+def process_vendor_payout(payout_id, decision, admin_note=None, conn=None, transaction_ref=None):
     """Admin action on a payout request. decision: 'paid' or 'rejected'.
-    Rejection refunds the held amount back to the wallet."""
+    Rejection refunds the held amount back to the wallet.
+    Marking a payout 'paid' requires a transaction_ref (UTR / bank / UPI ref)
+    so every money movement has a verifiable proof of transfer.
+    """
     conn, owns = _open(conn)
     try:
         cursor = conn.cursor()
@@ -451,6 +455,15 @@ def process_vendor_payout(payout_id, decision, admin_note=None, conn=None):
         amount = _safe_float(_row_get(row, "amount", 0))
 
         if decision == "paid":
+            # UTR format check: UPI-ish ref (alphanumerics, typical 6-30 chars).
+            # This is a lightweight format gate; financial reconciliation is the
+            # the payer's responsibility before approving the payout.
+            ref = (transaction_ref or '').strip()
+            if not ref:
+                return False, "Transaction reference (UTR/UPI/bank ref) is required to mark a payout as paid"
+            import re as _re
+            if not _re.match(r'^[A-Za-z0-9]{6,12}$', ref):
+                return False, "Transaction reference must be 6-12 alphanumeric characters"
             new_status = "paid"
         elif decision == "rejected":
             new_status = "rejected"
@@ -459,9 +472,9 @@ def process_vendor_payout(payout_id, decision, admin_note=None, conn=None):
             return False, "Invalid decision"
 
         cursor.execute(
-            "UPDATE vendor_payouts SET status = ?, admin_note = ?, processed_at = CURRENT_TIMESTAMP, "
-            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (new_status, admin_note, payout_id),
+            "UPDATE vendor_payouts SET status = ?, admin_note = ?, transaction_ref = ?, "
+            "processed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_status, admin_note, (str(transaction_ref).strip() if transaction_ref else None), payout_id),
         )
         conn.commit()
         return True, f"Payout {new_status}"

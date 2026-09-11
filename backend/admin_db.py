@@ -2,9 +2,22 @@ from flask import Blueprint, request, jsonify
 from database import get_db
 from auth.role_guard import require_super_admin, require_admin
 from utils.response_utils import success_response, error_response
+from utils.activity_logger import log_admin_action
+import re
 import sqlite3
 
 admin_db_bp = Blueprint('admin_db', __name__)
+
+_SQL_IDENTIFIER_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+
+def _validate_column_names(data):
+    """Column keys are interpolated into SQL — enforce strict identifier format."""
+    for key in data.keys():
+        if not isinstance(key, str) or not _SQL_IDENTIFIER_RE.match(key):
+            return False
+    return True
+
 
 @admin_db_bp.route('/api/admin/complaints', methods=['GET'])
 @require_admin()
@@ -266,60 +279,21 @@ def admin_get_all_refunds():
 @admin_db_bp.route('/api/admin/refund-requests/<int:request_id>', methods=['PATCH'])
 @require_admin()
 def admin_update_refund(request_id):
-    data = request.get_json(silent=True) or {}
-    status = data.get('status')
-    refund_amount = data.get('refund_amount')
-    admin_notes = data.get('admin_notes')
-    resolution = data.get('resolution')
+    """RETIRED endpoint.
 
-    allowed_statuses = ['Pending', 'Approved', 'Rejected', 'Processing', 'Completed']
-    
-    conn = get_db()
-    try:
-        # Check if request exists
-        refund = conn.execute("SELECT id FROM refund_requests WHERE id = ?", (request_id,)).fetchone()
-        if not refund:
-            return error_response("Refund request not found", 404)
+    This route used to update refund rows directly WITHOUT the money side-effects
+    (wallet credit, customer notifications, referral settlement) that the canonical
+    endpoint performs. To guarantee refunds always go through the full business
+    flow, this path now refuses the mutation and points callers at the canonical
+    endpoint (app.py: PATCH /api/admin/refund/<id>, UPPERCASE status enum).
+    """
+    return error_response(
+        "This refund endpoint is retired. Use PATCH /api/admin/refund/<id> "
+        "with status in ['APPROVED', 'REJECTED', 'PROCESSED'] so wallet credit, "
+        "notifications and referral settlement are applied.",
+        410,
+    )
 
-        updates = ["updated_at = CURRENT_TIMESTAMP"]
-        params = []
-
-        if status:
-            if status not in allowed_statuses:
-                return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
-            updates.append("status = ?")
-            params.append(status)
-        
-        if refund_amount is not None:
-            try:
-                amt = float(refund_amount)
-                if amt < 0: raise ValueError()
-                updates.append("refund_amount = ?")
-                params.append(amt)
-            except ValueError:
-                return error_response("Invalid refund amount", 400)
-            
-        if admin_notes is not None:
-            updates.append("admin_notes = ?")
-            params.append(admin_notes)
-            
-        if resolution is not None:
-            updates.append("resolution = ?")
-            params.append(resolution)
-
-        params.append(request_id)
-        query = f"UPDATE refund_requests SET {', '.join(updates)} WHERE id = ?"
-        
-        conn.execute(query, params)
-        conn.commit()
-
-        updated_row = conn.execute("SELECT * FROM refund_requests WHERE id = ?", (request_id,)).fetchone()
-        return success_response(dict(updated_row), "Refund request updated successfully")
-
-    except Exception as e:
-        return error_response(str(e))
-    finally:
-        conn.close()
 
 @admin_db_bp.route('/api/admin/refund-requests/summary', methods=['GET'])
 @require_admin()
@@ -403,6 +377,8 @@ def insert_row(table_name):
     data = request.json
     if not data:
         return error_response("No data provided")
+    if not _validate_column_names(data):
+        return error_response("Invalid column name")
 
     columns = ", ".join(data.keys())
     placeholders = ", ".join(["?" for _ in data])
@@ -428,6 +404,8 @@ def update_row(table_name, row_id):
     data = request.json
     if not data:
         return error_response("No data provided")
+    if not _validate_column_names(data):
+        return error_response("Invalid column name")
 
     # Assuming 'id' is the primary key. In a real advanced tool, we should fetch PK from schema.
     # But for this project, most tables have 'id'.
@@ -478,11 +456,29 @@ def execute_query():
         cursor.execute(query)
         if query.strip().upper().startswith("SELECT"):
             rows = [dict(row) for row in cursor.fetchall()]
-            return success_response(rows)
+            result = success_response(rows)
         else:
             conn.commit()
-            return success_response(None, "Query executed successfully")
+            result = success_response(None, "Query executed successfully")
+        # Audit trail: this is the most powerful endpoint in the system — every
+        # execution (read or write) must be attributable to an admin account.
+        try:
+            admin_user = getattr(request, 'user', None) or {}
+            log_admin_action(
+                admin_user.get('user_id'),
+                f"db_query_{query.strip().split(None, 1)[0].lower() if query.strip() else 'unknown'}",
+                "database",
+                None,
+            )
+        except Exception:
+            pass
+        return result
     except Exception as e:
+        try:
+            admin_user = getattr(request, 'user', None) or {}
+            log_admin_action(admin_user.get('user_id'), "db_query_failed", "database", None)
+        except Exception:
+            pass
         return error_response(str(e))
     finally:
         conn.close()

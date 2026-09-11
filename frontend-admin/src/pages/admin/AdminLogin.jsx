@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
-import { API_BASE_URL } from '../../config'
+import { API_BASE_URL, STORE_FRONTEND_URL } from '../../config'
 import adminLogo from '../../assets/admin-logo.svg'
 
 function AdminLogin() {
@@ -96,9 +96,7 @@ function AdminLogin() {
                 <div className="text-center">
                     <button
                         onClick={() => {
-                            const protocol = window.location.protocol;
-                            const hostname = window.location.hostname;
-                            window.location.href = `${protocol}//${hostname}:5173/`;
+                            window.location.href = `${STORE_FRONTEND_URL}/`;
                         }}
                         className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors hover:underline"
                     >

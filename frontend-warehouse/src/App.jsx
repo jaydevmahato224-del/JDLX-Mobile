@@ -20,7 +20,11 @@ window.fetch = async (...args) => {
   const { setGlobalError } = useStore.getState();
   const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
 
-  const isBackground = requestUrl.includes('/api/report-issue');
+  // Background/polling requests must not flash the top loader on every tick.
+  const isBackground =
+    requestUrl.includes('/api/report-issue') ||
+    requestUrl.includes('/warehouse/dashboard') ||
+    requestUrl.includes('/warehouse/notifications');
   if (!isBackground) startLoading();
 
   // Helper to identify if request is to our backend
@@ -33,10 +37,18 @@ window.fetch = async (...args) => {
   try {
     const response = await originalFetch(...args);
 
+    // 401 auto-logout only for authenticated app pages. Login, staff setup and
+    // the public request pages can legitimately receive 401s (wrong password,
+    // unverified application, etc.) and must never be bounced around.
+    const pathname = window.location.pathname;
+    const isPublicPath =
+      pathname.startsWith('/warehouse/login') ||
+      pathname.startsWith('/warehouse/staff/setup') ||
+      pathname.startsWith('/warehouse/request');
     if (
       response.status === 401 &&
       requestUrl.includes('/api/') &&
-      !window.location.pathname.startsWith('/warehouse/login')
+      !isPublicPath
     ) {
       useStore.getState().warehouseLogout();
       window.location.replace('/warehouse/login?reason=session_expired');

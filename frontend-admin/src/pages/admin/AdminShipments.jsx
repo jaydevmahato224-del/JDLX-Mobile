@@ -17,10 +17,13 @@ function AdminShipments() {
             const url = new URL(`${API_BASE_URL}/admin/shipment/list`);
             if (statusFilter) url.searchParams.append('status', statusFilter);
             
-            const res = await apiFetch(url);
+            // apiFetch expects a string URL — a URL object here would produce a
+            // garbage ".../api/api/https://..." path and every request would fail.
+            const res = await apiFetch(url.toString());
             const data = await res.json();
             if (res.ok) {
-                setShipments(data.data);
+                // Backend wraps in success_response: { success, data, message }
+                setShipments(Array.isArray(data?.data) ? data.data : []);
             } else {
                 toast.error(data.message || "Failed to load shipments");
             }

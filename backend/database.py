@@ -691,11 +691,15 @@ def init_db():
         amount REAL NOT NULL,
         status TEXT DEFAULT 'requested',
         admin_note TEXT,
+        transaction_ref TEXT,
         processed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
     )''')
+    ensure_columns('vendor_payouts', [
+        ('transaction_ref', 'TEXT'),
+    ])
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_payouts_wh ON vendor_payouts(warehouse_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_vendor_payouts_status ON vendor_payouts(status)")
 
@@ -714,6 +718,7 @@ def init_db():
         is_default INTEGER DEFAULT 0,
         latitude REAL,
         longitude REAL,
+        address_text TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
@@ -730,7 +735,28 @@ def init_db():
         ('is_default', 'INTEGER DEFAULT 0'),
         ('latitude', 'REAL'),
         ('longitude', 'REAL'),
+        # Checkout resolves the delivery address by address_id via
+        # `address_text` (and /api/address/add always stores it), but the
+        # house-based flow (/api/user/addresses) and rows created before this
+        # column existed never populated it — a missing value made saved-address
+        # orders fail with "Missing order details". The column is added above;
+        # this backfill composes a full text from the stored parts once so old
+        # addresses are immediately usable (guarded, so it only touches rows
+        # that still have an empty address_text).
+        ('address_text', 'TEXT'),
     ])
+    cursor.execute('''
+        UPDATE user_addresses
+        SET address_text = TRIM(
+            IFNULL(house, '')
+            || CASE WHEN IFNULL(area, '') <> '' THEN ', ' || IFNULL(area, '') ELSE '' END
+            || CASE WHEN IFNULL(landmark, '') <> '' THEN ', Near ' || IFNULL(landmark, '') ELSE '' END
+            || CASE WHEN IFNULL(city, '') <> '' THEN ', ' || IFNULL(city, '') ELSE '' END
+            || CASE WHEN IFNULL(state, '') <> '' THEN ', ' || IFNULL(state, '') ELSE '' END
+            || CASE WHEN IFNULL(pincode, '') <> '' THEN ' - ' || IFNULL(pincode, '') ELSE '' END
+        )
+        WHERE (address_text IS NULL OR TRIM(address_text) = '') AND IFNULL(house, '') <> ''
+    ''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS saved_payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

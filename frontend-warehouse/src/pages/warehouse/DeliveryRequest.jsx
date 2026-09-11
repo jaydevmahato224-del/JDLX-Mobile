@@ -378,7 +378,77 @@ function StatusPanel({ currentStatus, application, checkRequestStatus, deliveryR
     )
 }
 
-function DeliveryRequest() {
+// Delivery partner portal is temporarily closed. The original KYC/onboarding
+// flow is kept intact below as DeliveryRequestFlow — it will be re-enabled
+// when the delivery program relaunches. Nothing was removed.
+function DeliveryRequestClosed() {
+    return (
+        <div style={{
+            minHeight: '100vh',
+            background: '#0f172a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            fontFamily: "'Manrope', sans-serif",
+        }}>
+            <div style={{
+                maxWidth: '520px',
+                width: '100%',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '24px',
+                padding: '40px 32px',
+                textAlign: 'center',
+            }}>
+                <div style={{
+                    width: '72px',
+                    height: '72px',
+                    margin: '0 auto 20px',
+                    borderRadius: '20px',
+                    background: 'rgba(20,184,166,0.1)',
+                    border: '1px solid rgba(20,184,166,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#5eead4',
+                }}>
+                    <Truck size={32} />
+                </div>
+                <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#f1f5f9', margin: '0 0 12px' }}>
+                    Delivery Partner Portal Temporarily Closed
+                </h1>
+                <p style={{ fontSize: '14px', color: '#94a3b8', lineHeight: 1.7, margin: '0 0 8px' }}>
+                    Yeh portal abhi available nahi hai. Naye delivery partner onboarding aur KYC applications filhaal band hain.
+                </p>
+                <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.7, margin: '0 0 28px' }}>
+                    Hum delivery system par kaam kar rahe hain — jaise hi yeh dobara khulega, yahan notice mil jayega. Kripa dhairya Karein.
+                </p>
+                <Link
+                    to="/warehouse/login"
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '13px 28px',
+                        background: 'rgba(245,158,11,0.1)',
+                        border: '1px solid rgba(245,158,11,0.25)',
+                        color: '#fbbf24',
+                        borderRadius: '14px',
+                        textDecoration: 'none',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                    }}
+                >
+                    Back to Warehouse Login
+                </Link>
+            </div>
+        </div>
+    )
+}
+
+function DeliveryRequestFlow() {
     const navigate = useNavigate()
     const location = useLocation()
     const deliveryRequestUser = useStore((state) => state.warehouseRequestUser)
@@ -1121,4 +1191,6 @@ function DeliveryRequest() {
     )
 }
 
-export default DeliveryRequest
+// Portal-closed notice is the default export; the full flow above is parked
+// (not deleted) for the future delivery-system relaunch.
+export default DeliveryRequestClosed

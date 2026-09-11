@@ -38,9 +38,24 @@ const FAILURE_THRESHOLD = 3; // Number of failure BATCHES before showing error o
 
 const _originalFetch = window.fetch;
 window.fetch = async (...args) => {
+  const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+
+  // Scope the interceptor to OUR backend traffic only. Third-party fetches
+  // (analytics beacons, payment SDKs, CDNs, etc.) pass straight through with
+  // zero interference — no loading counter, no error overlay, no 401 logic.
+  // Helper to identify if request is to our backend
+  const isBackendUrl = requestUrl.includes('localhost:5000') || 
+                       requestUrl.includes('10.0.2.2:5000') || 
+                       requestUrl.includes('jdlx-mobile.onrender.com') ||
+                       requestUrl.startsWith('/api/') ||
+                       (typeof API_BASE_URL === 'string' && requestUrl.includes(API_BASE_URL));
+
+  if (!isBackendUrl) {
+    return _originalFetch(...args);
+  }
+
   const { startLoading, stopLoading } = useLoadingStore.getState();
   const { setGlobalError, clearGlobalError, globalError } = useStore.getState();
-  const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
 
   if (import.meta.env.DEV) {
     console.log(`%c JDLX FETCH: ${requestUrl}`, "color: #3b82f6;");
@@ -49,13 +64,6 @@ window.fetch = async (...args) => {
   // Only show loader for significant API calls
   const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs') || requestUrl.includes('/api/report-issue') || requestUrl.includes('/health');
   if (!isBackgroundRequest) startLoading();
-
-  // Helper to identify if request is to our backend
-  const isBackendUrl = requestUrl.includes('localhost:5000') || 
-                       requestUrl.includes('10.0.2.2:5000') || 
-                       requestUrl.includes('jdlx-mobile.onrender.com') ||
-                       requestUrl.startsWith('/api/') ||
-                       (typeof API_BASE_URL === 'string' && requestUrl.includes(API_BASE_URL));
 
   try {
     const response = await _originalFetch(...args);

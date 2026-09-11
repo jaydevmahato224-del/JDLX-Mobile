@@ -75,7 +75,8 @@ const AdminDatabase = () => {
     } finally {
       setLoading(false);
     }
-  }, [adminToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auth is cookie-based; referencing the nonexistent `adminToken` here crashed the whole page
+  }, []);
 
   useEffect(() => {
     fetchTables();
@@ -240,17 +241,20 @@ const AdminDatabase = () => {
           
           <div className="bg-slate-900 rounded-2xl p-4 text-white shadow-xl">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`}></div>
               <span className="text-xs font-bold text-slate-400 uppercase">System Status</span>
             </div>
-            <p className="text-sm font-medium">Turso (libSQL) Pro</p>
+            <p className="text-sm font-medium">Live Database</p>
             <div className="mt-4 flex flex-col gap-2">
               <div className="flex justify-between text-[10px] text-slate-400">
-                <span>Latency</span>
-                <span className="text-emerald-400">12ms</span>
+                <span>Tables loaded</span>
+                <span className="text-emerald-400">{tables.length}</span>
               </div>
-              <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                <div className="bg-emerald-500 h-full w-[10%]"></div>
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>Connection</span>
+                <span className={tables.length > 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                  {tables.length > 0 ? 'Healthy' : (loading ? 'Checking…' : 'Unreachable')}
+                </span>
               </div>
             </div>
           </div>

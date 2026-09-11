@@ -28,6 +28,13 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL ||
 
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
+// Storefront location: in dev the store runs on :5173 of the same host; in
+// production it lives on its Vercel deployment. Used by "Return to Storefront"
+// and PWA preview links (previously hardcoded to :5173, broken in prod).
+export const STORE_FRONTEND_URL = isLocalhost
+  ? `${typeof window !== 'undefined' ? window.location.protocol : 'http:'}//${currentHostname}:5173`
+  : 'https://jdlx-mobile.vercel.app';
+
 export function resolveMediaUrl(value) {
   if (!value || typeof value !== 'string') return '';
   if (/^(https?:|data:|blob:)/i.test(value)) return value;

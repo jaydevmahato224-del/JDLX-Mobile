@@ -261,13 +261,33 @@ def track_shipment(order_id):
                 (current_status, shipment['id'])
             )
 
+        # Backfill the courier tracking URL when Shiprocket provides one but it
+        # was never stored (older shipments created before tracking_url was set).
+        sr_track_url = (
+            tracking_info.get('track_url')
+            or tracking_info.get('tracking_url')
+            or (
+                tracking_info.get('shipment_track')[0].get('track_url')
+                if isinstance(tracking_info.get('shipment_track'), list)
+                and tracking_info.get('shipment_track')
+                and isinstance(tracking_info.get('shipment_track')[0], dict)
+                else None
+            )
+        )
+        effective_tracking_url = shipment['tracking_url'] or sr_track_url
+        if sr_track_url and not shipment['tracking_url']:
+            cursor.execute(
+                "UPDATE shipments SET tracking_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (sr_track_url, shipment['id'])
+            )
+
         conn.commit()
 
         return success_response({
             "current_status": current_status or shipment['status'],
             "awb_code": awb_code,
             "courier_name": shipment['courier_name'],
-            "tracking_url": shipment['tracking_url'],
+            "tracking_url": effective_tracking_url,
             "events": [dict(a) for a in shipment_track_activities]
         }, "Tracking data retrieved successfully")
 

@@ -263,35 +263,47 @@ export default function WarehouseProfile() {
                         </div>
                     </section>
 
+                    {/* Operations snapshot — real account data only (no fake scores) */}
                     <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-[2rem] p-4 sm:p-8 text-slate-900 shadow-2xl shadow-amber-500/10">
-                        <h3 className="text-xl font-black mb-2">Operational Score</h3>
-                        <p className="text-slate-900/60 text-xs font-bold uppercase tracking-widest mb-6">Performance Rating</p>
+                        <h3 className="text-xl font-black mb-2">Operations Snapshot</h3>
+                        <p className="text-slate-900/60 text-xs font-bold uppercase tracking-widest mb-6">Live Account Status</p>
 
-                        <div className="flex items-end gap-2">
-                            <span className="text-6xl font-black leading-none tracking-tighter">9.8</span>
-                            <span className="text-xl font-bold mb-1">/10</span>
-                        </div>
-
-                        <div className="mt-5 sm:mt-8 pt-8 border-t border-slate-900/10 space-y-4">
+                        <div className="space-y-4">
                             <div className="flex justify-between items-center text-sm font-bold">
-                                <span>Efficiency</span>
-                                <span>99%</span>
+                                <span>Terminal</span>
+                                <span className="uppercase tracking-widest">{isOpen ? 'Open' : 'Closed'}</span>
                             </div>
-                            <div className="w-full h-2 bg-slate-900/10 rounded-full overflow-hidden">
-                                <div className="w-[99%] h-full bg-slate-900" />
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span>Profile KYC</span>
+                                <span className="uppercase tracking-widest">{isProfilePending ? 'Pending' : 'Verified'}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span>Warehouse Capacity</span>
+                                <span>{user?.warehouse_capacity ? `${user.warehouse_capacity} SKUs` : 'Not set'}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span>Service Radius</span>
+                                <span>{user?.service_radius_km ? `${user.service_radius_km} km` : 'Not set'}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span>Active Zone</span>
+                                <span>{user?.pincode || 'Not set'}</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-white/5 border border-white/5 rounded-[2rem] p-4 sm:p-6 space-y-4">
                         <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">Account Security</h4>
-                        <button className="w-full flex items-center justify-between px-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition-all font-bold text-sm">
+                        <div className="w-full flex items-center justify-between px-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-slate-300 font-bold text-sm">
                             <div className="flex items-center gap-3">
                                 <Shield className="w-4 h-4" />
-                                <span>Two-Factor Auth</span>
+                                <span>Login Security</span>
                             </div>
-                            <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Active</span>
-                        </button>
+                            <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded-full uppercase tracking-widest">Google Sign-in</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 leading-5 px-2">
+                            Access is protected by verified Google sign-in and platform-managed staff credentials. Two-factor authentication is not yet available for partner accounts.
+                        </p>
                     </div>
                 </div>
             </div>

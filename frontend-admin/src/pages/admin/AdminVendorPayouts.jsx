@@ -98,14 +98,35 @@ const isSuperAdmin = adminUser?.role?.toLowerCase() === 'super_admin'
     }, [payoutFilter, fetchPayouts])
 
     const handlePayoutDecision = async (payout, decision) => {
+        let transactionRef = ''
+        if (decision === 'paid') {
+            transactionRef = (window.prompt(
+                `Approve payout #${payout.id} (₹${payout.amount})?
+
+Enter the bank/UPI transaction reference (UTR) — required to mark this payout as paid (6-12 alphanumeric characters):`,
+                ''
+            ) || '').trim()
+            if (!transactionRef) {
+                toast.error('Transaction reference (UTR) is required to approve a payout')
+                return
+            }
+            if (!/^[A-Za-z0-9]{6,12}$/.test(transactionRef)) {
+                toast.error('Transaction reference must be 6-12 alphanumeric characters')
+                return
+            }
+        }
         setProcessingId(payout.id)
         try {
             const res = await apiFetch(`/admin/vendor/payouts/${payout.id}/${decision === 'paid' ? 'approve' : 'reject'}`, {
                 method: 'POST',
-                body: JSON.stringify({ admin_note: notes[payout.id] || '' }),
+                body: JSON.stringify({ admin_note: notes[payout.id] || '', transaction_ref: transactionRef || undefined }),
             })
             const json = await res.json()
-            if (!res.ok) throw new Error(json.error || json.message || 'Action failed')
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}))
+                toast.error(errData.message || json.message || `Failed to ${decision} payout`)
+                return
+            }
             toast.success(json.message || `Payout ${decision}`)
             await Promise.all([fetchOverview(), fetchPayouts(payoutFilter)])
         } catch (e) {
@@ -302,6 +323,7 @@ const isSuperAdmin = adminUser?.role?.toLowerCase() === 'super_admin'
                                         <th className="p-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Requested</th>
                                         <th className="p-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
                                         <th className="p-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Note</th>
+                                        <th className="p-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Txn Ref</th>
                                         <th className="p-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Action</th>
                                     </tr>
                                 </thead>
@@ -337,6 +359,13 @@ const isSuperAdmin = adminUser?.role?.toLowerCase() === 'super_admin'
                                                         />
                                                     ) : (
                                                         <span className="text-xs text-slate-400 italic">{p.admin_note || '—'}</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 max-w-[160px]">
+                                                    {p.transaction_ref ? (
+                                                        <span className="text-xs font-mono font-bold text-slate-700">{p.transaction_ref}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 italic">—</span>
                                                     )}
                                                 </td>
                                                 <td className="p-4 text-right whitespace-nowrap">

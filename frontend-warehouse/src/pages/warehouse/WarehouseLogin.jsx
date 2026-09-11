@@ -467,13 +467,13 @@ function WarehouseLogin() {
                             <FileText size={15} /> Apply for warehouse access
                         </Link>
 
-                        <Link to="/warehouse/request-delivery" style={{
+                        <Link to="/warehouse/request-delivery" title="Delivery partner onboarding is temporarily closed" style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                             padding: '14px 24px', background: 'rgba(20,184,166,0.08)',
                             border: '1px solid rgba(20,184,166,0.15)', color: '#5eead4',
                             borderRadius: '14px', textDecoration: 'none', fontWeight: 600, fontSize: '14px',
                         }}>
-                            <Truck size={15} /> Apply to be a Delivery Partner
+                            <Truck size={15} /> Apply to be a Delivery Partner (Closed)
                         </Link>
 
                     </div>

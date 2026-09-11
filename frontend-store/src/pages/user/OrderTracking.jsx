@@ -351,7 +351,10 @@ function OrderTracking() {
                             <div className="flex justify-between items-center">
                                 <span className="text-xs font-bold text-gray-400">Rider Distance</span>
                                 <span className="text-sm font-black text-primary">
-                                    {calculateDistance(riderLocation.latitude, riderLocation.longitude, order.latitude, order.longitude).toFixed(2)} km away
+                                    {/* The status endpoint returns the order's coords as
+                                        delivery_latitude/delivery_longitude (o.* columns), so
+                                        reading plain `latitude`/`longitude` produced NaN. */}
+                                    {calculateDistance(riderLocation.latitude, riderLocation.longitude, order?.delivery_latitude ?? order?.latitude, order?.delivery_longitude ?? order?.longitude).toFixed(2)} km away
                                 </span>
                             </div>
                             <div className="h-1.5 bg-[var(--color-surface-container)] rounded-full overflow-hidden">

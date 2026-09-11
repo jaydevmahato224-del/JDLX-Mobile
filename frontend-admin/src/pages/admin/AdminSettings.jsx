@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Settings, Save, AlertCircle, Trash2, Truck, Smartphone, FileText, Globe, CreditCard, Zap, MapPin, Send, Clock, ShieldCheck } from 'lucide-react'
-import { API_BASE_URL } from '../../config'
+import { API_BASE_URL, STORE_FRONTEND_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
 
@@ -618,7 +618,7 @@ export default function AdminSettings() {
                     <h3 className="font-bold text-slate-800">App Install Prompt</h3>
                     <p className="text-xs text-slate-500 mt-1">Show a floating notification to browser users suggesting they install the app.</p>
                     <button 
-                      onClick={() => window.open('http://localhost:5173?preview_pwa=1', '_blank')}
+                      onClick={() => window.open(`${STORE_FRONTEND_URL}?preview_pwa=1`, '_blank')}
                       className="mt-3 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
                     >
                       Click here to preview banner in store

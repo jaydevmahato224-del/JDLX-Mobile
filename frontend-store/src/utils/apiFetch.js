@@ -19,10 +19,17 @@ export async function apiFetch(endpoint, options = {}) {
   }
   
   const userToken = localStorage.getItem('userToken') || localStorage.getItem('token')
+  // Spread only works on plain objects — a `Headers` instance (as passed by
+  // some callers) spreads into nothing and silently drops the headers.
+  // Convert it to a plain object first so the merge below keeps every header.
+  const extraHeaders =
+    options.headers instanceof Headers
+      ? Object.fromEntries(options.headers.entries())
+      : options.headers
   const defaultHeaders = {
     'Content-Type': 'application/json',
     ...(userToken ? { 'Authorization': `Bearer ${userToken}` } : {}),
-    ...options.headers,
+    ...(extraHeaders || {}),
   }
 
   return fetch(url, {

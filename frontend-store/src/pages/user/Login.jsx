@@ -13,6 +13,30 @@ const GoogleIcon = () => (
     </svg>
 )
 
+// ─── OAuth Callback Snapshot ────────────────────────────────────────────────
+// The backend redirects to /login?token=...&user=... after Google sign-in.
+// The token is a one-time credential, so it is stripped from the URL as early
+// as possible — at module load, BEFORE React renders or analytics/GA fires —
+// keeping it out of the address bar, browser history, and any Referer/GA
+// page-view leak. The params are snapshotted first so the component below can
+// still consume them after the URL has been cleaned.
+const OAUTH_CALLBACK = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    if (!params.has('token') && !params.has('user')) return null
+    const snapshot = {
+      ref: params.get('ref'),
+      error: params.get('error'),
+      token: params.get('token'),
+      user: params.get('user'),
+    }
+    window.history.replaceState({}, document.title, window.location.pathname)
+    return snapshot
+  } catch {
+    return null
+  }
+})()
+
 function Login() {
     const [error, setError] = useState('')
     const navigate = useNavigate()
@@ -39,26 +63,24 @@ function Login() {
     }, [user, navigate])
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search)
-        const refCode = params.get('ref')
+        // Params were snapshotted and scrubbed from the URL at module load
+        // (see OAUTH_CALLBACK above) — the token never lingers in the address
+        // bar, so this effect only consumes the in-memory snapshot.
+        if (!OAUTH_CALLBACK) return
+        const { ref: refCode, error: errorParam, token: tokenParam, user: userParam } = OAUTH_CALLBACK
         if (refCode) {
             localStorage.setItem('jdlx_ref_code', refCode)
         }
 
-        const errorParam = params.get('error')
         if (errorParam) {
             setError('Google login failed. Please try again.')
-            window.history.replaceState({}, document.title, window.location.pathname)
             return
         }
 
-        const tokenParam = params.get('token')
-        const userParam = params.get('user')
         if (tokenParam && userParam) {
             try {
                 const userData = JSON.parse(decodeURIComponent(userParam))
                 setUser(userData, tokenParam)
-                window.history.replaceState({}, document.title, window.location.pathname)
                 toast.success('Successfully logged in!')
                 navigate(intendedTarget.current, { replace: true })
             } catch (err) {

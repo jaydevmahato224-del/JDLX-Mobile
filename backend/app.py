@@ -29,7 +29,7 @@ if os.environ.get("RENDER") != "true":
 # --- Third-Party Imports ---
 import razorpay
 import jwt
-from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory
+from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -142,9 +142,10 @@ cors_origins = [
     r"^http://127\.0\.0\.1:517[3-5]$",
     r"^http://10\.0\.2\.2:517[3-5]$",
     r"^https?://(www\.)?jdlxmobile\.in$",
-    r"^https?://.*\.jdlxmobile\.in$",
-    r"^https?://.*\.vercel\.app$",
-    r"^https?://.*\.onrender\.com$",
+    r"^https?://jdlx-official-admin\.vercel\.app$",
+    r"^https?://jdlx-mobile-wearhouse\.vercel\.app$",
+    r"^https?://jdlx-mobile\.vercel\.app$",
+    r"^https?://jdlx-mobile\.onrender\.com$",
 ]
 if cors_origins_env:
     extra_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
@@ -637,6 +638,72 @@ def _maybe_gzip_response(response):
 @app.before_request
 def log_request_info():
     logger.info(f"Request: {request.method} {request.path}")
+
+
+# --- CSRF defense-in-depth -----------------------------------------------------
+# Cookie-based auth (HttpOnly `token`) is vulnerable to cross-site request
+# forgery. Existing implicit defenses: JSON-only parsing (plain-form CSRF fails
+# on get_json) and the CORS allowlist (JS callers preflight). This adds an
+# explicit Origin check for state-changing requests that arrive with cookies:
+# if the browser sends an Origin, it must match a configured CORS origin or the
+# request is rejected. Requests without Origin (server-to-server, curl, mobile
+# apps using Bearer tokens) are unaffected.
+_CSRF_EXEMPT_PATHS = {
+    '/api/shiprocket/webhook',   # server-to-server, token-authenticated
+    '/api/webhook/shiprocket',    # alternate webhook path
+    '/api/admin/request-otp',
+    '/api/admin/verify-otp',
+}
+
+
+_ORIGIN_CACHE = {}
+
+
+def _origin_allowed(origin):
+    """True when the Origin header matches the configured CORS allowlist.
+    cors_origins entries are regex strings (same list flask-cors receives),
+    plus optional plain entries from CORS_ORIGINS env.
+    """
+    if origin in _ORIGIN_CACHE:
+        return _ORIGIN_CACHE[origin]
+    import re as _re
+    allowed = False
+    for pattern in cors_origins:
+        try:
+            if isinstance(pattern, str):
+                if _re.match(pattern, origin):
+                    allowed = True
+                    break
+            elif getattr(pattern, 'match', None) and pattern.match(origin):
+                allowed = True
+                break
+        except Exception:
+            continue
+    _ORIGIN_CACHE[origin] = allowed
+    return allowed
+
+
+@app.before_request
+def csrf_origin_guard():
+    # Stateless, fail-closed guard on cookie-authenticated POST/PUT/PATCH/DELETE.
+    # JWT token_required already enforces role-based access — this layer limits
+    # the attack surface to requests that browsers actually send cross-site.
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return None
+    if not request.path.startswith('/api/'):
+        return None
+    if request.path in _CSRF_EXEMPT_PATHS:
+        return None
+    if not request.cookies.get('token'):
+        return None
+
+    origin = request.headers.get('Origin') or ''
+    if not origin:
+        return None
+
+    if _origin_allowed(origin):
+        return None
+    return jsonify({"error": "Cross-site request blocked"}), 403
 
 
 @app.before_request
@@ -2535,13 +2602,16 @@ def admin_vendor_payouts():
 
 @app.route('/api/admin/vendor/payouts/<int:payout_id>/approve', methods=['POST'])
 @token_required
-@require_admin()
+@require_admin(['super_admin', 'admin', 'manager'])
 def admin_vendor_payout_approve(payout_id):
     """Marks a payout request as paid (admin has transferred the money)."""
     try:
         from settlement import process_vendor_payout
         data = request.get_json(silent=True) or {}
-        ok, message = process_vendor_payout(payout_id, 'paid', data.get('admin_note'))
+        ok, message = process_vendor_payout(
+            payout_id, 'paid', data.get('admin_note'),
+            transaction_ref=data.get('transaction_ref'),
+        )
         if not ok:
             return error_response(message, 400)
         try:
@@ -2555,7 +2625,7 @@ def admin_vendor_payout_approve(payout_id):
 
 @app.route('/api/admin/vendor/payouts/<int:payout_id>/reject', methods=['POST'])
 @token_required
-@require_admin()
+@require_admin(['super_admin', 'admin', 'manager'])
 def admin_vendor_payout_reject(payout_id):
     """Rejects a payout request and refunds the held amount to the wallet."""
     try:
@@ -3143,12 +3213,113 @@ def get_admin_audit_logs_by_admin(admin_id):
         return error_response(str(e), 500)
 
 
+@app.route('/api/admin/audit-logs/export', methods=['GET'])
+@token_required
+@require_super_admin()
+def export_admin_audit_logs():
+    """Exports the current audit log listing as JSON or CSV.
+
+    Mirrors the filtered list returned by `GET /api/admin/audit-logs` (same
+    admin/action_type/date/q filters, same LIMIT 1000 cap) so exports stay
+    consistent with what the admin sees on the audit-logs page. This is a
+    convenience export endpoint only — it does not introduce any new retention,
+    deletion, or filtering behavior.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        admin_id = request.args.get('admin', type=int)
+        action_type = (request.args.get('action_type') or '').strip()
+        date_value = (request.args.get('date') or '').strip()
+        search = (request.args.get('q') or '').strip()
+
+        query = '''
+            SELECT l.id, l.admin_id, l.action_type, l.target_entity, l.target_id, l.description,
+                   l.ip_address, l.timestamp, u.name as admin_name, u.email as admin_email
+            FROM admin_audit_logs l
+            JOIN users u ON u.id = l.admin_id
+            WHERE 1=1
+        '''
+        params = []
+        if admin_id:
+            query += " AND l.admin_id = ?"
+            params.append(admin_id)
+        if action_type:
+            query += " AND l.action_type = ?"
+            params.append(action_type)
+        if date_value:
+            query += " AND DATE(l.timestamp) = DATE(?)"
+            params.append(date_value)
+        if search:
+            query += " AND (l.description LIKE ? OR l.target_entity LIKE ?)"
+            pattern = f"%{search}%"
+            params.extend([pattern, pattern])
+        query += " ORDER BY l.timestamp DESC LIMIT 1000"
+
+        cursor.execute(query, tuple(params))
+        logs = [dict(row) for row in cursor.fetchall()]
+
+        fmt = (request.args.get('format') or 'json').lower()
+        if fmt == 'csv':
+            import io
+            import csv as csv_mod
+            buf = io.StringIO(newline='')
+            writer = csv_mod.writer(buf)
+            writer.writerow([
+                'id', 'admin_id', 'admin_email', 'admin_name',
+                'action_type', 'target_entity', 'target_id',
+                'description', 'ip_address', 'timestamp',
+            ])
+            for log in logs:
+                writer.writerow([
+                    log.get('id'),
+                    log.get('admin_id'),
+                    log.get('admin_email') or '',
+                    log.get('admin_name') or '',
+                    log.get('action_type'),
+                    log.get('target_entity') or '',
+                    log.get('target_id'),
+                    log.get('description') or '',
+                    log.get('ip_address') or '',
+                    log.get('timestamp'),
+                ])
+            csv_bytes = buf.getvalue().encode('utf-8')
+            conn.close()
+            return Response(
+                csv_bytes,
+                mimetype='text/csv',
+                headers={
+                    'Content-Disposition': f'attachment; filename="jdlx-audit-logs-{datetime.date.today().isoformat()}.csv"',
+                },
+            )
+
+        conn.close()
+        return jsonify({
+            "logs": logs,
+            "exported_at": datetime.datetime.utcnow().isoformat(),
+            "count": len(logs),
+        }), 200
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
 @app.route('/api/admin/audit-logs/clear', methods=['DELETE'])
 @token_required
 @require_super_admin()
 def clear_admin_audit_logs():
-    """Wipes all audit logs (Super Admin only)."""
+    """Wipes all audit logs (Super Admin only).
+
+    Compliance guard: the wipe action itself is recorded in the append-only
+    activity_logs table BEFORE deletion, so an auditor can always see who
+    cleared the trail even after admin_audit_logs is wiped.
+    """
     try:
+        admin_id = (getattr(request, 'user', None) or {}).get('user_id')
+        try:
+            log_admin_action(admin_id, "audit_logs_cleared", "audit", None)
+        except Exception:
+            pass
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM admin_audit_logs")
@@ -4654,10 +4825,21 @@ def checkout():
 
         # Override if address_id provided
         if address_id:
-            cursor.execute("SELECT address_text, latitude, longitude FROM user_addresses WHERE id = ? AND user_id = ?", (address_id, user_id))
+            cursor.execute("SELECT address_text, latitude, longitude, house, area, landmark, city, state, pincode FROM user_addresses WHERE id = ? AND user_id = ?", (address_id, user_id))
             saved_addr = cursor.fetchone()
             if saved_addr:
                 address = saved_addr['address_text']
+                if not address:
+                    # House-based addresses (or rows saved before the
+                    # address_text column existed) have no text — compose one
+                    # from the stored parts so the order always carries a full
+                    # delivery address instead of failing the "Missing order
+                    # details" check.
+                    parts = [saved_addr['house'], saved_addr['area']]
+                    if saved_addr['landmark']:
+                        parts.append(f"Near {saved_addr['landmark']}")
+                    parts += [saved_addr['city'], saved_addr['state'], saved_addr['pincode']]
+                    address = ', '.join([p for p in parts if p])
                 user_lat = saved_addr['latitude']
                 user_lng = saved_addr['longitude']
 
@@ -5208,7 +5390,7 @@ def get_user_orders():
         cursor = conn.cursor()
         query = """
             SELECT o.id, o.order_number, o.created_at, o.order_status as status, 
-                   o.total_amount, o.delivery_type, s.status as shipment_status
+                   o.total_amount, o.delivery_type, o.delivery_address, s.status as shipment_status
             FROM orders o
             LEFT JOIN shipments s ON o.id = s.order_id
             WHERE o.user_id = ? 
@@ -5609,11 +5791,19 @@ def manage_addresses():
             return jsonify(addrs)
             
         elif request.method == 'POST':
-            fields = ['full_name', 'phone', 'house', 'city', 'state', 'pincode', 'landmark', 'is_default']
+            fields = ['full_name', 'phone', 'house', 'area', 'city', 'state', 'pincode', 'landmark', 'is_default']
             vals = [data.get(f) for f in fields]
+            # Compose address_text from the typed parts so checkout's
+            # saved-address flow (which resolves the full address by
+            # address_id) always has a value, even for house-based entries.
+            parts = [data.get('house'), data.get('area')]
+            if data.get('landmark'):
+                parts.append(f"Near {data.get('landmark')}")
+            parts += [data.get('city'), data.get('state'), data.get('pincode')]
+            address_text = ', '.join([p for p in parts if p])
             cursor.execute(
-                "INSERT INTO user_addresses (user_id, full_name, phone, house, city, state, pincode, landmark, is_default) VALUES (?,?,?,?,?,?,?,?,?)",
-                (user_id,) + tuple(vals)
+                "INSERT INTO user_addresses (user_id, full_name, phone, house, area, city, state, pincode, landmark, is_default, address_text) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (user_id,) + tuple(vals) + (address_text,)
             )
             conn.commit()
             addr_id = cursor.lastrowid
@@ -5631,10 +5821,20 @@ def manage_addresses():
                 return error_response("id required", 400)
             updates = []
             params = []
-            for f in ['full_name', 'phone', 'house', 'city', 'state', 'pincode', 'landmark', 'is_default']:
+            for f in ['full_name', 'phone', 'house', 'area', 'city', 'state', 'pincode', 'landmark', 'is_default']:
                 if f in data:
                     updates.append(f + " = ?")
                     params.append(data.get(f))
+            # Keep address_text in sync whenever the typed parts change, so an
+            # edited address still resolves to a full text at checkout.
+            if any(f in data for f in ['house', 'area', 'landmark', 'city', 'state', 'pincode']):
+                parts = [data.get('house'), data.get('area')]
+                if data.get('landmark'):
+                    parts.append(f"Near {data.get('landmark')}")
+                parts += [data.get('city'), data.get('state'), data.get('pincode')]
+                address_text = ', '.join([p for p in parts if p])
+                updates.append("address_text = ?")
+                params.append(address_text)
             if updates:
                 params.append(addr_id)
                 cursor.execute(f"UPDATE user_addresses SET {', '.join(updates)} WHERE id = ? AND user_id = ?", tuple(params + [user_id]))
@@ -5928,6 +6128,15 @@ def update_user_account_status(user_id):
         user_row = cursor.fetchone()
 
         cursor.execute("UPDATE users SET account_status = ? WHERE id = ?", (status, user_id))
+
+        # Session revocation on punitive statuses: without this, a banned user's
+        # existing JWTs keep working until natural expiry. Mirrors the logout-all
+        # mechanism (min_token_iat), which token_required enforces on every request.
+        revoking = str(status).strip().lower() in ('suspended', 'banned', 'blocked', 'disabled')
+        if revoking:
+            now_ts = int(time.time())
+            cursor.execute("UPDATE users SET min_token_iat = ? WHERE id = ?", (now_ts, user_id))
+
         conn.commit()
 
         if user_row:
@@ -5935,7 +6144,7 @@ def update_user_account_status(user_id):
             Thread(target=send_user_status_update_email, args=(user_row['email'], user_row['name'], status, reason)).start()
 
         conn.close()
-        return success_response(None, f"User status updated to {status}")
+        return success_response(None, f"User status updated to {status}" + (" — active sessions revoked" if revoking else ""))
     except Exception as e:
         return error_response(str(e), 500)
 
@@ -8147,6 +8356,142 @@ def admin_get_inventory_stats():
         })
     except Exception as e:
         return error_response(str(e), 500)
+
+
+@app.route('/api/admin/inventory/demand-forecast', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("manage_inventory")
+def admin_demand_forecast():
+    """AI Demand Prediction feed for the admin Intelligence page.
+
+    Derives 7-day sales velocity from real order history (completed orders
+    only) and compares it against current effective stock to produce restock
+    recommendations. Optional `store_id` scopes stock to that dark store's
+    store_inventory rows, falling back to global catalog stock when the store
+    has no mapped inventory (so the page never shows all-zero fake scarcity).
+    """
+    conn = None
+    try:
+        store_id = (request.args.get('store_id') or '').strip()
+        conn = get_db()
+        cursor = conn.cursor()
+
+        use_store_stock = False
+        if store_id:
+            try:
+                mapped = cursor.execute(
+                    "SELECT COUNT(*) AS c FROM store_inventory WHERE store_id = ?",
+                    (int(store_id),),
+                ).fetchone()['c']
+                use_store_stock = int(mapped or 0) > 0
+            except (TypeError, ValueError):
+                use_store_stock = False
+
+        if use_store_stock:
+            stock_expr = """
+                COALESCE((SELECT si.stock_quantity FROM store_inventory si
+                          WHERE si.store_id = ? AND si.product_id = p.id), 0)"""
+            base_params = [int(store_id)]
+        else:
+            # Same effective-stock rule as /api/admin/inventory: summed active
+            # variant stock for variant products, plain stock otherwise.
+            stock_expr = """
+                CASE WHEN p.has_variants = 1
+                     THEN (SELECT COALESCE(SUM(stock), 0) FROM product_variants pv
+                           WHERE pv.product_id = p.id AND pv.status = 'active')
+                     ELSE p.stock END"""
+            base_params = []
+
+        cursor.execute(
+            f"""
+            SELECT p.id AS product_id,
+                   p.name AS product_name,
+                   COALESCE(p.category, '') AS category,
+                   {stock_expr} AS current_stock,
+                   COALESCE(SUM(recent.quantity), 0) AS sold_7d
+            FROM products p
+            LEFT JOIN (
+                SELECT oi.product_id, oi.quantity
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                WHERE o.created_at >= datetime('now', '-7 days')
+                  AND o.order_status NOT IN ('CANCELLED', 'REFUNDED')
+            ) recent ON recent.product_id = p.id
+            GROUP BY p.id
+            """,
+            base_params,
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+
+        # 30-day telemetry count for the "Items Monitored" card.
+        monitored = cursor.execute("""
+            SELECT COUNT(DISTINCT oi.product_id) AS c
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.created_at >= datetime('now', '-30 days')
+              AND o.order_status NOT IN ('CANCELLED', 'REFUNDED')
+        """).fetchone()['c']
+
+        fast_sellers = sorted(
+            [r for r in rows if (r['sold_7d'] or 0) > 0],
+            key=lambda r: r['sold_7d'],
+            reverse=True,
+        )[:5]
+
+        predictions = []
+        low_stock_risk = []
+        for r in rows:
+            sold = int(r['sold_7d'] or 0)
+            stock = int(r['current_stock'] or 0)
+            predicted = sold  # last-7-days demand ≈ next-7-days projection
+            restock = max(0, predicted - stock)
+            if predicted > 0 and (stock <= 0 or stock < predicted * 0.5):
+                risk = 'Critical'
+            elif predicted > 0 and stock < predicted:
+                risk = 'Warning'
+            else:
+                risk = 'Green'
+            if risk in ('Critical', 'Warning'):
+                low_stock_risk.append({
+                    "product_id": r['product_id'],
+                    "product_name": r['product_name'],
+                    "current_stock": stock,
+                    "predicted_7d_demand": predicted,
+                })
+            predictions.append({
+                "product_id": r['product_id'],
+                "product_name": r['product_name'],
+                "category": r['category'],
+                "current_stock": stock,
+                "daily_avg_velocity": round(sold / 7.0, 2),
+                "predicted_7d_demand": predicted,
+                "recommended_restock": restock,
+                "risk_level": risk,
+            })
+
+        risk_order = {'Critical': 0, 'Warning': 1, 'Green': 2}
+        predictions.sort(key=lambda p: (risk_order.get(p['risk_level'], 3), -p['recommended_restock']))
+
+        return jsonify({
+            "total_items_analyzed": monitored,
+            "fast_sellers": [
+                {
+                    "product_id": r['product_id'],
+                    "product_name": r['product_name'],
+                    "category": r['category'],
+                    "sales_7d": int(r['sold_7d'] or 0),
+                }
+                for r in fast_sellers
+            ],
+            "low_stock_risk": low_stock_risk,
+            "predictions": predictions[:50],
+        })
+    except Exception as e:
+        return error_response(str(e), 500)
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/api/admin/inventory/<int:product_id>', methods=['PATCH'])

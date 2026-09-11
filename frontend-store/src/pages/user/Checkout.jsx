@@ -36,7 +36,7 @@ function Checkout() {
     });
 
     const [coords, setCoords] = useState({ latitude: 28.6139, longitude: 77.2090 });
-    const [orderPlaced] = useState(false);
+    const [orderPlaced, setOrderPlaced] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState('PREPAID'); // Default to Prepaid as recommended
     const [isProcessing, setIsProcessing] = useState(false);
     const [savedAddresses, setSavedAddresses] = useState([]);
@@ -46,6 +46,17 @@ function Checkout() {
     const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
     const [pincodeMessage, setPincodeMessage] = useState('');
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
+
+    // House-based saved addresses (Profile page / older rows) may lack an
+    // address_text value — compose the full text from the stored parts so the
+    // picker and the order payload always show/use a complete address. The
+    // stored address_text (from checkout's AddressPicker flow) is preferred.
+    const savedAddressText = (addr) =>
+        (addr?.address_text || [addr?.house, addr?.area, addr?.city, addr?.state, addr?.pincode].filter(Boolean).join(', '));
+    const extractPincode = (addr) => {
+        const m = (addr?.address_text || '').match(/\b\d{6}\b/);
+        return m ? m[0] : (addr?.pincode || '');
+    };
 
     // Derived values
     const subtotal = useMemo(() => cart.reduce((sum, item) => {
@@ -109,14 +120,18 @@ function Checkout() {
                     const defaultAddr = addresses.find(a => a.is_default);
                     if (defaultAddr) {
                         setSelectedAddressId(defaultAddr.id);
-                        const pinMatch = defaultAddr.address_text.match(/\b\d{6}\b/);
-                        const extractedPin = pinMatch ? pinMatch[0] : '';
+                        const extractedPin = extractPincode(defaultAddr);
                         setFormData(prev => ({ 
                             ...prev, 
-                            address: defaultAddr.address_text,
+                            address: savedAddressText(defaultAddr),
                             pincode: extractedPin
                         }));
                         setCoords({ latitude: defaultAddr.latitude, longitude: defaultAddr.longitude });
+                        // Saved addresses get the same serviceability check as
+                        // manual entries (auto-forces PREPAID where COD is off).
+                        if (extractedPin.length === 6) {
+                            fetchCityStateFromPincode(extractedPin, setFormData);
+                        }
                     }
                 }
             } catch {
@@ -200,8 +215,12 @@ function Checkout() {
 
     const discountAmount = appliedOffer ? appliedOffer.discount_amount : 0;
     const finalTotal = Math.max(0, (subtotal - discountAmount) + platformFee + deliveryCharge + fittingTotal - walletAmount);
-    const payNowAmount = paymentMethod === 'COD' ? codAdvance : finalTotal;
-    const remainingCodAmount = paymentMethod === 'COD' ? (finalTotal - codAdvance) : 0;
+    // COD advance mirrors the backend /checkout math exactly (see app.py
+    // checkout route): the wallet deduction has already reduced finalTotal, so
+    // the advance is capped at the remaining total (min(cod_advance, final))
+    // and the at-delivery remainder can never go negative.
+    const payNowAmount = paymentMethod === 'COD' ? Math.min(codAdvance, finalTotal) : finalTotal;
+    const remainingCodAmount = paymentMethod === 'COD' ? Math.max(0, finalTotal - payNowAmount) : 0;
     const isCodDisabledByAmount = subtotal < minOrderCod;
 
     // Free delivery progress
@@ -349,6 +368,10 @@ function Checkout() {
                             }
 
                             toast.success('Payment successful!');
+                            // Mark as placed before clearing the cart so the
+                            // empty-cart redirect effect doesn't override the
+                            // order-success navigation (see effect above).
+                            setOrderPlaced(true);
                             clearCart();
                             navigate(`/order-success/${orderId}`);
                         } else {
@@ -437,17 +460,53 @@ function Checkout() {
                 setIsProcessing(false);
                 return;
             }
-            if (pincodeStatus === 'unserviceable') {
-                toast.error("Courier service is not available for this location.");
-                setIsProcessing(false);
-                return;
-            }
-            if (pincodeStatus === 'invalid') {
-                toast.error("Invalid Pincode. Please enter a valid Indian pincode.");
-                setIsProcessing(false);
-                return;
-            }
         }
+
+        // Pincode serviceability applies to BOTH manual entries and saved
+        // addresses — a saved address in an unserviceable/invalid pincode must
+        // not bypass the courier-availability rules manual entries follow.
+        if (pincodeStatus === 'unserviceable') {
+            toast.error("Courier service is not available for this location.");
+            setIsProcessing(false);
+            return;
+        }
+        if (pincodeStatus === 'invalid') {
+            toast.error("Invalid Pincode. Please enter a valid Indian pincode.");
+            setIsProcessing(false);
+            return;
+        }
+
+        // Build the order payload — restored from the pre-refactor version so
+        // every business field (items, address, payment type, offer, wallet
+        // deduction, coordinates) reaches the backend. Auth is attached by
+        // apiFetch (HttpOnly cookie + Bearer fallback), so no manual token.
+        const manualAddressText = `${formData.flatNo}, ${formData.area}${formData.landmark ? `, Near ${formData.landmark}` : ''}, ${formData.city}, ${formData.state} - ${formData.pincode}`;
+
+        const orderPayload = {
+            items: cart.map(item => ({ 
+                id: item.id, 
+                qty: item.qty, 
+                price: item.price, 
+                variant_id: item.variant_id || null,
+                device_model: item.device_model || null,
+                fitting_charge: item.fitting ? (item.sub_category?.toLowerCase().includes('uv glass') ? 80 : 40) : 0
+            })),
+            address: selectedAddressId ? formData.address : manualAddressText,
+            pincode: formData.pincode,
+            address_id: selectedAddressId,
+            phone: formData.phone,
+            total_amount: subtotal,
+            fitting_charge: fittingTotal,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            email: formData.email,
+            delivery_type: 'scheduled',
+            customer_name: formData.name,
+            payment_type: paymentMethod,
+            offer_id: appliedOffer ? appliedOffer.offer_id : null,
+            discount_applied: discountAmount,
+            wallet_amount: walletAmount
+        };
 
         const orderRes = await apiFetch('/checkout', {
                 method: 'POST',
@@ -468,6 +527,10 @@ function Checkout() {
             // missing field never skips payment for an order that still needs it.
             const serverPayNow = Number(orderData?.summary?.pay_now_amount ?? 1);
             if (serverPayNow <= 0) {
+                // Mark the order as placed BEFORE clearing the cart so the
+                // empty-cart redirect effect below doesn't race with the
+                // order-success navigation and bounce the user home.
+                setOrderPlaced(true);
                 clearCart();
                 navigate(`/order-success/${orderId}`);
                 return;
@@ -572,14 +635,19 @@ function Checkout() {
                                         key={addr.id}
                                         onClick={() => {
                                             setSelectedAddressId(addr.id);
-                                            const pinMatch = addr.address_text.match(/\b\d{6}\b/);
-                                            const extractedPin = pinMatch ? pinMatch[0] : '';
+                                            const extractedPin = extractPincode(addr);
                                             setFormData(prev => ({ 
                                                 ...prev, 
-                                                address: addr.address_text,
+                                                address: savedAddressText(addr),
                                                 pincode: extractedPin
                                             }));
                                             setCoords({ latitude: addr.latitude, longitude: addr.longitude });
+                                            // Same serviceability check as manual
+                                            // entries so saved addresses can't
+                                            // bypass courier availability rules.
+                                            if (extractedPin.length === 6) {
+                                                fetchCityStateFromPincode(extractedPin, setFormData);
+                                            }
                                         }}
                                         className={`p-4 rounded-[20px] border-2 transition-all cursor-pointer flex items-center justify-between gap-4 ${selectedAddressId === addr.id ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/5' : 'border-[var(--color-surface-high)] bg-[var(--color-surface-low)]/50 hover:bg-[var(--color-surface-low)]'}`}
                                     >
@@ -588,7 +656,7 @@ function Checkout() {
                                                 <MapPin size={16} />
                                             </div>
                                             <div className="flex flex-col">
-                                                <p className="text-[14px] font-black tracking-tight text-[var(--color-on-surface)] truncate max-w-[200px] sm:max-w-md">{addr.address_text}</p>
+                                                <p className="text-[14px] font-black tracking-tight text-[var(--color-on-surface)] truncate max-w-[200px] sm:max-w-md">{savedAddressText(addr)}</p>
                                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Verified Location</p>
                                             </div>
                                         </div>
@@ -971,7 +1039,10 @@ function Checkout() {
                             {walletAmount > 0 && (
                                 <div className="flex justify-between text-sm font-black text-[#D48A12] bg-orange-50 px-2.5 py-2 rounded-xl border border-orange-100 animate-in fade-in slide-in-from-right-4">
                                     <span className="flex items-center gap-1.5"><Wallet size={14} /> Wallet Deduction</span>
-                                    <span>-₹{walletAmount.toFixed(0)}</span>
+                                    {/* toFixed(2) matches WalletCheckout's "Extra ₹X will be
+                                        deducted" message so the shown deduction equals the
+                                        actual applied amount. */}
+                                    <span>-₹{walletAmount.toFixed(2)}</span>
                                 </div>
                             )}
 
@@ -1077,6 +1148,10 @@ function Checkout() {
                             pincode: extractedPin 
                         }));
 setCoords({ latitude: addr.latitude, longitude: addr.longitude });
+                        // Same serviceability check as manual entries.
+                        if (extractedPin.length === 6) {
+                            fetchCityStateFromPincode(extractedPin, setFormData);
+                        }
                         apiFetch('/address/user')
                             .then(res => res.json())
                             .then(data => {

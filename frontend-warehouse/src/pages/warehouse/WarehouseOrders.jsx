@@ -13,7 +13,8 @@ import {
     Package,
     Truck,
     AlertCircle,
-    ArrowRight
+    ArrowRight,
+    ExternalLink
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
@@ -28,6 +29,8 @@ const WarehouseOrders = () => {
     // (deliveryTypeFilter removed — quick delivery is retired; every order
     // uses standard scheduled fulfillment.)
     const [updatingId, setUpdatingId] = useState(null)
+    const [dispatchingId, setDispatchingId] = useState(null)
+    const [weights, setWeights] = useState({})
     const [notification, setNotification] = useState(null)
 
     const showNotification = (message, type = 'success') => {
@@ -73,6 +76,29 @@ const WarehouseOrders = () => {
             showNotification(err.message, 'error')
         } finally {
             setUpdatingId(null)
+        }
+    }
+
+    // Pack-ready handoff to Shiprocket: creates the SR order, assigns the
+    // best courier, generates the AWB and marks the assignment dispatched.
+    const handleShiprocketDispatch = async (order) => {
+        setDispatchingId(order.id)
+        try {
+            const response = await apiFetch(`/warehouse/orders/${order.id}/dispatch`, {
+                method: 'PATCH',
+                body: JSON.stringify({ weight_kg: parseFloat(weights[order.id]) || 0.5 })
+            })
+            const result = await response.json()
+            if (!response.ok) throw new Error(result.error || 'Shiprocket dispatch failed')
+
+            const awb = result.data?.awb_code
+            const courier = result.data?.courier_name
+            showNotification(`AWB ${awb || '—'} • ${courier || 'Courier'} — pickup will be scheduled`, 'success')
+            await fetchOrders()
+        } catch (err) {
+            showNotification(err.message, 'error')
+        } finally {
+            setDispatchingId(null)
         }
     }
 
@@ -310,19 +336,64 @@ const WarehouseOrders = () => {
                                             )}
 
                                             {order.assignment_status === 'packed' && (
-                                                <button 
-                                                    onClick={() => handleUpdateStatus(order.id, 'dispatched')}
-                                                    disabled={!!updatingId}
-                                                    className="h-10 px-6 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                                                >
-                                                    Dispatch <Truck size={14} />
-                                                </button>
+                                                <>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0.1"
+                                                            value={weights[order.id] ?? ''}
+                                                            placeholder="kg"
+                                                            onChange={(e) => setWeights((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                                                            className="h-10 w-16 bg-slate-950/50 border border-white/10 rounded-xl px-2 text-xs font-bold text-white focus:outline-none focus:border-amber-400/50"
+                                                            title="Package weight (kg, default 0.5)"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleShiprocketDispatch(order)}
+                                                            disabled={!!dispatchingId || !!updatingId}
+                                                            className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-indigo-500/20"
+                                                            title="Create Shiprocket order, assign courier and generate AWB"
+                                                        >
+                                                            {dispatchingId === order.id ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />}
+                                                            Ship via Shiprocket
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleUpdateStatus(order.id, 'dispatched')}
+                                                        disabled={!!updatingId || !!dispatchingId}
+                                                        className="h-10 px-4 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all disabled:opacity-50"
+                                                        title="Mark dispatched without Shiprocket (self-fulfilled)"
+                                                    >
+                                                        Manual Dispatch
+                                                    </button>
+                                                </>
                                             )}
 
                                             {['dispatched', 'rejected'].includes(order.assignment_status) && (
-                                                <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                                                    No actions available
-                                                </div>
+                                                order.assignment_status === 'dispatched' && order.awb_code ? (
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                                                            AWB: {order.awb_code}
+                                                        </div>
+                                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                                            {order.courier_name || 'Courier'}
+                                                        </div>
+                                                        {order.tracking_url && (
+                                                            <a
+                                                                href={order.tracking_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-[10px] font-black text-blue-400 underline flex items-center gap-1"
+                                                            >
+                                                                Track Package <ExternalLink size={10} />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                                                        No actions available
+                                                    </div>
+                                                )
                                             )}
                                             
                                             {updatingId === order.id && (

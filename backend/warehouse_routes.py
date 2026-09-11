@@ -3442,6 +3442,19 @@ def warehouse_update_order_status(assignment_id):
                    WHERE id = ?""",
                 (mapped_order_status, assignment["order_id"]),
             )
+            # Customer notification for self-fulfilled (non-Shiprocket) dispatch.
+            # Mirrors the Shiprocket dispatch trigger so customers get the
+            # shipped update no matter which path the warehouse uses.
+            try:
+                _ship_row = conn.execute(
+                    "SELECT user_id FROM orders WHERE id = ?", (assignment["order_id"],)
+                ).fetchone()
+                if _ship_row and _ship_row["user_id"]:
+                    notification_service.send_order_notification(
+                        _ship_row["user_id"], assignment["order_id"], "SHIPPED"
+                    )
+            except Exception:
+                pass  # never break the status update on notification failure
         elif mapped_order_status:
              conn.execute(
                 """UPDATE orders
@@ -3505,7 +3518,7 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
         order = conn.execute(
             """SELECT o.id, o.order_number, o.total_amount, o.delivery_address,
                       o.customer_name, COALESCE(o.customer_phone, o.phone) as phone,
-                      o.payment_type, o.order_status,
+                      o.payment_type, o.order_status, o.user_id,
                       u.name as user_name, u.email as user_email
                FROM orders o
                LEFT JOIN users u ON u.id = o.user_id
@@ -3684,6 +3697,18 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
                    WHERE id = ?""",
                 (assignment["order_id"],),
             )
+            # Customer notification: the Shiprocket webhook early-returns for
+            # orders already SHIPPED, so this packed->dispatched transition is
+            # the single point where the customer learns their order shipped.
+            # Tracking is visible on the order-tracking page (AWB + URL are
+            # stored on the shipments row above).
+            if order["user_id"]:
+                try:
+                    notification_service.send_order_notification(
+                        order["user_id"], assignment["order_id"], "SHIPPED"
+                    )
+                except Exception:
+                    pass  # never break dispatch flow on notification failure
         conn.commit()
 
         return success_response({

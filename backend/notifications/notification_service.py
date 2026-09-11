@@ -192,6 +192,7 @@ class NotificationService:
         status_tpl_map = {
             'PLACED': 'order_placed_app',
             'PACKING': 'order_packing_app',
+            'SHIPPED': 'order_shipped_app',
             'OUT_FOR_DELIVERY': 'order_out_delivery_app',
             'DELIVERED': 'order_delivered_app',
         }
@@ -218,6 +219,7 @@ class NotificationService:
             'PLACED': f"Your order #{order_id} has been placed successfully!",
             'PACKING': f"We are packing your items for order #{order_id}.",
             'READY_FOR_PICKUP': f"Order #{order_id} is ready for pickup!",
+            'SHIPPED': f"Your order #{order_id} has been shipped! Track it live from the Orders page.",
             'OUT_FOR_DELIVERY': f"Order #{order_id} is out for delivery! Track it live.",
             'DELIVERED': f"Order #{order_id} has been delivered. Enjoy!",
             'PENDING_PAYMENT': f"Complete your payment for order #{order_id} to confirm.",

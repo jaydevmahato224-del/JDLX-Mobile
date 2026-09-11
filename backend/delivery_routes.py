@@ -174,6 +174,14 @@ def register_delivery_partner():
     if not isinstance(data, dict):
         data = request.form.to_dict() if request.form else {}
 
+    # Delivery partner onboarding is temporarily closed (the portal shows the
+    # "temporarily closed" notice). Fail closed at the API level too so the
+    # parked frontend cannot be bypassed by direct API calls. Reopen by setting
+    # DELIVERY_ONBOARDING_CLOSED=false in the environment — no application
+    # data is written while this gate is closed.
+    if os.environ.get("DELIVERY_ONBOARDING_CLOSED", "true").strip().lower() in {"1", "true", "yes", "on"}:
+        return error_response("Delivery partner onboarding is temporarily closed. Please check back later.", 503)
+
     name = data.get('name')
     email = data.get('email', '').lower().strip()
     phone = data.get('phone')

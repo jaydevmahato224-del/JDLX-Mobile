@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Instagram, Twitter, Facebook, Mail, Phone, MapPin, ShieldCheck, Truck, RotateCcw } from 'lucide-react';
+import { Instagram, Twitter, Facebook, Mail, Phone, MapPin } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 const Footer = () => {
@@ -30,39 +30,6 @@ const Footer = () => {
 
   return (
     <footer className="bg-[var(--color-surface-white)] border-t border-slate-100 mt-20">
-      {/* Upper Footer: Value Props */}
-      <div className="border-b border-slate-50">
-        <div className="max-w-[1400px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary">
-              <Truck size={24} />
-            </div>
-            <div>
-              <h4 className="font-black text-sm uppercase tracking-wider">Swift Delivery</h4>
-              <p className="text-xs text-slate-400 font-medium">Premium doorstep service</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <h4 className="font-black text-sm uppercase tracking-wider">Quality Assured</h4>
-              <p className="text-xs text-slate-400 font-medium">100% genuine products</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500">
-              <RotateCcw size={24} />
-            </div>
-            <div>
-              <h4 className="font-black text-sm uppercase tracking-wider">Easy Returns</h4>
-              <p className="text-xs text-slate-400 font-medium">Hassle-free 7-day policy</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Footer Content */}
       <div className="max-w-[1400px] mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-4 gap-12">
         {/* Brand Section */}

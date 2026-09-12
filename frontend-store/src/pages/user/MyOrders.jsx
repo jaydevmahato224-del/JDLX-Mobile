@@ -100,7 +100,32 @@ function MyOrders() {
         }
     };
 
-    if (loading) return <div>Loading orders...</div>;
+    // Loading state: skeleton cards that mirror the order-card layout so the
+    // page doesn't jump when orders arrive. Top padding keeps this block clear
+    // of the floating back button, so the two never overlap.
+    if (loading) return (
+        <div className="pt-14 md:pt-16">
+            <div className="h-7 w-36 rounded-lg bg-gray-100 animate-pulse mb-4" />
+            <div className="flex flex-col gap-4">
+                {[0, 1, 2].map((i) => (
+                    <div key={i} className="glass-card p-4 flex flex-col gap-3 animate-pulse">
+                        <div className="flex justify-between items-start">
+                            <div className="space-y-2">
+                                <div className="h-3 w-24 rounded bg-gray-100" />
+                                <div className="h-2.5 w-32 rounded bg-gray-50" />
+                                <div className="h-4 w-16 rounded bg-gray-100" />
+                            </div>
+                            <div className="h-6 w-20 rounded-full bg-gray-100" />
+                        </div>
+                        <div className="flex items-center justify-between border-t border-gray-50 pt-3">
+                            <div className="h-2.5 w-40 rounded bg-gray-50" />
+                            <div className="h-3 w-16 rounded bg-gray-100" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 
     return (
         <div className="container-standard py-6">

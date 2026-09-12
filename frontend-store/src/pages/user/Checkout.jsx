@@ -377,7 +377,10 @@ function Checkout() {
                         } else {
                             let verifyData;
                             try { verifyData = await verifyRes.json(); } catch { verifyData = {}; }
-                            toast.error(verifyData?.message || 'Payment verification failed');
+                            toast.error(
+                                verifyData?.message || `Order #${orderId} is saved but payment couldn't be verified. Retry from Profile → My Orders.`,
+                                { duration: 8000 }
+                            );
                             setIsProcessing(false);
                         }
                     } catch (verifyErr) {
@@ -389,7 +392,10 @@ function Checkout() {
                 modal: {
                     ondismiss: () => {
                         setIsProcessing(false);
-                        toast.error('Payment cancelled');
+                        toast.error(
+                            `Payment cancelled — Order #${orderId} is saved. Complete it from Profile → My Orders.`,
+                            { duration: 8000 }
+                        );
                     }
                 }
             };
@@ -403,7 +409,13 @@ function Checkout() {
 
         } catch (err) {
             console.error('Payment error:', err);
-            toast.error(err.message || 'Something went wrong with payment');
+            // The order itself was already created before this point — never
+            // leave the user thinking nothing happened. Point them at the
+            // My Orders recovery flow instead of a generic failure toast.
+            toast.error(
+                `Order #${orderId} is saved but payment didn't start. Complete it from Profile → My Orders → Complete Payment.`,
+                { duration: 8000 }
+            );
             setIsProcessing(false);
         }
     };

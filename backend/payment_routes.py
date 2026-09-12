@@ -106,6 +106,95 @@ def create_payment_order():
     finally:
         conn.close()
 
+@payment_bp.route('/api/payment/retry', methods=['POST'])
+@token_required
+def retry_payment():
+    """Recovery path for orders stuck in PLACED because the gateway step
+    failed or was dismissed after checkout created the order. Creates a
+    fresh Razorpay order for the outstanding amount and returns the same
+    payload shape as /payment/create-order so the frontend can reuse its
+    Razorpay-open logic."""
+    user_id = request.user.get('user_id')
+    data = request.get_json() or {}
+    order_id = data.get('order_id')
+
+    if not order_id:
+        return error_response("Order ID is required", 400)
+
+    conn = get_db()
+    try:
+        order = conn.execute(
+            "SELECT id, user_id, total_amount, payment_type, cod_advance_paid, order_status, payment_status FROM orders WHERE id = ?",
+            (order_id,)
+        ).fetchone()
+
+        if not order:
+            return error_response("Order not found", 404)
+        if int(order['user_id']) != int(user_id):
+            return error_response("Unauthorized access to this order", 403)
+        if (order['order_status'] or '').upper() not in ('PLACED', 'PAYMENT_FAILED'):
+            return error_response("This order no longer needs payment", 400)
+
+        payment_type = (order['payment_type'] or 'PREPAID').upper()
+        amount_rupees = float(order['total_amount'] or 0)
+        if payment_type == 'COD':
+            amount_rupees = float(order['cod_advance_paid'] or 0)
+        if amount_rupees <= 0:
+            return error_response("Payment amount must be greater than zero", 400)
+
+        amount_paise = int(round(amount_rupees * 100))
+
+        # Reuse an existing unpaid gateway order when present so Razorpay
+        # doesn't accumulate duplicate order objects per retry attempt.
+        existing = conn.execute(
+            """SELECT razorpay_order_id FROM payments
+               WHERE order_id = ? AND status IN ('created', 'failed')
+               ORDER BY id DESC LIMIT 1""",
+            (order_id,)
+        ).fetchone()
+
+        if existing and existing['razorpay_order_id']:
+            razorpay_order_id = existing['razorpay_order_id']
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE payments SET status = 'created', updated_at = CURRENT_TIMESTAMP WHERE razorpay_order_id = ?",
+                (razorpay_order_id,)
+            )
+            conn.commit()
+        else:
+            client = get_razorpay_client()
+            razorpay_order = client.order.create(data={
+                'amount': amount_paise,
+                'currency': 'INR',
+                'receipt': f'jdlx_order_{order_id}_retry',
+                'notes': {
+                    'jdlx_order_id': str(order_id),
+                    'user_id': str(user_id),
+                    'retry': 'true'
+                }
+            })
+            razorpay_order_id = razorpay_order['id']
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT INTO payments (order_id, user_id, razorpay_order_id, amount, payment_method, status)
+                   VALUES (?, ?, ?, ?, ?, 'created')""",
+                (order_id, user_id, razorpay_order_id, amount_paise, payment_type)
+            )
+            conn.commit()
+
+        return success_response({
+            "razorpay_order_id": razorpay_order_id,
+            "amount": amount_paise,
+            "currency": 'INR',
+            "key_id": os.environ.get('RAZORPAY_KEY_ID'),
+            "order_id": order_id
+        }, "Retry order created successfully")
+
+    except Exception as e:
+        return error_response(f"Error creating retry order: {str(e)}", 500)
+    finally:
+        conn.close()
+
 @payment_bp.route('/api/payment/verify', methods=['POST'])
 @token_required
 def verify_payment():

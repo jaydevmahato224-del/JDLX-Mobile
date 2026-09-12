@@ -409,7 +409,9 @@ def init_db():
         order_status TEXT DEFAULT 'PLACED', 
         source TEXT DEFAULT 'ONLINE',
         agent_id INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+        -- CURRENT_TIMESTAMP is UTC in SQLite; store IST so displayed placed-time
+        -- matches wall-clock time in MyOrders / warehouse panels without TZ math.
+        created_at TIMESTAMP DEFAULT (datetime('now', '+5 hours', '+30 minutes')), 
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
     ensure_columns('orders', [

@@ -7,6 +7,38 @@ import adminLogo from '../../assets/admin-logo.svg'
 function AdminLogin() {
     const navigate = useNavigate();
     const adminUser = useStore(state => state.adminUser);
+    const setAdminUser = useStore(state => state.setAdminUser);
+
+    // OAuth bootstrap — the backend admin callback now redirects here with
+    // ?oauth_token=...&oauth_user=... (same pattern as the warehouse/delivery
+    // flows). The auth cookie is HttpOnly so the SPA can't read it, and without
+    // this snapshot adminUser stayed null and AdminRoute bounced every admin
+    // straight back to /admin/login (the login loop). Consumed once, then
+    // scrubbed from the address bar so the token never lingers in the URL.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const oauthToken = params.get('oauth_token');
+        const oauthUser = params.get('oauth_user');
+        if (!oauthToken || !oauthUser) return;
+
+        try {
+            const userData = JSON.parse(decodeURIComponent(oauthUser));
+            const role = (userData.role || '').toLowerCase();
+            const ADMIN_ROLES = ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'];
+            if (ADMIN_ROLES.includes(role)) {
+                setAdminUser(userData);
+                localStorage.setItem('adminToken', oauthToken);
+                window.history.replaceState({}, '', '/admin/dashboard');
+                navigate('/admin/dashboard', { replace: true });
+            } else {
+                // Backend already gates non-admins; this is defense in depth.
+                window.history.replaceState({}, '', '/admin/login?error=unauthorized');
+            }
+        } catch (err) {
+            console.error('Failed to parse admin OAuth callback data', err);
+            window.history.replaceState({}, '', '/admin/login?error=oauth_failed');
+        }
+    }, [setAdminUser, navigate]);
     // Parse OAuth error query params once at mount — they never change during
     // the page's lifetime, so a lazy initializer replaces the effect cleanly.
     const [errorMessage] = useState(() => {
@@ -34,9 +66,12 @@ function AdminLogin() {
         return null;
     });
 
-    // Auto-redirect if already logged in as admin
+    // Auto-redirect if already logged in as admin (all admin roles, matching
+    // the role whitelist AdminRoute enforces — previously super_admin and the
+    // sub-admin roles were missed here and got stuck on the login page).
     useEffect(() => {
-        if (adminUser && (adminUser.role === 'admin' || adminUser.role === 'super_admin')) {
+        const role = (adminUser?.role || '').toLowerCase();
+        if (adminUser && ['admin', 'super_admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'].includes(role)) {
             navigate('/admin/dashboard', { replace: true });
         }
     }, [adminUser, navigate]);

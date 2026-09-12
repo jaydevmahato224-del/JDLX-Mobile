@@ -2188,7 +2188,14 @@ def admin_google_callback():
 
         encoded_user = quote(json.dumps(user_data, separators=(',', ':')))
         cookie_settings = get_cookie_settings()
-        resp = redirect(f"{frontend_url}/admin/dashboard")
+        # Pass the session snapshot in the redirect query exactly like the
+        # warehouse/delivery flows do (oauth_token + oauth_user). The admin SPA
+        # has no other way to learn WHO logged in — the auth cookie is HttpOnly
+        # and /auth/verify-token only echoes the JWT role, which previously left
+        # adminUser null and bounced every admin straight back to /admin/login.
+        resp = redirect(
+            f"{frontend_url}/admin/login?oauth_token={quote(jwt_token)}&oauth_user={encoded_user}"
+        )
         resp.set_cookie('token', jwt_token, **cookie_settings)
         return resp
             
@@ -4726,7 +4733,7 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     #    failure must NOT leave partial decrements behind — the whole set is
     #    wrapped in a savepoint so it stays all-or-nothing even when the caller
     #    commits after catching the ValueError (e.g. payment verify/webhook).
-    cursor.execute("SAVEPOINT confirm_stock_decrement")
+    cursor.execute("SAVEPOINT confirm_stock")
     for item in items:
         product_id = item['product_id']
         qty = item['quantity']
@@ -4740,12 +4747,14 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
                 (qty, v_id, product_id, qty)
             )
             if cursor.rowcount == 0:
+                # Undo the decrements already applied for earlier items in this order.
+                # (Roll back FIRST — anything written before the rollback is undone
+                # with it, so the status marker must be set after.)
+                cursor.execute("ROLLBACK TO SAVEPOINT confirm_stock")
                 cursor.execute(
                     "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
                     (order_id,)
                 )
-                # Undo the decrements already applied for earlier items in this order.
-                cursor.execute("ROLLBACK TO SAVEPOINT confirm_stock_decrement")
                 raise ValueError(f"Insufficient variant stock for product {product_id}")
 
             cursor.execute("""
@@ -4761,12 +4770,14 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
                 (qty, product_id, qty)
             )
             if cursor.rowcount == 0:
+                # Undo the decrements already applied for earlier items in this order.
+                # (Roll back FIRST — anything written before the rollback is undone
+                # with it, so the status marker must be set after.)
+                cursor.execute("ROLLBACK TO SAVEPOINT confirm_stock")
                 cursor.execute(
                     "UPDATE orders SET order_status = 'INVENTORY_UNAVAILABLE' WHERE id = ?",
                     (order_id,)
                 )
-                # Undo the decrements already applied for earlier items in this order.
-                cursor.execute("ROLLBACK TO SAVEPOINT confirm_stock_decrement")
                 raise ValueError(f"Insufficient stock for product {product_id}")
 
         # Decrement warehouse partner inventory stock if store_id is set (Multi-Vendor stock sync)
@@ -4803,7 +4814,7 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
             except Exception as notify_err:
                 print(f"[LOW STOCK WARNING] Failed to trigger notification: {notify_err}")
 
-    cursor.execute("RELEASE SAVEPOINT confirm_stock_decrement")
+    cursor.execute("RELEASE SAVEPOINT confirm_stock")
 
     # 5. Update order status to 'CONFIRMED' and confirmed_at timestamp
     cursor.execute(
@@ -5187,17 +5198,17 @@ def checkout():
         
         cursor.execute('''
             INSERT INTO orders (
-                order_number, user_id, customer_name, customer_phone, delivery_address, 
+                order_number, user_id, customer_name, customer_phone, phone, delivery_address, 
                 order_status, total_amount, dark_store_id, estimated_delivery, 
                 delivery_latitude, delivery_longitude, payment_status, delivery_type,
                 platform_fee, delivery_fee, fitting_charge, payment_type,
                 cod_advance_paid, cod_remaining_amount, free_delivery_applied,
                 source, agent_id
             )
-            VALUES (?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, 'ONLINE', NULL)
+            VALUES (?, ?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, 'ONLINE', NULL)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
-            phone, address, final_total, store_id, estimated_delivery_str,
+            phone, phone, address, final_total, store_id, estimated_delivery_str,
             user_lat, user_lng, delivery_type, platform_fee, actual_delivery_fee, fitting_charge,
             payment_type, cod_advance_paid, cod_remaining_amount, free_delivery_applied
         ))
@@ -5417,7 +5428,8 @@ def get_user_orders():
         cursor = conn.cursor()
         query = """
             SELECT o.id, o.order_number, o.created_at, o.order_status as status, 
-                   o.total_amount, o.delivery_type, o.delivery_address, s.status as shipment_status
+                   o.total_amount, o.delivery_type, o.delivery_address,
+                   o.payment_status, o.payment_type, s.status as shipment_status
             FROM orders o
             LEFT JOIN shipments s ON o.id = s.order_id
             WHERE o.user_id = ? 

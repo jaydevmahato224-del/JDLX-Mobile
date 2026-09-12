@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
-import { Link } from 'react-router-dom'
-import { MapPin, ChevronRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { MapPin, ChevronRight, CreditCard } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { loadRazorpay } from '../../utils/loadRazorpay'
+import { toast } from 'react-hot-toast'
 
 function MyOrders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [payingOrderId, setPayingOrderId] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -22,6 +26,80 @@ function MyOrders() {
         fetchOrders();
     }, []);
 
+    // An order needs payment recovery when it was created but never confirmed:
+    // still PLACED with payment_status 'pending' — the state left behind when
+    // the gateway step fails or the Razorpay modal is dismissed at checkout.
+    const needsPayment = (order) =>
+        (order.status || '').toUpperCase() === 'PLACED' &&
+        (order.payment_status || 'pending').toLowerCase() === 'pending';
+
+    const handleCompletePayment = async (order) => {
+        if (payingOrderId) return;
+        setPayingOrderId(order.id);
+        try {
+            const res = await apiFetch('/payment/retry', {
+                method: 'POST',
+                body: JSON.stringify({ order_id: order.id })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.message || data?.error || 'Could not start payment');
+
+            const paymentData = data.data || {};
+            await loadRazorpay();
+
+            const rzp = new window.Razorpay({
+                key: paymentData.key_id,
+                amount: paymentData.amount,
+                currency: paymentData.currency,
+                name: 'JDLX Mobile',
+                description: `Order #${order.order_number || order.id}`,
+                order_id: paymentData.razorpay_order_id,
+                prefill: {
+                    contact: order.customer_phone || ''
+                },
+                theme: { color: '#6366f1' },
+                handler: async (response) => {
+                    try {
+                        const verifyRes = await apiFetch('/payment/verify', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                order_id: order.id,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature
+                            })
+                        });
+                        if (verifyRes.ok) {
+                            toast.success('Payment successful! Your order is confirmed.');
+                            navigate(`/track/${order.id}`);
+                        } else {
+                            const err = await verifyRes.json().catch(() => ({}));
+                            toast.error(err?.message || 'Payment verification failed');
+                        }
+                    } catch (e) {
+                        console.error('Verification error:', e);
+                        toast.error('Payment verification encountered an error');
+                    }
+                },
+                modal: {
+                    ondismiss: () => {
+                        setPayingOrderId(null);
+                        toast.error('Payment cancelled — you can retry from My Orders');
+                    }
+                }
+            });
+            rzp.on('payment.failed', () => {
+                setPayingOrderId(null);
+                toast.error('Payment failed. Please try again.');
+            });
+            rzp.open();
+        } catch (e) {
+            console.error('Retry payment error:', e);
+            toast.error(e.message || 'Something went wrong');
+            setPayingOrderId(null);
+        }
+    };
+
     if (loading) return <div>Loading orders...</div>;
 
     return (
@@ -31,13 +109,17 @@ function MyOrders() {
                 <p>No orders placed yet.</p>
             ) : (
                 <div className="flex flex-col gap-4">
-                    {orders.map(order => (
-                        <Link
+                    {orders.map(order => {
+                        const showPayNow = needsPayment(order);
+                        return (
+                        <div
                             key={order.id}
-                            to={`/track/${order.id}`}
                             className="glass-card p-4 flex flex-col gap-3 hover:translate-y-[-2px] transition-all hover:shadow-lg group"
                         >
-                            <div className="flex justify-between items-start">
+                            <Link
+                                to={`/track/${order.id}`}
+                                className="flex justify-between items-start"
+                            >
                                 <div>
                                     <div className="text-xs font-black text-primary uppercase tracking-wider mb-1">
                                         #{order.order_number || `ORD-${order.id}`}
@@ -65,19 +147,38 @@ function MyOrders() {
                                         {order.shipment_status || order.status}
                                     </span>
                                 </div>
-                            </div>
+                            </Link>
+
+                            {showPayNow && (
+                                <button
+                                    onClick={() => handleCompletePayment(order)}
+                                    disabled={payingOrderId === order.id}
+                                    className={`w-full py-3 rounded-2xl font-black text-sm tracking-tight flex items-center justify-center gap-2 transition-all ${
+                                        payingOrderId === order.id
+                                            ? 'bg-gray-200 text-gray-400'
+                                            : 'bg-primary text-white hover:scale-[1.01] active:scale-[0.99]'
+                                    }`}
+                                >
+                                    <CreditCard className="w-4 h-4" />
+                                    {payingOrderId === order.id ? 'Opening payment…' : 'Complete Payment'}
+                                </button>
+                            )}
 
                             <div className="flex items-center justify-between border-t border-gray-50 pt-3">
                                 <div className="flex items-center gap-2 text-[10px] text-gray-500">
                                     <MapPin className="w-3 h-3" />
                                     <span className="truncate max-w-[180px]">{order.delivery_address}</span>
                                 </div>
-                                <div className="flex items-center gap-1 text-primary font-bold text-xs group-hover:gap-2 transition-all">
+                                <Link
+                                    to={`/track/${order.id}`}
+                                    className="flex items-center gap-1 text-primary font-bold text-xs group-hover:gap-2 transition-all"
+                                >
                                     Track Order <ChevronRight className="w-3.5 h-3.5" />
-                                </div>
+                                </Link>
                             </div>
-                        </Link>
-                    ))}
+                        </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

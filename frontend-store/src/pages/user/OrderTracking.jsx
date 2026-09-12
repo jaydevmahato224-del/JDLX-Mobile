@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban } from 'lucide-react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'
+import { loadRazorpay } from '../../utils/loadRazorpay'
+import { toast } from 'react-hot-toast'
 
 function OrderTracking() {
     const { orderId } = useParams();
+    const navigate = useNavigate();
     const [order, setOrder] = useState(null);
     const [error, setError] = useState(null);
+    const [payingNow, setPayingNow] = useState(false);
     const [trackingInfo, setTrackingInfo] = useState(null);
     const [riderLocation, setRiderLocation] = useState(null);
     const [routeData, setRouteData] = useState(null);
@@ -22,6 +26,81 @@ function OrderTracking() {
     const [customReason, setCustomReason] = useState('');
     const [message, setMessage] = useState({ type: '', text: '' });
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // Payment recovery: an order still PLACED with pending payment means the
+    // gateway step at checkout failed or was dismissed. Offer Complete Payment
+    // right on the tracking page so the order doesn't stay stuck forever.
+    const needsPayment = order &&
+        (order.status || '').toUpperCase() === 'PLACED' &&
+        (order.payment_status || 'pending').toLowerCase() === 'pending';
+
+    const handleCompletePayment = async () => {
+        if (payingNow) return;
+        setPayingNow(true);
+        try {
+            const res = await apiFetch('/payment/retry', {
+                method: 'POST',
+                body: JSON.stringify({ order_id: Number(orderId) })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.message || data?.error || 'Could not start payment');
+
+            const paymentData = data.data || {};
+            await loadRazorpay();
+
+            const rzp = new window.Razorpay({
+                key: paymentData.key_id,
+                amount: paymentData.amount,
+                currency: paymentData.currency,
+                name: 'JDLX Mobile',
+                description: `Order #${order?.order_number || orderId}`,
+                order_id: paymentData.razorpay_order_id,
+                prefill: { contact: order?.customer_phone || '' },
+                theme: { color: '#6366f1' },
+                handler: async (response) => {
+                    try {
+                        const verifyRes = await apiFetch('/payment/verify', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                order_id: Number(orderId),
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature
+                            })
+                        });
+                        if (verifyRes.ok) {
+                            toast.success('Payment successful! Your order is confirmed.');
+                            // Refresh so the timeline shows CONFIRMED.
+                            window.location.reload();
+                        } else {
+                            const err = await verifyRes.json().catch(() => ({}));
+                            toast.error(err?.message || 'Payment verification failed');
+                        }
+                    } catch (e) {
+                        console.error('Verification error:', e);
+                        toast.error('Payment verification encountered an error');
+                    } finally {
+                        setPayingNow(false);
+                    }
+                },
+                modal: {
+                    ondismiss: () => {
+                        setPayingNow(false);
+                        toast.error('Payment cancelled');
+                    }
+                }
+            });
+            rzp.on('payment.failed', () => {
+                setPayingNow(false);
+                toast.error('Payment failed. Please try again.');
+            });
+            rzp.open();
+        } catch (e) {
+            console.error('Retry payment error:', e);
+            toast.error(e.message || 'Something went wrong');
+            setPayingNow(false);
+        }
+    };
 
     // Haversine formula for client-side distance calculation
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -243,6 +322,32 @@ function OrderTracking() {
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                     <Truck className="w-24 h-24 text-primary" />
                 </div>
+
+                {needsPayment && (
+                    <div className="flex flex-col gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                                <CreditCard className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black text-amber-700">Payment Pending</p>
+                                <p className="text-[11px] font-bold text-amber-600">
+                                    Your order is placed but payment isn't complete — complete it to move your order to the warehouse.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleCompletePayment}
+                            disabled={payingNow}
+                            className={`w-full py-3 rounded-xl font-black text-sm tracking-tight flex items-center justify-center gap-2 transition-all ${
+                                payingNow ? 'bg-amber-200 text-amber-400' : 'bg-amber-500 text-white hover:bg-amber-600'
+                            }`}
+                        >
+                            <CreditCard className="w-4 h-4" />
+                            {payingNow ? 'Opening payment…' : 'Complete Payment'}
+                        </button>
+                    </div>
+                )}
 
                 {isOrderInactive ? (
                     <div className="flex flex-col gap-4">

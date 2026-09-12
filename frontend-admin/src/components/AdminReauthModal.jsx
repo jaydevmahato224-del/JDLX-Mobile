@@ -37,6 +37,7 @@ const AdminReauthModal = () => {
             const res = await fetch(`${API_BASE_URL}/admin/request-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // cross-origin: without this the CSRF-exempt endpoint is fine but consistent cookie handling matters
                 body: JSON.stringify({ email: adminUser.email })
             });
             const data = await res.json();
@@ -67,6 +68,11 @@ const AdminReauthModal = () => {
             const res = await fetch(`${API_BASE_URL}/admin/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                // CRITICAL: the backend answers with Set-Cookie (fresh 8h JWT).
+                // Cross-origin fetches drop response cookies unless credentials
+                // are included — without it the new token was never stored, the
+                // next admin API call 401'd, and this modal reopened forever.
+                credentials: 'include',
                 body: JSON.stringify({ email: adminUser.email, otp })
             });
             const data = await res.json();

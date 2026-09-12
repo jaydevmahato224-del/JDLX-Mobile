@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, MapPin, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
@@ -37,7 +37,6 @@ function AdminLayout({ children }) {
         { path: '/admin/categories', icon: FolderTree, label: 'Categories', allowedRoles: ['super_admin', 'admin', 'inventory_admin'] },
         { path: '/admin/device-models', icon: Smartphone, label: 'Device Models', allowedRoles: ['super_admin', 'admin', 'inventory_admin'] },
         { path: '/admin/delivery-applications', icon: Truck, label: 'Manage Delivery', allowedRoles: ['super_admin', 'admin', 'delivery_admin'] },
-        { path: '/admin/stores', icon: MapPin, label: 'Dark Stores', allowedRoles: ['super_admin', 'admin'] },
         { path: '/admin/warehouse-applications', icon: Warehouse, label: 'Warehouse Requests', allowedRoles: ['super_admin', 'admin', 'manager'] },
         { path: '/admin/restocking', icon: RefreshCcw, label: 'Restocking', allowedRoles: ['super_admin', 'admin', 'inventory_admin'] },
         { path: '/admin/refunds', icon: AlertCircle, label: 'Refunds', allowedRoles: ['super_admin', 'admin', 'support_admin'] },

@@ -30,7 +30,7 @@ def get_system_stats():
                     END
                 ), 0)
                 FROM orders
-                WHERE DATE(created_at) = DATE('now')
+                WHERE DATE(created_at) = DATE('now', '+5 hours', '+30 minutes')
                 AND order_status NOT IN ('PLACED', 'CANCELLED', 'REJECTED')
             ) AS daily_revenue
         '''

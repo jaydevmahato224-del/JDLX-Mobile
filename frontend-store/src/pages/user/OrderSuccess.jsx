@@ -78,7 +78,7 @@ function OrderSuccess() {
       <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
         <button 
           onClick={() => navigate(`/track/${orderId}`)}
-          className="btn-primary flex-1 flex items-center justify-center gap-2"
+          className="flex-1 py-4 rounded-[20px] bg-primary text-[var(--color-on-primary)] font-black tracking-tight flex items-center justify-center gap-2 shadow-lg hover:bg-[var(--color-primary-dark)] active:scale-95 transition-all"
         >
           Track Order <ArrowRight size={18} />
         </button>

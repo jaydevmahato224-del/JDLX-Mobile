@@ -7199,6 +7199,69 @@ def get_cancelled_analytics():
         return error_response(str(e), 500)
 
 
+@app.route('/api/admin/dashboard-pulse', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("view_analytics")
+def admin_dashboard_pulse():
+    """Read-only operational snapshot for the admin dashboard.
+
+    Returns the real multi-vendor (warehouse-based) state:
+      - order_status_breakdown: counts per order lifecycle stage
+      - pending_actions: items that need an admin decision today
+    Legacy quick-delivery concepts (dark stores, store_inventory, rider
+    fleet) are deliberately NOT part of this snapshot.
+    """
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT UPPER(order_status) as status, COUNT(*) as count
+            FROM orders GROUP BY UPPER(order_status)
+        """)
+        order_status_breakdown = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("SELECT COUNT(*) FROM refund_requests WHERE LOWER(status) = 'pending'")
+        pending_refunds = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM complaints WHERE LOWER(status) = 'pending'")
+        pending_complaints = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM warehouse_applications WHERE LOWER(COALESCE(verification_status, 'pending')) = 'pending'")
+        pending_warehouse_requests = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM delivery_applications WHERE LOWER(COALESCE(verification_status, 'pending')) = 'pending'")
+        pending_delivery_requests = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM warehouse_inventory wi
+            JOIN products p ON p.id = wi.product_id
+            WHERE COALESCE(wi.stock_quantity, 0) <= p.low_stock_threshold
+               OR COALESCE(wi.available_stock, 0) <= p.low_stock_threshold
+        """)
+        warehouse_low_stock = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM products")
+        total_products = cursor.fetchone()[0]
+
+        conn.close()
+        return jsonify({
+            "order_status_breakdown": order_status_breakdown,
+            "pending_actions": {
+                "refunds": pending_refunds,
+                "complaints": pending_complaints,
+                "warehouse_requests": pending_warehouse_requests,
+                "delivery_requests": pending_delivery_requests,
+            },
+            "warehouse_low_stock": warehouse_low_stock,
+            "total_products": total_products,
+        })
+    except Exception as e:
+        return error_response(str(e), 500)
+
+
 @app.route('/api/admin/recent-orders', methods=['GET'])
 @token_required
 @require_admin()

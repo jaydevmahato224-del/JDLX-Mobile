@@ -136,6 +136,7 @@ function MyOrders() {
                 <div className="flex flex-col gap-4">
                     {orders.map(order => {
                         const showPayNow = needsPayment(order);
+                        const statusUpper = (order.status || '').toUpperCase();
                         return (
                         <div
                             key={order.id}
@@ -161,12 +162,12 @@ function MyOrders() {
                                     {/* (delivery-type badge removed — quick delivery is retired;
                                         all orders use standard scheduled fulfillment.) */}
                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                        order.shipment_status === 'DELIVERED' || order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
+                                        order.shipment_status === 'DELIVERED' || statusUpper === 'DELIVERED' ? 'bg-green-100 text-green-700' :
+                                        statusUpper === 'CANCELLED' || ['RTO', 'RETURNED', 'CANCELLED'].includes(order.shipment_status) ? 'bg-red-100 text-red-700' :
                                         ['IN_TRANSIT', 'SHIPPED', 'In Transit'].includes(order.shipment_status) ? 'bg-orange-100 text-orange-700' :
                                         order.shipment_status === 'assigned' ? 'bg-blue-100 text-blue-700' :
-                                        ['RTO', 'RETURNED'].includes(order.shipment_status) ? 'bg-red-100 text-red-700' :
-                                        order.status === 'OUT_FOR_DELIVERY' ? 'bg-blue-100 text-blue-700' :
-                                        order.status === 'PACKING' ? 'bg-purple-100 text-purple-700' :
+                                        statusUpper === 'OUT_FOR_DELIVERY' ? 'bg-blue-100 text-blue-700' :
+                                        statusUpper === 'PACKING' ? 'bg-purple-100 text-purple-700' :
                                         'bg-yellow-100 text-yellow-700'
                                     }`}>
                                         {order.shipment_status || order.status}

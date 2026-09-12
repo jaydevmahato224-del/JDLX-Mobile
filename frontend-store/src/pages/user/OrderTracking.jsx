@@ -401,7 +401,7 @@ function OrderTracking() {
                         {/* Hero status card — gradient, status-aware copy and a
                             progress bar so the customer instantly sees where
                             their order is and what happens next. */}
-                        <div className="relative rounded-3xl p-6 bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-500 text-white overflow-hidden shadow-xl shadow-indigo-500/20">
+                        <div className="relative rounded-3xl p-6 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white overflow-hidden shadow-xl shadow-amber-500/25">
                             <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
                             <div className="absolute -bottom-10 -left-6 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
                             <div className="relative flex items-start justify-between gap-4">
@@ -430,7 +430,7 @@ function OrderTracking() {
                                 <p className="text-[12px] font-medium text-white/85 mt-2">{hero.sub}</p>
                                 <div className="mt-3 h-2 rounded-full bg-white/20 overflow-hidden">
                                     <div
-                                        className="h-full rounded-full bg-gradient-to-r from-amber-300 to-yellow-200 transition-all duration-700"
+                                        className="h-full rounded-full bg-gradient-to-r from-white to-amber-100 transition-all duration-700"
                                         style={{ width: `${progressPct}%` }}
                                     />
                                 </div>

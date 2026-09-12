@@ -143,6 +143,7 @@ cors_origins = [
     r"^http://10\.0\.2\.2:517[3-5]$",
     r"^https?://(www\.)?jdlxmobile\.in$",
     r"^https?://jdlx-official-admin\.vercel\.app$",
+    r"^https?://jdlx-mobile-admin\.vercel\.app$",
     r"^https?://jdlx-mobile-wearhouse\.vercel\.app$",
     r"^https?://jdlx-mobile\.vercel\.app$",
     r"^https?://jdlx-mobile\.onrender\.com$",

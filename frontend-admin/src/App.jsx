@@ -61,7 +61,12 @@ window.fetch = async (...args) => {
 
     // ONLY trigger global error screens for our backend API failures
     if (isBackendUrl && !isBackground) {
-      if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+      // 'network' (No Internet screen + auto reload-on-reconnect) ONLY when
+      // the browser is actually offline. When online, a thrown fetch is a
+      // server/CORS/DNS problem: classifying it as 'network' caused the
+      // no-internet → connection-restored → reload → no-internet loop whenever
+      // the real issue was a blocked origin or backend downtime.
+      if (!navigator.onLine) {
         setGlobalError('network');
       } else {
         setGlobalError('server');

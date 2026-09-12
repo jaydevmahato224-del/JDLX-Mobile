@@ -274,11 +274,11 @@ function OrderTracking() {
     const isOrderInactive = isTerminalStatus || isPendingRefundRequest;
 
     const stages = [
-        { id: 'PLACED', label: 'Order Placed', icon: Clock, time: order?.created_at },
-        { id: 'CONFIRMED', label: 'Confirmed', icon: CheckCircle, time: order?.confirmed_at },
-        { id: 'PACKED', label: 'Packed', icon: Package, time: order?.packed_at },
-        { id: 'SHIPPED', label: 'Shipped', icon: Truck, time: order?.shipped_at },
-        { id: 'DELIVERED', label: 'Delivered', icon: CheckCircle, time: order?.delivered_at }
+        { id: 'PLACED', label: 'Order Placed', icon: Clock, time: order?.created_at, desc: 'We received your order' },
+        { id: 'CONFIRMED', label: 'Confirmed', icon: CheckCircle, time: order?.confirmed_at, desc: 'Warehouse accepted — packing coming up' },
+        { id: 'PACKED', label: 'Packed', icon: Package, time: order?.packed_at, desc: 'Your items are sealed & ready' },
+        { id: 'SHIPPED', label: 'Shipped', icon: Truck, time: order?.shipped_at, desc: 'Handed to the courier' },
+        { id: 'DELIVERED', label: 'Delivered', icon: CheckCircle, time: order?.delivered_at, desc: 'Enjoy your order!' }
     ];
 
     const getCurrentStageIndex = () => {
@@ -308,6 +308,27 @@ function OrderTracking() {
     );
 
     const activeIndex = getCurrentStageIndex();
+    // Human-friendly status copy for the hero. The old "Confirmed — In
+    // Progress..." read like something was stuck; these say what is actually
+    // happening at each step.
+    const statusCopy = {
+        PLACED:    { title: 'Order Received', sub: 'Waiting for the warehouse to accept your order' },
+        CONFIRMED: { title: 'Confirmed at Warehouse', sub: 'Accepted by the warehouse — packing starts next' },
+        PACKING:   { title: 'Being Packed', sub: 'Your items are being packed right now' },
+        PACKED:    { title: 'Packed & Ready', sub: 'Sealed and ready for courier handoff' },
+        SHIPPED:   { title: 'Shipped', sub: 'Your parcel is on its way' },
+        OUT_FOR_DELIVERY: { title: 'Out for Delivery', sub: 'Arriving today — keep your phone handy' },
+        DELIVERED: { title: 'Delivered', sub: 'Thanks for shopping with JDLX!' }
+    };
+    const hero = statusCopy[order?.status?.toUpperCase()] || { title: 'Order Received', sub: 'We are processing your order' };
+    const progressPct = activeIndex < 0 ? 8 : Math.min(100, Math.round(((activeIndex + (order?.status === 'DELIVERED' ? 1 : 0.5)) / stages.length) * 100));
+
+    const fmtStageTime = (t) => {
+        if (!t) return '';
+        const d = new Date(t);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    };
 
     return (
         <div className="container-standard py-6 flex flex-col gap-6">
@@ -377,43 +398,90 @@ function OrderTracking() {
                     </div>
                 ) : (
                     <>
-                        <div className="flex flex-col">
-                            <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">Estimated Delivery</div>
-                            <div className="text-3xl font-black text-primary">
-                                {order?.status === 'DELIVERED' ? 'Delivered' : (trackingInfo?.estimated_delivery_time || order?.estimated_delivery)}
+                        {/* Hero status card — gradient, status-aware copy and a
+                            progress bar so the customer instantly sees where
+                            their order is and what happens next. */}
+                        <div className="relative rounded-3xl p-6 bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-500 text-white overflow-hidden shadow-xl shadow-indigo-500/20">
+                            <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+                            <div className="absolute -bottom-10 -left-6 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
+                            <div className="relative flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/70">
+                                        {order?.status === 'DELIVERED' ? 'Completed' : 'Estimated Delivery'}
+                                    </p>
+                                    <p className="text-3xl font-black tracking-tighter mt-1">
+                                        {order?.status === 'DELIVERED' ? 'Delivered 🎉' : (trackingInfo?.estimated_delivery_time || order?.estimated_delivery || '3-5 business days')}
+                                    </p>
+                                </div>
+                                <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 border border-white/20">
+                                    {(() => {
+                                        const StageIcon = stages[Math.max(0, activeIndex)]?.icon || Clock;
+                                        return <StageIcon className="w-7 h-7" />;
+                                    })()}
+                                </div>
+                            </div>
+                            <div className="relative mt-5">
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur text-[11px] font-black uppercase tracking-widest border border-white/25">
+                                        {hero.title}
+                                    </span>
+                                    <span className="text-[11px] font-bold text-white/85">{progressPct}% complete</span>
+                                </div>
+                                <p className="text-[12px] font-medium text-white/85 mt-2">{hero.sub}</p>
+                                <div className="mt-3 h-2 rounded-full bg-white/20 overflow-hidden">
+                                    <div
+                                        className="h-full rounded-full bg-gradient-to-r from-amber-300 to-yellow-200 transition-all duration-700"
+                                        style={{ width: `${progressPct}%` }}
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <div className="relative flex flex-col gap-8 mt-4">
-                            {/* Vertical Line */}
-                            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-[var(--color-surface-container)]"></div>
+                        {/* Stepper timeline — connected icons with per-stage
+                            descriptions; current step pulses, done steps check. */}
+                        <div className="relative flex flex-col gap-7 mt-2">
+                            <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-[var(--color-surface-container)]">
+                                <div
+                                    className="w-full bg-green-500 transition-all duration-700"
+                                    style={{ height: activeIndex < 0 ? '0%' : `${Math.min(100, ((activeIndex) / (stages.length - 1)) * 100)}%` }}
+                                />
+                            </div>
 
                             {stages.map((stage, index) => {
                                 const Icon = stage.icon;
-                                const isCompleted = index <= activeIndex;
-                                const isCurrent = index === activeIndex;
+                                const isDone = index < activeIndex || (order?.status === 'DELIVERED' && index === stages.length - 1);
+                                const isCurrent = index === activeIndex && order?.status !== 'DELIVERED';
 
                                 return (
                                     <div key={stage.id} className="flex gap-4 items-start relative z-10">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${isCurrent ? 'bg-primary text-white scale-110 shadow-lg ring-4 ring-primary/20' :
-                                            isCompleted ? 'bg-green-500 text-white' : 'bg-[var(--color-surface-card)] text-[var(--color-on-surface-variant)] border-2 border-[var(--color-surface-high)]'
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 shrink-0 ${
+                                            isCurrent ? 'bg-primary text-white scale-110 shadow-lg shadow-primary/30 ring-4 ring-primary/20' :
+                                            isDone ? 'bg-green-500 text-white shadow-md shadow-green-500/30' :
+                                            'bg-[var(--color-surface-card)] text-[var(--color-on-surface-variant)] border-2 border-[var(--color-surface-high)]'
                                             }`}>
-                                            <Icon className="w-5 h-5" />
+                                            {isDone && !isCurrent ? <Check size={18} strokeWidth={3} /> : <Icon className="w-5 h-5" />}
                                         </div>
-                                        <div className="flex-1 pt-1">
-                                            <h3 className={`font-bold text-sm ${isCompleted ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}`}>
-                                                {stage.label}
-                                            </h3>
-                                            {stage.time && (
-                                                <p className="text-[10px] text-gray-400">
-                                                    {new Date(stage.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </p>
-                                            )}
-                                            {isCurrent && stage.id !== 'DELIVERED' && (
-                                                <p className="text-[11px] text-primary font-medium mt-1 animate-pulse">
-                                                    In Progress...
-                                                </p>
-                                            )}
+                                        <div className="flex-1 pt-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                <h3 className={`font-black text-sm tracking-tight ${isDone || isCurrent ? 'text-[var(--color-on-surface)]' : 'text-gray-400'}`}>
+                                                    {stage.label}
+                                                </h3>
+                                                {stage.time && (
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isDone || isCurrent ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                        {fmtStageTime(stage.time)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className={`text-[11px] mt-0.5 ${isCurrent ? 'text-primary font-semibold' : isDone ? 'text-[var(--color-on-surface-variant)]' : 'text-gray-400'}`}>
+                                                {isCurrent ? (
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+                                                        {stage.desc}
+                                                    </span>
+                                                ) : (
+                                                    stage.desc
+                                                )}
+                                            </p>
                                         </div>
                                     </div>
                                 );

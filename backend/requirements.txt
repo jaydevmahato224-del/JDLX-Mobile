@@ -12,6 +12,7 @@ razorpay==2.0.1
 Authlib==1.7.2
 gunicorn==26.1.0
 pdfplumber==0.11.10
+fpdf2==2.8.8
 Pillow==12.3.0
 psutil==7.2.2
 libsql-experimental==0.0.55

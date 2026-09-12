@@ -5496,6 +5496,87 @@ def get_user_orders():
     except Exception as e:
         return error_response(str(e), 500)
 
+@app.route('/api/invoice/<int:order_id>', methods=['GET'])
+@token_required
+def download_order_invoice(order_id):
+    """Download the customer's tax invoice PDF for an online order.
+
+    Owner-only: the order must belong to the authenticated user (admins are
+    not granted this route — it mirrors the storefront ownership guards).
+    The invoice is rendered read-only from existing order data; cancellation
+    or payment state does not block download (the invoice shows the real
+    payment/number data either way).
+    """
+    user_id = request.user['user_id']
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        order_row = cursor.execute('''
+            SELECT id, order_number, created_at, order_status, payment_status,
+                   payment_type, customer_name, customer_phone, phone,
+                   delivery_address, total_amount, platform_fee, delivery_fee,
+                   fitting_charge, estimated_delivery, dark_store_id
+            FROM orders WHERE id = ? AND user_id = ?
+        ''', (order_id, user_id)).fetchone()
+        if not order_row:
+            return error_response('Order not found', 404)
+        order = dict(order_row)
+
+        items = [dict(r) for r in cursor.execute('''
+            SELECT product_name, quantity, price, variant_name, device_model
+            FROM order_items WHERE order_id = ?
+        ''', (str(order_id),)).fetchall()]
+
+        # Sold By: the warehouse the order is assigned/fulfilled from.
+        vendor = None
+        vendor_row = cursor.execute('''
+            SELECT w.warehouse_name as name, w.address, w.phone, w.email
+            FROM warehouse_order_assignments woa
+            JOIN warehouses w ON w.id = woa.warehouse_id
+            WHERE woa.order_id = ?
+            ORDER BY woa.id DESC LIMIT 1
+        ''', (order_id,)).fetchone()
+        if vendor_row:
+            vendor = dict(vendor_row)
+        else:
+            # Offline/POS orders may live in warehouse_orders instead.
+            vendor_row = cursor.execute('''
+                SELECT w.warehouse_name as name, w.address, w.phone, w.email
+                FROM warehouse_orders wo
+                JOIN warehouses w ON w.id = wo.warehouse_partner_id
+                WHERE wo.order_id = ?
+                ORDER BY wo.id DESC LIMIT 1
+            ''', (order_id,)).fetchone()
+            if vendor_row:
+                vendor = dict(vendor_row)
+
+        settings = {}
+        try:
+            settings = {
+                r['key']: r['value']
+                for r in cursor.execute(
+                    "SELECT key, value FROM system_settings"
+                ).fetchall()
+            }
+        except Exception:
+            settings = {}
+
+        from invoice_generator import generate_order_invoice_pdf
+        pdf_bytes = generate_order_invoice_pdf(order, items, vendor=vendor, settings=settings)
+
+        filename = f"{order.get('order_number') or ('ORD-' + str(order_id))}-invoice.pdf"
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Cache-Control': 'no-store',
+            },
+        )
+    except Exception as e:
+        logger.error(f'Invoice generation failed for order {order_id}: {e}')
+        return error_response('Could not generate invoice', 500)
+
 @app.route('/api/order/<int:order_id>/tracking', methods=['GET'])
 @token_required
 def get_order_tracking(order_id):

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard } from 'lucide-react'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard, Download } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
+import { downloadOrderInvoice } from '../../utils/downloadInvoice'
 import { toast } from 'react-hot-toast'
 
 function OrderTracking() {
@@ -16,6 +17,7 @@ function OrderTracking() {
     const [riderLocation, setRiderLocation] = useState(null);
     const [routeData, setRouteData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [invoiceBusy, setInvoiceBusy] = useState(false);
     const [, setShipmentLoading] = useState(false);
     const [shipmentData, setShipmentData] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
@@ -337,6 +339,14 @@ function OrderTracking() {
                     <ArrowLeft className="w-5 h-5 text-[var(--color-on-surface-variant)]" />
                 </Link>
                 <h1 className="text-2xl font-bold text-[var(--color-on-surface)]">Track Order #{order?.order_number || orderId}</h1>
+                <button
+                    onClick={() => downloadOrderInvoice(orderId, { setBusy: setInvoiceBusy, filename: `${order?.order_number || `ORD-${orderId}`}-invoice.pdf` })}
+                    disabled={invoiceBusy}
+                    className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider bg-primary/10 text-primary-dark border border-primary/20 hover:bg-primary/20 active:scale-95 transition-all disabled:opacity-50"
+                >
+                    <Download className="w-3.5 h-3.5" />
+                    {invoiceBusy ? 'Preparing…' : 'Invoice'}
+                </button>
             </div>
 
             <div className="glass-card p-6 flex flex-col gap-6 relative overflow-hidden">

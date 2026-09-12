@@ -24,6 +24,12 @@ function ProfileSettings() {
 
     useEffect(() => {
         const fetchProfile = async () => {
+            // Don't fire an authenticated call for guests (the redirect effect
+            // above handles them) — it would only produce a noisy 401.
+            if (!user) {
+                setLoading(false);
+                return;
+            }
             try {
                 const res = await apiFetch('/user/profile');
                 if (res.ok) {
@@ -38,7 +44,7 @@ function ProfileSettings() {
             }
         };
         fetchProfile();
-    }, []);
+    }, [user]);
 
     const handleFileChange = e => {
         const file = e.target.files[0];

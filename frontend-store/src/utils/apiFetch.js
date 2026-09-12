@@ -26,8 +26,13 @@ export async function apiFetch(endpoint, options = {}) {
     options.headers instanceof Headers
       ? Object.fromEntries(options.headers.entries())
       : options.headers
+  // Never force a JSON Content-Type on a FormData body: it strips the multipart
+  // boundary, so the server sees no files/form fields at all (this silently
+  // broke every profile-image / complaint / refund / report upload). Let the
+  // browser set the multipart Content-Type automatically in that case.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
   const defaultHeaders = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(userToken ? { 'Authorization': `Bearer ${userToken}` } : {}),
     ...(extraHeaders || {}),
   }

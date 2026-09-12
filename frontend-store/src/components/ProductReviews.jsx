@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Star, ThumbsUp, CheckCircle2, MessageSquare, AlertCircle, Send, X, Camera, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../config'
-import { useStore } from '../store/useStore'
 import toast from 'react-hot-toast'
 import { apiFetch } from '../utils/apiFetch'
 

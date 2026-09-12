@@ -190,12 +190,17 @@ export const useStore = create((set, get) => ({
         }
     },
     initAuth: async () => {
-        // If user already cached in localStorage, skip API call
+        // Optimistically restore the cached user so the UI renders instantly,
+        // then re-validate the session against the backend in the background.
+        // The cookie/token may have expired or been invalidated server-side;
+        // without this re-check the app stays stuck in a fake "logged in" state
+        // and every authenticated call 401s silently forever.
         const cachedUser = safeParse('user');
         if (cachedUser) {
             set({ user: cachedUser });
             get().fetchCart();
             get().fetchWishlist();
+            get().validateSession();
             return true;
         }
         
@@ -217,7 +222,7 @@ export const useStore = create((set, get) => ({
                     }
                 }
             }
-        } catch (e) {
+        } catch {
             // Silently fail - user is not logged in, that's OK
             // Don't log to console to avoid cluttering during normal use
         }
@@ -227,12 +232,46 @@ export const useStore = create((set, get) => ({
         set({ user: null, token: null });
         return false;
     },
-    logout: async () => {
+    // Re-validate the persisted session with the backend. Returns true when the
+    // session is confirmed valid, or when the check could not be completed
+    // (offline / backend hiccup) — a transient network failure must never log a
+    // user out. Only a definitive 401 clears the local session.
+    validateSession: async () => {
+        try {
+            const res = await apiFetch('/api/auth/verify-token');
+            if (res.status === 401) {
+                get().clearLocalSession({ expired: true });
+                return false;
+            }
+            return res.ok;
+        } catch {
+            return true;
+        }
+    },
+    // Clear every locally cached, user-scoped datum. Used both by logout and by
+    // the global 401 handler, so a dead session can never keep showing the
+    // previous account's wishlist/cart on a shared device.
+    clearLocalSession: (opts = {}) => {
+        const wasLoggedIn = !!get().user;
         localStorage.removeItem('user');
         localStorage.removeItem('userToken');
         localStorage.removeItem('cart');
+        localStorage.removeItem('wishlist');
+        // Regenerate the guest cart session id so a new user on the same device
+        // never inherits the previous user's server-side cart.
+        localStorage.setItem('sessionId', Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+        set({ user: null, token: null, cart: [], wishlist: [] });
+        // Only surface a message when the session actually died (not on an
+        // explicit logout), and only once (a burst of 401s clears just once).
+        if (opts.expired && wasLoggedIn) {
+            toast.error('Session expired. Please login again.');
+        }
+    },
+    logout: async () => {
+        // Clear locally FIRST so the UI reacts immediately and no user-scoped
+        // data (wishlist included) leaks to the next user on this device.
+        get().clearLocalSession();
         await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        set({ user: null, cart: [], token: null });
     },
     setAdminUser: (adminUser, adminToken) => {
         if (adminUser && adminToken) {
@@ -421,15 +460,13 @@ export const useStore = create((set, get) => ({
         set({ cart: [] });
     },
     registerForNotification: async (productId, email) => {
-        const { user } = get();
         try {
-            const response = await fetch(`${API_BASE_URL}/products/${productId}/notify`, {
+            // Use the authenticated wrapper so the server can attach the in-app
+            // notification to the real session user (the backend no longer
+            // trusts a client-supplied user_id).
+            const response = await apiFetch(`/products/${productId}/notify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    email, 
-                    user_id: user?.id 
-                })
+                body: JSON.stringify({ email })
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Failed to register notification');
@@ -607,6 +644,13 @@ export const useStore = create((set, get) => ({
     fetchWishlist: async () => {
         try {
             const res = await apiFetch(`/wishlist?_t=${Date.now()}`);
+            if (res.status === 401) {
+                // Session is gone — drop the cached wishlist instead of
+                // continuing to show another user's saved items (and count).
+                localStorage.removeItem('wishlist');
+                set({ wishlist: [] });
+                return;
+            }
             const data = await res.json();
             if (res.ok) {
                 const normalized = Array.isArray(data) ? data : (data.data || []);

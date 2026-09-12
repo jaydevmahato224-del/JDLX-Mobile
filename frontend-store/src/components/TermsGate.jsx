@@ -12,7 +12,6 @@ function parseTermsVersion(settingsData) {
 
 function TermsGate() {
   const user = useStore((s) => s.user)
-  const token = useStore.getState().token
   const setUser = useStore((s) => s.setUser)
 
   const [requiredVersion, setRequiredVersion] = useState(1)
@@ -46,13 +45,19 @@ function TermsGate() {
         setRequiredVersion(version)
         setTermsContent(settingsJson?.data?.terms_and_conditions_content || '')
 
-        let freshAcceptedVersion = Number(currentUser?.terms_accepted_version || 0)
-
-        if (profileRes.ok && profileJson) {
-          setUser(profileJson)
-          freshAcceptedVersion = Number(profileJson.terms_accepted_version || 0)
+        // Only trust the authoritative profile response for the accept state.
+        // If it failed (expired session, transient network error), do NOT fall
+        // back to the cached user — it may not carry terms_accepted_version at
+        // all, which would wrongly block users who already accepted with a
+        // "Terms Required" modal. A dead session is handled globally by the
+        // 401 guard, so staying closed here is safe.
+        if (!profileRes.ok || !profileJson) {
+          setOpen(false)
+          return
         }
-        
+
+        setUser(profileJson)
+        const freshAcceptedVersion = Number(profileJson.terms_accepted_version || 0)
         setOpen(freshAcceptedVersion < version)
       } catch {
         // ignore; do not block app due to transient errors

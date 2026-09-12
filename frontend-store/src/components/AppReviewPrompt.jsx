@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Star, X } from 'lucide-react';
-import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../utils/apiFetch'

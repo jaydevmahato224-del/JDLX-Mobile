@@ -17,7 +17,6 @@ const DISMISSED_FLAG = 'jdlx_push_banner_dismissed';
  * the subscription is registered with the backend so pushes are delivered.
  */
 const PushPermissionBanner = () => {
-  const token = useStore((state) => state.token);
   const user = useStore((state) => state.user);
   const [permission, setPermission] = useState('checking'); // checking | granted | denied | default | unsupported
   const [configured, setConfigured] = useState(false);

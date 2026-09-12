@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -108,9 +107,8 @@ function BugReportPage() {
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/bug-report`, {
+            const res = await apiFetch('/bug-report', {
                 method: 'POST',
-                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

@@ -42,21 +42,33 @@ def normalize_role(role):
 
 
 def _decode_bearer_token():
+    """Resolve the caller's JWT from the Authorization header or the cookie.
+
+    Header-first matches app.token_required: admin/API/mobile clients always
+    send a Bearer token and a stray storefront cookie must never shadow it. The
+    HttpOnly `token` cookie is the fallback, so cookie-only storefront sessions
+    are accepted too. Blueprint routes used to read ONLY the header, which is
+    why a cookie-only session got a hard 401 on every `request.user`-based
+    endpoint (bug reports, complaints, refunds, offers, support, …).
+    """
+    header_token = None
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header:
+    if auth_header:
+        parts = auth_header.split(" ", 1)
+        if len(parts) == 2 and parts[1].strip():
+            header_token = parts[1].strip()
+    cookie_token = request.cookies.get("token")
+
+    candidates = [t for t in (header_token, cookie_token) if t]
+    if not candidates:
         return None, ("Token is missing!", 401)
-
-    parts = auth_header.split(" ", 1)
-    if len(parts) != 2:
-        return None, ("Token is invalid!", 401)
-
-    token = parts[1].strip()
     secret = get_jwt_secret()
-    try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
-    except Exception:
-        return None, ("Token is invalid!", 401)
-    return payload, None
+    for token in candidates:
+        try:
+            return jwt.decode(token, secret, algorithms=["HS256"]), None
+        except Exception:
+            continue
+    return None, ("Token is invalid!", 401)
 
 
 def _is_admin_disabled(user_id, role):

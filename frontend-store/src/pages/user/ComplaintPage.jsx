@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -82,9 +81,8 @@ const fetchOrders = async () => {
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/complaint`, {
+            const res = await apiFetch('/complaint', {
                 method: 'POST',
-                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

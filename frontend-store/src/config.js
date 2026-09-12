@@ -1,5 +1,9 @@
 // API Configuration
 const PROD_BACKEND_URL = "https://jdlx-mobile.onrender.com/api";
+// Bare backend origin — used to build absolute media/static URLs. Media is
+// public (no cookies needed), so it can always load straight from the backend
+// even when the API itself is served same-origin through a proxy.
+const PROD_BACKEND_ORIGIN = "https://jdlx-mobile.onrender.com";
 
 function getDefaultApiBaseUrl() {
   if (typeof window === 'undefined') {
@@ -74,7 +78,14 @@ function resolveApiBaseUrl() {
 // Export API_BASE_URL: Use environment variable if set, otherwise use local fallback for localhost or production URL for everything else.
 export const API_BASE_URL = resolveApiBaseUrl();
 
-export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+// When API_BASE_URL is an absolute URL we derive the origin from it. When it is
+// relative (same-origin proxy, e.g. VITE_API_URL=/api via the Vercel rewrite),
+// there is no origin to derive, so media keeps pointing at the backend host —
+// otherwise every product/profile image URL would resolve to the frontend and
+// 404.
+export const API_ORIGIN = /^https?:\/\//i.test(API_BASE_URL)
+  ? API_BASE_URL.replace(/\/api\/?$/, '')
+  : PROD_BACKEND_ORIGIN;
 
 export function resolveMediaUrl(value) {
   if (!value || typeof value !== 'string') {

@@ -698,12 +698,18 @@ def csrf_origin_guard():
         return None
 
     origin = request.headers.get('Origin') or ''
-    if not origin:
-        return None
+    if origin:
+        if _origin_allowed(origin):
+            return None
+        return jsonify({"error": "Cross-site request blocked"}), 403
 
-    if _origin_allowed(origin):
-        return None
-    return jsonify({"error": "Cross-site request blocked"}), 403
+    # No Origin header (older browsers, some form posts): fall back to the
+    # Fetch Metadata hint and fail closed. A cross-site request carrying our
+    # auth cookie is never legitimate; server-to-server callers without the
+    # cookie were already skipped above.
+    if (request.headers.get('Sec-Fetch-Site') or '').lower() == 'cross-site':
+        return jsonify({"error": "Cross-site request blocked"}), 403
+    return None
 
 
 @app.before_request
@@ -856,21 +862,41 @@ app.config["PARTNER_OAUTH_CLIENT"] = oauth
 # AUTHENTICATION & AUTH HELPERS
 # ==============================================================================
 
+def _decode_candidate_tokens():
+    """Resolve the caller's JWT from the Authorization header or the cookie.
+
+    Header-first is deliberate: admin/API/mobile clients always send a Bearer
+    token, and a stray storefront cookie in the same browser must never shadow
+    it (that would downgrade an admin request to a normal-user role). The
+    HttpOnly `token` cookie is the fallback so cookie-only storefront sessions
+    are accepted too. Returns (payload, None) or (None, (message, status)).
+    """
+    header_token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        header_token = auth_header.split(' ', 1)[1].strip()
+    cookie_token = request.cookies.get('token')
+
+    candidates = [t for t in (header_token, cookie_token) if t]
+    if not candidates:
+        return None, ('Token is missing!', 401)
+    for token in candidates:
+        try:
+            return jwt.decode(token, SECRET_KEY, algorithms=["HS256"]), None
+        except Exception:
+            continue
+    return None, ('Token is invalid!', 401)
+
+
 def token_required(f):
-    """Decorator to protect routes with JWT authentication (cookie or header)."""
+    """Decorator to protect routes with JWT authentication (header or cookie)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Prefer HttpOnly cookie; fall back to Authorization header for backward compat
-        token = request.cookies.get('token')
-        if not token:
-            auth_header = request.headers.get('Authorization')
-            if auth_header and auth_header.startswith('Bearer '):
-                token = auth_header.split(' ')[1]
-        if not token:
-            return error_response('Token is missing!', 401)
+        data, err = _decode_candidate_tokens()
+        if err:
+            message, status = err
+            return error_response(message, status)
         try:
-            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            
             # Global Logout Check: Verify if token was issued before min_token_iat
             user_id = data.get('user_id')
             iat = data.get('iat')
@@ -887,6 +913,18 @@ def token_required(f):
             return error_response('Token is invalid!', 401)
         return f(*args, **kwargs)
     return decorated
+
+
+def get_optional_user_id():
+    """Best-effort user id for public endpoints that behave differently for a
+    logged-in caller. Reads the same cookie/Bearer credential as token_required
+    and returns None (never raises) when there is no valid session. Used so
+    public endpoints never trust a client-supplied user_id (spoofing).
+    """
+    data, err = _decode_candidate_tokens()
+    if err or not data:
+        return None
+    return data.get('user_id')
 
 
 # --- Admin OTP Re-authentication ---
@@ -1274,6 +1312,11 @@ def _issue_user_session(user_dict, email, ip_address):
         "age": user_dict.get('age'),
         "email_verified": user_dict.get('email_verified'),
         "phone_verified": user_dict.get('phone_verified'),
+        # Included so the frontend TermsGate can trust the freshly returned
+        # session snapshot instead of defaulting to version 0 (which could pop
+        # the "Terms Required" modal for users who already accepted).
+        "terms_accepted_version": user_dict.get('terms_accepted_version', 0) or 0,
+        "terms_accepted_at": user_dict.get('terms_accepted_at'),
         "role": user_role
     }
     return user_data, jwt_token
@@ -3505,18 +3548,10 @@ def table_has_column(cursor, table_name, column_name):
 def get_cart():
     """Retrieves the user's server-side cart, supporting both token and session_id."""
     try:
-        user_id = None
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            try:
-                import jwt
-                decoded = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-                user_id = decoded.get('user_id')
-            except Exception as e:
-                print(f"DEBUG: JWT decode failed: {e}")
-                pass
-        
+        # Support both the HttpOnly cookie and the Authorization Bearer header so
+        # a logged-in user's cart is never silently downgraded to the guest
+        # session cart when their token only lives in the cookie.
+        user_id = get_optional_user_id()
         session_id = request.args.get('session_id')
         
         if not user_id and not session_id:
@@ -3589,19 +3624,8 @@ def get_cart():
 def update_server_cart():
     """Syncs the cart with the server, supporting both logged-in users and guests."""
     data = request.json
-    # Attempt to get user_id from token, otherwise use session_id
-    user_id = None
-    auth_header = request.headers.get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-        try:
-            import jwt
-            decoded = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-            user_id = decoded.get('user_id')
-        except Exception as e:
-            print(f"DEBUG: update_server_cart JWT decode failed: {e}")
-            pass
-
+    # Attempt to get user_id from the cookie/Bearer token, otherwise use session_id
+    user_id = get_optional_user_id()
     session_id = data.get('session_id')
     action = data.get('action', 'add')
     variant_id = data.get('variant_id')
@@ -3713,8 +3737,11 @@ def update_server_cart():
 def register_product_notification(product_id):
     data = request.get_json(silent=True) or {}
     email = (data.get('email') or '').strip().lower()
-    user_id = data.get('user_id') # Optional
-    
+    # Never trust a client-supplied user_id: derive it from the presented
+    # credential so nobody can create in-app notifications for an arbitrary
+    # account. Guests (no valid session) simply get no in-app notification.
+    user_id = get_optional_user_id()
+
     if not email or '@' not in email or '.' not in email:
         return error_response("Valid email is required", 400)
         
@@ -9156,18 +9183,10 @@ def get_product_reviews(product_id):
         conn = get_db()
         cursor = conn.cursor()
         
-        # 1. Fetch individual reviews
-        current_user_id = None
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(" ")[1]
-            try:
-                from jwt_config import get_jwt_secret
-                import jwt
-                payload = jwt.decode(token, get_jwt_secret(), algorithms=["HS256"])
-                current_user_id = payload.get('user_id')
-            except:
-                pass
+        # 1. Fetch individual reviews (personalization: which reviews this user
+        # already marked helpful). Cookie or Bearer credential — both accepted so
+        # cookie-only sessions keep their personalization.
+        current_user_id = get_optional_user_id()
 
         cursor.execute('''
             SELECT pr.*, u.name as user_name, u.profile_image,
@@ -9693,20 +9712,15 @@ def warehouse_availability():
                 "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true'
             }, "Availability checked")
 
-        # Check user-specific COD restriction if logged in
+        # Check user-specific COD restriction if logged in (cookie or Bearer)
         user_cod_restricted = False
-        token = request.headers.get('Authorization')
-        if token and token.startswith('Bearer '):
+        user_id = get_optional_user_id()
+        if user_id:
             try:
-                from flask import current_app
-                import jwt
-                payload = jwt.decode(token.split(' ')[1], current_app.config['SECRET_KEY'], algorithms=['HS256'])
-                user_id = payload.get('user_id')
-                if user_id:
-                    cursor.execute("SELECT cod_restricted FROM users WHERE id = ?", (user_id,))
-                    u_row = cursor.fetchone()
-                    if u_row and u_row['cod_restricted']:
-                        user_cod_restricted = True
+                cursor.execute("SELECT cod_restricted FROM users WHERE id = ?", (user_id,))
+                u_row = cursor.fetchone()
+                if u_row and u_row['cod_restricted']:
+                    user_cod_restricted = True
             except:
                 pass
 

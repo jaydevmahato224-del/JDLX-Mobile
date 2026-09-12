@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -135,9 +134,8 @@ function RefundRequestPage() {
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/refund-request`, {
+            const res = await apiFetch('/refund-request', {
                 method: 'POST',
-                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

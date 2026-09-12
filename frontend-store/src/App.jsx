@@ -36,6 +36,10 @@ let _lastFailureTimestamp = 0;
 const FAILURE_BATCH_WINDOW_MS = 2000; // Failures within 2s = same batch
 const FAILURE_THRESHOLD = 3; // Number of failure BATCHES before showing error overlay
 
+// Guards the session re-validation below so a burst of simultaneous 401s only
+// triggers ONE verify-token round-trip (and one logout) instead of several.
+let _sessionCheckInFlight = false;
+
 const _originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
@@ -72,42 +76,52 @@ window.fetch = async (...args) => {
       console.log(`%c JDLX STATUS: ${response.status} for ${requestUrl}`, "color: #10b981;");
     }
 
-    if (response.status === 401 && requestUrl.includes('/api/') && !window.location.pathname.startsWith('/login')) {
-      // Only treat a 401 as a session-invalidation when THIS request actually
-      // carried the user's token. Unauthenticated requests that happen to return
-      // 401 (guest/OTP/admin endpoints, stale background calls, etc.) must not
-      // silently wipe a valid session — that caused random "auto-logouts".
+    // Detect a dead session. This must cover BOTH kinds of session:
+    //  - Bearer sessions (apiFetch attaches an Authorization header), and
+    //  - cookie-only sessions (HttpOnly cookie, NO Authorization header) — the
+    //    old logic only ran when an Authorization header was present, so a
+    //    cookie session that had expired kept 401ing forever while the UI still
+    //    showed the user as logged in.
+    if (response.status === 401
+        && requestUrl.includes('/api/')
+        && !requestUrl.includes('/api/auth/')
+        && !window.location.pathname.startsWith('/login')) {
       const init = args[1] || {};
       const headers = init.headers;
-      let hadAuthHeader = false;
       let authHeaderValue = null;
       if (headers) {
         if (typeof headers.get === 'function') {
-          hadAuthHeader = !!headers.get('Authorization');
           authHeaderValue = headers.get('Authorization');
         } else if (typeof headers === 'object') {
-          hadAuthHeader = Object.keys(headers).some(k => k.toLowerCase() === 'authorization' && headers[k]);
           const hdrKey = Object.keys(headers).find(k => k.toLowerCase() === 'authorization');
           authHeaderValue = hdrKey ? headers[hdrKey] : null;
         }
       }
-      if (hadAuthHeader && authHeaderValue) {
-        // Confirm the token is GENUINELY invalid before wiping the session.
-        // A single endpoint can return 401 for unrelated reasons (OTP flow,
-        // permission checks, account state) while the token itself is still
-        // valid — logging out on every 401 caused the recurring random
-        // "auto-logouts" on all devices. Ask the backend's verify-token
-        // endpoint; only logout when it agrees the token is bad.
+
+      const believesLoggedIn = !!useStore.getState().user;
+
+      // Only act when we actually thought we were authenticated (header token,
+      // or a cached user), so guest 401s (OTP/permission/public endpoints)
+      // never wipe a valid session. Confirm with the backend first: a single
+      // endpoint can 401 for unrelated reasons while the token is still good.
+      if ((authHeaderValue || believesLoggedIn) && !_sessionCheckInFlight) {
+        _sessionCheckInFlight = true;
         try {
           const verifyRes = await _originalFetch(`${API_BASE_URL}/auth/verify-token`, {
-            headers: { 'Authorization': authHeaderValue }
+            credentials: 'include',
+            headers: authHeaderValue ? { 'Authorization': authHeaderValue } : undefined,
           });
           if (verifyRes.status === 401) {
-            useStore.getState().logout();
+            // Definitive: the session is dead. Clear it so the UI stops
+            // pretending to be logged in (and drops the stale wishlist/cart),
+            // and tell the user why instead of failing silently.
+            useStore.getState().clearLocalSession({ expired: true });
           }
         } catch {
           // Network hiccup while verifying — never wipe a possibly-valid
           // session because a background request failed.
+        } finally {
+          _sessionCheckInFlight = false;
         }
       }
     }

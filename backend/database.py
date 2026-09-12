@@ -1182,8 +1182,17 @@ def init_db():
     )''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS wishlist (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, product_id INTEGER NOT NULL, variant_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, product_id, variant_id), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(product_id) REFERENCES products(id), FOREIGN KEY(variant_id) REFERENCES product_variants(id))''')
     ensure_columns('wishlist', [('variant_id', 'INTEGER REFERENCES product_variants(id)')])
-    # Backfill unique constraint for existing databases: drop old index, create new
-    cursor.execute("DROP INDEX IF EXISTS sqlite_autoindex_wishlist_1")
+    # Backfill unique constraint for existing databases: drop old index, create new.
+    # NOTE: an auto-index that backs a UNIQUE table constraint
+    # (sqlite_autoindex_*) cannot be dropped — SQLite raises "index associated
+    # with UNIQUE or PRIMARY KEY constraint cannot be dropped" — which used to
+    # abort init_db() entirely. Dropping is only best-effort cleanup; the
+    # explicit unique index below provides the actual guarantee, so swallow the
+    # error and continue.
+    try:
+        cursor.execute("DROP INDEX IF EXISTS sqlite_autoindex_wishlist_1")
+    except sqlite3.OperationalError:
+        pass
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wishlist_user_product_variant ON wishlist(user_id, product_id, variant_id)")
     cursor.execute('''CREATE TABLE IF NOT EXISTS product_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, user_id INTEGER NOT NULL, rating INTEGER NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(product_id, user_id), FOREIGN KEY(product_id) REFERENCES products(id), FOREIGN KEY(user_id) REFERENCES users(id))''')
     ensure_columns('product_reviews', [('review_text', 'TEXT'), ('review_images', 'TEXT'), ('is_verified', 'INTEGER DEFAULT 0'), ('helpful_count', 'INTEGER DEFAULT 0'), ('store_id', 'INTEGER')])
@@ -1203,6 +1212,27 @@ def init_db():
     ensure_columns('notifications', [
         ('is_read', 'INTEGER DEFAULT 0'),
         ('metadata', 'TEXT'),
+    ])
+
+    # "Notify me when back in stock" subscriptions. Used by
+    # /api/products/<id>/notify (insert) and the restock sweep in
+    # warehouse_routes (status pending -> notified). Historically this table only
+    # existed in the production DB and was never created by a migration, so the
+    # endpoint 500'd on any fresh database. Additive CREATE IF NOT EXISTS keeps
+    # existing data untouched.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        email TEXT NOT NULL,
+        product_id INTEGER NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+    ensure_columns('product_notifications', [
+        ('user_id', 'INTEGER'),
+        ('status', "TEXT DEFAULT 'pending'"),
     ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_push_tokens (

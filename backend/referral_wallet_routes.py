@@ -12,26 +12,57 @@ from auth.role_guard import require_admin
 
 referral_wallet_bp = Blueprint('referral_wallet', __name__)
 
-# Basic token_required decorator (standard in this project)
+# token_required decorator — mirrors app.py: resolve the JWT from the
+# Authorization header first, then the HttpOnly cookie. Header-first keeps
+# admin/API clients safe; the cookie fallback fixes the hard 401 that cookie-only
+# sessions used to get on every wallet/referral endpoint.
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
+        header_token = None
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
-            token = auth_header.split(" ", 1)[1]
-        
-        if not token:
+            header_token = auth_header.split(" ", 1)[1].strip()
+        cookie_token = request.cookies.get('token')
+
+        candidates = [t for t in (header_token, cookie_token) if t]
+        if not candidates:
             return jsonify({'message': 'Token is missing!'}), 401
-            
+
         try:
             secret = current_app.config.get('JWT_SECRET') or get_jwt_secret()
-            data = jwt.decode(token, secret, algorithms=["HS256"])
-            g.user_id = data['user_id']
-            # Optional: Check if user exists in DB
+            data = None
+            for candidate in candidates:
+                try:
+                    data = jwt.decode(candidate, secret, algorithms=["HS256"])
+                    break
+                except Exception:
+                    data = None
+            if not data:
+                return jsonify({'message': 'Token is invalid!'}), 401
+
+            user_id = data.get('user_id')
+            if not user_id:
+                return jsonify({'message': 'Token is invalid!'}), 401
+
+            # Global Logout Check: honour min_token_iat so "logout everywhere"
+            # invalidates this token too (same guarantee as app.token_required).
+            iat = data.get('iat')
+            if iat:
+                conn = get_db()
+                try:
+                    row = conn.execute(
+                        "SELECT min_token_iat FROM users WHERE id = ?", (user_id,)
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if row and row['min_token_iat'] and iat < row['min_token_iat']:
+                    return jsonify({'message': 'Session invalidated. Please login again.'}), 401
+
+            g.user_id = user_id
         except Exception:
             return jsonify({'message': 'Token is invalid!'}), 401
-            
+
         return f(*args, **kwargs)
     return decorated
 

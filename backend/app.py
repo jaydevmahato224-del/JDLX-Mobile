@@ -5522,6 +5522,24 @@ def download_order_invoice(order_id):
             return error_response('Order not found', 404)
         order = dict(order_row)
 
+        # 90-day retention policy (see Terms & Conditions): invoices are
+        # downloadable for 3 months from the order date, after which access
+        # is revoked. Invoices are generated on demand and never stored, so
+        # expiry means refusing to render — nothing to delete server-side.
+        from invoice_generator import INVOICE_RETENTION_DAYS
+        try:
+            order_dt = datetime.datetime.strptime(
+                str(order.get('created_at'))[:19], '%Y-%m-%d %H:%M:%S'
+            )
+            now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+            if now_ist > order_dt + datetime.timedelta(days=INVOICE_RETENTION_DAYS):
+                return error_response(
+                    f'Invoice download window has expired. Invoices are available for {INVOICE_RETENTION_DAYS} days after the order date.',
+                    410,
+                )
+        except (ValueError, TypeError):
+            pass  # unparseable date — fall through and render rather than block
+
         items = [dict(r) for r in cursor.execute('''
             SELECT product_name, quantity, price, variant_name, device_model
             FROM order_items WHERE order_id = ?

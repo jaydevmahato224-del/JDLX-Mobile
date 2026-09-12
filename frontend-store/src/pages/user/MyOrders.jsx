@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { MapPin, ChevronRight, CreditCard, Download } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
-import { downloadOrderInvoice } from '../../utils/downloadInvoice'
+import { downloadOrderInvoice, invoiceAvailable } from '../../utils/downloadInvoice'
 import { toast } from 'react-hot-toast'
 
 function MyOrders() {
@@ -198,17 +198,19 @@ function MyOrders() {
                                     <span className="truncate max-w-[180px]">{order.delivery_address}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => downloadOrderInvoice(order.id, {
-                                            setBusy: (b) => setInvoiceBusyId(b ? order.id : null),
-                                            filename: `${order.order_number || `ORD-${order.id}`}-invoice.pdf`
-                                        })}
-                                        disabled={invoiceBusyId === order.id}
-                                        className="flex items-center gap-1 text-primary font-bold text-xs disabled:opacity-50"
-                                    >
-                                        <Download className="w-3.5 h-3.5" />
-                                        {invoiceBusyId === order.id ? 'Preparing…' : 'Invoice'}
-                                    </button>
+                                    {invoiceAvailable(order.created_at) && (
+                                        <button
+                                            onClick={() => downloadOrderInvoice(order.id, {
+                                                setBusy: (b) => setInvoiceBusyId(b ? order.id : null),
+                                                filename: `${order.order_number || `ORD-${order.id}`}-invoice.pdf`
+                                            })}
+                                            disabled={invoiceBusyId === order.id}
+                                            className="flex items-center gap-1 text-primary font-bold text-xs disabled:opacity-50"
+                                        >
+                                            <Download className="w-3.5 h-3.5" />
+                                            {invoiceBusyId === order.id ? 'Preparing…' : 'Invoice'}
+                                        </button>
+                                    )}
                                     <Link
                                         to={`/track/${order.id}`}
                                         className="flex items-center gap-1 text-primary font-bold text-xs group-hover:gap-2 transition-all"

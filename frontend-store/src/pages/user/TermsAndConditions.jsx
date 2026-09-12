@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Shield, Truck, CreditCard, RefreshCcw, AlertTriangle, ChevronRight } from 'lucide-react'
+import { FileText, Shield, Truck, CreditCard, RefreshCcw, AlertTriangle, ChevronRight, FileDown } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
 
 // Module-level constant so the useMemo below has a stable dependency
@@ -39,6 +39,15 @@ const defaultSections = [
       'Applicable platform fees, delivery fees, and taxes (if any) may apply at checkout.',
       'Payment status is reflected in your order history.',
       'Any failed/partial payments may result in order cancellation or delays.',
+    ],
+  },
+  {
+    icon: FileDown,
+    title: 'Invoices & Billing Documents',
+    points: [
+      'Invoices can be downloaded from the order page for 90 days (about 3 months) from the order date.',
+      'After 90 days, the invoice download button is removed and the invoice is permanently removed from our database — it can no longer be downloaded.',
+      'Please download and save your invoice within the 90-day window; support cannot reissue invoices after expiry.',
     ],
   },
   {

@@ -36,6 +36,13 @@ BRAND_NAME = "JDLX MOBILE"
 BRAND_TAGLINE = "Premium Mobile Store"
 BRAND_SUPPORT = "support@jdlxmobile.com"
 
+# Invoice retention policy (documented in the storefront's Terms & Conditions):
+# customers can download an invoice for 90 days (~3 months) after the order
+# date. Invoices are rendered on demand and never stored server-side, so
+# "removal" after the window means the download endpoint refuses and the
+# storefront hides the button — there is no stored copy to delete.
+INVOICE_RETENTION_DAYS = 90
+
 
 def _find_font(filename):
     for base in _FONT_CANDIDATE_DIRS:

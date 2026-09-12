@@ -19,6 +19,7 @@ import {
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
+import { markOrdersSeen, ORDERS_SEEN_EVENT } from '../../components/WarehouseLayout'
 
 const WarehouseOrders = () => {
     const { warehouseLogout } = useStore()
@@ -49,6 +50,14 @@ const WarehouseOrders = () => {
             if (!response.ok) throw new Error('Failed to fetch orders')
             const data = await response.json()
             setOrders(data.data || [])
+            // Viewing the Orders page marks everything currently listed as
+            // "seen" — the sidebar's new-order badge clears instantly (same
+            // tab, via event) and stays clear across refreshes (localStorage).
+            const latestId = (data.data || [])[0]?.id
+            if (Number.isFinite(latestId)) {
+                markOrdersSeen(latestId)
+                window.dispatchEvent(new Event(ORDERS_SEEN_EVENT))
+            }
         } catch (err) {
             showNotification(err.message, 'error')
         } finally {

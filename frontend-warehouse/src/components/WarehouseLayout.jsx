@@ -1,5 +1,29 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus, Wallet } from 'lucide-react'
+
+// Seen/unseen tracking for the Orders nav badge. Assignment ids are
+// monotonic, so "anything newer than what the partner last saw" is simply
+// id > lastSeen. Persisted per browser so the badge survives refreshes.
+const LAST_SEEN_KEY = 'wh_lastSeenAssignmentId'
+const readLastSeenId = () => {
+    try {
+        const parsed = parseInt(localStorage.getItem(LAST_SEEN_KEY), 10)
+        return Number.isFinite(parsed) ? parsed : 0
+    } catch {
+        return 0
+    }
+}
+// Exported so the Orders page can mark everything visible as seen.
+export const markOrdersSeen = (latestAssignmentId) => {
+    try {
+        if (Number.isFinite(latestAssignmentId)) {
+            localStorage.setItem(LAST_SEEN_KEY, String(latestAssignmentId))
+        }
+    } catch { /* storage unavailable — badge simply always shows */ }
+}
+// Custom event so the layout badge updates instantly when the Orders page
+// marks seen, without waiting for the next poll cycle.
+export const ORDERS_SEEN_EVENT = 'warehouse:orders-seen'
 import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE_URL } from '../config'
@@ -24,6 +48,10 @@ export default function WarehouseLayout() {
     const [notifications, setNotifications] = useState([]);
     const [notificationsLoading, setNotificationsLoading] = useState(false);
     const notificationsPanelRef = useRef(null);
+    // Unseen-order badge on the sidebar "Orders" item: count of assignments
+    // newer than what the partner last saw. Refreshed on a light poll and
+    // cleared the moment they open the Orders page.
+    const [unseenOrdersCount, setUnseenOrdersCount] = useState(0);
 
     const unreadCount = notifications.reduce((count, item) => count + (item.is_read ? 0 : 1), 0);
 
@@ -113,6 +141,41 @@ export default function WarehouseLayout() {
             return () => clearInterval(interval);
         }
     }, [warehouseToken, fetchWarehouseSession, fetchNotifications, isStaffUser]);
+
+    // ── Unseen-orders badge ────────────────────────────────────────────────
+    // Re-computes the badge from the latest assignment id we already know.
+    const recomputeUnseenCount = useCallback((latestId) => {
+        if (!Number.isFinite(latestId)) return
+        const lastSeen = readLastSeenId()
+        setUnseenOrdersCount(latestId > lastSeen ? 1 : 0)
+    }, [])
+
+    useEffect(() => {
+        // Orders visibility is owner-only (same auth as notifications), and
+        // location re-triggers so navigating to the Orders page re-checks.
+        if (!warehouseToken || isStaffUser) return;
+        let cancelled = false;
+        const checkNewOrders = async () => {
+            try {
+                const response = await apiFetch('/warehouse/orders?limit=1');
+                if (!response.ok) return;
+                const payload = await response.json();
+                const latest = (payload?.data || [])[0];
+                if (!cancelled) recomputeUnseenCount(latest?.id);
+            } catch { /* badge is cosmetic — never surface poll errors */ }
+        };
+        checkNewOrders();
+        const interval = setInterval(checkNewOrders, 30000);
+        // The Orders page dispatches this as soon as it renders/fetches —
+        // drop the badge immediately (it will re-arm if newer orders land).
+        const handleSeen = () => setUnseenOrdersCount(0);
+        window.addEventListener(ORDERS_SEEN_EVENT, handleSeen);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+            window.removeEventListener(ORDERS_SEEN_EVENT, handleSeen);
+        };
+    }, [warehouseToken, isStaffUser, recomputeUnseenCount, location.pathname]);
 
     useEffect(() => {
         if (!isNotificationsOpen) return;
@@ -258,6 +321,11 @@ export default function WarehouseLayout() {
                         }
 
                         const isActive = location.pathname === link.path;
+                        // Unseen-order badge lives on the Orders nav item only:
+                        // while the partner is on another tab, every newly
+                        // assigned order counts as unseen; opening Orders
+                        // marks them seen and the badge disappears.
+                        const showOrdersBadge = link.path === '/warehouse/orders' && unseenOrdersCount > 0;
                         return (
                             <Link
                                 key={link.path}
@@ -266,7 +334,15 @@ export default function WarehouseLayout() {
                                 className={`flex items-center gap-4 px-4 py-4 rounded-2xl transition-all duration-300 group ${isActive ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'}`}
                             >
                                 <Icon className={`w-5 h-5 transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-amber-400' : 'text-slate-500'}`} />
-                                <span className="text-sm font-bold tracking-tight">{link.label}</span>
+                                <span className="text-sm font-bold tracking-tight flex-1">{link.label}</span>
+                                {showOrdersBadge && (
+                                    <span
+                                        className="min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-rose-500 text-white text-[11px] font-black shadow-[0_0_12px_rgba(244,63,94,0.45)] animate-in zoom-in duration-300"
+                                        title={`${unseenOrdersCount} new order${unseenOrdersCount > 1 ? 's' : ''} received`}
+                                    >
+                                        {unseenOrdersCount > 9 ? '9+' : unseenOrdersCount}
+                                    </span>
+                                )}
                             </Link>
                         )
                     })}

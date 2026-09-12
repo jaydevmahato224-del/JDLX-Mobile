@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 import os
 from dotenv import load_dotenv
@@ -194,6 +195,18 @@ def get_db():
         conn.close()
         return g._jdlx_request_db
     return g._jdlx_request_db
+
+def ist_now_str():
+    """Current IST time as a naive 'YYYY-MM-DD HH:MM:SS' string.
+
+    The whole system stores and renders timestamps as IST wall-clock (matching
+    the IST DEFAULT on orders.created_at), so writes that need an explicit
+    timestamp use this instead of the UTC-based CURRENT_TIMESTAMP.
+    """
+    return (
+        datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
 
 def init_db():
     conn = get_db()
@@ -1399,6 +1412,29 @@ def init_db():
     # Settlement window (days) — mirrors the return policy. Falls back to
     # referral_reward_window_days, then 7 (the refund flow's default window).
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('vendor_settlement_window_days', '7')")
+
+    # --- One-time legacy timestamp migration (UTC → IST) ---
+    # Every DB default (CURRENT_TIMESTAMP) writes UTC; the site operates in IST
+    # and renders naive timestamps as wall-clock. Rows written before the IST
+    # defaults were introduced would show a 5h30m offset forever, so shift the
+    # affected legacy rows forward once and stamp the migration in settings.
+    cursor.execute("SELECT value FROM system_settings WHERE key = 'legacy_utc_to_ist_migrated'")
+    if not cursor.fetchone():
+        for table, cols in (
+            ("orders", ("created_at", "updated_at", "confirmed_at", "packed_at", "shipped_at", "status_delivered_at", "cancelled_at")),
+            ("warehouse_order_assignments", ("created_at",)),
+            ("warehouse_orders", ("created_at", "updated_at", "accepted_at", "packing_started_at", "packed_at", "ready_for_pickup_at", "courier_pickup_requested_at", "dispatched_at", "delivered_at", "cancelled_at")),
+        ):
+            existing = {r[1] for r in cursor.execute(f"PRAGMA table_info({table})").fetchall()}
+            for col in cols:
+                if col in existing:
+                    cursor.execute(
+                        f"UPDATE {table} SET {col} = datetime({col}, '+5 hours', '+30 minutes') WHERE {col} IS NOT NULL"
+                    )
+        cursor.execute(
+            "INSERT INTO system_settings (key, value) VALUES ('legacy_utc_to_ist_migrated', datetime('now')) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
 
     conn.commit()
     conn.close()

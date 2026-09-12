@@ -42,7 +42,7 @@ from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
 # Local imports
-from database import get_db as _db_get_db
+from database import get_db as _db_get_db, ist_now_str
 from utils.response_utils import success_response, error_response, safe_float
 from utils.product_url_utils import generate_share_token, generate_product_description
 from notifier import (
@@ -3424,16 +3424,16 @@ def warehouse_update_order_status(assignment_id):
         if mapped_order_status == "CONFIRMED":
             conn.execute(
                 """UPDATE orders
-                   SET order_status = ?, confirmed_at = COALESCE(confirmed_at, CURRENT_TIMESTAMP)
+                   SET order_status = ?, confirmed_at = COALESCE(confirmed_at, ?)
                    WHERE id = ?""",
-                (mapped_order_status, assignment["order_id"]),
+                (mapped_order_status, ist_now_str(), assignment["order_id"]),
             )
         elif mapped_order_status == "PACKED":
             conn.execute(
                 """UPDATE orders
-                   SET order_status = ?, packed_at = COALESCE(packed_at, CURRENT_TIMESTAMP)
+                   SET order_status = ?, packed_at = COALESCE(packed_at, ?)
                    WHERE id = ?""",
-                (mapped_order_status, assignment["order_id"]),
+                (mapped_order_status, ist_now_str(), assignment["order_id"]),
             )
         elif mapped_order_status == "SHIPPED":
             conn.execute(
@@ -3693,9 +3693,9 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
             )
             conn.execute(
                 """UPDATE orders
-                   SET order_status = 'SHIPPED', shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP)
+                   SET order_status = 'SHIPPED', shipped_at = COALESCE(shipped_at, ?)
                    WHERE id = ?""",
-                (assignment["order_id"],),
+                (ist_now_str(), assignment["order_id"]),
             )
             # Customer notification: the Shiprocket webhook early-returns for
             # orders already SHIPPED, so this packed->dispatched transition is
@@ -4951,12 +4951,13 @@ def _insert_offline_order(cur, *, order_number, user_id, vendor_id, agent_id,
         INSERT INTO orders (
             order_number, user_id, vendor_id, source, agent_id, customer_name, customer_phone,
             delivery_address, total_amount, subtotal_amount, tax_amount, gst_rate, discount_amount,
-            order_status, payment_status, payment_type
+            order_status, payment_status, payment_type, created_at, updated_at
         )
-        VALUES (?, ?, ?, 'OFFLINE', ?, ?, ?, 'Store Counter Sale', ?, ?, ?, ?, ?, 'CONFIRMED', 'completed', ?)
+        VALUES (?, ?, ?, 'OFFLINE', ?, ?, ?, 'Store Counter Sale', ?, ?, ?, ?, ?, 'CONFIRMED', 'completed', ?, ?, ?)
         """,
         (order_number, user_id, vendor_id, agent_id, customer_name, customer_phone,
-         total_amount, subtotal, tax_amount, gst_rate, discount_amount, payment_mode),
+         total_amount, subtotal, tax_amount, gst_rate, discount_amount, payment_mode,
+         ist_now_str(), ist_now_str()),
     )
     return cur.lastrowid
 
@@ -5062,7 +5063,9 @@ def _billing_window_expired(order):
         created_dt = created.replace(tzinfo=None)
     else:
         return False
-    return datetime.datetime.utcnow() > created_dt + datetime.timedelta(hours=BILLING_RETURN_WINDOW_HOURS)
+    # created_at is IST wall-clock; compare against IST now (server clock is UTC).
+    now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    return now_ist > created_dt + datetime.timedelta(hours=BILLING_RETURN_WINDOW_HOURS)
 
 
 def _serialize_billing_product(r):

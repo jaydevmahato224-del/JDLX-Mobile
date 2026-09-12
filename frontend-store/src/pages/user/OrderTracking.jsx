@@ -410,7 +410,7 @@ function OrderTracking() {
                                         {order?.status === 'DELIVERED' ? 'Completed' : 'Estimated Delivery'}
                                     </p>
                                     <p className="text-3xl font-black tracking-tighter mt-1">
-                                        {order?.status === 'DELIVERED' ? 'Delivered 🎉' : (trackingInfo?.estimated_delivery_time || order?.estimated_delivery || '3-5 business days')}
+                                        {order?.status === 'DELIVERED' ? 'Delivered 🎉' : (trackingInfo?.estimated_delivery_time || order?.estimated_delivery || '5-7 working days')}
                                     </p>
                                 </div>
                                 <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 border border-white/20">

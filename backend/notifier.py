@@ -189,7 +189,7 @@ def send_order_email(to_email, order_details):
     </ul>
     {breakdown}
     <p><b>Delivery Address:</b> {_esc(order_details['address'])}</p>
-    <p><b>Estimated Delivery:</b> {order_details.get('estimated_delivery', '3-5 business days')}</p>
+    <p><b>Estimated Delivery:</b> {order_details.get('estimated_delivery', '5-7 working days')}</p>
     <br/>
     <p>Track your order on our app!</p>
     """

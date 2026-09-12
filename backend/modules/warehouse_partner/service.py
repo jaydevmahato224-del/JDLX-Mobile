@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 import jwt
 
-from database import get_db_connection
+from database import get_db_connection, ist_now_str
 from jwt_config import get_jwt_secret
 from .auth import normalize_warehouse_role
 
@@ -601,14 +601,15 @@ def sync_root_order_status_from_warehouse(cursor, order_id, warehouse_status):
         if timestamp_column not in allowed_columns:
             raise ValueError(f"Invalid timestamp column: {timestamp_column}")
 
+        _now = ist_now_str()
         cursor.execute(
             f'''
             UPDATE orders
-            SET order_status = ?, updated_at = CURRENT_TIMESTAMP,
-                {timestamp_column} = COALESCE({timestamp_column}, CURRENT_TIMESTAMP)
+            SET order_status = ?, updated_at = ?,
+                {timestamp_column} = COALESCE({timestamp_column}, ?)
             WHERE id = ?
             ''',
-            (target_status, order_id),
+            (target_status, _now, _now, order_id),
         )
     else:
         cursor.execute(
@@ -660,14 +661,15 @@ def sync_warehouse_order_with_root_status(order_id, root_status, conn=None):
                 metadata={"order_id": order_id},
             )
     elif root_status == "delivered":
+        _now = ist_now_str()
         cursor.execute(
             '''
             UPDATE warehouse_orders
-            SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
-                updated_at = CURRENT_TIMESTAMP
+            SET delivered_at = COALESCE(delivered_at, ?),
+                updated_at = ?
             WHERE order_id = ?
             ''',
-            (order_id,),
+            (_now, _now, order_id),
         )
 
     if owns_connection:
@@ -732,14 +734,15 @@ def update_warehouse_order_status(cursor, warehouse_order_id, warehouse_partner_
         if timestamp_field not in allowed_fields:
             raise ValueError(f"Invalid timestamp field: {timestamp_field}")
 
+        _now = ist_now_str()
         cursor.execute(
             f'''
             UPDATE warehouse_orders
-            SET assignment_status = ?, updated_at = CURRENT_TIMESTAMP,
-                {timestamp_field} = COALESCE({timestamp_field}, CURRENT_TIMESTAMP)
+            SET assignment_status = ?, updated_at = ?,
+                {timestamp_field} = COALESCE({timestamp_field}, ?)
             WHERE id = ?
             ''',
-            (new_status, warehouse_order_id),
+            (new_status, _now, _now, warehouse_order_id),
         )
     else:
         cursor.execute(

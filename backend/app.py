@@ -43,7 +43,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from PIL import Image
 
 # --- Local Module Imports ---
-from database import init_db, get_db as _database_get_db, USE_TURSO
+from database import init_db, get_db as _database_get_db, USE_TURSO, ist_now_str
 from notifier import (
     send_order_email, 
     send_user_status_update_email, 
@@ -4843,10 +4843,10 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
         except Exception as notify_err:
             print(f"[LOW STOCK WARNING] Failed to trigger notification: {notify_err}")
 
-    # 5. Update order status to 'CONFIRMED' and confirmed_at timestamp
+    # 5. Update order status to 'CONFIRMED' and confirmed_at timestamp (IST)
     cursor.execute(
-        "UPDATE orders SET order_status = 'CONFIRMED', confirmed_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (order_id,)
+        "UPDATE orders SET order_status = 'CONFIRMED', confirmed_at = ?, updated_at = ? WHERE id = ?",
+        (ist_now_str(), ist_now_str(), order_id)
     )
 
     # 6. Create warehouse order assignment only when an explicit warehouse/store is attached.
@@ -4854,8 +4854,8 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
         cursor.execute("SELECT id FROM warehouse_order_assignments WHERE order_id = ?", (order_id,))
         if not cursor.fetchone():
             cursor.execute(
-                "INSERT INTO warehouse_order_assignments (order_id, warehouse_id, assignment_status) VALUES (?, ?, 'assigned')",
-                (order_id, store_id)
+                "INSERT INTO warehouse_order_assignments (order_id, warehouse_id, assignment_status, created_at) VALUES (?, ?, 'assigned', ?)",
+                (order_id, store_id, ist_now_str())
             )
             print(f"[ORDER CONFIRMATION] Created warehouse assignment for Order #{order_id} to Warehouse #{store_id}")
 
@@ -4946,7 +4946,7 @@ def checkout():
                 return error_response(f"Select Your Device Model is required for {product['name']}", 400)
 
         delivery_message = None
-        est_time = "3-5 business days"
+        est_time = "5-7 working days"
         store_id = None
         # Select warehouse from warehouse_inventory for the ordered product/variant (Multi-Vendor matching logic)
         for item in items:
@@ -5223,6 +5223,8 @@ def checkout():
         
         estimated_delivery_str = est_time
         
+        # created_at is written explicitly in IST — the DB's CURRENT_TIMESTAMP
+        # default is UTC and would render 5h30m behind wall-clock time.
         cursor.execute('''
             INSERT INTO orders (
                 order_number, user_id, customer_name, customer_phone, phone, delivery_address, 
@@ -5230,14 +5232,15 @@ def checkout():
                 delivery_latitude, delivery_longitude, payment_status, delivery_type,
                 platform_fee, delivery_fee, fitting_charge, payment_type,
                 cod_advance_paid, cod_remaining_amount, free_delivery_applied,
-                source, agent_id
+                source, agent_id, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, 'ONLINE', NULL)
+            VALUES (?, ?, ?, ?, ?, ?, 'PLACED', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, 'ONLINE', NULL, ?, ?)
         ''', (
             order_number, user_id, data.get('customer_name', 'Valued Customer'), 
             phone, phone, address, final_total, store_id, estimated_delivery_str,
             user_lat, user_lng, delivery_type, platform_fee, actual_delivery_fee, fitting_charge,
-            payment_type, cod_advance_paid, cod_remaining_amount, free_delivery_applied
+            payment_type, cod_advance_paid, cod_remaining_amount, free_delivery_applied,
+            ist_now_str(), ist_now_str()
         ))
 
         

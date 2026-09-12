@@ -1088,7 +1088,7 @@ function Checkout() {
                                     )}
                                     {isShiprocket && (
                                         <div className="text-[10px] text-blue-600 font-bold border-t border-[var(--color-surface-high)] pt-2 flex items-center gap-1">
-                                            <Truck size={12} /> Standard courier shipping (3-5 business days)
+                                            <Truck size={12} /> Standard courier shipping (5-7 working days)
                                         </div>
                                     )}
                                 </div>
@@ -1099,7 +1099,7 @@ function Checkout() {
                                         <div className="space-y-0.5">
                                             <p className="text-[13px] font-black text-blue-800">Standard Logistics</p>
                                             <p className="text-[11px] font-medium text-blue-600">
-                                                Delivery via Shiprocket courier (3-5 business days)
+                                                Delivery via Shiprocket courier (5-7 working days)
                                             </p>
                                         </div>
                                     </div>

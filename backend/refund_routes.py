@@ -75,8 +75,11 @@ def submit_refund_request():
         except (ValueError, TypeError):
             # Fallback for non-iso strings if any
             delivery_time = datetime.datetime.now() # Should not happen with current DB setup
-        
-        if (datetime.datetime.now() - delivery_time).days > 7:
+
+        # DB timestamps are stored as IST wall-clock; compare against IST now
+        # (server clock is UTC on Render) so the window boundary is exact.
+        now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+        if (now_ist - delivery_time).days > 7:
             return error_response("The 7-day return window has expired", 400)
 
         # 4. Check for existing non-rejected request
@@ -183,8 +186,10 @@ def check_refund_eligibility(order_id):
             delivery_time = datetime.datetime.fromisoformat(delivery_time_str)
         except (ValueError, TypeError):
             delivery_time = datetime.datetime.now()
-        
-        delta = datetime.datetime.now() - delivery_time
+
+        # Same IST alignment as above — DB stores IST wall-clock.
+        now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+        delta = now_ist - delivery_time
         if delta.days > 7:
             return success_response({"eligible": False, "reason": "The 7-day return window has expired"})
 

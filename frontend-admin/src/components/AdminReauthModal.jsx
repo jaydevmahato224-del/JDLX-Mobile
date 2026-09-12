@@ -78,7 +78,18 @@ const AdminReauthModal = () => {
             const data = await res.json();
 
             if (data.success) {
-                setAdminUser(data.user, data.token);
+                // The response body carries ONLY the user snapshot — the fresh
+                // 8h JWT arrives as an HttpOnly Set-Cookie (credentials:'include'
+                // above makes the browser store it). The localStorage Bearer
+                // token from the original OAuth login is now STALE: backend
+                // decodes header-first, so a stale header would shadow the
+                // fresh cookie and 401 the very next call (re-locking the
+                // modal). Drop it — cookie-only calls are fully supported.
+                try {
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('admin_token');
+                } catch (e) { /* storage unavailable — cookie still works */ }
+                setAdminUser(data.user);
                 setReauthenticating(false);
                 toast.success('Session extended successfully!');
                 // Reload to resume pending actions if necessary, 

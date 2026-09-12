@@ -73,6 +73,11 @@ export const useStore = create((set, get) => ({
     adminLogout: () => {
         localStorage.removeItem('adminUser');
         localStorage.removeItem('adminSessionFingerprint');
+        // Drop the Bearer token too: backend decodes header-first, so a stale
+        // localStorage token would shadow the (fresh) auth cookie of whoever
+        // logs in next and break their session with 401s.
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('admin_token');
         apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         set({ adminUser: null });
     },

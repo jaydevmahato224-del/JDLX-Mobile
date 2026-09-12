@@ -15,6 +15,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import StatCards from './components/StatCards'
 import FulfillmentQueue from './components/FulfillmentQueue'
+import DispatchPanel from './components/DispatchPanel'
 import TerminalStatus from './components/TerminalStatus'
 import InventoryAlerts from './components/InventoryAlerts'
 import ScoreCards from './components/ScoreCards'
@@ -47,11 +48,16 @@ const NAV_ITEMS = [
 
 const WarehouseDashboard = () => {
     const navigate = useNavigate()
+    // warehouseToken must be pulled from the store — it guards every API call
+    // below (fetchDashboardData and handleUpdateStatus both early-return
+    // without it) and apiFetch attaches it as the Bearer credential.
+    const warehouseToken = useStore((state) => state.warehouseToken)
     const { warehouseUser, warehouseLogout } = useStore()
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState(EMPTY_DASHBOARD)
     const [actionError, setActionError] = useState('')
     const [updatingOrderId, setUpdatingOrderId] = useState(null)
+    const [dispatchingOrderId, setDispatchingOrderId] = useState(null)
 
     const fetchDashboardData = useCallback(async () => {
         if (!warehouseToken) return
@@ -89,7 +95,7 @@ const WarehouseDashboard = () => {
         } finally {
             setLoading(false)
         }
-    }, [warehouseLogout, navigate])
+    }, [warehouseLogout, navigate, warehouseToken])
 
     useEffect(() => {
         if (!warehouseUser) {
@@ -101,6 +107,47 @@ const WarehouseDashboard = () => {
         const interval = setInterval(fetchDashboardData, 30000)
         return () => clearInterval(interval)
     }, [warehouseUser, navigate, fetchDashboardData])
+
+    const handleDispatch = async (orderId) => {
+        if (!warehouseToken) return
+
+        setDispatchingOrderId(orderId)
+        setActionError('')
+        try {
+            const response = await apiFetch(`/warehouse/orders/${orderId}/dispatch`, {
+                method: 'PATCH',
+                body: JSON.stringify({}),
+            })
+
+            if (response.status === 401 || response.status === 403) {
+                warehouseLogout()
+                navigate('/warehouse/login', { replace: true })
+                return
+            }
+
+            const result = await response.json()
+            if (!response.ok) {
+                throw new Error(result.error || result.message || 'Dispatch failed.')
+            }
+
+            await fetchDashboardData()
+        } catch (error) {
+            console.error('Failed to dispatch order:', error)
+            setActionError(error.message || 'Dispatch failed.')
+        } finally {
+            setDispatchingOrderId(null)
+        }
+    }
+
+    const handleDispatchAll = async () => {
+        // Fire the Shiprocket handoff for every packed order, sequentially so
+        // the Shiprocket API is never hit concurrently and each result is
+        // visible in the queue as it lands.
+        const packed = (data.recent_orders || []).filter(o => o.assignment_status === 'packed')
+        for (const order of packed) {
+            await handleDispatch(order.id)
+        }
+    }
 
     const handleUpdateStatus = async (orderId, status) => {
         if (!warehouseToken) return
@@ -241,11 +288,18 @@ const WarehouseDashboard = () => {
                                 />
                             </div>
 
+                            <DispatchPanel
+                                packedOrders={data.cards.packed_orders}
+                                onDispatchAll={handleDispatchAll}
+                            />
+
                             <div className="mt-8 grid gap-8 xl:grid-cols-[1.72fr_0.94fr]">
                                 <div className="min-w-0">
                                     <FulfillmentQueue
                                         recentOrders={data.recent_orders}
                                         onUpdateStatus={handleUpdateStatus}
+                                        onDispatch={handleDispatch}
+                                        dispatchingOrderId={dispatchingOrderId}
                                         updatingOrderId={updatingOrderId}
                                     />
                                 </div>

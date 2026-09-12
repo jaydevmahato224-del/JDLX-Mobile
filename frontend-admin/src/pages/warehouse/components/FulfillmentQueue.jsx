@@ -1,4 +1,4 @@
-import { Box, Check, Package, PackageCheck, Play } from 'lucide-react'
+import { Box, Check, Package, PackageCheck, Play, Truck } from 'lucide-react'
 
 const getStatusStyles = (status) => {
     switch (status) {
@@ -25,15 +25,18 @@ const getActionButtonClass = (tone) => {
             return 'border-amber-400/20 bg-amber-400/10 text-amber-200 hover:bg-amber-400/18'
         case 'ready':
             return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/18'
+        case 'dispatch':
+            return 'border-sky-400/30 bg-sky-400/12 text-sky-200 hover:bg-sky-400/22'
         default:
             return 'border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08]'
     }
 }
 
-const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId = null }) => {
+const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, onDispatch, dispatchingOrderId = null, updatingOrderId = null }) => {
     const renderActions = (order) => {
         const { id, assignment_status: status } = order
         const isUpdating = updatingOrderId === id
+        const isDispatching = dispatchingOrderId === id
 
         if (status === 'assigned') {
             return (
@@ -70,6 +73,22 @@ const FulfillmentQueue = ({ recentOrders = [], onUpdateStatus, updatingOrderId =
                 >
                     <Check size={15} />
                     {isUpdating ? 'Saving...' : 'Mark packed'}
+                </button>
+            )
+        }
+
+        // Packed orders must be dispatchable — this is the handoff that creates
+        // the Shiprocket order, assigns the courier and generates the AWB.
+        // Without it packed orders never reach the courier (order -> SHIPPED).
+        if (status === 'packed') {
+            return (
+                <button
+                    onClick={() => onDispatch(id)}
+                    disabled={isDispatching}
+                    className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${getActionButtonClass('dispatch')}`}
+                >
+                    <Truck size={15} />
+                    {isDispatching ? 'Dispatching...' : 'Dispatch'}
                 </button>
             )
         }

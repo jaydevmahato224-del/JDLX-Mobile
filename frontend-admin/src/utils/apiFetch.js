@@ -18,10 +18,17 @@ export async function apiFetch(endpoint, options = {}) {
     url = `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
   }
   
+  // Role-scoped tokens: warehouse and admin sessions live in their own
+  // localStorage keys. The backend's warehouse endpoints require a Bearer
+  // warehouse JWT and reject admin/user tokens, so the warehouse token must
+  // take precedence when present (an admin tab in the same browser must not
+  // downgrade a warehouse call to an admin token that would 403).
+  const warehouseToken = localStorage.getItem('warehouseToken') || localStorage.getItem('warehouse_token')
   const adminToken = localStorage.getItem('adminToken') || localStorage.getItem('admin_token')
+  const activeToken = warehouseToken || adminToken
   const defaultHeaders = {
     'Content-Type': 'application/json',
-    ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {}),
+    ...(activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}),
     ...options.headers,
   }
 

@@ -4733,7 +4733,14 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     #    failure must NOT leave partial decrements behind — the whole set is
     #    wrapped in a savepoint so it stays all-or-nothing even when the caller
     #    commits after catching the ValueError (e.g. payment verify/webhook).
+    #    libSQL/Turso: every statement runs in its own implicit transaction
+    #    unless an explicit BEGIN is open, which silently drops SAVEPOINTs
+    #    issued outside one ("no such savepoint" on RELEASE). The explicit
+    #    BEGIN is required for the savepoint to exist at all there; local
+    #    sqlite3 accepts it identically (it just makes the open tx explicit).
+    cursor.execute("BEGIN")
     cursor.execute("SAVEPOINT confirm_stock")
+    low_stock_alerts = []
     for item in items:
         product_id = item['product_id']
         qty = item['quantity']
@@ -4799,22 +4806,41 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
                     (qty, qty, qty, qty, store_id, store_id, product_id)
                 )
 
-        # Trigger Low Stock Notifications if stock drops to or below threshold
+        # Low-stock notification is DEFERRED to after the savepoint loop:
+        # the notification service calls conn.commit() internally, which on
+        # libSQL ends the open transaction and destroys the savepoint mid-loop
+        # ("no such savepoint: confirm_stock" — the bug that silently killed
+        # every order confirmation). Collect candidates now, notify later.
         cursor.execute("SELECT name, stock, low_stock_threshold FROM products WHERE id = ?", (product_id,))
         prod_data = cursor.fetchone()
         if prod_data and 0 < prod_data['stock'] <= (prod_data['low_stock_threshold'] or 5):
-            try:
-                trigger_low_stock_notifications_svc(
-                    product_id, 
-                    prod_data['stock'], 
-                    prod_data['name'],
-                    get_db,
-                    notification_service.notify_user_internal
-                )
-            except Exception as notify_err:
-                print(f"[LOW STOCK WARNING] Failed to trigger notification: {notify_err}")
+            low_stock_alerts.append(
+                (product_id, prod_data['stock'], prod_data['name'])
+            )
 
     cursor.execute("RELEASE SAVEPOINT confirm_stock")
+    # Keep the outer transaction open for the caller's COMMIT — sqlite3 with
+    # isolation_level=None and libSQL both treat this BEGIN as the tx boundary,
+    # so an explicit COMMIT here would double-commit / error on some drivers.
+    try:
+        cursor.execute("COMMIT")
+    except Exception:
+        pass  # drivers that auto-commit on RELEASE raise here — safe to ignore
+
+    # Fire deferred low-stock notifications AFTER the tx work — these may call
+    # commit() internally (safe now, the savepoint is released) and must never
+    # be able to break order confirmation.
+    for ls_product_id, ls_stock, ls_name in low_stock_alerts:
+        try:
+            trigger_low_stock_notifications_svc(
+                ls_product_id,
+                ls_stock,
+                ls_name,
+                get_db,
+                notification_service.notify_user_internal
+            )
+        except Exception as notify_err:
+            print(f"[LOW STOCK WARNING] Failed to trigger notification: {notify_err}")
 
     # 5. Update order status to 'CONFIRMED' and confirmed_at timestamp
     cursor.execute(

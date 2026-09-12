@@ -5,6 +5,10 @@ import { toast } from 'react-hot-toast'
 // Terms & Conditions policy): invoices download for 90 days after ordering.
 export const INVOICE_RETENTION_DAYS = 90
 
+// Invoices are generated once the warehouse packs the order (mirrors backend
+// INVOICE_ELIGIBLE_STATUSES) — download unlocks from PACKED onwards.
+export const INVOICE_UNLOCK_STATUSES = ['PACKED', 'OUT_FOR_DELIVERY', 'SHIPPED', 'DELIVERED']
+
 /**
  * True while the order is inside the 90-day invoice download window.
  * Accepts the order's created_at (IST wall-clock string from the API).
@@ -15,6 +19,15 @@ export function invoiceAvailable(created_at) {
     if (Number.isNaN(placed.getTime())) return false
     const ageDays = (Date.now() - placed.getTime()) / 86400000
     return ageDays < INVOICE_RETENTION_DAYS
+}
+
+/**
+ * True when the invoice is actually downloadable: the warehouse has packed
+ * the order (status gate) AND the order is inside the 90-day window.
+ */
+export function invoiceUnlocked(created_at, status) {
+    if (!invoiceAvailable(created_at)) return false
+    return INVOICE_UNLOCK_STATUSES.includes(String(status || '').toUpperCase())
 }
 
 /**
@@ -29,6 +42,10 @@ export async function downloadOrderInvoice(orderId, { setBusy, filename } = {}) 
         if (!res.ok) {
             if (res.status === 410) {
                 toast.error('Invoice download window has expired (90 days).')
+                return
+            }
+            if (res.status === 409) {
+                toast.error('Invoice will be available once the warehouse has packed your order.')
                 return
             }
             let msg = 'Could not download invoice'

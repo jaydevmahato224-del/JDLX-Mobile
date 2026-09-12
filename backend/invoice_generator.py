@@ -43,6 +43,11 @@ BRAND_SUPPORT = "support@jdlxmobile.com"
 # storefront hides the button — there is no stored copy to delete.
 INVOICE_RETENTION_DAYS = 90
 
+# Invoices are generated once the warehouse finishes packing the order, so
+# download unlocks at PACKED and stays available through the delivery
+# lifecycle (and for the 90-day retention window after the order date).
+INVOICE_ELIGIBLE_STATUSES = ("PACKED", "OUT_FOR_DELIVERY", "SHIPPED", "DELIVERED")
+
 
 def _find_font(filename):
     for base in _FONT_CANDIDATE_DIRS:

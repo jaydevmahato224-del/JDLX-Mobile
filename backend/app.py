@@ -5522,11 +5522,21 @@ def download_order_invoice(order_id):
             return error_response('Order not found', 404)
         order = dict(order_row)
 
+        # Invoices are generated once the warehouse has packed the order —
+        # before that there is nothing billable to hand the customer yet.
+        # From PACKED onwards (plus SHIPPED/DELIVERED) the download unlocks,
+        # subject to the 90-day retention policy below.
+        from invoice_generator import INVOICE_RETENTION_DAYS, INVOICE_ELIGIBLE_STATUSES
+        if (order.get('order_status') or '').upper() not in INVOICE_ELIGIBLE_STATUSES:
+            return error_response(
+                'Invoice will be available once the warehouse has packed your order.',
+                409,
+            )
+
         # 90-day retention policy (see Terms & Conditions): invoices are
         # downloadable for 3 months from the order date, after which access
         # is revoked. Invoices are generated on demand and never stored, so
         # expiry means refusing to render — nothing to delete server-side.
-        from invoice_generator import INVOICE_RETENTION_DAYS
         try:
             order_dt = datetime.datetime.strptime(
                 str(order.get('created_at'))[:19], '%Y-%m-%d %H:%M:%S'

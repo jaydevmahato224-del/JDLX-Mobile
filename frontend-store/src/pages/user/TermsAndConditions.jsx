@@ -45,7 +45,8 @@ const defaultSections = [
     icon: FileDown,
     title: 'Invoices & Billing Documents',
     points: [
-      'Invoices can be downloaded from the order page for 90 days (about 3 months) from the order date.',
+      'Your order invoice is generated once the warehouse has packed your order — it cannot be downloaded before packing.',
+      'Invoices can be downloaded from the order tracking page for 90 days (about 3 months) from the order date.',
       'After 90 days, the invoice download button is removed and the invoice is permanently removed from our database — it can no longer be downloaded.',
       'Please download and save your invoice within the 90-day window; support cannot reissue invoices after expiry.',
     ],

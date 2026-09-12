@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { MapPin, ChevronRight, CreditCard, Download } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
-import { downloadOrderInvoice, invoiceAvailable } from '../../utils/downloadInvoice'
+import { downloadOrderInvoice, invoiceUnlocked } from '../../utils/downloadInvoice'
 import { toast } from 'react-hot-toast'
 
 function MyOrders() {
@@ -198,7 +198,7 @@ function MyOrders() {
                                     <span className="truncate max-w-[180px]">{order.delivery_address}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    {invoiceAvailable(order.created_at) && (
+                                    {invoiceUnlocked(order.created_at, order.status) && (
                                         <button
                                             onClick={() => downloadOrderInvoice(order.id, {
                                                 setBusy: (b) => setInvoiceBusyId(b ? order.id : null),

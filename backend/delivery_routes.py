@@ -263,7 +263,7 @@ def register_delivery_partner():
 
         return success_response({"partner_id": partner_id}, "Application submitted for Store approval. Check email for next steps.", 201)
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -294,7 +294,7 @@ def list_public_stores():
         stores = conn.execute("SELECT id, name, store_code, address, pincode, latitude, longitude FROM dark_stores WHERE active = 1").fetchall()
         return success_response([dict(row) for row in stores], "Stores retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -320,7 +320,7 @@ def get_request_status():
         }
         return success_response(data, "Request status retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -342,7 +342,7 @@ def list_warehouse_delivery_applications():
         ).fetchall()
         return jsonify([dict(row) for row in apps]), 200
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -378,7 +378,7 @@ def warehouse_approve_rider():
 
         return success_response(None, f"Rider request moved to {new_status}", 200)
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -405,7 +405,7 @@ def list_delivery_applications():
         apps = conn.execute(query, params).fetchall()
         return jsonify([dict(row) for row in apps]), 200
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -447,7 +447,7 @@ def approve_delivery_application():
 
         return success_response(None, f"Application {status} successfully", 200)
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 
@@ -460,7 +460,7 @@ def list_delivery_partners():
         partners = conn.execute("SELECT * FROM delivery_partners ORDER BY name ASC").fetchall()
         return jsonify([dict(row) for row in partners]), 200
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again.", 500)
     finally:
         conn.close()
 

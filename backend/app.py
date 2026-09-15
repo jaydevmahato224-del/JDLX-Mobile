@@ -1581,47 +1581,11 @@ def google_link_verify():
         
         # Success: Link Google account
         if str(google_id).startswith('warehouse_'):
-            # Warehouse Google-linking flow: persist the link on the warehouse
-            # record and complete the session as a warehouse partner, not a
-            # customer (users table).
-            from warehouse_routes import get_wh_cookie_settings as _wh_cookie
-            cursor.execute(
-                "UPDATE warehouses SET google_id = ? WHERE id = ?",
-                (google_id, row['user_id'])
-            )
-            cursor.execute("DELETE FROM google_link_otps WHERE id = ?", (row['id'],))
-            conn.commit()
-
-            wh = conn.execute(
-                """SELECT w.*, ds.id AS store_id, ds.store_code
-                   FROM warehouses w
-                   LEFT JOIN dark_stores ds ON w.warehouse_name = ds.name
-                   WHERE w.id = ?""", (row['user_id'],)
-            ).fetchone()
-            if not wh:
-                return error_response("Warehouse not found", 404)
-
-            jwt_token = issue_warehouse_token(wh["id"], email, wh["warehouse_role"])
-            user_obj = {
-                "id": wh["id"],
-                "store_id": wh["store_id"],
-                "partner_id": wh["partner_id"],
-                "warehouse_name": wh["warehouse_name"],
-                "owner_name": wh["owner_name"],
-                "email": wh["email"],
-                "warehouse_role": wh["warehouse_role"],
-                "role": wh["warehouse_role"],
-                "address": wh["address"],
-                "pincode": wh["pincode"],
-                "warehouse_capacity": wh["warehouse_capacity"],
-                "operations_status": wh["operations_status"],
-                "weather_status": wh["weather_status"],
-                "service_radius_km": wh["service_radius_km"],
-                "profile_kyc_status": wh["profile_kyc_status"],
-            }
-            resp = jsonify({"user": user_obj, "token": jwt_token})
-            resp.set_cookie('token', jwt_token, **_wh_cookie())
-            return resp
+            # Warehouse OTP-linking flow is RETIRED: the warehouse OAuth
+            # callback auto-links google_id server-side, so no OTP link
+            # request for a warehouse can exist anymore. Reject explicitly
+            # instead of silently writing a warehouse_ id onto a customer row.
+            return error_response("This login method has been retired. Please sign in with Google again.", 410)
 
         cursor.execute(
             "UPDATE users SET google_id = ?, profile_image = COALESCE(?, profile_image), name = COALESCE(?, name) WHERE id = ?",
@@ -1667,26 +1631,20 @@ def google_link_resend():
     cursor = conn.cursor()
     try:
         is_warehouse = str(google_id).startswith('warehouse_')
-        user = None
-        wh = None
         if is_warehouse:
-            # Warehouse Google-linking resend: the partner may not exist as a
-            # customer in `users`, so look up the warehouse record directly.
-            cursor.execute(
-                "SELECT * FROM warehouses WHERE LOWER(email) = ?", (email,)
-            )
-            wh = cursor.fetchone()
-            if not wh:
-                return success_response(None, "OTP sent to your email.")
-        else:
+            # Warehouse OTP-linking flow is RETIRED (OAuth callback now
+            # auto-links server-side) — nothing to resend for.
+            return error_response("This login method has been retired. Please sign in with Google again.", 410)
+        user = None
+        if not is_warehouse:
             cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email,))
             user = cursor.fetchone()
             if not user:
                 return success_response(None, "OTP sent to your email.")
 
-        recipient_name = (wh['owner_name'] or wh['warehouse_name'] if wh else user['name']) or 'User'
-        recipient_id = wh['id'] if wh else user['id']
-        recipient_picture = None if wh else user['profile_image']
+        recipient_name = user['name'] or 'User'
+        recipient_id = user['id']
+        recipient_picture = user['profile_image']
 
         # Escalating cooldown: only unexpired OTP rows count toward the resend
         # budget; an expired OTP is treated as a fresh request.
@@ -4800,7 +4758,16 @@ def confirm_order_and_decrement_stock_logic(cursor, order_id):
     #    issued outside one ("no such savepoint" on RELEASE). The explicit
     #    BEGIN is required for the savepoint to exist at all there; local
     #    sqlite3 accepts it identically (it just makes the open tx explicit).
-    cursor.execute("BEGIN")
+    # BEGIN is required on Turso (savepoints don't exist outside an explicit
+    # tx there), but on the wallet-prepaid checkout path the connection is
+    # ALREADY inside the checkout transaction — issuing BEGIN again raises
+    # "cannot start a transaction within a transaction" on local sqlite3.
+    # Skip it when a transaction is already open; the savepoint below is
+    # valid either way and still gives all-or-nothing semantics.
+    try:
+        cursor.execute("BEGIN")
+    except Exception:
+        pass  # already inside a transaction — savepoint still works
     cursor.execute("SAVEPOINT confirm_stock")
     low_stock_alerts = []
     for item in items:
@@ -6864,6 +6831,136 @@ def run_system_scan():
 # ADMIN: INVENTORY & OPERATIONS
 # ==============================================================================
 
+@app.route('/api/admin/serviceability/check', methods=['GET'])
+@token_required
+@require_admin()
+@require_permission("manage_orders")
+def admin_serviceability_check():
+    """Admin: check whether a customer pincode is serviceable for delivery.
+
+    Reuses the exact same logic as the public /api/pincode/check endpoint
+    (local pincode_rules + Shiprocket serviceability from the active dark
+    store's pickup pincode), plus COD/prepaid info per courier. Read-only.
+    """
+    pincode = (request.args.get('pincode') or '').strip()
+    if not pincode or len(pincode) != 6 or not pincode.isdigit():
+        return error_response("Invalid pincode format — enter a 6-digit pincode", 400)
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Local rules first (same as the public check)
+        cursor.execute("SELECT cod_allowed, prepaid_only FROM pincode_rules WHERE pincode = ?", (pincode,))
+        rule = cursor.fetchone()
+        cod_allowed = bool(rule['cod_allowed']) if rule else True
+        prepaid_only = bool(rule['prepaid_only']) if rule else False
+
+        cursor.execute("SELECT pincode, name FROM dark_stores WHERE active = 1 LIMIT 1")
+        store = cursor.fetchone()
+        pickup_pincode = store['pincode'] if store and store['pincode'] else '110001'
+        pickup_source = store['name'] if store and store['pincode'] else 'Fallback (110001) — active store has no pincode set'
+        conn.close()
+
+        # Postal lookup for city/state context (best-effort)
+        city_detected, state_detected = None, None
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            res_postal = requests.get(f"https://api.postalpincode.in/pincode/{pincode}", headers=headers, verify=False, timeout=5)
+            if res_postal.status_code == 200:
+                postal_data = res_postal.json()
+                if postal_data and postal_data[0] and postal_data[0].get('PostOffice'):
+                    office = postal_data[0]['PostOffice'][0]
+                    city_detected = office.get('District')
+                    state_detected = office.get('State')
+        except Exception:
+            pass
+
+        # Shiprocket serviceability (same as public check)
+        shiprocket_verified = False
+        shiprocket_serviceable = True
+        shiprocket_cod_allowed = True
+        couriers = []
+        sr_error = None
+        try:
+            from shiprocket_client import sr_headers, SHIPROCKET_API
+            sr_h = sr_headers()
+            if sr_h:
+                res = requests.get(
+                    f"{SHIPROCKET_API}/courier/serviceability/",
+                    params={
+                        "pickup_postcode": pickup_pincode,
+                        "delivery_postcode": pincode,
+                        "weight": "0.5",
+                        "cod": "1"
+                    },
+                    headers=sr_h,
+                    timeout=10
+                )
+                if res.status_code == 200:
+                    sr_data = res.json()
+                    status_code = sr_data.get('status')
+                    if status_code == 200:
+                        shiprocket_verified = True
+                        data_payload = sr_data.get('data', {})
+                        couriers = data_payload.get('available_courier_companies', []) or []
+                        if not couriers:
+                            shiprocket_serviceable = False
+                        else:
+                            shiprocket_cod_allowed = any(int(c.get('cod', 0)) == 1 for c in couriers)
+                    elif status_code == 404 or "not serviceable" in str(sr_data.get('message', '')).lower():
+                        shiprocket_verified = True
+                        shiprocket_serviceable = False
+                    else:
+                        shiprocket_verified = False
+                        sr_error = str(sr_data.get('message') or 'unknown')
+                else:
+                    sr_error = f"HTTP {res.status_code}"
+        except Exception as sr_exc:
+            sr_error = str(sr_exc)
+
+        serviceable = shiprocket_serviceable if shiprocket_verified else True
+        final_cod = cod_allowed and shiprocket_cod_allowed
+
+        courier_list = [
+            {
+                'id': c.get('courier_company_id'),
+                'name': c.get('courier_name'),
+                'cod': int(c.get('cod', 0)) == 1,
+                'eta_days': c.get('estimated_delivery_days'),
+                'freight': c.get('rate'),
+            }
+            for c in couriers[:10]
+        ]
+
+        return success_response({
+            "pincode": pincode,
+            "serviceable": serviceable,
+            "cod_allowed": final_cod,
+            "prepaid_only": prepaid_only or not final_cod,
+            "city": city_detected,
+            "state": state_detected,
+            "pickup_pincode_used": pickup_pincode,
+            "pickup_source": pickup_source,
+            "shiprocket_verified": shiprocket_verified,
+            "shiprocket_error": sr_error,
+            "couriers": courier_list,
+            "courier_count": len(couriers),
+            "message": (
+                f"Serviceable — {len(couriers)} courier(s) available"
+                if serviceable and couriers
+                else "Delivery not available to this pincode"
+                if not serviceable
+                else "Serviceable (Shiprocket check unavailable — showing optimistic result)"
+            ),
+        }, "Serviceability check complete", 200)
+    except Exception as e:
+        logger.error(f"admin_serviceability_check error: {e}", exc_info=True)
+        return error_response("Serviceability check failed. Please try again.", 500)
+
+
 @app.route('/api/admin/orders', methods=['GET'])
 @token_required
 @require_admin()
@@ -6907,19 +7004,40 @@ def get_admin_orders():
             SELECT o.*, u.name as customer_name, u.email as customer_email,
                    COALESCE(ds.store_code, w.partner_id) as store_code,
                    COALESCE(ds.name, w.owner_name, w.partner_id, 'Default Store') as store_name,
-                   s.status as shipment_status
+                   s.status as shipment_status,
+                   woa.id as assignment_id, woa.assignment_status,
+                   woa.created_at as warehouse_received_at,
+                   aw.warehouse_name as fulfillment_warehouse,
+                   aw.pincode as fulfillment_warehouse_pincode,
+                   s.awb_code, s.courier_name, s.tracking_url,
+                   s.estimated_delivery as courier_eta, s.created_at as shipment_created_at,
+                   s.shiprocket_order_id
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
             LEFT JOIN dark_stores ds ON COALESCE(o.store_id, o.dark_store_id) = ds.id
             LEFT JOIN warehouses w ON COALESCE(o.store_id, o.dark_store_id) = w.id
             LEFT JOIN shipments s ON o.id = s.order_id
+            LEFT JOIN warehouse_order_assignments woa ON woa.order_id = o.id
+            LEFT JOIN warehouses aw ON aw.id = woa.warehouse_id
         """
         if where:
             query += " WHERE " + " AND ".join(where)
         query += " ORDER BY o.created_at DESC"
 
         cursor.execute(query, params)
-        orders = [dict(row) for row in cursor.fetchall()]
+        orders = []
+        for row in cursor.fetchall():
+            order = dict(row)
+            # Dispatch type for the admin panel: Shiprocket when an SR
+            # order/AWB exists, manual when the warehouse dispatched without
+            # Shiprocket, else not dispatched yet. Derived — no DB change.
+            if order.get("awb_code") or order.get("shiprocket_order_id"):
+                order["dispatch_type"] = "shiprocket"
+            elif (order.get("assignment_status") or "").lower() == "dispatched":
+                order["dispatch_type"] = "manual"
+            else:
+                order["dispatch_type"] = None
+            orders.append(order)
         conn.close()
         return jsonify(orders)
     except Exception as e:
@@ -7364,13 +7482,21 @@ def admin_get_order_details(order_id):
                    COALESCE(ds.name, w.owner_name, w.partner_id, 'Default Store') as store_name,
                    dp.name as partner_name, dp.phone as partner_phone,
                    s.shiprocket_order_id, s.shiprocket_shipment_id, s.awb_code, 
-                   s.courier_name, s.status as shipment_status, s.tracking_url
+                   s.courier_name, s.status as shipment_status, s.tracking_url,
+                   s.estimated_delivery as courier_eta,
+                   woa.id as assignment_id, woa.assignment_status,
+                   woa.created_at as warehouse_received_at,
+                   aw.warehouse_name as fulfillment_warehouse,
+                   aw.address as fulfillment_warehouse_address,
+                   aw.pincode as fulfillment_warehouse_pincode
             FROM orders o 
             JOIN users u ON o.user_id = u.id 
             LEFT JOIN dark_stores ds ON COALESCE(o.store_id, o.dark_store_id) = ds.id
             LEFT JOIN warehouses w ON COALESCE(o.store_id, o.dark_store_id) = w.id
             LEFT JOIN delivery_partners dp ON o.delivery_partner_id = dp.id
             LEFT JOIN shipments s ON o.id = s.order_id
+            LEFT JOIN warehouse_order_assignments woa ON woa.order_id = o.id
+            LEFT JOIN warehouses aw ON aw.id = woa.warehouse_id
             WHERE o.id = ?
         """, (order_id,))
         order = cursor.fetchone()

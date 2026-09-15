@@ -462,7 +462,10 @@ def init_db():
         ('delivery_partner_id', 'INTEGER'),
         ('store_id', 'INTEGER'),
         ('dark_store_id', 'INTEGER'),
-        ('cancellation_reason', 'TEXT')
+        ('cancellation_reason', 'TEXT'),
+        # checkout INSERT writes updated_at; legacy DBs already have this
+        # column — ensure fresh deployments get it too.
+        ('updated_at', 'TIMESTAMP')
     ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS order_items (

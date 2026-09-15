@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet, Gauge } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet, Gauge, MapPin } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
@@ -20,6 +20,7 @@ function AdminLayout({ children }) {
         { path: '/admin/banners', icon: LayoutDashboard, label: 'Banner Manager', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/system-health', icon: Activity, label: 'System Health', allowedRoles: ['super_admin'] },
         { path: '/admin/load-monitor', icon: Gauge, label: 'Load Monitor', allowedRoles: ['super_admin', 'admin'], extraStyle: 'text-cyan-500 font-bold' },
+        { path: '/admin/serviceability', icon: MapPin, label: 'Serviceability', allowedRoles: ['super_admin', 'admin', 'manager', 'support_admin', 'delivery_admin', 'inventory_admin'] },
         { path: '/admin/server-control', icon: Server, label: 'Server Control', allowedRoles: ['super_admin'], extraStyle: 'text-blue-500 font-bold' },
 
         { path: '/admin/orders', icon: ShoppingBag, label: 'Orders', allowedRoles: ['super_admin', 'admin', 'manager', 'delivery_admin'] },

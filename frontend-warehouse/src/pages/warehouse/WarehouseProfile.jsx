@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store/useStore';
 import { apiClient } from '../../utils/apiClient';
-import { User, Mail, Shield, MapPin, Phone, Building, Calendar, Award, ChevronLeft, Radio, Zap } from 'lucide-react';
+import { User, Mail, Shield, MapPin, Phone, Building, Calendar, Award, ChevronLeft, Radio, Zap, Landmark, Save, AlertTriangle, Pencil } from 'lucide-react';
 import TerminalStatus from './components/TerminalStatus';
 
 // Static palette so Tailwind sees the complete class literals (dynamic
@@ -49,6 +49,69 @@ export default function WarehouseProfile() {
 
     const [updatingTerminal, setUpdatingTerminal] = useState(false);
     const [actionError, setActionError] = useState('');
+
+    // --- Multi-vendor business details editing (additive) ---
+    const [bizForm, setBizForm] = useState({
+        address: '', pincode: '', phone: '', gst_number: '', pickup_contact_name: '',
+    });
+    const [payoutForm, setPayoutForm] = useState({
+        bank_account_name: '', bank_account_number: '', bank_ifsc: '', bank_name: '', upi_id: '',
+    });
+    const [profileLoading, setProfileLoading] = useState(true);
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [profileMessage, setProfileMessage] = useState('');
+    const [profileError, setProfileError] = useState('');
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const profile = await apiClient.get('/warehouse/profile');
+                if (cancelled) return;
+                const data = profile?.data || profile || {};
+                setBizForm({
+                    address: data.address || '',
+                    pincode: data.pincode || '',
+                    phone: data.phone || '',
+                    gst_number: data.gst_number || '',
+                    pickup_contact_name: data.pickup_contact_name || '',
+                });
+                setPayoutForm({
+                    bank_account_name: data.payout?.bank_account_name || '',
+                    bank_account_number: data.payout?.bank_account_number || '',
+                    bank_ifsc: data.payout?.bank_ifsc || '',
+                    bank_name: data.payout?.bank_name || '',
+                    upi_id: data.payout?.upi_id || '',
+                });
+            } catch (loadError) {
+                if (!cancelled) console.error('Failed to load warehouse profile:', loadError);
+            } finally {
+                if (!cancelled) setProfileLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    const missingBizFields = [
+        !bizForm.gst_number?.trim() && 'GST number',
+        !bizForm.pickup_contact_name?.trim() && 'Pickup contact',
+        !bizForm.pincode?.trim() && 'Pincode',
+        (!payoutForm.bank_account_number?.trim() && !payoutForm.upi_id?.trim()) && 'Payout (bank/UPI)',
+    ].filter(Boolean);
+
+    const handleSaveProfile = async () => {
+        setSavingProfile(true); setProfileMessage(''); setProfileError('');
+        try {
+            await apiClient.patch('/warehouse/profile', { ...bizForm, ...payoutForm });
+            setProfileMessage('Business details updated successfully.');
+            // Keep the header user object fresh for other pages.
+            setWarehouseUser({ ...user, ...bizForm }, warehouseToken);
+        } catch (saveError) {
+            setProfileError(saveError?.message || 'Could not update business details.');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
 
     // --- Terminal controls (relocated from the dashboard, business logic unchanged) ---
     const handleUpdateOperationsStatus = async (newStatus) => {
@@ -200,6 +263,103 @@ export default function WarehouseProfile() {
                             <ProfileField icon={Mail} label="Email Address" value={user?.email} color="blue" />
                             <ProfileField icon={Phone} label="Contact Number" value={user?.phone} color="emerald" />
                             <ProfileField icon={MapPin} label="Active Zone" value={user?.pincode} color="rose" />
+                        </div>
+                    </div>
+
+                    {/* Multi-vendor profile completion banner (additive) */}
+                    {!profileLoading && missingBizFields.length > 0 && (
+                        <div className="flex items-start gap-3 rounded-[20px] border border-amber-500/20 bg-amber-500/10 px-5 py-4">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+                            <div className="text-sm leading-6 text-amber-200">
+                                <p className="font-bold">Complete your multi-vendor seller profile</p>
+                                <p className="text-amber-200/80">
+                                    Missing: {missingBizFields.join(', ')}. JDLX is now a multi-vendor marketplace — add these below so invoicing, pickups and settlements work smoothly.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Business Details — editable (multi-vendor) */}
+                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-4 sm:p-8 space-y-4 sm:space-y-6 backdrop-blur-sm">
+                        <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-4">
+                            <div className="flex items-center gap-3">
+                                <Pencil className="w-5 h-5 text-amber-500" />
+                                <h2 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">Business Details</h2>
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Editable</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'pickup_contact_name', label: 'Pickup Contact Person', placeholder: 'Who hands over shipments' },
+                                { key: 'gst_number', label: 'GSTIN (GST Number)', placeholder: '22AAAAA0000A1Z5' },
+                                { key: 'phone', label: 'Contact Number', placeholder: '+91 9XXXXXXXXX' },
+                                { key: 'pincode', label: 'Pickup Pincode', placeholder: '6-digit pincode' },
+                            ].map(({ key, label, placeholder }) => (
+                                <div key={key} className="flex flex-col gap-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</label>
+                                    <input
+                                        value={bizForm[key] || ''}
+                                        onChange={(e) => setBizForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder={placeholder}
+                                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 outline-none placeholder:font-medium placeholder:text-slate-600 focus:border-amber-500/40 focus:bg-white/10 transition-all"
+                                    />
+                                </div>
+                            ))}
+                            <div className="flex flex-col gap-2 md:col-span-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Warehouse / Pickup Address</label>
+                                <textarea
+                                    rows={2}
+                                    value={bizForm.address || ''}
+                                    onChange={(e) => setBizForm((prev) => ({ ...prev, address: e.target.value }))}
+                                    placeholder="Complete pickup address"
+                                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 outline-none placeholder:font-medium placeholder:text-slate-600 focus:border-amber-500/40 focus:bg-white/10 transition-all resize-y"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button
+                                onClick={handleSaveProfile}
+                                disabled={savingProfile || profileLoading}
+                                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-3 text-sm font-black text-slate-900 shadow-lg shadow-amber-500/20 transition-all hover:brightness-110 disabled:opacity-50"
+                            >
+                                <Save className="h-4 w-4" />
+                                {savingProfile ? 'Saving…' : 'Save Business Details'}
+                            </button>
+                            {profileMessage && <span className="text-xs font-bold text-emerald-400">{profileMessage}</span>}
+                            {profileError && <span className="text-xs font-bold text-rose-400">{profileError}</span>}
+                        </div>
+                    </div>
+
+                    {/* Payout Account — editable (multi-vendor settlements) */}
+                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-4 sm:p-8 space-y-4 sm:space-y-6 backdrop-blur-sm">
+                        <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                            <Landmark className="w-5 h-5 text-amber-500" />
+                            <h2 className="text-lg font-black text-white tracking-tight uppercase tracking-[0.1em]">Payout Account</h2>
+                        </div>
+                        <p className="text-xs font-medium leading-5 text-slate-500">
+                            Bank or UPI account where your vendor settlements are credited. Keep it active and in your own name.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'bank_account_name', label: 'Account Holder Name', placeholder: 'As printed on the bank passbook' },
+                                { key: 'bank_account_number', label: 'Account Number', placeholder: 'Bank account number' },
+                                { key: 'bank_ifsc', label: 'IFSC Code', placeholder: 'SBIN0001234' },
+                                { key: 'bank_name', label: 'Bank Name', placeholder: 'e.g. State Bank of India' },
+                                { key: 'upi_id', label: 'UPI ID (alternative)', placeholder: 'name@upi' },
+                            ].map(({ key, label, placeholder }) => (
+                                <div key={key} className="flex flex-col gap-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</label>
+                                    <input
+                                        value={payoutForm[key] || ''}
+                                        onChange={(e) => setPayoutForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder={placeholder}
+                                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 outline-none placeholder:font-medium placeholder:text-slate-600 focus:border-amber-500/40 focus:bg-white/10 transition-all"
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </div>
 

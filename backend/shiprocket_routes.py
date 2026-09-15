@@ -381,7 +381,7 @@ def shiprocket_webhook():
         conn.commit()
         return jsonify({"status": "ok"}), 200
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "Shipment tracking temporarily unavailable. Please try again."}), 500
     finally:
         conn.close()
 

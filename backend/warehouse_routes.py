@@ -223,7 +223,47 @@ def _ensure_warehouse_kyc_schema(conn):
         cursor.execute("ALTER TABLE warehouses ADD COLUMN kyc_notice_sent INTEGER DEFAULT 0")
     if "kyc_notice_sent_at" not in warehouse_columns:
         cursor.execute("ALTER TABLE warehouses ADD COLUMN kyc_notice_sent_at TIMESTAMP")
-    
+
+    # Multi-vendor marketplace profile fields (additive; existing rows keep
+    # working — they just show as "pending" in the profile checklist).
+    for col_def in (
+        ("gst_number", "TEXT"),
+        ("pickup_contact_name", "TEXT"),
+        ("gst_certificate_file", "TEXT"),
+        ("profile_update_notice_sent", "INTEGER DEFAULT 0"),
+        ("profile_update_notice_sent_at", "TIMESTAMP"),
+    ):
+        if col_def[0] not in warehouse_columns:
+            cursor.execute(f"ALTER TABLE warehouses ADD COLUMN {col_def[0]} {col_def[1]}")
+
+    cursor.execute("PRAGMA table_info(warehouse_applications)")
+    app_columns = [row[1] for row in cursor.fetchall()]
+    for col_def in (
+        ("gst_number", "TEXT"),
+        ("pickup_contact_name", "TEXT"),
+        ("gst_certificate_file", "TEXT"),
+    ):
+        if col_def[0] not in app_columns:
+            cursor.execute(f"ALTER TABLE warehouse_applications ADD COLUMN {col_def[0]} {col_def[1]}")
+
+    # Payout account details (bank/UPI) for vendor settlements — one row per
+    # warehouse, editable by the partner from the profile page.
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS warehouse_payout_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            warehouse_id INTEGER NOT NULL UNIQUE,
+            bank_account_name TEXT,
+            bank_account_number TEXT,
+            bank_ifsc TEXT,
+            bank_name TEXT,
+            upi_id TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+        )
+        """
+    )
+
     conn.commit()
 
 
@@ -263,6 +303,9 @@ def _sync_legacy_warehouse_kyc_rollout(conn):
     """
     Syncs legacy warehouse records with the new KYC requirements.
     Sends notifications and emails to warehouses with pending KYC.
+    Also notifies partners once about the multi-vendor profile fields
+    (GST / pickup contact / payout) so existing warehouses update their
+    details from the profile page.
     """
     _ensure_warehouse_kyc_schema(conn)
     
@@ -270,7 +313,9 @@ def _sync_legacy_warehouse_kyc_rollout(conn):
         """
         SELECT id, email, owner_name, warehouse_name,
                COALESCE(profile_kyc_status, 'verified') AS profile_kyc_status,
-               COALESCE(kyc_notice_sent, 0) AS kyc_notice_sent
+               COALESCE(kyc_notice_sent, 0) AS kyc_notice_sent,
+               gst_number, pickup_contact_name,
+               COALESCE(profile_update_notice_sent, 0) AS profile_update_notice_sent
         FROM warehouses
         """
     ).fetchall()
@@ -321,6 +366,40 @@ def _sync_legacy_warehouse_kyc_rollout(conn):
             )
             pending_mail_jobs.append(
                 (warehouse["email"], warehouse["owner_name"], warehouse["warehouse_name"])
+            )
+
+        # Multi-vendor profile rollout: one-time nudge for existing partners
+        # whose GST / pickup contact / payout details are still missing.
+        # Read-only for anything else — it never blocks login or dispatch.
+        needs_profile_update = (
+            not (warehouse["gst_number"] or "").strip()
+            or not (warehouse["pickup_contact_name"] or "").strip()
+        )
+        if needs_profile_update and int(warehouse["profile_update_notice_sent"] or 0) == 0:
+            conn.execute(
+                """
+                INSERT INTO warehouse_notifications (warehouse_id, title, message, type)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    warehouse["id"],
+                    "Action Required: Complete Your Multi-Vendor Profile",
+                    (
+                        "JDLX is now a multi-vendor marketplace. Please add your GST number, "
+                        "pickup contact name, and payout (bank/UPI) details from Profile → "
+                        "Business Details so invoicing, pickups and settlements work smoothly."
+                    ),
+                    "PROFILE_UPDATE",
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE warehouses
+                SET profile_update_notice_sent = 1,
+                    profile_update_notice_sent_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (warehouse["id"],),
             )
 
     conn.commit()
@@ -538,7 +617,7 @@ def warehouse_upload_product_image():
         return success_response({"url": file_url}, "Image uploaded successfully", 201)
     except Exception as e:
         current_app.logger.error(f"Product image upload failed: {str(e)}")
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
 
 
 def require_warehouse_auth(f):
@@ -917,6 +996,8 @@ def warehouse_auth_google():
                 "weather_status": wh["weather_status"],
                 "service_radius_km": wh["service_radius_km"],
                 "profile_kyc_status": wh["profile_kyc_status"],
+                "gst_number": wh["gst_number"] if "gst_number" in wh.keys() else None,
+                "pickup_contact_name": wh["pickup_contact_name"] if "pickup_contact_name" in wh.keys() else None,
             },
         })
         cookie_settings = get_wh_cookie_settings()
@@ -1127,6 +1208,8 @@ def partner_auth_google_callback():
                 "weather_status": wh["weather_status"],
                 "service_radius_km": wh["service_radius_km"],
                 "profile_kyc_status": wh["profile_kyc_status"],
+                "gst_number": wh["gst_number"] if "gst_number" in wh.keys() else None,
+                "pickup_contact_name": wh["pickup_contact_name"] if "pickup_contact_name" in wh.keys() else None,
             }
             encoded_user = quote(json.dumps(user_obj))
             cookie_settings = get_wh_cookie_settings()
@@ -1273,6 +1356,7 @@ def warehouse_register():
     try:
         owner_image = _save_uploaded_asset(request.files.get("owner_image"), "owner")
         kyc_document = _save_uploaded_asset(request.files.get("kyc_document"), "kyc")
+        gst_certificate = _save_uploaded_asset(request.files.get("gst_certificate_file"), "gst")
         warehouse_images = []
         for image_file in request.files.getlist("warehouse_images"):
             saved_image = _save_uploaded_asset(image_file, "store")
@@ -1313,8 +1397,9 @@ def warehouse_register():
             """INSERT INTO warehouse_applications
                (warehouse_name, owner_name, email, phone, address, pincode,
                 warehouse_capacity, warehouse_type, verification_status, partner_id,
-                document_upload, warehouse_photos, owner_image, kyc_details, request_mail_message)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)""",
+                document_upload, warehouse_photos, owner_image, kyc_details, request_mail_message,
+                gst_number, pickup_contact_name, gst_certificate_file)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 data.get("warehouse_name"),
                 data.get("owner_name"),
@@ -1330,6 +1415,9 @@ def warehouse_register():
                 owner_image,
                 kyc_details,
                 request_mail_message,
+                (data.get("gst_number") or "").strip() or None,
+                (data.get("pickup_contact_name") or "").strip() or None,
+                gst_certificate,
             ),
         )
         conn.commit()
@@ -1391,7 +1479,7 @@ def warehouse_request_status():
         }
         return success_response(data, "Request status retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -1708,7 +1796,7 @@ def warehouse_dashboard():
         return success_response(data, "Dashboard data retrieved successfully")
     except Exception as e:
         current_app.logger.error(f"ERROR in warehouse_dashboard: {str(e)}", exc_info=True)
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -1802,7 +1890,7 @@ def warehouse_analytics():
         return jsonify(response), 200
     except Exception as e:
         current_app.logger.error(f"ERROR in warehouse_analytics: {str(e)}", exc_info=True)
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -2048,7 +2136,7 @@ def create_direct_purchase():
         return success_response({"purchase_id": purchase_id}, "Purchase completed and inventory updated")
     except Exception as e:
         conn.rollback()
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -2106,7 +2194,7 @@ def get_warehouse_orders():
         return success_response(orders, "Orders retrieved successfully")
     except Exception as e:
         current_app.logger.error(f"Failed to get warehouse orders: {str(e)}")
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -2126,7 +2214,7 @@ def update_product_category(product_id):
         conn.commit()
         return success_response(None, "Product category updated successfully")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -2143,7 +2231,7 @@ def get_all_categories():
         categories = [r["category"] for r in rows]
         return success_response(categories)
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -2198,7 +2286,7 @@ def warehouse_create_category():
                 201
             )
         except Exception as e2:
-            return error_response(str(e2), 500)
+            return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -2828,7 +2916,7 @@ def warehouse_create_product():
             return success_response({"product_id": product_id, "sku": final_sku}, "Product created, added to inventory, and synced with catalog", 201)
 
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -3329,7 +3417,7 @@ def warehouse_adjust_stock(item_id):
         }, f"Stock {movement_type} recorded successfully")
     except Exception as e:
         conn.rollback()
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -3808,7 +3896,7 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
         }, "Package handed off to Shiprocket. The courier will schedule the pickup.")
     except Exception as e:
         current_app.logger.error(f"ERROR in warehouse_dispatch_to_shiprocket: {str(e)}", exc_info=True)
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -3875,6 +3963,146 @@ def warehouse_settings():
         print(f"[DEBUG] warehouse_settings: Error during update: {str(e)}")
         traceback.print_exc()
         return error_response(f"Internal database error: {str(e)}", 500)
+    finally:
+        conn.close()
+
+
+# ── Multi-vendor profile (additive; partners manage their business details) ──
+
+@warehouse_bp.route("/api/warehouse/profile", methods=["GET"])
+@require_warehouse_auth
+def warehouse_profile_get():
+    """Full business profile for the logged-in warehouse partner, including
+    the multi-vendor fields (GST, pickup contact) and payout account."""
+    wh_id = _get_current_warehouse_id()
+    conn = get_db()
+    try:
+        _ensure_warehouse_kyc_schema(conn)
+        wh = conn.execute("SELECT * FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
+        if not wh:
+            return error_response("Warehouse not found", 404)
+        payout = conn.execute(
+            "SELECT bank_account_name, bank_account_number, bank_ifsc, bank_name, upi_id, updated_at "
+            "FROM warehouse_payout_accounts WHERE warehouse_id = ?",
+            (wh_id,),
+        ).fetchone()
+        profile = dict(wh)
+        profile["payout"] = dict(payout) if payout else None
+        return success_response(profile, "Profile loaded", 200)
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/profile", methods=["PATCH"])
+@require_warehouse_auth
+def warehouse_profile_update():
+    """Partner edits their multi-vendor business details.
+
+    Accepts JSON or multipart (gst_certificate_file upload). Editable fields:
+    address, pincode, phone, gst_number, pickup_contact_name, payout fields.
+    Identity fields (email, partner_id, status...) are NOT editable here.
+    Address changes sync to the linked dark_stores row so storefront
+    availability keeps showing the right address.
+    """
+    wh_id = _get_current_warehouse_id()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = request.form.to_dict() if request.form else {}
+
+    editable = ["address", "pincode", "phone", "gst_number", "pickup_contact_name"]
+    updates = {}
+    for field in editable:
+        if field in data:
+            value = str(data.get(field) or "").strip()
+            if field == "pincode" and value and (not value.isdigit() or len(value) != 6):
+                return error_response("Pincode must be a 6-digit number", 400)
+            if field == "phone" and value and not value.replace("+", "").replace("-", "").replace(" ", "").isdigit():
+                return error_response("Phone number format is invalid", 400)
+            updates[field] = value
+
+    payout_fields = ["bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "upi_id"]
+    payout_updates = {}
+    for field in payout_fields:
+        if field in data:
+            value = str(data.get(field) or "").strip()
+            if field == "bank_ifsc" and value and len(value) != 11:
+                return error_response("IFSC code must be 11 characters", 400)
+            payout_updates[field] = value
+
+    gst_cert_path = None
+    try:
+        gst_cert_path = _save_uploaded_asset(request.files.get("gst_certificate_file"), "gst")
+    except ValueError as upload_error:
+        return error_response(str(upload_error), 400)
+    if gst_cert_path:
+        updates["gst_certificate_file"] = gst_cert_path
+
+    if not updates and not any(k in data for k in payout_fields):
+        return error_response("No valid fields to update", 400)
+
+    conn = get_db()
+    try:
+        _ensure_warehouse_kyc_schema(conn)
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(
+                f"UPDATE warehouses SET {set_clause} WHERE id = ?",
+                list(updates.values()) + [wh_id],
+            )
+            # Keep the linked dark store's address in sync (best-effort, name-based
+            # mapping matches the existing settings sync behaviour).
+            if "address" in updates or "pincode" in updates or "phone" in updates:
+                wh = conn.execute(
+                    "SELECT warehouse_name FROM warehouses WHERE id = ?", (wh_id,)
+                ).fetchone()
+                if wh:
+                    ds_set, ds_vals = [], []
+                    if "address" in updates:
+                        ds_set.append("address = ?")
+                        ds_vals.append(updates["address"])
+                    if "pincode" in updates:
+                        ds_set.append("pincode = ?")
+                        ds_vals.append(updates["pincode"])
+                    if "phone" in updates:
+                        ds_set.append("phone = ?")
+                        ds_vals.append(updates["phone"])
+                    if ds_set:
+                        conn.execute(
+                            f"UPDATE dark_stores SET {', '.join(ds_set)} WHERE name = ?",
+                            ds_vals + [wh["warehouse_name"]],
+                        )
+
+        if any(k in data for k in payout_fields):
+            existing = conn.execute(
+                "SELECT id FROM warehouse_payout_accounts WHERE warehouse_id = ?", (wh_id,)
+            ).fetchone()
+            if existing:
+                p_set = ", ".join(f"{k} = ?" for k in payout_updates)
+                conn.execute(
+                    f"UPDATE warehouse_payout_accounts SET {p_set}, updated_at = CURRENT_TIMESTAMP WHERE warehouse_id = ?",
+                    list(payout_updates.values()) + [wh_id],
+                )
+            elif payout_updates:
+                cols = ["warehouse_id"] + list(payout_updates.keys())
+                placeholders = ", ".join(["?"] * len(cols))
+                conn.execute(
+                    f"INSERT INTO warehouse_payout_accounts ({', '.join(cols)}) VALUES ({placeholders})",
+                    [wh_id] + list(payout_updates.values()),
+                )
+
+        conn.commit()
+        wh = conn.execute("SELECT * FROM warehouses WHERE id = ?", (wh_id,)).fetchone()
+        payout = conn.execute(
+            "SELECT bank_account_name, bank_account_number, bank_ifsc, bank_name, upi_id, updated_at "
+            "FROM warehouse_payout_accounts WHERE warehouse_id = ?",
+            (wh_id,),
+        ).fetchone()
+        profile = dict(wh)
+        profile["payout"] = dict(payout) if payout else None
+        return success_response(profile, "Profile updated", 200)
+    except Exception as profile_error:
+        current_app.logger.error(f"warehouse_profile_update failed: {profile_error}", exc_info=True)
+        return error_response("Could not update profile. Please try again in a moment.", 500)
     finally:
         conn.close()
 
@@ -4053,8 +4281,9 @@ def admin_update_warehouse_application(app_id):
                 conn.execute(
                     """INSERT INTO warehouses
                        (application_id, partner_id, warehouse_name, owner_name, email, phone,
-                        address, pincode, warehouse_capacity, warehouse_type)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        address, pincode, warehouse_capacity, warehouse_type,
+                        gst_number, pickup_contact_name, gst_certificate_file)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         app_id,
                         app_row["partner_id"] or generate_unique_partner_id(conn),
@@ -4066,6 +4295,24 @@ def admin_update_warehouse_application(app_id):
                         app_row["pincode"],
                         app_row["warehouse_capacity"],
                         app_row["warehouse_type"],
+                        app_row["gst_number"],
+                        app_row["pickup_contact_name"],
+                        app_row["gst_certificate_file"],
+                    ),
+                )
+            else:
+                # Re-approval / update: refresh the multi-vendor fields from the
+                # latest application so the partner profile stays current.
+                conn.execute(
+                    """UPDATE warehouses
+                       SET gst_number = ?, pickup_contact_name = ?,
+                           gst_certificate_file = COALESCE(?, gst_certificate_file)
+                       WHERE email = ?""",
+                    (
+                        app_row["gst_number"],
+                        app_row["pickup_contact_name"],
+                        app_row["gst_certificate_file"],
+                        app_row["email"],
                     ),
                 )
             
@@ -4280,7 +4527,7 @@ def admin_get_warehouse_stats(app_id):
         }
         return jsonify(data), 200
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -4355,7 +4602,7 @@ def admin_get_warehouse_performance(app_id):
 
         return jsonify(performance), 200
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -5282,7 +5529,7 @@ def generate_billing_order():
             subtotal, validated_items = _validate_billing_items(cur, vendor_id, items)
         except ValueError as e:
             conn.rollback()
-            return error_response(str(e), 400)
+            return error_response("The request could not be processed. Please check the details and try again.", 400)
 
         tax_amount = round(subtotal * gst_rate / 100, 2)
         total_amount = max(0.0, round(subtotal + tax_amount - discount_amount, 2))
@@ -5353,7 +5600,7 @@ def generate_billing_order():
         }), 201
     except Exception as exc:
         conn.rollback()
-        return error_response(f"Failed to generate bill: {str(exc)}", 500)
+        return error_response("Failed to generate bill. Please try again.", 500)
     finally:
         conn.close()
 
@@ -5377,10 +5624,10 @@ def upload_billing_damage_image():
             return error_response("File upload failed", 400)
         return success_response({"url": url}, "Damage image uploaded successfully", 201)
     except ValueError as e:
-        return error_response(str(e), 400)
+        return error_response("The request could not be processed. Please check the details and try again.", 400)
     except Exception as e:
         current_app.logger.error(f"Damage image upload failed: {str(e)}")
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
 
 
 @warehouse_bp.route("/api/warehouse/billing/history", methods=["GET"])
@@ -5566,7 +5813,7 @@ def return_billing_order():
         }), 200
     except Exception as exc:
         conn.rollback()
-        return error_response(f"Failed to process return: {str(exc)}", 500)
+        return error_response("Failed to process return. Please try again.", 500)
     finally:
         conn.close()
 
@@ -5632,7 +5879,7 @@ def cancel_billing_order():
         }), 200
     except Exception as exc:
         conn.rollback()
-        return error_response(f"Failed to cancel bill: {str(exc)}", 500)
+        return error_response("Failed to cancel bill. Please try again.", 500)
     finally:
         conn.close()
 
@@ -5718,7 +5965,7 @@ def exchange_billing_order():
             new_subtotal, new_validated = _validate_billing_items(cur, vendor_id, new_items)
         except ValueError as e:
             conn.rollback()
-            return error_response(str(e), 400)
+            return error_response("The request could not be processed. Please check the details and try again.", 400)
         new_tax = round(new_subtotal * gst_rate / 100, 2)
         new_total = max(0.0, round(new_subtotal + new_tax, 2))
 
@@ -5780,7 +6027,7 @@ def exchange_billing_order():
         }), 200
     except Exception as exc:
         conn.rollback()
-        return error_response(f"Failed to process exchange: {str(exc)}", 500)
+        return error_response("Failed to process exchange. Please try again.", 500)
     finally:
         conn.close()
 
@@ -5859,7 +6106,7 @@ def warehouse_get_offers():
                     offer['applicable_ids'] = []
         return success_response(offers, "Warehouse offers retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -5946,7 +6193,7 @@ def warehouse_create_offer():
         return success_response({"id": cursor.lastrowid}, "Offer created successfully", 201)
     except Exception as e:
         conn.rollback()
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -6048,7 +6295,7 @@ def warehouse_update_offer(offer_id):
         return success_response(None, "Offer updated successfully")
     except Exception as e:
         conn.rollback()
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -6074,7 +6321,7 @@ def warehouse_delete_offer(offer_id):
         return success_response(None, "Offer deleted successfully")
     except Exception as e:
         conn.rollback()
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -6114,7 +6361,7 @@ def warehouse_offer_products():
             products.append(item)
         return success_response(products, "Warehouse products retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()
 
@@ -6187,7 +6434,7 @@ def warehouse_earnings():
             "recent_settlements": [dict(r) for r in recent],
         }, "Earnings retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
 
 
 @warehouse_bp.route("/api/warehouse/earnings/settlements", methods=["GET"])
@@ -6235,7 +6482,7 @@ def warehouse_earnings_settlements():
             "per_page": per_page,
         }, "Settlements retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
 
 
 @warehouse_bp.route("/api/warehouse/earnings/payouts", methods=["GET"])
@@ -6255,7 +6502,7 @@ def warehouse_earnings_payouts():
         conn.close()
         return success_response([dict(r) for r in rows], "Payouts retrieved")
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
 
 
 @warehouse_bp.route("/api/warehouse/earnings/withdraw", methods=["POST"])
@@ -6278,4 +6525,4 @@ def warehouse_earnings_withdraw():
             return error_response(message, 400)
         return success_response(None, message)
     except Exception as e:
-        return error_response(str(e), 500)
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)

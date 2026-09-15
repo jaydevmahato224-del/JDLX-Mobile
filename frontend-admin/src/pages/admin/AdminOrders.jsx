@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Package, Clock, Printer, Calendar, MapPin, Map, AlertCircle, RotateCcw, Loader2, ExternalLink, Bell } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Truck, UserPlus, Search, Filter, Eye, X, Package, Clock, Printer, Calendar, MapPin, Map, AlertCircle, RotateCcw, Loader2, ExternalLink, Bell, Warehouse } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
 import toast from 'react-hot-toast'
@@ -415,22 +415,43 @@ function AdminOrders() {
                                         <td className="p-4">
                                             <div className="flex flex-col gap-1">
                                                 {order.store_name ? <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded flex items-center gap-1 w-max" title={`Store Code: ${order.store_code || 'N/A'}`}><Package className="w-3 h-3" /> {order.store_name} (#{order.dark_store_id})</span> : <span className="text-xs text-gray-400">-</span>}
+                                                {order.fulfillment_warehouse && (
+                                                    <span className="text-xs font-semibold bg-purple-50 text-purple-700 px-2 py-0.5 rounded flex items-center gap-1 w-max" title={`Warehouse pincode: ${order.fulfillment_warehouse_pincode || 'N/A'} · Received: ${order.warehouse_received_at ? new Date(order.warehouse_received_at).toLocaleString() : 'N/A'}`}>
+                                                        <Warehouse className="w-3 h-3" /> {order.fulfillment_warehouse}
+                                                    </span>
+                                                )}
+                                                {order.warehouse_received_at && (
+                                                    <span className="text-[10px] text-gray-500" title="When the warehouse received this order">Recv: {new Date(order.warehouse_received_at).toLocaleDateString()} {new Date(order.warehouse_received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                )}
                                                 {order.delivery_partner_id ? <span className="text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded flex items-center gap-1 w-max"><UserPlus className="w-3 h-3" /> Rider #{order.delivery_partner_id}</span> : <span className="text-xs text-gray-400">-</span>}
                                                 {order.estimated_delivery && <span className="text-xs text-orange-600 font-medium">ETA: {order.estimated_delivery}</span>}
+                                                {!order.estimated_delivery && order.courier_eta && <span className="text-xs text-orange-600 font-medium">Courier ETA: {order.courier_eta}</span>}
                                             </div>
                                         </td>
                                         <td className="p-4">
-                                            {order.shipment_status ? (
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                                    order.shipment_status?.toLowerCase().includes('delivered') ? 'bg-green-100 text-green-700' :
-                                                    order.shipment_status === 'assigned' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {order.shipment_status}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-gray-400 italic">No Shipment</span>
-                                            )}
+                                            <div className="flex flex-col gap-1 items-start">
+                                                {order.dispatch_type && (
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                        order.dispatch_type === 'shiprocket' ? 'bg-violet-100 text-violet-700 border border-violet-200' : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                                    }`}>
+                                                        {order.dispatch_type === 'shiprocket' ? '⚡ Shiprocket' : 'Manual'}
+                                                    </span>
+                                                )}
+                                                {order.shipment_status ? (
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                        order.shipment_status?.toLowerCase().includes('delivered') ? 'bg-green-100 text-green-700' :
+                                                        order.shipment_status === 'assigned' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-amber-100 text-amber-700'
+                                                    }`}>
+                                                        {order.shipment_status}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 italic">No Shipment</span>
+                                                )}
+                                                {order.assignment_status && (
+                                                    <span className="text-[10px] text-gray-500 uppercase" title="Warehouse assignment status">WH: {order.assignment_status}</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${getStatusStyle(order.status)}`}>
@@ -622,6 +643,64 @@ function AdminOrders() {
                                 {selectedOrder.delivery_latitude && (
                                     <p className="text-xs text-gray-500 font-mono flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> {selectedOrder.delivery_latitude}, {selectedOrder.delivery_longitude}</p>
                                 )}
+                            </div>
+
+                            {/* Fulfillment Journey — warehouse receive → dispatch → delivery */}
+                            <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-3">
+                                <h3 className="font-bold border-b border-gray-200 pb-2 mb-1 text-gray-800 flex items-center gap-2">
+                                    <Warehouse className="w-4 h-4" /> Fulfillment Journey
+                                </h3>
+                                <div className="flex flex-col gap-2 text-sm">
+                                    <div className="flex justify-between items-center gap-2">
+                                        <span className="text-gray-600 font-semibold">Fulfillment Warehouse</span>
+                                        <span className="font-bold text-gray-800 text-right">
+                                            {selectedOrder.fulfillment_warehouse || '—'}
+                                            {selectedOrder.fulfillment_warehouse_pincode ? ` (${selectedOrder.fulfillment_warehouse_pincode})` : ''}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center gap-2">
+                                        <span className="text-gray-600 font-semibold">Received at Warehouse</span>
+                                        <span className="font-bold text-gray-800">
+                                            {selectedOrder.warehouse_received_at ? new Date(selectedOrder.warehouse_received_at).toLocaleString() : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center gap-2">
+                                        <span className="text-gray-600 font-semibold">Warehouse Status</span>
+                                        <span className="font-bold text-gray-800 uppercase">{selectedOrder.assignment_status || 'NOT ASSIGNED'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center gap-2">
+                                        <span className="text-gray-600 font-semibold">Dispatched Via</span>
+                                        <span className={`font-bold uppercase ${
+                                            selectedOrder.dispatch_type === 'shiprocket' ? 'text-violet-700' :
+                                            selectedOrder.dispatch_type === 'manual' ? 'text-gray-800' : 'text-gray-400'}`}>
+                                            {selectedOrder.dispatch_type === 'shiprocket' ? '⚡ Shiprocket' :
+                                             selectedOrder.dispatch_type === 'manual' ? 'Manual (by warehouse)' : 'Not dispatched'}
+                                        </span>
+                                    </div>
+                                    {selectedOrder.courier_name && (
+                                        <div className="flex justify-between items-center gap-2">
+                                            <span className="text-gray-600 font-semibold">Courier</span>
+                                            <span className="font-bold text-gray-800">{selectedOrder.courier_name}</span>
+                                        </div>
+                                    )}
+                                    {(selectedOrder.courier_eta || selectedOrder.estimated_delivery) && (
+                                        <div className="flex justify-between items-center gap-2">
+                                            <span className="text-gray-600 font-semibold">Expected Delivery</span>
+                                            <span className="font-bold text-orange-700">{selectedOrder.courier_eta || selectedOrder.estimated_delivery}</span>
+                                        </div>
+                                    )}
+                                    {selectedOrder.shipped_at && (
+                                        <div className="flex justify-between items-center gap-2">
+                                            <span className="text-gray-600 font-semibold">Shipped At</span>
+                                            <span className="font-bold text-gray-800">{new Date(selectedOrder.shipped_at.replace(' ', 'T')).toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {selectedOrder.fulfillment_warehouse_address && (
+                                        <p className="text-[11px] text-gray-500 border-t border-gray-200 pt-2 mt-1">
+                                            <strong>Pickup address:</strong> {selectedOrder.fulfillment_warehouse_address}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Phase 10: Routing Topology Map */}

@@ -17,6 +17,8 @@ const INITIAL_FORM = {
     warehouse_capacity: '',
     warehouse_type: 'micro_fulfillment',
     request_mail_message: '',
+    gst_number: '',
+    pickup_contact_name: '',
 }
 
 const UPLOAD_ACCEPT_IMAGES = '.jpg,.jpeg,.png,.webp'
@@ -32,6 +34,8 @@ const WAREHOUSE_TYPES = [
     { value: 'cold_storage', label: 'Cold Storage' },
     { value: 'pharmacy', label: 'Pharmacy Warehouse' },
 ]
+
+
 
 // ── Shared style tokens ──────────────────────────────────────────────────────
 const s = {
@@ -119,6 +123,7 @@ function WarehouseRequest() {
     const [uploads, setUploads] = useState({
         ownerImage: null,
         kycDocument: null,
+        gstCertificate: null,
         storeImages: [],
     })
 
@@ -210,6 +215,8 @@ function WarehouseRequest() {
             warehouse_capacity: String(application.warehouse_capacity ?? prev.warehouse_capacity ?? ''),
             warehouse_type: application.warehouse_type || prev.warehouse_type,
             request_mail_message: application.request_mail_message || prev.request_mail_message,
+            gst_number: application.gst_number || prev.gst_number,
+            pickup_contact_name: application.pickup_contact_name || prev.pickup_contact_name,
         }))
     }, [application, currentStatus])
 
@@ -257,6 +264,18 @@ function WarehouseRequest() {
         setUploads((prev) => ({ ...prev, kycDocument: file || null }))
     }
 
+    const handleGstCertificateChange = (e) => {
+        const file = e.target.files?.[0]
+        const validationError = validateUpload(file, 'GST certificate', true)
+        if (validationError) {
+            setError(validationError)
+            e.target.value = ''
+            return
+        }
+        setError('')
+        setUploads((prev) => ({ ...prev, gstCertificate: file || null }))
+    }
+
     const handleStoreImagesChange = (e) => {
         const files = Array.from(e.target.files || [])
         const invalid = files.find((file) => validateUpload(file, 'Store image'))
@@ -279,6 +298,9 @@ function WarehouseRequest() {
             })
             if (uploads.ownerImage) {
                 payload.append('owner_image', uploads.ownerImage)
+            }
+            if (uploads.gstCertificate) {
+                payload.append('gst_certificate_file', uploads.gstCertificate)
             }
             if (uploads.kycDocument) {
                 payload.append('kyc_document', uploads.kycDocument)
@@ -550,6 +572,31 @@ function WarehouseRequest() {
                                                 {WAREHOUSE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                                             </select>
                                         </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={s.label}>GSTIN (GST number)</label>
+                                            <input
+                                                name="gst_number" type="text"
+                                                value={formData.gst_number}
+                                                onChange={handleInputChange}
+                                                placeholder="22AAAAA0000A1Z5"
+                                                style={s.input}
+                                            />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={s.label}>Pickup contact person</label>
+                                            <input
+                                                name="pickup_contact_name" type="text"
+                                                value={formData.pickup_contact_name}
+                                                onChange={handleInputChange}
+                                                placeholder="Person who hands over shipments to the courier"
+                                                style={s.input}
+                                            />
+                                        </div>
+                                        <div style={{ gridColumn: '1/-1', margin: 0 }}>
+                                            <p style={{ margin: 0, fontSize: '11px', color: '#64748b', lineHeight: 1.5 }}>
+                                                JDLX is a multi-vendor marketplace — GST details enable vendor invoicing and settlements, and the pickup contact is who our courier partners will meet for order handovers. You can update these anytime from your profile.
+                                            </p>
+                                        </div>
                                         <div style={{ gridColumn: '1/-1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                             <label style={s.label}>Request Mail (Type your message)</label>
                                             <textarea
@@ -578,6 +625,13 @@ function WarehouseRequest() {
                                                     <input type="file" accept={UPLOAD_ACCEPT_DOCS} onChange={handleKycDocumentChange} style={s.fileInput} />
                                                     {uploads.kycDocument && (
                                                         <p style={{ margin: 0, fontSize: '11px', color: '#67e8f9' }}>{uploads.kycDocument.name}</p>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={s.label}>GST Certificate (optional)</label>
+                                                    <input type="file" accept={UPLOAD_ACCEPT_DOCS} onChange={handleGstCertificateChange} style={s.fileInput} />
+                                                    {uploads.gstCertificate && (
+                                                        <p style={{ margin: 0, fontSize: '11px', color: '#67e8f9' }}>{uploads.gstCertificate.name}</p>
                                                     )}
                                                 </div>
                                             </div>

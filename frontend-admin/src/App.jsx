@@ -21,6 +21,11 @@ window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
   const { setGlobalError } = useStore.getState();
   const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+  // skipGlobalError: per-call opt-out for the full-screen error takeover.
+  // Action buttons (dispatch/status/etc.) handle 5xx/timeout inline — the
+  // operator must stay on the page to read the message and retry.
+  const options = typeof args[1] === 'object' && args[1] !== null ? args[1] : {};
+  const skipGlobalError = !!options.skipGlobalError;
 
   // Skip loading for report-issue
   const isBackground = requestUrl.includes('/api/report-issue');
@@ -48,10 +53,9 @@ window.fetch = async (...args) => {
     }
 
     // Detection Logic for Server Errors - ONLY for our backend
-    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground) {
+    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground && !skipGlobalError) {
       setGlobalError('server');
     }
-
     return response;
   } catch (error) {
     // AbortError is intentional (e.g., cancelled polling requests) — never trigger error screens
@@ -60,7 +64,7 @@ window.fetch = async (...args) => {
     console.error("Fetch Error:", error);
 
     // ONLY trigger global error screens for our backend API failures
-    if (isBackendUrl && !isBackground) {
+    if (isBackendUrl && !isBackground && !skipGlobalError) {
       // 'network' (No Internet screen + auto reload-on-reconnect) ONLY when
       // the browser is actually offline. When online, a thrown fetch is a
       // server/CORS/DNS problem: classifying it as 'network' caused the
@@ -81,6 +85,7 @@ window.fetch = async (...args) => {
 // Lazy Loading for admin routes
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const AdminSystemHealth = lazy(() => import('./pages/admin/AdminSystemHealth'))
+const AdminLoadMonitor = lazy(() => import('./pages/admin/AdminLoadMonitor'))
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'))
 const ReferralDashboard = lazy(() => import('./pages/admin/ReferralDashboard'))
 const AdminInventory = lazy(() => import('./pages/admin/AdminInventory'))
@@ -171,6 +176,11 @@ function App() {
             <Route path="system-health" element={
               <AdminRoute allowedRoles={['super_admin']}>
                 <AdminSystemHealth />
+              </AdminRoute>
+            } />
+            <Route path="load-monitor" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin']}>
+                <AdminLoadMonitor />
               </AdminRoute>
             } />
             <Route path="products" element={

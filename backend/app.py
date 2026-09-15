@@ -73,6 +73,9 @@ from app_review_routes import app_review_bp, check_and_trigger_review
 from payment_routes import payment_bp
 from shiprocket_routes import shiprocket_bp
 from referral_wallet_routes import referral_wallet_bp
+from system_metrics import (
+    system_metrics_bp, track_request_start, track_request_end, track_request_abort
+)
 from services.system_monitor import get_system_stats
 from delivery.warehouse_selector import select_best_warehouse
 from delivery.location_service import update_rider_location, get_rider_location
@@ -168,19 +171,34 @@ CORS(
 # ==============================================================================
 
 def sync_to_shiprocket(order_data, cursor):
-    """Syncs an order with Shiprocket if credentials are set."""
-    cursor.execute("SELECT key, value FROM system_settings WHERE key LIKE 'shiprocket_%'")
-    settings = {row['key']: row['value'] for row in cursor.fetchall()}
-    
-    if not settings.get('shiprocket_email') or not settings.get('shiprocket_password'):
+    """Syncs an order with Shiprocket if credentials are set.
+
+    Credentials come exclusively from the environment (SHIPROCKET_EMAIL /
+    SHIPROCKET_PASSWORD). DB-stored shiprocket_* rows are legacy/inert —
+    the admin panel no longer saves credentials and the public settings
+    endpoint scrubs them.
+    """
+    email = os.environ.get('SHIPROCKET_EMAIL')
+    password = os.environ.get('SHIPROCKET_PASSWORD')
+
+    if not email or not password:
         return None
-        
-    sr = ShiprocketService(
-        settings['shiprocket_email'], 
-        settings['shiprocket_password'],
-        settings.get('shiprocket_pickup_location', 'Primary')
+
+    # Pickup location stays admin-editable via system_settings (non-secret),
+    # with the SHIPROCKET_PICKUP_LOCATION env var taking precedence.
+    try:
+        cursor.execute("SELECT value FROM system_settings WHERE key = 'shiprocket_pickup_location'")
+        row = cursor.fetchone()
+    except Exception:
+        row = None
+    pickup_location = (
+        os.environ.get('SHIPROCKET_PICKUP_LOCATION')
+        or (row['value'] if row and row['value'] else None)
+        or 'Primary'
     )
-    
+
+    sr = ShiprocketService(email, password, pickup_location)
+
     return sr.create_order(order_data)
 
 # M1 fix: whitelist of valid Shiprocket-driven order status transitions.
@@ -312,6 +330,7 @@ app.register_blueprint(app_review_bp)
 app.register_blueprint(payment_bp)
 app.register_blueprint(shiprocket_bp)
 app.register_blueprint(referral_wallet_bp)
+app.register_blueprint(system_metrics_bp)
 
 
 # ==============================================================================
@@ -639,6 +658,25 @@ def _maybe_gzip_response(response):
 @app.before_request
 def log_request_info():
     logger.info(f"Request: {request.method} {request.path}")
+
+
+# --- Load Monitor hooks (metrics only — never enforces anything) --------------
+# Placed AFTER the security guards above would also work, but registering here
+# (first) means even rejected requests are counted. Fail-open by design: any
+# error inside the tracker is swallowed so business requests are never affected.
+@app.before_request
+def _metrics_before_request():
+    track_request_start()
+
+
+@app.after_request
+def _metrics_after_request(response):
+    return track_request_end(response)
+
+
+@app.teardown_appcontext
+def _metrics_teardown(_exc=None):
+    track_request_abort(_exc)
 
 
 # --- CSRF defense-in-depth -----------------------------------------------------
@@ -2434,16 +2472,31 @@ def google_callback():
 # ADMIN: GENERAL MANAGEMENT
 # ==============================================================================
 
+# Secret keys that must never leave the backend through the public settings
+# endpoint. Shiprocket credentials live ONLY in the server env vars
+# (SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD); legacy rows saved from the old
+# admin form stay in the table but are inert (never read for auth, never
+# exposed).
+PUBLIC_SETTINGS_SECRET_KEYS = (
+    'shiprocket_email',
+    'shiprocket_password',
+    'shiprocket_token',
+)
+
 @app.route('/api/settings', methods=['GET'])
 @cache.cached(timeout=60)
 def get_system_settings():
-    """Retrieves public system settings."""
+    """Retrieves public system settings (secrets scrubbed)."""
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT key, value FROM system_settings")
         settings_list = cursor.fetchall()
-        settings = {row['key']: row['value'] for row in settings_list}
+        settings = {
+            row['key']: row['value']
+            for row in settings_list
+            if row['key'] not in PUBLIC_SETTINGS_SECRET_KEYS
+        }
         conn.close()
         return success_response(settings, "Settings retrieved")
     except Exception as e:
@@ -2454,8 +2507,16 @@ def get_system_settings():
 @token_required
 @require_super_admin()
 def update_system_settings():
-    """Updates system settings (Super Admin only)."""
+    """Updates system settings (Super Admin only).
+
+    Shiprocket API credentials (shiprocket_email / shiprocket_password) are
+    NOT writable here — they are configured exclusively via backend env vars
+    (SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD on Render). Attempts to save them
+    are silently ignored so no stale/wrong credential can override the env.
+    """
     data = request.get_json(silent=True) or {}
+    data.pop('shiprocket_email', None)
+    data.pop('shiprocket_password', None)
     try:
         conn = get_db()
         cursor = conn.cursor()

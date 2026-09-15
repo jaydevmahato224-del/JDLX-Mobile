@@ -74,15 +74,17 @@ const WarehouseOrders = () => {
         try {
             const response = await apiFetch(`/warehouse/orders/${assignmentId}/status`, {
                 method: 'PATCH',
-                body: JSON.stringify({ status: newStatus })
+                body: JSON.stringify({ status: newStatus }),
+                // Show 5xx/timeout inline (toast) — never the full-screen takeover.
+                skipGlobalError: true
             })
-            const result = await response.json()
+            const result = await response.json().catch(() => ({}))
             if (!response.ok) throw new Error(result.error || 'Status update failed')
             
             showNotification(`Order marked as ${newStatus}`)
             await fetchOrders()
         } catch (err) {
-            showNotification(err.message, 'error')
+            showNotification(err.message || 'Network error — please try again', 'error')
         } finally {
             setUpdatingId(null)
         }
@@ -95,17 +97,21 @@ const WarehouseOrders = () => {
         try {
             const response = await apiFetch(`/warehouse/orders/${order.id}/dispatch`, {
                 method: 'PATCH',
-                body: JSON.stringify({ weight_kg: parseFloat(weights[order.id]) || 0.5 })
+                body: JSON.stringify({ weight_kg: parseFloat(weights[order.id]) || 0.5 }),
+                // Dispatch errors (5xx/timeouts) are surfaced inline as a toast
+                // so the operator can read the reason and retry — the full-
+                // screen "Sync Failed" takeover must not fire for this.
+                skipGlobalError: true
             })
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'Shiprocket dispatch failed')
+            const result = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(result.error || result.message || 'Shiprocket dispatch failed')
 
             const awb = result.data?.awb_code
             const courier = result.data?.courier_name
             showNotification(`AWB ${awb || '—'} • ${courier || 'Courier'} — pickup will be scheduled`, 'success')
             await fetchOrders()
         } catch (err) {
-            showNotification(err.message, 'error')
+            showNotification(err.message || 'Network error — please try again', 'error')
         } finally {
             setDispatchingId(null)
         }

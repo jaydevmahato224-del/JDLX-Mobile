@@ -129,7 +129,7 @@ def assign_courier(order_id):
     conn = get_db()
     try:
         shipment = conn.execute(
-            "SELECT shiprocket_shipment_id FROM shipments WHERE order_id = ?",
+            "SELECT shiprocket_order_id, shiprocket_shipment_id FROM shipments WHERE order_id = ?",
             (order_id,)
         ).fetchone()
 
@@ -137,14 +137,15 @@ def assign_courier(order_id):
             return error_response("Shipment not found for this order", 404)
 
         shipment_id = shipment['shiprocket_shipment_id']
+        sr_order_id = shipment['shiprocket_order_id']
         headers = sr_headers()
 
         # 1. Fetch available couriers (serviceability)
-        # Note: In a real scenario, we might need more params like pincodes.
-        # For simplicity, we assume Shiprocket uses the data from the order_id.
+        # Shiprocket's serviceability API requires the SR *order* id
+        # (shipment_id alone returns 400 "Order Id Required").
         res = requests.get(
             f"{SHIPROCKET_API}/courier/serviceability/",
-            params={"shipment_id": shipment_id},
+            params={"order_id": sr_order_id or shipment_id},
             headers=headers
         )
         serviceability = res.json()
@@ -156,30 +157,29 @@ def assign_courier(order_id):
         if not available_couriers:
             return error_response("No couriers available for this route", 404)
 
-        # 2. Auto-assign best courier (lowest rate, highest rating)
-        # For this logic, we'll just pick the first one which is usually the recommended
-        best_courier = available_couriers[0]
-        courier_id = best_courier['courier_company_id']
-
-        assign_res = requests.post(
-            f"{SHIPROCKET_API}/shipments/assign/courier",
-            json={"shipment_id": shipment_id, "courier_id": courier_id},
-            headers=headers
-        )
-        assign_data = assign_res.json()
-
-        if not assign_data.get('status') == 200:
+        # 2. Assign best courier + generate AWB in ONE call (Shiprocket
+        #    retired /shipments/assign/courier — it now returns 404).
+        #    The first courier is usually the recommended one; retry the
+        #    next few if one fills up in between.
+        awb_data, best_courier, awb_code = {}, None, None
+        for cand in available_couriers[:4]:
+            assign_res = requests.post(
+                f"{SHIPROCKET_API}/courier/assign/awb",
+                json={"shipment_id": shipment_id, "courier_id": cand['courier_company_id']},
+                headers=headers
+            )
+            awb_data = assign_res.json()
+            awb_code = awb_data.get('response', {}).get('data', {}).get('awb_code')
+            if awb_code:
+                best_courier = cand
+                break
+            err_msg = str(awb_data.get('message', '') or '')
+            if 'recharge' in err_msg.lower() or 'balance' in err_msg.lower():
+                return error_response(f"Shiprocket: {err_msg}", 502)
+        if not awb_code:
             return error_response("Courier assignment failed", 400)
 
-        # 3. Request AWB
-        awb_res = requests.post(
-            f"{SHIPROCKET_API}/courier/generate/awb",
-            json={"shipment_id": shipment_id},
-            headers=headers
-        )
-        awb_data = awb_res.json()
-        
-        awb_code = awb_data.get('response', {}).get('data', {}).get('awb_code')
+        courier_id = best_courier['courier_company_id']
 
         # Update shipments table
         cursor = conn.cursor()

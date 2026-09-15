@@ -37,8 +37,8 @@ export default function AdminSettings() {
     priority_dispatch_enabled: 'true',
     min_order_cod: '0',
 
-    shiprocket_email: '',
-    shiprocket_password: '',
+    // Shiprocket API credentials are env-only (Render env vars) — never set or
+    // displayed from the admin panel. Only the pickup location is admin-editable.
     shiprocket_pickup_location: 'Primary',
     global_return_policy: '7 Days Return Policy',
 
@@ -541,31 +541,13 @@ export default function AdminSettings() {
                       Shiprocket Courier & Standard Shipping
                       <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Shiprocket_Logo.svg/1200px-Shiprocket_Logo.svg.png" className="h-3 ml-1" alt="" />
                     </h2>
-                    <p className="text-slate-500 font-medium text-xs mt-0.5">Connect your Shiprocket credentials to support automated nationwide shipping and manage Courier COD status.</p>
+                    <p className="text-slate-500 font-medium text-xs mt-0.5">Configure courier COD and pickup location. API credentials are managed securely in the backend environment (Render env vars) by the platform team.</p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
-                   <div className="space-y-2">
-                     <label className="text-xs font-black uppercase tracking-widest text-slate-400">API Email Address</label>
-                     <input
-                       type="email"
-                       value={settings.shiprocket_email || ''}
-                       onChange={(e) => handleChange('shiprocket_email', e.target.value)}
-                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
-                     />
-                   </div>
-                   <div className="space-y-2">
-                     <label className="text-xs font-black uppercase tracking-widest text-slate-400">API Password Key</label>
-                     <input
-                       type="password"
-                       value={settings.shiprocket_password || ''}
-                       onChange={(e) => handleChange('shiprocket_password', e.target.value)}
-                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-[#6322b2] transition-all"
-                     />
-                   </div>
                    <div className="space-y-2 md:col-span-2">
                      <label className="text-xs font-black uppercase tracking-widest text-slate-400">Registered Warehouse Pickup Location</label>
                      <input

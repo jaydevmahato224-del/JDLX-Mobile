@@ -9,15 +9,16 @@ _token_expiry = 0
 
 def get_token():
     global _token, _token_expiry
-    if _token and time.time() < _token_expiry:
-        return _token
-    
+
     email = os.environ.get("SHIPROCKET_EMAIL")
     password = os.environ.get("SHIPROCKET_PASSWORD")
-    
+
     if not email or not password:
         print("Error: SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD not set in environment.")
         return None
+
+    if _token and time.time() < _token_expiry:
+        return _token
 
     try:
         res = requests.post(f"{SHIPROCKET_API}/auth/login", json={
@@ -26,8 +27,10 @@ def get_token():
         })
         data = res.json()
         _token = data.get("token")
-        if _token:
-            _token_expiry = time.time() + 23 * 3600  # refresh before 24h
+        if not _token:
+            # Auth failed (bad credentials) — log the reason so ops can fix the
+            # env vars. Do NOT cache the failure; next call retries the login.
+            print(f"Shiprocket login rejected for {email}: {data.get('message')}")
         return _token
     except Exception as e:
         print(f"Shiprocket Auth Error: {str(e)}")

@@ -32,6 +32,9 @@ export async function apiFetch(endpoint, options = {}) {
     ...options.headers,
   }
 
+  // skipGlobalError is intentionally NOT stripped: fetch() itself ignores
+  // unknown RequestInit fields, while the App.jsx window.fetch interceptor
+  // reads it from the options object to skip the full-screen error takeover.
   return fetch(url, {
     ...options,
     headers: defaultHeaders,

@@ -19,6 +19,11 @@ window.fetch = async (...args) => {
   const { startLoading, stopLoading } = useLoadingStore.getState();
   const { setGlobalError } = useStore.getState();
   const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+  // skipGlobalError: per-call opt-out for the full-screen error takeover.
+  // Action buttons (dispatch/status/etc.) handle 5xx/timeout inline — the
+  // operator must stay on the page to read the message and retry.
+  const options = typeof args[1] === 'object' && args[1] !== null ? args[1] : {};
+  const skipGlobalError = !!options.skipGlobalError;
 
   // Background/polling requests must not flash the top loader on every tick.
   const isBackground =
@@ -55,7 +60,7 @@ window.fetch = async (...args) => {
     }
 
     // Detection Logic for Server Errors - ONLY for our backend
-    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground) {
+    if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground && !skipGlobalError) {
       setGlobalError('server');
     }
 
@@ -64,7 +69,7 @@ window.fetch = async (...args) => {
     console.error("Fetch Error:", error);
 
     // ONLY trigger global error screens for our backend API failures
-    if (isBackendUrl && !isBackground) {
+    if (isBackendUrl && !isBackground && !skipGlobalError) {
       if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
         setGlobalError('network');
       } else {

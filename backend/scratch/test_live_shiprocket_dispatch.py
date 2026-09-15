@@ -1,13 +1,17 @@
 """
-E2E flow test: Store order -> Warehouse -> Dispatch -> SHIPPED notification.
+LIVE e2e: Store order -> warehouse packed -> REAL Shiprocket dispatch.
 
-Runs against an ISOLATED COPY of jdlx.db (never the real DB) and a local
-Flask server on a scratch port. The Shiprocket path is intentionally NOT
-exercised (no credentials in the test DB -> sync_to_shiprocket no-ops);
-the self-fulfilled dispatch path is used instead, which shares the same
-assignment/order-status side effects and the SHIPPED customer notification.
+Same isolated-DB approach as scratch/test_e2e_dispatch.py (never touches the
+real DB), but the Shiprocket path is exercised FOR REAL: the spawned server
+loads backend/.env, and the dispatch PATCH hits apiv2.shiprocket.in to create
+the order, assign a courier and generate an AWB.
 
-Usage:  python3 backend/scratch/test_e2e_dispatch.py
+Run this AFTER fixing SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD (env or .env).
+It intentionally performs only ONE Shiprocket dispatch attempt per run —
+repeated failed logins get the Shiprocket account temporarily blocked, so
+do NOT loop this script.
+
+Usage:  python3 backend/scratch/test_live_shiprocket_dispatch.py
 """
 import datetime
 import json
@@ -25,10 +29,13 @@ import jwt
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DB = os.path.join(BACKEND_DIR, "jdlx.db")
-TEST_DB = "/tmp/jdlx_e2e_test.db"
-SERVER_LOG = "/tmp/jdlx_e2e_server.log"
-PORT = 5599
+TEST_DB = "/tmp/jdlx_live_sr_test.db"
+SERVER_LOG = "/tmp/jdlx_live_sr_server.log"
+PORT = 5598
 BASE = f"http://127.0.0.1:{PORT}"
+
+# Realistic address WITH pincode — Shiprocket needs it for serviceability.
+TEST_ADDRESS = "42 E2E Test Lane, Connaught Place, New Delhi - 110001"
 
 # Read the dev JWT secret from .env (keys only — never printed).
 JWT_SECRET = None
@@ -67,7 +74,7 @@ def api(method, path, token=None, body=None):
         req.add_header("Authorization", f"Bearer {token}")
     data = json.dumps(body).encode() if body is not None else None
     try:
-        with urllib.request.urlopen(req, data=data, timeout=30) as resp:
+        with urllib.request.urlopen(req, data=data, timeout=60) as resp:
             return resp.status, json.loads(resp.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         try:
@@ -88,29 +95,20 @@ def secrets_hex():
     return secrets.token_hex(16)
 
 
-# ---------------------------------------------------------------------------
 def prepare_db():
     shutil.copyfile(SOURCE_DB, TEST_DB)
-    # Neutralize Shiprocket credentials so no real external call can happen.
-    db("DELETE FROM system_settings WHERE key LIKE 'shiprocket_%'")
-    db("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('cod_enabled','true')")
-    # Pure-COD path: zero advance so checkout itself confirms the order and
-    # creates the warehouse assignment (nonzero advance defers confirm to the
-    # Razorpay advance-verification flow, which this test does not exercise).
+    # Pure-COD path: zero advance so checkout confirms the order and creates
+    # the warehouse assignment without the Razorpay advance flow.
     db("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('cod_advance_amount','0')")
-    # Make the SHIPPED template path verifiable (service reads these columns).
-    try:
-        db("INSERT OR REPLACE INTO notification_templates (template_key, title, message, is_active) "
-           "VALUES ('order_shipped_app','Order Shipped! 🚚','Order #{order_id} has shipped. Track it live!',1)")
-    except sqlite3.Error:
-        pass  # fallback message path will be used instead
+    db("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('cod_enabled','true')")
+    db("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('cod_enabled_shiprocket','true')")
 
 
 def pick_data():
     user = db(
-        "INSERT INTO users (google_id, name, email, role) VALUES ('e2e_test_gid_1','E2E Tester','e2e-tester@example.com','user') ",
+        "INSERT INTO users (google_id, name, email, role) VALUES ('live_sr_gid_1','Live SR Tester','live-sr-tester@example.com','user') ",
     )
-    user = db("SELECT id, email FROM users WHERE email='e2e-tester@example.com'", fetchone=True)
+    user = db("SELECT id, email FROM users WHERE email='live-sr-tester@example.com'", fetchone=True)
     prod = db(
         "SELECT id, name, price, stock FROM products WHERE stock >= 5 AND (prepaid_only = 0 OR prepaid_only IS NULL) "
         "ORDER BY id LIMIT 1", fetchone=True)
@@ -134,16 +132,26 @@ def wait_for_server(proc, timeout=60):
     return False
 
 
+def sr_login_reject_reason():
+    """Pull the Shiprocket auth reject reason out of the server log (if any)."""
+    try:
+        for line in open(SERVER_LOG, errors="ignore"):
+            if "Shiprocket login rejected" in line or "SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD not set" in line:
+                return line.strip().split(" - ")[-1]
+    except Exception:
+        pass
+    return None
+
+
 def main():
-    print("== E2E: store order -> warehouse dispatch ==")
+    print("== LIVE e2e: store order -> warehouse packed -> REAL Shiprocket dispatch ==")
     prepare_db()
     user, prod, wh = pick_data()
     check("test data ready", bool(user and prod and wh),
           f"user={user and user['id']} prod={prod and prod['id']} wh={wh and wh['id']}")
     if not (user and prod and wh):
         sys.exit(2)
-    print(f"  user #{user['id']} | product #{prod['id']} ({prod['name']}, stock {prod['stock']}) "
-          f"| warehouse #{wh['id']} ({wh['warehouse_name']})")
+    print(f"  user #{user['id']} | product #{prod['id']} ({prod['name']}) | warehouse #{wh['id']} ({wh['warehouse_name']})")
 
     user_token = mint({"user_id": user["id"], "email": user["email"], "role": "user"}, hours=2)
     wh_token = mint({"warehouse_id": wh["id"], "email": f"owner{wh['id']}@e2e.test",
@@ -153,7 +161,7 @@ def main():
     env.update({
         "DATABASE_PATH": TEST_DB,
         "FORCE_LOCAL_DB": "1",
-        "FORCE_HTTPS": "0",  # keep Talisman from redirecting HTTP->HTTPS on the scratch port
+        "FORCE_HTTPS": "0",
         "PORT": str(PORT),
         "DISABLE_RATE_LIMIT": "1",
         "FLASK_DEBUG": "",
@@ -165,13 +173,13 @@ def main():
     try:
         check("server started", wait_for_server(proc))
 
-        # --- 1. Store: place COD order (store-frontend checkout payload shape) ---
+        # --- 1. Store: place COD order with a pincode-bearing address ---
         status, resp = api("POST", "/api/checkout", token=user_token, body={
             "items": [{"id": prod["id"], "qty": 1}],
-            "address": "42 E2E Test Lane, Testville",
-            "phone": "9999999999",
+            "address": TEST_ADDRESS,
+            "phone": "8447039921",
             "payment_type": "COD",
-            "customer_name": "E2E Tester",
+            "customer_name": "Live SR Tester",
         })
         data = resp.get("data") or resp or {}
         order_id = data.get("order_id") or data.get("id") or resp.get("order_id")
@@ -179,71 +187,78 @@ def main():
         check("order id returned", bool(order_id), f"resp={json.dumps(resp)[:300]}")
         if not order_id:
             sys.exit(2)
-        print(f"  order #{order_id} placed")
-
-        order = db("SELECT id, order_status, dark_store_id, store_id, user_id, payment_type FROM orders WHERE id=?",
-                   (order_id,), fetchone=True)
-        check("order row exists", order is not None)
-        check("order is COD", order and (order["payment_type"] or "").upper() == "COD")
-        store_id = (order["store_id"] or order["dark_store_id"]) if order else None
-        check("warehouse resolved on order", bool(store_id), f"store_id={store_id}")
+        print(f"  order #{order_id} placed ({TEST_ADDRESS})")
 
         asg = db("SELECT id, assignment_status FROM warehouse_order_assignments WHERE order_id=?",
                  (order_id,), fetchone=True)
         check("warehouse assignment created at confirm", asg is not None)
         if not asg:
             sys.exit(2)
-        check("assignment points to resolved warehouse", store_id in (None,) or asg and True)
         print(f"  assignment #{asg['id']} status={asg['assignment_status']}")
 
-        # --- 2. Warehouse: list orders ---
-        status, resp = api("GET", "/api/warehouse/orders", token=wh_token)
-        body = resp.get("data") if isinstance(resp.get("data"), list) else (resp if isinstance(resp, list) else [])
-        found = any((o.get("order_id") == order_id or o.get("id") == order_id) for o in body)
-        check("warehouse sees the new order (200 + present)", status == 200 and found,
-              f"status={status} n={len(body)}")
-
-        # --- 3. Status ladder: accepted -> packing -> packed ---
-        for step, expect_order in (("accepted", "CONFIRMED"), ("packing", "PACKING"), ("packed", "PACKED")):
+        # --- 2. Status ladder: accepted -> packing -> packed ---
+        for step in ("accepted", "packing", "packed"):
             status, resp = api("PATCH", f"/api/warehouse/orders/{asg['id']}/status", token=wh_token,
                                body={"status": step})
             check(f"transition -> {step} (200)", status == 200, f"status={status} resp={json.dumps(resp)[:200]}")
-            row = db("SELECT assignment_status FROM warehouse_order_assignments WHERE id=?", (asg["id"],), fetchone=True)
-            check(f"assignment_status == {step}", row and row["assignment_status"] == step)
-            orow = db("SELECT order_status FROM orders WHERE id=?", (order_id,), fetchone=True)
-            check(f"order_status == {expect_order}", orow and orow["order_status"] == expect_order,
-                  f"got={orow and orow['order_status']}")
 
-        # --- 4. Self-fulfilled dispatch (Shiprocket creds absent in test DB) ---
-        status, resp = api("PATCH", f"/api/warehouse/orders/{asg['id']}/status", token=wh_token,
-                           body={"status": "dispatched"})
-        check("dispatch accepted (200)", status == 200, f"status={status} resp={json.dumps(resp)[:200]}")
-        orow = db("SELECT order_status, shipped_at FROM orders WHERE id=?", (order_id,), fetchone=True)
-        check("order_status == SHIPPED", orow and orow["order_status"] == "SHIPPED",
-              f"got={orow and orow['order_status']}")
-        check("shipped_at stamped", bool(orow and orow["shipped_at"]))
+        # --- 3. REAL Shiprocket dispatch (the one and only SR attempt) ---
+        print("\n  --> calling PATCH /dispatch (real Shiprocket: create order + assign courier + AWB)...")
+        status, resp = api("PATCH", f"/api/warehouse/orders/{asg['id']}/dispatch", token=wh_token,
+                           body={"weight_kg": 0.5})
+        body = json.dumps(resp)
+        print(f"  dispatch HTTP {status}: {body[:500]}")
 
-        # --- 5. SHIPPED customer notification exists ---
+        if status != 200:
+            err = resp.get("error") or resp.get("message") or "?"
+            print(f"\n  !! Dispatch failed: {err}")
+            reject = sr_login_reject_reason()
+            if reject:
+                print(f"  !! Server log says: {reject}")
+            if "not configured" in str(err):
+                print("  !! Fix SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD (env or backend/.env) and re-run ONCE.")
+            sys.exit(1)
+
+        d = resp.get("data") or {}
+        check("dispatch 200 with AWB", bool(d.get("awb_code")), f"awb={d.get('awb_code')}")
+        check("courier assigned", bool(d.get("courier_name")), f"courier={d.get('courier_name')}")
+        check("tracking URL present", bool(d.get("tracking_url")), f"url={d.get('tracking_url')}")
+        check("SR order id returned", bool(d.get("shiprocket_order_id")), f"sr={d.get('shiprocket_order_id')}")
+        print(f"\n  AWB: {d.get('awb_code')} | Courier: {d.get('courier_name')}")
+        print(f"  Tracking: {d.get('tracking_url')}")
+
+        # --- 4. DB side effects ---
+        row = db("SELECT order_status, shipped_at FROM orders WHERE id=?", (order_id,), fetchone=True)
+        check("order_status == SHIPPED", row and row["order_status"] == "SHIPPED",
+              f"got={row and row['order_status']}")
+        check("shipped_at stamped", bool(row and row["shipped_at"]))
+
+        asg_row = db("SELECT assignment_status FROM warehouse_order_assignments WHERE id=?", (asg["id"],), fetchone=True)
+        check("assignment_status == dispatched", asg_row and asg_row["assignment_status"] == "dispatched",
+              f"got={asg_row and asg_row['assignment_status']}")
+
+        ship = db("SELECT shiprocket_order_id, shiprocket_shipment_id, awb_code, courier_name, tracking_url, status "
+                  "FROM shipments WHERE order_id=?", (order_id,), fetchone=True)
+        check("shipments row populated", ship is not None and bool(ship["awb_code"]),
+              f"ship={dict(ship) if ship else None}")
+        if ship:
+            print(f"  shipments row: status={ship['status']} awb={ship['awb_code']} courier={ship['courier_name']}")
+
+        # --- 5. Idempotency: repeat dispatch returns stored AWB, no duplicate ---
+        status, resp = api("PATCH", f"/api/warehouse/orders/{asg['id']}/dispatch", token=wh_token,
+                           body={"weight_kg": 0.5})
+        d2 = resp.get("data") or {}
+        check("idempotent re-dispatch returns same AWB (200)",
+              status == 200 and d2.get("awb_code") == d.get("awb_code"),
+              f"status={status} awb={d2.get('awb_code')}")
+
+        # --- 6. Customer SHIPPED notification ---
         notif = db("SELECT id, title, message FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 5",
                    (user["id"],))
         shipped = [n for n in notif if "shipped" in (n["title"] or "").lower()
                    or "shipped" in (n["message"] or "").lower()]
         check("SHIPPED notification delivered to customer", len(shipped) >= 1,
               f"recent={[(n['title'], (n['message'] or '')[:60]) for n in notif]}")
-        if shipped:
-            print(f"  notification: \"{shipped[0]['title']}\" / \"{(shipped[0]['message'] or '')[:70]}\"")
-
-        # --- 6. Tracking endpoint responds (self-fulfilled = no Shiprocket shipment yet) ---
-        status, resp = api("GET", f"/api/shipment/track/{order_id}", token=user_token)
-        check("tracking endpoint reachable + ownership honored", status in (200, 404),
-              f"status={status}")
-        if status == 404:
-            print("  (404 expected for self-fulfilled orders — Shiprocket dispatch populates tracking_url)")
-
-        # --- 7. Idempotency guard: dispatch again must be rejected (terminal state) ---
-        status, resp = api("PATCH", f"/api/warehouse/orders/{asg['id']}/status", token=wh_token,
-                           body={"status": "packed"})
-        check("invalid backwards transition rejected", status == 400, f"status={status}")
 
     finally:
         try:
@@ -258,7 +273,7 @@ def main():
         print("Failed checks:", *FAIL, sep="\n  - ")
         print(f"Server log tail: {SERVER_LOG}")
         sys.exit(1)
-    print("ALL GREEN ✅")
+    print("ALL GREEN ✅  — real Shiprocket order created, AWB generated, customer notified.")
 
 
 if __name__ == "__main__":

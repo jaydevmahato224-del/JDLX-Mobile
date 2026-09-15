@@ -117,6 +117,8 @@ const WarehouseDashboard = () => {
             const response = await apiFetch(`/warehouse/orders/${orderId}/dispatch`, {
                 method: 'PATCH',
                 body: JSON.stringify({}),
+                // Show dispatch errors inline — never the full-screen takeover.
+                skipGlobalError: true,
             })
 
             if (response.status === 401 || response.status === 403) {
@@ -158,6 +160,7 @@ const WarehouseDashboard = () => {
             const response = await apiFetch(`/warehouse/orders/${orderId}/status`, {
                 method: 'PATCH',
                 body: JSON.stringify({ status }),
+                skipGlobalError: true,
             })
 
             if (response.status === 401 || response.status === 403) {

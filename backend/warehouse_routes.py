@@ -3474,6 +3474,34 @@ def warehouse_update_order_status(assignment_id):
         conn.close()
 
 
+def _sr_err(payload, fallback):
+    """Extract a human-friendly message from a Shiprocket API response."""
+    if isinstance(payload, dict):
+        msg = payload.get("message")
+        if not msg and isinstance(payload.get("data"), dict):
+            msg = payload["data"].get("message")
+        if isinstance(msg, (list, dict)):
+            try:
+                msg = "; ".join(str(m) for m in msg)
+            except Exception:
+                msg = str(msg)
+        if msg:
+            return str(msg)
+    return fallback
+
+
+def _extract_pincode6(text):
+    """Pull the first 6-digit pincode out of a free-form address string."""
+    m = re.search(r"\b[1-9][0-9]{5}\b", text or "")
+    return m.group(0) if m else ""
+
+
+def _safe_phone(phone):
+    """Keep digits only (Shiprocket requires a 10-15 digit phone)."""
+    digits = re.sub(r"\D", "", str(phone or ""))
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
 @warehouse_bp.route("/api/warehouse/orders/<int:assignment_id>/dispatch", methods=["PATCH"])
 @require_warehouse_auth
 def warehouse_dispatch_to_shiprocket(assignment_id):
@@ -3530,20 +3558,24 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
         if (order["order_status"] or "").upper() == "CANCELLED":
             return error_response("Cancelled orders cannot be dispatched", 400)
 
-        item = conn.execute(
-            """SELECT p.name, oi.quantity, oi.price
+        items = conn.execute(
+            """SELECT COALESCE(oi.product_name, p.name) AS name, oi.quantity,
+                      oi.price
                FROM order_items oi
-               JOIN products p ON p.id = oi.product_id
+               LEFT JOIN products p ON p.id = oi.product_id
                WHERE oi.order_id = ?
-               LIMIT 1""",
+               ORDER BY oi.id""",
             (assignment["order_id"],),
-        ).fetchone()
-        if not item:
+        ).fetchall()
+        if not items:
             return error_response("Order has no items", 400)
 
         headers = sr_headers()
         if not headers.get("Authorization"):
-            return error_response("Shiprocket is not configured. Please contact the platform admin.", 503)
+            return error_response(
+                "Shiprocket is not configured. Add Shiprocket email & password in Admin → Settings → Delivery & Logistics, or set SHIPROCKET_EMAIL / SHIPROCKET_PASSWORD env vars.",
+                503,
+            )
 
         # 1. Create the Shiprocket order (skipped when it already exists)
         shipment = conn.execute(
@@ -3558,8 +3590,7 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
 
         if not sr_shipment_id:
             cod_row = conn.execute(
-                "SELECT value FROM system_settings WHERE key = 'cod_enabled_shiprocket'"
-            ).fetchone()
+                "SELECT value FROM system_settings WHERE key = 'cod_enabled_shiprocket'").fetchone()
             cod_allowed = bool(cod_row) and str(cod_row["value"]).lower() == "true"
             payment_method = (
                 "COD"
@@ -3567,27 +3598,51 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
                 else "Prepaid"
             )
 
+            # Shiprocket rejects orders with an unparsable customer address:
+            # derive city / pincode / state from the stored delivery address
+            # (pincode is embedded in checkout address_text) instead of hard-
+            # coding "Unknown".
+            pickup_row = conn.execute(
+                "SELECT pincode FROM warehouses WHERE id = ?", (wh_id,)
+            ).fetchone()
+            pickup_pincode = _extract_pincode6(pickup_row and pickup_row["pincode"])
+            delivery_pincode = _extract_pincode6(order["delivery_address"])
+
+            # Pickup location: env var first, then the admin-editable (non-secret)
+            # system_settings value, else Shiprocket's default "Primary".
+            pickup_setting = conn.execute(
+                "SELECT value FROM system_settings WHERE key = 'shiprocket_pickup_location'"
+            ).fetchone()
+            pickup_location = (
+                os.environ.get("SHIPROCKET_PICKUP_LOCATION")
+                or (pickup_setting["value"] if pickup_setting and pickup_setting["value"] else None)
+                or "Primary"
+            )
+
             payload = {
                 "order_id": f"JDLX-{assignment['order_id']}",
                 "order_date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "pickup_location": "warehouse",
+                "pickup_location": pickup_location,
                 "channel_id": os.environ.get("SHIPROCKET_CHANNEL_ID"),
                 "billing_customer_name": order["customer_name"] or order["user_name"] or "Valued Customer",
                 "billing_last_name": "",
                 "billing_address": order["delivery_address"] or "",
                 "billing_city": "Unknown",
-                "billing_pincode": "",
+                "billing_pincode": delivery_pincode,
                 "billing_state": "Unknown",
                 "billing_country": "India",
                 "billing_email": order["user_email"] or "",
-                "billing_phone": order["phone"] or "",
+                "billing_phone": _safe_phone(order["phone"]),
                 "shipping_is_billing": True,
-                "order_items": [{
-                    "name": item["name"],
-                    "sku": f"SKU-{assignment['order_id']}",
-                    "units": item["quantity"],
-                    "selling_price": item["price"],
-                }],
+                "order_items": [
+                    {
+                        "name": it["name"],
+                        "sku": f"SKU-{assignment['order_id']}-{idx + 1}",
+                        "units": it["quantity"],
+                        "selling_price": it["price"],
+                    }
+                    for idx, it in enumerate(items)
+                ],
                 "payment_method": payment_method,
                 "sub_total": float(order["total_amount"] or 0),
                 "length": 10,
@@ -3597,14 +3652,25 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
             }
             if sr_order_id:
                 payload["sr_order_id"] = sr_order_id
+            # The courier serviceability step needs the pickup pincode; pass it
+            # when the warehouse profile has one so Shiprocket doesn't have to
+            # guess it from the pickup location name.
+            if pickup_pincode:
+                payload["pickup_postcode"] = pickup_pincode
 
             res = requests.post(
                 f"{SHIPROCKET_API}/orders/create/adhoc",
                 json=payload, headers=headers, timeout=30,
             )
-            sr_data = res.json()
+            try:
+                sr_data = res.json()
+            except ValueError:
+                sr_data = {}
             if res.status_code not in (200, 201):
-                return error_response(sr_data.get("message", "Shiprocket order creation failed"), 502)
+                return error_response(
+                    f"Shiprocket: {_sr_err(sr_data, f'order creation failed (HTTP {res.status_code})')}",
+                    502,
+                )
             sr_order_id = sr_data.get("order_id") or sr_order_id
             sr_shipment_id = sr_data.get("shipment_id") or sr_shipment_id
             if not sr_shipment_id:
@@ -3641,33 +3707,54 @@ def warehouse_dispatch_to_shiprocket(assignment_id):
         if not awb_code:
             ser = requests.get(
                 f"{SHIPROCKET_API}/courier/serviceability/",
-                params={"shipment_id": sr_shipment_id},
+                # Shiprocket's serviceability API requires the SR *order* id
+                # (shipment_id alone returns 400 "Order Id Required").
+                params={"order_id": sr_order_id},
                 headers=headers, timeout=30,
             )
-            serviceability = ser.json()
+            try:
+                serviceability = ser.json()
+            except ValueError:
+                serviceability = {}
             couriers = (serviceability.get("data") or {}).get("available_courier_companies") or []
             if serviceability.get("status") != 200 or not couriers:
-                return error_response("No courier available for this route. Please try again later.", 502)
+                return error_response(
+                    "No courier available for this route"
+                    + (f": {_sr_err(serviceability, '')}".rstrip(": ") if serviceability else "")
+                    + ". Please verify the pickup location & delivery pincode, then try again.",
+                    502,
+                )
 
-            best_courier = couriers[0]
-            assign_res = requests.post(
-                f"{SHIPROCKET_API}/shipments/assign/courier",
-                json={"shipment_id": sr_shipment_id, "courier_id": best_courier["courier_company_id"]},
-                headers=headers, timeout=30,
-            )
-            assign_data = assign_res.json()
-            if assign_data.get("status") != 200:
-                return error_response(assign_data.get("message") or "Courier assignment failed", 502)
-
-            awb_res = requests.post(
-                f"{SHIPROCKET_API}/courier/generate/awb",
-                json={"shipment_id": sr_shipment_id},
-                headers=headers, timeout=30,
-            )
-            awb_data = awb_res.json()
-            awb_code = (awb_data.get("response") or {}).get("data", {}).get("awb_code")
+            # Assign courier + generate AWB in ONE call: Shiprocket retired
+            # /shipments/assign/courier (it now returns 404);
+            # /courier/assign/awb does both steps. Retry with the next
+            # courier if one fills up between the serviceability check and
+            # the assignment.
+            awb_data, best_courier, awb_code = {}, None, None
+            for cand in couriers[:4]:
+                cand_res = requests.post(
+                    f"{SHIPROCKET_API}/courier/assign/awb",
+                    json={"shipment_id": sr_shipment_id, "courier_id": cand["courier_company_id"]},
+                    headers=headers, timeout=30,
+                )
+                try:
+                    awb_data = cand_res.json()
+                except ValueError:
+                    awb_data = {}
+                awb_code = (awb_data.get("response") or {}).get("data", {}).get("awb_code")
+                if awb_code:
+                    best_courier = cand
+                    break
+                # Wallet/credit blocks apply to every courier — fail fast
+                # with a clear message instead of burning the candidates.
+                err_msg = _sr_err(awb_data, "")
+                if "recharge" in err_msg.lower() or "balance" in err_msg.lower():
+                    return error_response(f"Shiprocket: {err_msg}", 502)
             if not awb_code:
-                return error_response("AWB generation failed", 502)
+                return error_response(
+                    f"Courier assignment failed: {_sr_err(awb_data, 'all available couriers were rejected')}",
+                    502,
+                )
 
             tracking_url = (
                 (awb_data.get("response") or {}).get("data", {}).get("courier_tracking_url")

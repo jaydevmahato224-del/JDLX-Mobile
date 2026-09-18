@@ -17,7 +17,7 @@ const TEST_EMAIL = 'test@example.com'
 // Clear the counter in the ISOLATED test DB before each phase (test-only).
 const clearRL = () => {
   try {
-    execSync(`python3 -c "import sqlite3; c=sqlite3.connect('/tmp/jdlx_errtest_e2e.db'); c.execute('DELETE FROM rate_limits'); c.commit()"`)
+    execSync(`python3 -c "import sqlite3; c=sqlite3.connect('/tmp/jdlx_audit.db'); c.execute('DELETE FROM rate_limits'); c.commit()"`)
   } catch (e) { console.log('rate-limit clear failed:', e.message?.slice(0, 80)) }
 }
 
@@ -60,7 +60,7 @@ const results = []
 const check = (name, ok, extra = '') => { results.push({ name, ok }); console.log(`${ok ? 'PASS' : 'FAIL'} — ${name}${extra ? ` (${extra})` : ''}`) }
 
 // ── 1. HOME ──
-await page.goto(`${APP}/`, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(`${APP}/`, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await new Promise(r => setTimeout(r, 3500))
 const homeHasProducts = await page.evaluate(() => {
   const imgs = [...document.querySelectorAll('main img, img')].filter(i => (i.getAttribute('src') || '').includes('/api/') || (i.getAttribute('src') || '').includes('/static'))
@@ -112,7 +112,7 @@ if (!addAttempt) {
 }
 
 // ── 4. CART PAGE ──
-await page.goto(`${APP}/cart`, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(`${APP}/cart`, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await new Promise(r => setTimeout(r, 2500))
 const cartOk = await page.evaluate(() => {
   const t = document.body.innerText
@@ -122,12 +122,12 @@ check('cart page renders totals', cartOk)
 
 // ── 5. LOGOUT state + /profile redirect ──
 await page.evaluate(() => { localStorage.clear() })
-await page.goto(`${APP}/profile`, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(`${APP}/profile`, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await new Promise(r => setTimeout(r, 2000))
 check('guest /profile redirects to login', page.url().includes('/login'))
 
 // ── 6. LOGIN: Google-OAuth-only (no password form) — verify OAuth entry renders ──
-await page.goto(`${APP}/login`, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(`${APP}/login`, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await new Promise(r => setTimeout(r, 1500))
 const loginForm = await page.evaluate(() => {
   const t = document.body.innerText.toLowerCase()
@@ -145,14 +145,14 @@ await page.evaluate((t, email) => {
 
 for (const path of ['/profile/orders', '/profile/wallet', '/profile/support']) {
   clearRL()
-  await page.goto(`${APP}${path}`, { waitUntil: 'networkidle2', timeout: 60000 })
+  await page.goto(`${APP}${path}`, { waitUntil: 'domcontentloaded', timeout: 45000 })
   await new Promise(r => setTimeout(r, 2500))
   const rendered = await page.evaluate(() => document.body.innerText.length > 150 && !document.body.innerText.includes('Something went wrong'))
   check(`protected route ${path} renders`, rendered)
 }
 // ── 8. ChatWidget on profile (regression) ──
 clearRL()
-await page.goto(`${APP}/profile`, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(`${APP}/profile`, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await new Promise(r => setTimeout(r, 2500))
 const fab = await page.evaluate(() => {
   const b = document.querySelector('button[aria-label="Chat with us"]')

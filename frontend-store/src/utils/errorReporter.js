@@ -105,6 +105,9 @@ function flush() {
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
   if (!queue.length || isDisabled()) return
   const batch = queue.splice(0, MAX_BATCH)
+  // If a burst left more than one batch queued, keep draining — without this
+  // the remaining events would sit unsent until a new event or pagehide.
+  if (queue.length) scheduleFlush()
   try {
     const body = JSON.stringify({ events: batch })
     // sendBeacon survives page unload; fall back to keepalive fetch.

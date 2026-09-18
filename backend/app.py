@@ -759,6 +759,12 @@ def security_shield_guard():
         return None
     if request.path == '/api/health':
         return None
+    # CORS preflights are browser-generated and pair 1:1 with the real request.
+    # Counting them halves every user's effective budget and can 429-block a
+    # legitimate visitor for 10 minutes on a heavy page load. Real API traffic
+    # is still counted and limited normally below.
+    if request.method == 'OPTIONS':
+        return None
 
     ip_address = get_client_ip()
 

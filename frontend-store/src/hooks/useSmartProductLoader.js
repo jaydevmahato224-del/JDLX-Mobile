@@ -101,6 +101,11 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
   // fetch that could race-abort and wipe the product list via setProducts([]).
   const hasLoadedOnceRef = useRef(false)
   const isFetchingRef = useRef(false)
+  // Monotonic token per fetch call. Rapid category/search switches let two
+  // replace=true fetches run concurrently (the isFetchingRef guard is
+  // intentionally bypassed for replace) — without this, a SLOW old fetch could
+  // resolve after the new one and overwrite the newer category's results.
+  const fetchSeqRef = useRef(0)
   const prefetchedPagesRef = useRef(new Set())
   const categoryRef = useRef(null)
   const searchQueryRef = useRef('')
@@ -167,6 +172,8 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
       if (isFetchingRef.current && !replace) return
 
       isFetchingRef.current = true
+      const seq = ++fetchSeqRef.current
+      const isCurrent = () => seq === fetchSeqRef.current
       const fetchStart = Date.now()
 
       // ── Set loading phase flags ──────────────────────────────────────────
@@ -231,7 +238,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
             }
             const data = await response.json()
 
-            if (!mountedRef.current) return
+            if (!mountedRef.current || !isCurrent()) return
 
             const nextBatch = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
 
@@ -267,7 +274,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
           }
         }
       } catch (err) {
-        if (!mountedRef.current) return
+        if (!mountedRef.current || !isCurrent()) return
         console.error('useSmartProductLoader: fetch error after all attempts', err)
         
         if (err.name === 'AbortError') {
@@ -285,7 +292,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
         setHasMore(false)
       } finally {
         clearTimeout(wakingUpTimerId)
-        if (mountedRef.current) {
+        if (mountedRef.current && isCurrent()) {
           setIsWakingUp(false)
           if (replace && !hasLoadedOnceRef.current) {
             // Anti-flicker: hold skeleton for at least MIN_SKELETON_MS
@@ -297,7 +304,9 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
           setLoadingMore(false)
           setPageRefreshing(false)
         }
-        isFetchingRef.current = false
+        // Only the newest call may release the concurrency gate — a stale
+        // call finishing early must not unblock a third fetch mid-flight.
+        if (isCurrent()) isFetchingRef.current = false
       }
     },
     [buildProductsUrl, pageSize, clearInitialLoadingAfterDelay]

@@ -12,6 +12,7 @@ import sys
 
 os.environ.setdefault("FORCE_LOCAL_DB", "1")
 os.environ.setdefault("DATABASE_PATH", "jdlx.db")
+os.environ.setdefault("FORCE_HTTPS", "0")  # keep Talisman from redirecting the test client to HTTPS
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 

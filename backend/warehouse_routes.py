@@ -2649,7 +2649,7 @@ def warehouse_create_product():
                 recommendation_priority, recommendation_weight,
                 lifecycle_state, share_token
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name, generated_description, sub_category, price or 0, offline_price, category, category_id, images, 
@@ -2916,6 +2916,8 @@ def warehouse_create_product():
             return success_response({"product_id": product_id, "sku": final_sku}, "Product created, added to inventory, and synced with catalog", 201)
 
     except Exception as e:
+        import logging
+        logging.getLogger("app").error("warehouse_create_product failed: %r", e, exc_info=True)
         return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
     finally:
         conn.close()

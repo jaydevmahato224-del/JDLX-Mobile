@@ -18,6 +18,7 @@ import sys
 
 os.environ.setdefault("FORCE_LOCAL_DB", "1")
 os.environ.setdefault("DATABASE_PATH", "jdlx.db")
+os.environ.setdefault("FORCE_HTTPS", "0")  # keep Talisman from redirecting the test client to HTTPS
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -88,6 +89,8 @@ def main():
         r = client.post("/api/warehouse/billing/generate", headers=H, json={
             "customer_name": "Offline Price Test",
             "payment_mode": "CASH",
+            # GST is opt-in per bill (POS dropdown sends the rate; default 0%)
+            "gst_rate": 18,
             "items": [{"product_id": pid_off, "quantity": 2}],
         })
         bill = r.get_json() or {}

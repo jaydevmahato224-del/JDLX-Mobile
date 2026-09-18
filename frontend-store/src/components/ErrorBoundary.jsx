@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
+import { reportClientError, flushClientErrors } from '../utils/errorReporter';
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -13,7 +14,7 @@ class ErrorBoundary extends React.Component {
 
     componentDidCatch(error, errorInfo) {
         console.error("Uncaught error:", error, errorInfo);
-        
+
         // Filter out non-backend errors (Firebase, Push, Browser APIs)
         const errorStr = error?.toString() || '';
         const isThirdPartyError = 
@@ -39,6 +40,17 @@ class ErrorBoundary extends React.Component {
         } else {
             // It's a JS/Rendering error - log it and trigger global error screen as 'client' error
             console.error("Frontend Rendering Error:", error);
+            // Telemetry: report the crash automatically (before, users had to
+            // manually click "Report This Issue" — now the admin Error Center
+            // sees every crash without user action). Report + flush BEFORE the
+            // global screen hides it.
+            reportClientError({
+                kind: 'crash',
+                message: error?.message || String(error),
+                stack: error?.stack || '',
+                context: { component_stack: errorInfo?.componentStack || '' },
+            });
+            flushClientErrors();
             useStore.getState().setGlobalError('client');
         }
     }

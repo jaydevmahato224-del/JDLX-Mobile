@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard, Download } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'
@@ -9,7 +9,6 @@ import { toast } from 'react-hot-toast'
 
 function OrderTracking() {
     const { orderId } = useParams();
-    const navigate = useNavigate();
     const [order, setOrder] = useState(null);
     const [error, setError] = useState(null);
     const [payingNow, setPayingNow] = useState(false);

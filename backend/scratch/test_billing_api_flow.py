@@ -25,6 +25,7 @@ import sys
 # TURSO credentials — without FORCE_LOCAL_DB this test would run on LIVE data.
 os.environ.setdefault("FORCE_LOCAL_DB", "1")
 os.environ.setdefault("DATABASE_PATH", "jdlx.db")
+os.environ.setdefault("FORCE_HTTPS", "0")  # keep Talisman from redirecting the test client to HTTPS
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -93,16 +94,22 @@ def main():
     staff_token = data.get("token", "")
     check("setup password -> JWT", r.status_code == 200 and staff_token)
 
-    # 4. Staff login
+    # 4. Staff login — sessions are cookie-based now (HttpOnly token cookie);
+    #    recover the token from Set-Cookie and send it as Bearer (same token,
+    #    same guard) for the rest of the flow.
     r = client.post("/api/warehouse/staff/login", json={
         "email": TEST_EMAIL,
         "password": "secret123",
     })
     data = r.get_json() or {}
-    login_token = data.get("token", "")
-    check("staff login", r.status_code == 200 and login_token)
+    login_token = ""
+    for part in (r.headers.get("Set-Cookie") or "").split(";"):
+        if part.strip().startswith("token="):
+            login_token = part.strip()[len("token="):]
+            break
+    check("staff login", r.status_code == 200 and bool(data.get("user")) and bool(login_token))
 
-    SH = {"Authorization": f"Bearer {login_token}"}
+    SH = {"Authorization": f"Bearer {login_token}"} if login_token else {}
 
     # 4b. Session must return the staff profile (not the owner profile)
     r = client.get("/api/warehouse/session", headers=SH)

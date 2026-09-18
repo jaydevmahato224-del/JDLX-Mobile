@@ -15,6 +15,7 @@ _tmp_db = os.path.join(_tmpdir, "test.db")
 os.environ["FORCE_LOCAL_DB"] = "1"
 os.environ["DATABASE_PATH"] = _tmp_db
 os.environ["DISABLE_RATE_LIMIT"] = "1"  # keep only the explicit endpoint limits
+os.environ["FORCE_HTTPS"] = "0"  # keep Talisman from redirecting the test client to HTTPS
 # Keep RAZORPAY env from .env; the webhook tests toggle the secret at runtime.
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
@@ -152,7 +153,7 @@ check("fresh OTP captured", otp2 is not None)
 if otp2:
     rr = client.post("/api/admin/verify-otp", json={"email": "admin@test.local", "otp": otp2})
     body = rr.get_json(silent=True) or {}
-    check("correct OTP -> success + token", rr.status_code == 200 and body.get("success") is True and bool(body.get("token")), f"(got {rr.status_code} {body})")
+    check("correct OTP -> success (auth via session cookie)", rr.status_code == 200 and body.get("success") is True and bool(body.get("user")), f"(got {rr.status_code} {body})")
     conn = otp_conn()
     left = conn.execute("SELECT COUNT(*) FROM admin_otps WHERE email = 'admin@test.local'").fetchone()[0]
     check("OTP consumed after success (one-time use)", left == 0, f"(rows left={left})")

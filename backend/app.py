@@ -67,6 +67,7 @@ from report_routes import report_bp
 from refund_routes import refund_bp
 from bug_routes import bug_bp
 from issue_routes import issue_bp
+from client_error_routes import client_error_bp
 from offer_routes import offer_bp, calculate_discount
 from analytics_routes import analytics_bp
 from app_review_routes import app_review_bp, check_and_trigger_review
@@ -324,6 +325,7 @@ app.register_blueprint(report_bp)
 app.register_blueprint(refund_bp)
 app.register_blueprint(bug_bp)
 app.register_blueprint(issue_bp)
+app.register_blueprint(client_error_bp)
 app.register_blueprint(offer_bp)
 app.register_blueprint(analytics_bp)
 app.register_blueprint(app_review_bp)

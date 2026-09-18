@@ -48,6 +48,7 @@ const WalletCheckout = ({ onApply, totalAmount }) => {
         </div>
         
         <button 
+          type="button"
           onClick={toggleApply}
           className={`shrink-0 whitespace-nowrap px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
             isApplied 

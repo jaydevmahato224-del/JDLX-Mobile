@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCcw, Server, CloudOff, AlertTriangle, Send, X, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
+import { captureApiFailure } from '../utils/errorReporter';
 import toast from 'react-hot-toast';
 
 // ─── Network Error Screen (Cartoonish) ────────────────────────────────────────
@@ -279,6 +280,14 @@ export const ClientErrorScreen = () => {
 export const GlobalErrorOverlay = () => {
     const { globalError, setGlobalError, clearGlobalError } = useStore();
     const [isRecovering, setIsRecovering] = useState(false);
+
+    // Telemetry: a global error screen is actually showing to a real user.
+    // Report once per activation so the Error Center knows user impact.
+    useEffect(() => {
+        if (globalError) {
+            captureApiFailure(window.location.pathname, `global '${globalError}' error screen shown`);
+        }
+    }, [globalError]);
 
     useEffect(() => {
         // Track if this effect instance is still active (prevents stale closures)

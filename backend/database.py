@@ -1092,6 +1092,40 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
+    # --- Client error telemetry (automatic frontend error capture) ---
+    # Raw events carry full context and auto-expire (lazy purge in client_error_routes);
+    # groups are the compact per-bug signal admins browse (permanent).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS client_error_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fingerprint TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        severity TEXT DEFAULT 'medium',
+        message TEXT NOT NULL,
+        stack TEXT,
+        page TEXT,
+        user_id INTEGER,
+        session_id TEXT,
+        app_version TEXT,
+        context_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_client_error_events_fp ON client_error_events(fingerprint, created_at)")
+    cursor.execute('''CREATE TABLE IF NOT EXISTS client_error_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fingerprint TEXT UNIQUE NOT NULL,
+        kind TEXT NOT NULL,
+        severity TEXT DEFAULT 'medium',
+        message TEXT NOT NULL,
+        sample_stack TEXT,
+        sample_page TEXT,
+        total_count INTEGER DEFAULT 0,
+        users_affected INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'new',
+        first_seen_at TIMESTAMP,
+        last_seen_at TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_client_error_groups_status ON client_error_groups(status, last_seen_at)")
+
     # --- Security ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, ip_address TEXT, status TEXT NOT NULL, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email)")

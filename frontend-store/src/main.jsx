@@ -6,6 +6,7 @@ import './styles/fpsOptimize.css'
 import { initFrameRateDetection } from './hooks/useFrameRate'
 import { initPerformanceManager } from './utils/performanceManager'
 import initAppShellBehavior from './utils/appShell'
+import { initErrorReporter } from './utils/errorReporter'
 import { useStore } from './store/useStore'
 import { API_BASE_URL } from './config'
 import { apiFetch } from './utils/apiFetch'
@@ -16,6 +17,20 @@ initPerformanceManager();
 // Native-app feel: block pinch / double-tap zoom so the UI never reflows like
 // a browser page (complements the locked viewport meta in index.html).
 initAppShellBehavior();
+// Client error telemetry: capture crashes + unhandled rejections for the admin
+// Error Center. Fail-silent — can never affect app behaviour.
+initErrorReporter();
+
+// Session id for interaction/onboarding analytics (read by Home.jsx
+// logInteraction and OnboardingSource). Previously nothing ever wrote this
+// key, so every event was stored with session_id 'anon' and user-journey
+// analytics merged all visitors into one fake session. Lazy per-tab id —
+// analytics-only, never used for auth or business decisions.
+try {
+  if (!localStorage.getItem('jdlx_session_id')) {
+    localStorage.setItem('jdlx_session_id', `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`)
+  }
+} catch { /* storage unavailable — callers already fall back to 'anon' */ }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

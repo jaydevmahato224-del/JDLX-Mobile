@@ -20,6 +20,7 @@ import { API_BASE_URL } from './config'
 import { useAnalytics } from './hooks/useAnalytics'
 import { AnalyticsContext } from './context/AnalyticsContext'
 import { getProductUrl } from './utils/productSlug'
+import { reportClientError, captureApiFailure } from './utils/errorReporter'
 
 if (import.meta.env.DEV) {
   console.log("%c JDLX DEBUG: API_BASE_URL is", "color: #f59e0b; font-weight: bold;", API_BASE_URL);
@@ -66,7 +67,10 @@ window.fetch = async (...args) => {
   }
 
   // Only show loader for significant API calls
-  const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs') || requestUrl.includes('/api/report-issue') || requestUrl.includes('/health');
+  // /client-error is the telemetry sink itself — never let it drive the loader
+  // or the failure counter (a failing capture endpoint must not trigger the
+  // global error overlay).
+  const isBackgroundRequest = requestUrl.includes('/interactions') || requestUrl.includes('/logs') || requestUrl.includes('/api/report-issue') || requestUrl.includes('/health') || requestUrl.includes('/client-error');
   if (!isBackgroundRequest) startLoading();
 
   try {
@@ -132,10 +136,20 @@ window.fetch = async (...args) => {
       // Only increment batch count if this failure is from a NEW batch (>2s since last failure)
       if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
         _failureBatchCount++;
+        // Telemetry: one event per failure batch (parallel calls within the
+        // 2s window collapse into a single report).
+        reportClientError({
+          kind: 'api_failure',
+          message: `API ${response.status}: ${requestUrl}`,
+          context: { status: response.status, endpoint: requestUrl },
+        });
       }
       _lastFailureTimestamp = now;
       if (_failureBatchCount >= FAILURE_THRESHOLD) {
         setGlobalError('server');
+        // Telemetry: backend is responding with server errors — surface the
+        // failing route in the admin Error Center.
+        captureApiFailure(requestUrl, `HTTP ${response.status}`);
       }
     } else if (isBackendUrl && response.ok) {
       // Successful response — reset failure counter immediately
@@ -163,6 +177,13 @@ window.fetch = async (...args) => {
       const now = Date.now();
       if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
         _failureBatchCount++;
+        // Telemetry: network-level API failure (fetch threw) — one event per batch.
+        reportClientError({
+          kind: 'api_failure',
+          message: `API network failure: ${requestUrl}`,
+          stack: error?.stack || '',
+          context: { endpoint: requestUrl, offline: !navigator.onLine },
+        });
       }
       _lastFailureTimestamp = now;
       if (_failureBatchCount >= FAILURE_THRESHOLD) {
@@ -171,6 +192,9 @@ window.fetch = async (...args) => {
         } else {
           setGlobalError('server');
         }
+        // Telemetry: a failure BATCH (multiple consecutive backend failures)
+        // crossed the overlay threshold — surface it in the admin Error Center.
+        captureApiFailure(requestUrl, 'network/server failure batch');
       }
     }
     throw error;
@@ -248,6 +272,19 @@ const BugReportPage = lazy(() => import('./pages/user/BugReportPage'))
 const MyBugReportsPage = lazy(() => import('./pages/user/MyBugReportsPage'))
 const ShareRedirect = lazy(() => import('./pages/user/ShareRedirect'))
 const OrderSuccess = lazy(() => import('./pages/user/OrderSuccess'))
+const ChatWidget = lazy(() => import('./components/ChatWidget'))
+
+// Floating hybrid support chatbot — visible ONLY on profile pages (per
+// product design: help lives with the account, no distraction while shopping).
+function ProfileChatWidget() {
+  const location = useLocation()
+  if (!location.pathname.startsWith('/profile')) return null
+  return (
+    <Suspense fallback={null}>
+      <ChatWidget />
+    </Suspense>
+  )
+}
 
 // ─── Protected Route Wrapper ──────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
@@ -478,6 +515,7 @@ function App() {
               <Route path="/*" element={
                 <>
                   <Layout>
+                    <ProfileChatWidget />
                     <Routes>
                       {/* Public Routes */}
                       <Route path="/" element={<HomePage />} />

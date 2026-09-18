@@ -17,6 +17,7 @@ import tempfile
 os.environ['FORCE_LOCAL_DB'] = '1'
 os.environ['DATABASE_PATH'] = '/tmp/admin_security_test.db'
 os.environ['DISABLE_RATE_LIMIT'] = '1'
+os.environ['FORCE_HTTPS'] = '0'  # keep Talisman from redirecting the test client to HTTPS
 
 if os.path.exists(os.environ['DATABASE_PATH']):
     os.remove(os.environ['DATABASE_PATH'])
@@ -204,8 +205,14 @@ check("PATCH disable admin 5 -> 200", r.status_code == 200, f"(got {r.status_cod
 H_DELIV = {'Authorization': f"Bearer {make_token(5, 'delivery_admin', 'delivadmin@test.local')}"}
 r = client.get('/api/admin/delivery-partners', headers=H_DELIV)
 check("disabled admin's live JWT rejected by guard (403)", r.status_code == 403, f"(got {r.status_code} {r.get_json()})")
-# delivery-partners is now protected (was public before this fix)
-r = client.get('/api/admin/delivery-partners', headers=H_USER)
+# delivery-partners is now protected (was public before this fix).
+# Re-mint user 7's token with his CURRENT DB role: earlier GAP-1 tests changed
+# his role, and the guard intentionally rejects tokens whose role no longer
+# matches the DB (instant role-demotion enforcement).
+_cur_role_row = db().execute("SELECT role FROM users WHERE id = 7").fetchone()
+_cur_role = _cur_role_row['role'] if _cur_role_row else 'user'
+H_USER_FRESH = {'Authorization': f"Bearer {make_token(7, _cur_role, 'user@test.local')}"}
+r = client.get('/api/admin/delivery-partners', headers=H_USER_FRESH)
 check("delivery-partners no longer public (normal user 403)", r.status_code == 403, f"(got {r.status_code} {r.get_json()})")
 r = client.get('/api/admin/delivery-partners')
 check("delivery-partners requires auth (no token 401/403)", r.status_code in (401, 403), f"(got {r.status_code})")

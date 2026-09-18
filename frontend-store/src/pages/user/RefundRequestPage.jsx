@@ -43,6 +43,30 @@ function RefundRequestPage() {
     const [requestTypeDropdownOpen, setRequestTypeDropdownOpen] = useState(false);
     const [reasonDropdownOpen, setReasonDropdownOpen] = useState(false);
 
+    // Defined BEFORE the effect below — it appears in that effect's dependency
+    // array, so referencing it earlier was a temporal-dead-zone ReferenceError
+    // that crashed this entire page on mount (blank Refund Request screen).
+    const checkEligibility = useCallback(async (orderId) => {
+        if (!orderId) return;
+        setLoadingEligibility(true);
+        setErrorMsg(null);
+        try {
+            const res = await apiFetch(`/refund-eligibility/${orderId}`);
+            const data = await res.json();
+            if (res.ok) {
+                const result = data.data || data;
+                setEligibility(result);
+                if (!result.eligible) {
+                    setErrorMsg(result.reason);
+                }
+            }
+        } catch {
+            toast.error("Eligibility check failed");
+        } finally {
+            setLoadingEligibility(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (!user) {
             navigate('/login');
@@ -74,27 +98,6 @@ function RefundRequestPage() {
 
         initialize();
     }, [user, navigate, checkEligibility]);
-
-    const checkEligibility = useCallback(async (orderId) => {
-        if (!orderId) return;
-        setLoadingEligibility(true);
-        setErrorMsg(null);
-        try {
-            const res = await apiFetch(`/refund-eligibility/${orderId}`);
-            const data = await res.json();
-            if (res.ok) {
-                const result = data.data || data;
-                setEligibility(result);
-                if (!result.eligible) {
-                    setErrorMsg(result.reason);
-                }
-            }
-        } catch {
-            toast.error("Eligibility check failed");
-        } finally {
-            setLoadingEligibility(false);
-        }
-    }, []);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];

@@ -24,6 +24,7 @@ _tmpdir = tempfile.mkdtemp(prefix="jdlx_biz_test_")
 os.environ["FORCE_LOCAL_DB"] = "1"
 os.environ["DATABASE_PATH"] = os.path.join(_tmpdir, "test.db")
 os.environ["DISABLE_RATE_LIMIT"] = "1"
+os.environ["FORCE_HTTPS"] = "0"  # keep Talisman from redirecting the test client to HTTPS
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
 

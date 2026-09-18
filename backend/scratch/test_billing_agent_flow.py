@@ -48,11 +48,13 @@ def run():
         assert "vendor_id" in cols, "roles table missing vendor_id"
         assert "permissions" in cols, "roles table missing permissions"
         cur.execute(
-            "INSERT INTO roles (vendor_id, role_name, permissions) VALUES (1, 'Billing Agent', ?)",
+            "INSERT OR IGNORE INTO roles (vendor_id, role_name, permissions) VALUES (1, 'Billing Agent', ?)",
             (json.dumps(["billing"]),),
         )
-        role_id = cur.lastrowid
-        results.append(("roles + Billing Agent role created", True))
+        role_id = cur.execute(
+            "SELECT role_id FROM roles WHERE vendor_id = 1 AND role_name = 'Billing Agent'"
+        ).fetchone()[0]
+        results.append(("roles + Billing Agent role ensured", True))
 
         # 2. warehouse_staff with billing schema
         staff_cols = get_columns(cur, "warehouse_staff")

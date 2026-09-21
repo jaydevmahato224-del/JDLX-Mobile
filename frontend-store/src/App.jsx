@@ -326,12 +326,20 @@ function RouteChangeTracker() {
 // untouched, this just presents login as the natural next step.
 function PostOnboardingRedirect({ active, user }) {
   const navigate = useNavigate()
+  // One-shot guard: the redirect must fire exactly once, right after onboarding
+  // completes. Without this, the effect re-runs whenever navigate's identity
+  // changes (every route change) and drags the user back to /login even after
+  // they skipped — a redirect trap.
+  const firedRef = useRef(false)
   useEffect(() => {
-    // After first-run onboarding, present the login page as the next step for
-    // logged-out users (guide ke baad login). Guests can still browse back to
-    // home from /login — the guest-browsing flow itself is untouched.
-    if (active && !user) {
-      navigate('/login', { replace: true })
+    // After first-run onboarding, present the login step for logged-out users
+    // (guide ke baad login). The firstRun flag tells Login.jsx to show it as a
+    // skippable bottom sheet; every other arrival still gets the regular page.
+    // Guests can still browse back to home — the guest-browsing flow itself is
+    // untouched.
+    if (active && !user && !firedRef.current) {
+      firedRef.current = true
+      navigate('/login', { replace: true, state: { firstRun: true } })
     }
   }, [active, user, navigate])
   return null

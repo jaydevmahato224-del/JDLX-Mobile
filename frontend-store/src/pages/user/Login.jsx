@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import toast from "react-hot-toast"
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
+import FirstLoginSheet from '../../components/FirstLoginSheet'
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -43,6 +44,12 @@ function Login() {
     const location = useLocation()
     const user = useStore((state) => state.user)
     const setUser = useStore((state) => state.setUser)
+
+    // First-run arrival (right after onboarding): present the login step as a
+    // bottom sheet with a "Skip for now" escape so nobody gets stuck here.
+    // Every other arrival (header login button, ProtectedRoute bounce) renders
+    // the existing full login page exactly as before — auth logic unchanged.
+    const [firstRunSheet, setFirstRunSheet] = useState(() => Boolean(location.state?.firstRun))
 
     // Auth-restore redirect guard.
     //
@@ -98,6 +105,13 @@ function Login() {
             ''
         const refQuery = refCode ? `&ref=${encodeURIComponent(refCode)}` : ''
         window.location.href = `${origin}/login/google?flow=user&frontend_url=${frontendUrl}${refQuery}`
+    }
+
+    // Skip closes the sheet AND leaves the login page (back to guest home) —
+    // otherwise closing the sheet would just reveal this same login page.
+    // Guest browsing, header login buttons and ProtectedRoute keep working.
+    if (firstRunSheet && !user) {
+        return <FirstLoginSheet onSkip={() => { setFirstRunSheet(false); navigate('/', { replace: true }) }} />
     }
 
     return (

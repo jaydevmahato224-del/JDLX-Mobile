@@ -17,6 +17,11 @@ function isSupported(key) {
   return false
 }
 
+// Permissions API query names differ from our UI keys (the geolocation
+// permission is named 'geolocation', NOT 'location' — querying 'location'
+// throws TypeError in Chrome and would wrongly surface as "Not asked").
+const PERM_QUERY_NAME = { location: 'geolocation' }
+
 // Best-effort current status. 'unavailable' means the device/browser has no
 // such capability (counts as satisfied). 'unknown' means the browser has no
 // permission API for it (iOS) — resolved by an actual request attempt.
@@ -28,7 +33,7 @@ function getPermissionStatus(key) {
       return resolve(p === 'granted' ? 'granted' : p === 'denied' ? 'denied' : 'default')
     }
     if (navigator.permissions && typeof navigator.permissions.query === 'function') {
-      navigator.permissions.query({ name: key })
+      navigator.permissions.query({ name: PERM_QUERY_NAME[key] || key })
         .then((res) => resolve(res.state))
         .catch(() => resolve('unknown'))
     } else {

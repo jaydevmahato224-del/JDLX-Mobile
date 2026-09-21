@@ -51,8 +51,6 @@ export default function OnboardingGuide({ onComplete }) {
     }
   }
 
-  const p = PAGES[page]
-
   return (
     // overflow-y-auto: on short screens the centered column can exceed the
     // viewport, so the page must scroll or the Next button becomes unreachable.
@@ -71,23 +69,41 @@ export default function OnboardingGuide({ onComplete }) {
           </button>
         </div>
 
-        {/* Illustration card */}
-        <div className="w-44 h-44 rounded-[2.5rem] bg-[var(--color-surface-card)] border border-amber-400/40 flex items-center justify-center text-[5.5rem] shadow-2xl shadow-amber-500/10">
-          <span style={{ animation: 'jdlx-float 3s ease-in-out infinite' }}>{p.emoji}</span>
-        </div>
-
-        {/* Title + points */}
-        <h1 className="mt-8 text-2xl font-black tracking-tight text-center">{p.title}</h1>
-        <ul className="mt-6 w-full space-y-3.5">
-          {p.points.map((point, i) => (
-            <li
+        {/* Pages stack — every page renders into the SAME grid cell, so this
+            block always occupies the TALLEST page's height. Switching pages
+            therefore never changes the layout height, which removes the
+            vertical re-centering jump (jitter) the instant-swap version had
+            (title/point line-wraps differ per page). Inactive pages are faded
+            out and non-interactive; the active one gently rises in. */}
+        <div className="grid w-full">
+          {PAGES.map((pg, i) => (
+            <div
               key={i}
-              className="flex items-start gap-3 rounded-2xl px-4 py-3 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] text-[var(--color-on-surface)]"
+              aria-hidden={i !== page}
+              className={`col-start-1 row-start-1 w-full transition-all duration-300 ease-out ${
+                i === page ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+              }`}
             >
-              <span className="text-base leading-6">{point}</span>
-            </li>
+              {/* Illustration card */}
+              <div className="w-44 h-44 mx-auto rounded-[2.5rem] bg-[var(--color-surface-card)] border border-amber-400/40 flex items-center justify-center text-[5.5rem] shadow-2xl shadow-amber-500/10">
+                <span style={{ animation: 'jdlx-float 3s ease-in-out infinite' }}>{pg.emoji}</span>
+              </div>
+
+              {/* Title + points */}
+              <h1 className="mt-8 text-2xl font-black tracking-tight text-center">{pg.title}</h1>
+              <ul className="mt-6 w-full space-y-3.5">
+                {pg.points.map((point, j) => (
+                  <li
+                    key={j}
+                    className="flex items-start gap-3 rounded-2xl px-4 py-3 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] text-[var(--color-on-surface)]"
+                  >
+                    <span className="text-base leading-6">{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
 
         {/* Dots */}
         <div className="flex items-center gap-2 mt-8">

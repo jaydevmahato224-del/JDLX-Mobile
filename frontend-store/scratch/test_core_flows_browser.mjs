@@ -17,7 +17,7 @@ const TEST_EMAIL = 'test@example.com'
 // Clear the counter in the ISOLATED test DB before each phase (test-only).
 const clearRL = () => {
   try {
-    execSync(`python3 -c "import sqlite3; c=sqlite3.connect('/tmp/jdlx_audit.db'); c.execute('DELETE FROM rate_limits'); c.commit()"`)
+    execSync(`python3 -c "import sqlite3; c=sqlite3.connect('/tmp/jdlx_verify.db'); c.execute('DELETE FROM rate_limits'); c.commit()"`)
   } catch (e) { console.log('rate-limit clear failed:', e.message?.slice(0, 80)) }
 }
 

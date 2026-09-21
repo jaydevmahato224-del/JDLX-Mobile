@@ -12,7 +12,7 @@ import { execSync } from 'child_process'
 const API = 'http://localhost:5099'
 const APP = 'http://localhost:5173'
 const TEST_EMAIL = 'test@example.com'
-const DB = '/tmp/jdlx_audit.db'
+const DB = '/tmp/jdlx_gcheck.db'
 
 const clearRL = () => {
   try {

@@ -11,6 +11,7 @@ import ProductErrorState from '../../components/ProductErrorState'
 import ProductLoadingGrid from '../../components/ProductLoadingGrid'
 import PromoBanner from '../../components/PromoBanner'
 import RecommendationsSection from '../../components/RecommendationsSection'
+import PriceBlock from '../../components/PriceBlock'
 import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
@@ -236,18 +237,12 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-2 md:gap-4">
-          <div className="space-y-0.5 md:space-y-1">
-             <div className="flex items-baseline gap-1 md:gap-2">
-               {product.has_variants && <span className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-widest">From</span>}
-               <span className="text-lg md:text-2xl font-black text-[var(--color-on-surface)] tracking-tighter">₹{product.price}</span>
-               {product.mrp > product.price && (
-                 <span className="text-[10px] md:text-xs text-slate-400 line-through font-bold">₹{product.mrp}</span>
-               )}
-             </div>
-             {product.mrp > product.price && (
-               <span className="block text-[10px] font-black text-emerald-600 uppercase">Save {Math.round(((product.mrp - product.price) / product.mrp) * 100)}%</span>
-             )}
-          </div>
+          <PriceBlock
+            price={product.price}
+            mrp={product.mrp}
+            hasVariants={product.has_variants}
+            size="md"
+          />
 
           {quantity > 0 ? (
             <div className="flex items-center bg-slate-900 rounded-xl md:rounded-2xl p-0.5 md:p-1 shadow-xl">

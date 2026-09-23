@@ -59,6 +59,7 @@ from services.inventory_service import trigger_low_stock_notifications as trigge
 from auth.role_guard import normalize_role, require_admin, require_super_admin, ADMIN_ROLES
 from auth.permission_guard import require_permission
 from warehouse_routes import warehouse_bp, issue_warehouse_token, _normalize_offline_price
+from admin_auth_routes import admin_auth_bp
 from delivery_routes import delivery_bp
 from admin_db import admin_db_bp
 from complaint_routes import complaint_bp
@@ -317,6 +318,7 @@ def shiprocket_webhook():
 
 # --- Blueprint Registration ---
 app.register_blueprint(warehouse_bp)
+app.register_blueprint(admin_auth_bp)
 app.register_blueprint(delivery_bp)
 app.register_blueprint(admin_db_bp)
 app.register_blueprint(complaint_bp)
@@ -694,6 +696,11 @@ _CSRF_EXEMPT_PATHS = {
     '/api/webhook/shiprocket',    # alternate webhook path
     '/api/admin/request-otp',
     '/api/admin/verify-otp',
+    # Admin password login + forgot-password: pre-auth endpoints (no session
+    # cookie yet / deliberately cookie-less challenge flow). Both are
+    # rate-limited and lockout-protected in admin_auth_routes.py.
+    '/api/admin/login-password',
+    '/api/admin/security/reset-password',
 }
 
 

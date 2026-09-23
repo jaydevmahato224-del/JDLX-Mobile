@@ -853,8 +853,14 @@ export default function ChatWidget() {
           <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
           <div className="pointer-events-none absolute -left-20 top-1/3 h-64 w-64 rounded-full bg-amber-300/10 blur-3xl" />
 
-          {/* Header */}
-          <div className="relative shrink-0 bg-gradient-to-r from-primary to-amber-600 px-4 pb-4 pt-5 text-white shadow-lg">
+          {/* Header — padding-top keeps it below the iOS notch/status bar
+              while preserving the original 1.25rem minimum on non-notched
+              devices (max() instead of the .safe-area-top class, which would
+              zero out the top padding where env() is 0). */}
+          <div
+            className="relative shrink-0 bg-gradient-to-r from-primary to-amber-600 px-4 pb-4 text-white shadow-lg"
+            style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top, 0px))' }}
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/20 shadow-inner">

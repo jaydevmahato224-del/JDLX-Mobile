@@ -8,6 +8,7 @@ import { GlobalErrorOverlay } from './components/ErrorScreens'
 import AdminRoute from './components/AdminRoute'
 import AdminLayout from './components/AdminLayout'
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'))
+const AdminSecurity = lazy(() => import('./pages/admin/AdminSecurity'))
 import { useStore } from './store/useStore'
 import TopLoader from './components/TopLoader'
 import { useLoadingStore } from './store/useLoadingStore'
@@ -173,6 +174,11 @@ function App() {
             <Route path="dashboard" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']}>
                 <AdminDashboard />
+              </AdminRoute>
+            } />
+            <Route path="security" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin']}>
+                <AdminSecurity />
               </AdminRoute>
             } />
             <Route path="system-health" element={

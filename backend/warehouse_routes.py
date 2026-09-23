@@ -43,6 +43,7 @@ from google.auth.transport import requests as google_requests
 
 # Local imports
 from database import get_db as _db_get_db, ist_now_str
+from utils.recommendation_engine import autofill_recommendations
 from utils.response_utils import success_response, error_response, safe_float
 from utils.product_url_utils import generate_share_token, generate_product_description
 from notifier import (
@@ -2199,6 +2200,113 @@ def get_warehouse_orders():
         conn.close()
 
 
+@warehouse_bp.route("/api/warehouse/orders/<int:assignment_id>", methods=["GET"])
+@require_warehouse_auth
+def get_warehouse_order_detail(assignment_id):
+    """Full detail for one warehouse order assignment (order + items + shipment).
+
+    Used by the warehouse Order Detail page. Scoped to the authenticated
+    warehouse so a partner can never read another warehouse's assignment.
+    """
+    wh_id = _get_current_warehouse_id()
+
+    conn = get_db()
+    try:
+        order = conn.execute(
+            """
+            SELECT woa.id, woa.order_id, woa.assignment_status, woa.created_at as assigned_at,
+                   o.order_number, o.customer_name, o.customer_phone as phone, o.phone,
+                   o.delivery_address, o.total_amount, o.subtotal_amount, o.tax_amount,
+                   o.discount_amount, o.platform_fee, o.delivery_fee, o.fitting_charge,
+                   o.order_status, o.cancellation_reason, o.payment_type, o.payment_status,
+                   o.cod_advance_paid, o.cod_remaining_amount, o.estimated_delivery,
+                   o.created_at, o.packed_at, o.shipped_at, o.delivered_at,
+                   u.name as user_name,
+                   s.awb_code, s.courier_name, s.tracking_url, s.status as shipment_status,
+                   s.shiprocket_order_id, s.shiprocket_shipment_id,
+                   s.estimated_delivery as shipment_eta, s.pickup_scheduled_date
+            FROM warehouse_order_assignments woa
+            JOIN orders o ON o.id = woa.order_id
+            LEFT JOIN users u ON u.id = o.user_id
+            LEFT JOIN shipments s ON s.order_id = woa.order_id
+            WHERE woa.id = ? AND woa.warehouse_id = ?
+            """,
+            (assignment_id, wh_id),
+        ).fetchone()
+
+        if not order:
+            return error_response("Warehouse order not found", 404)
+
+        item_rows = conn.execute(
+            """
+            SELECT oi.id, oi.product_id, oi.quantity, oi.price, oi.subtotal,
+                   oi.device_model, oi.variant_name, oi.variant_options,
+                   COALESCE(NULLIF(oi.product_name, ''), p.name) as product_name,
+                   p.images as product_images,
+                   CASE
+                       WHEN LOWER(COALESCE(c.name, p.category, '')) = 'sticker'
+                            OR COALESCE(c.device_customization_enabled, 0) = 1
+                       THEN 1 ELSE 0
+                   END as needs_custom_cutting
+            FROM order_items oi
+            LEFT JOIN products p ON p.id = oi.product_id
+            LEFT JOIN categories c ON c.id = p.category_id
+            WHERE oi.order_id = ?
+            ORDER BY oi.id ASC
+            """,
+            (order["order_id"],),
+        ).fetchall()
+
+        tracking_rows = []
+        if order["awb_code"] or order["shipment_status"]:
+            # Shipment events, newest first. The table may not exist on very old
+            # databases — degrade to an empty timeline instead of a 500.
+            try:
+                tracking_rows = conn.execute(
+                    """
+                    SELECT st.status, st.location, st.description, st.timestamp
+                    FROM shipment_tracking st
+                    JOIN shipments s ON s.id = st.shipment_id
+                    WHERE s.order_id = ?
+                    ORDER BY st.timestamp DESC, st.id DESC
+                    LIMIT 30
+                    """,
+                    (order["order_id"],),
+                ).fetchall()
+            except Exception:
+                tracking_rows = []
+
+        detail = dict(order)
+        detail["items"] = []
+        for r in item_rows:
+            item = dict(r)
+            # products.images is a JSON array string (p.image doesn't exist);
+            # extract the first URL, matching the warehouse products endpoint.
+            item["product_image"] = None
+            if item.get("product_images"):
+                try:
+                    imgs = json.loads(item["product_images"])
+                    if isinstance(imgs, list) and imgs:
+                        item["product_image"] = imgs[0]
+                except Exception:
+                    item["product_image"] = None
+            item.pop("product_images", None)
+            detail["items"].append(item)
+        detail["total_quantity"] = sum(int(i["quantity"] or 0) for i in detail["items"])
+        # Same custom-cutting rule as the list endpoint: sticker category or a
+        # device-customization-enabled category (per-item device_model is shown
+        # on each item row in the UI).
+        detail["has_custom_cutting"] = any(int(i["needs_custom_cutting"] or 0) for i in detail["items"])
+        detail["tracking_timeline"] = [dict(r) for r in tracking_rows]
+
+        return success_response(detail, "Order detail retrieved successfully")
+    except Exception as e:
+        current_app.logger.error(f"Failed to get warehouse order detail: {str(e)}")
+        return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
+    finally:
+        conn.close()
+
+
 @warehouse_bp.route("/api/warehouse/products/<int:product_id>/category", methods=["PUT"])
 @require_warehouse_auth
 def update_product_category(product_id):
@@ -2674,6 +2782,18 @@ def warehouse_create_product():
                     (product_id, r_id, rec_type)
                 )
 
+        # Smart auto-fill: any recommendation type left without a manual
+        # mapping (the default since the manual mapping UI was replaced by
+        # the backend engine) is generated from catalog + sales data.
+        # Non-fatal — engine never raises, but guard anyway.
+        try:
+            autofill_recommendations(conn, product_id)
+        except Exception:
+            current_app.logger.warning(
+                "Recommendation auto-fill failed for new product %s", product_id,
+                exc_info=True
+            )
+
         # Save Product Content
         content = data.get('content', {})
         if content:
@@ -2981,15 +3101,34 @@ def warehouse_patch_inventory(item_id):
             product_id = inv["product_id"]
             recommendations = data["recommendations"] # { 'related': [id1, id2], ... }
             
-            # Simple approach: clear all and re-insert for provided types
+            # Manual mapping = a NON-EMPTY id list for that type. Empty lists
+            # (what the panel sends now that the mapping UI is retired) must
+            # NOT clear existing rows — they mean "let the engine manage it".
             for rec_type, prod_ids in recommendations.items():
                 if not isinstance(prod_ids, list): continue
+                if not prod_ids:
+                    continue  # empty list -> engine-managed, never wipe
                 conn.execute("DELETE FROM product_recommendations WHERE product_id = ? AND recommendation_type = ?", (product_id, rec_type))
                 for r_id in prod_ids:
                     conn.execute(
                         "INSERT OR IGNORE INTO product_recommendations (product_id, recommended_product_id, recommendation_type) VALUES (?, ?, ?)",
                         (product_id, r_id, rec_type)
                     )
+
+            # Smart auto-fill: since the manual mapping UI was retired, the
+            # panel sends EMPTY lists on every edit — previously that wiped
+            # existing recommendations on every save. Now: a NON-EMPTY list
+            # is still an explicit manual mapping (replaced above); an EMPTY
+            # list is treated as "not managed here" — the delete above is
+            # skipped for it and the engine regenerates the type instead.
+            # Non-fatal — engine never raises, but guard anyway.
+            try:
+                autofill_recommendations(conn, product_id)
+            except Exception:
+                current_app.logger.warning(
+                    "Recommendation auto-fill failed for product %s", product_id,
+                    exc_info=True
+                )
 
         # Handle Product Content if provided
         if "content" in data:

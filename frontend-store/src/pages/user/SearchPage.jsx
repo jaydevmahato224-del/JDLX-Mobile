@@ -9,6 +9,7 @@ import ProductEmptyState from '../../components/ProductEmptyState'
 import ProductErrorState from '../../components/ProductErrorState'
 import ProductLoadingGrid from '../../components/ProductLoadingGrid'
 import RecommendationsSection from '../../components/RecommendationsSection'
+import PriceBlock from '../../components/PriceBlock'
 import useSmartProductLoader from '../../hooks/useSmartProductLoader'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { useStore } from '../../store/useStore'
@@ -125,12 +126,12 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         </div>
 
         <div className="mt-auto flex items-end justify-between gap-2">
-          <div className="flex flex-col">
-             <span className="text-base font-black text-[var(--color-on-surface)]">{product.has_variants && <span className="text-[9px] font-black text-primary uppercase tracking-widest mr-1">From</span>}₹{product.price}</span>
-             {product.mrp > product.price && (
-               <span className="text-[10px] text-slate-400 line-through font-medium">₹{product.mrp}</span>
-             )}
-          </div>
+          <PriceBlock
+            price={product.price}
+            mrp={product.mrp}
+            hasVariants={product.has_variants}
+            size="sm"
+          />
 
           {quantity > 0 ? (
             <div className="flex items-center bg-[var(--color-surface-container)] rounded-lg p-0.5">

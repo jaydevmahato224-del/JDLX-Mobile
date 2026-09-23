@@ -92,6 +92,7 @@ const DeliveryRequest = lazy(() => import('./pages/warehouse/DeliveryRequest'))
 const WarehouseRiderApplications = lazy(() => import('./pages/warehouse/WarehouseRiderApplications'))
 const ManageRiders = lazy(() => import('./pages/warehouse/ManageRiders'))
 const WarehouseOrders = lazy(() => import('./pages/warehouse/WarehouseOrders'))
+const WarehouseOrderDetail = lazy(() => import('./pages/warehouse/WarehouseOrderDetail'))
 const WarehouseProcurement = lazy(() => import('./pages/warehouse/WarehouseProcurement'))
 const WarehouseOffers = lazy(() => import('./pages/warehouse/WarehouseOffers'))
 const WarehouseEarnings = lazy(() => import('./pages/warehouse/WarehouseEarnings'))
@@ -204,6 +205,11 @@ function App() {
             <Route path="/warehouse/orders" element={
               <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']}>
                 <WarehouseOrders />
+              </WarehouseRoute>
+            } />
+            <Route path="/warehouse/orders/:assignmentId" element={
+              <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']}>
+                <WarehouseOrderDetail />
               </WarehouseRoute>
             } />
             <Route path="/warehouse/procurement" element={

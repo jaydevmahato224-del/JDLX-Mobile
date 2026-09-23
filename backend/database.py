@@ -231,7 +231,15 @@ def init_db():
 
     # --- Core Tables ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, google_id TEXT UNIQUE NOT NULL, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, profile_image TEXT, role TEXT NOT NULL DEFAULT 'user', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    ensure_columns('users', [('phone', 'TEXT'), ('gender', 'TEXT'), ('date_of_birth', 'TEXT'), ('age', 'INTEGER'), ('about', 'TEXT'), ('terms_accepted_version', 'INTEGER DEFAULT 0'), ('terms_accepted_at', 'TIMESTAMP'), ('email_verified', 'INTEGER DEFAULT 0'), ('phone_verified', 'INTEGER DEFAULT 0'), ('account_status', "TEXT DEFAULT 'active'"), ('cod_restricted', 'INTEGER DEFAULT 0'), ('min_token_iat', 'INTEGER DEFAULT 0'), ('last_login', 'TIMESTAMP'), ('app_installed', 'INTEGER DEFAULT 0'), ('app_installed_at', 'TIMESTAMP')])
+    ensure_columns('users', [('phone', 'TEXT'), ('gender', 'TEXT'), ('date_of_birth', 'TEXT'), ('age', 'INTEGER'), ('about', 'TEXT'), ('terms_accepted_version', 'INTEGER DEFAULT 0'), ('terms_accepted_at', 'TIMESTAMP'), ('email_verified', 'INTEGER DEFAULT 0'), ('phone_verified', 'INTEGER DEFAULT 0'), ('account_status', "TEXT DEFAULT 'active'"), ('cod_restricted', 'INTEGER DEFAULT 0'), ('min_token_iat', 'INTEGER DEFAULT 0'), ('last_login', 'TIMESTAMP'), ('app_installed', 'INTEGER DEFAULT 0'), ('app_installed_at', 'TIMESTAMP'),
+        # Admin password login + security questions (admin_auth_routes.py).
+        # Mirrors migrate_admin_auth.py — kept here so deploys auto-migrate.
+        ('password_hash', 'TEXT'),
+        ('password_salt', 'TEXT'),
+        ('password_set_at', 'TIMESTAMP'),
+        ('admin_phone', 'TEXT'),
+        ('security_question', 'TEXT'),
+        ('security_answer_hash', 'TEXT')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, icon TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     ensure_columns('categories', [('important_note', 'TEXT'), ('return_policy', "TEXT DEFAULT '7 Days Return Policy'"), ('device_customization_enabled', 'INTEGER DEFAULT 0')])
@@ -270,6 +278,22 @@ def init_db():
         ('share_token', 'TEXT'), 
         ('seo_slug', 'TEXT')
     ])
+    # Admin security audit trail (admin_auth_routes.py) — auto-provisioned so
+    # deploys never need the standalone migrate_admin_auth.py step.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS admin_security_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_id INTEGER,
+        email TEXT,
+        event_type TEXT NOT NULL,
+        description TEXT,
+        ip_address TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_admin_security_events_admin "
+        "ON admin_security_events(admin_id, created_at)"
+    )
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_variant_group ON products(variant_group_id)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_share_token ON products(share_token)")

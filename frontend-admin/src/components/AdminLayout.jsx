@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet, Gauge, MapPin, ShieldAlert } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet, Gauge, MapPin, ShieldAlert, UserCog } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
@@ -15,6 +15,7 @@ function AdminLayout({ children }) {
 
     const navLinks = [
         { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', allowedRoles: ['super_admin', 'admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'] },
+        { path: '/admin/security', icon: UserCog, label: 'Account & Security', allowedRoles: ['super_admin', 'admin', 'manager', 'inventory_admin', 'delivery_admin', 'support_admin'] },
         { path: '/admin/analytics', icon: BarChart2, label: 'Analytics', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-400 font-black tracking-wide' },
         { path: '/admin/offers', icon: BadgePercent, label: 'Offers & Promotions', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-rose-500 font-bold' },
         { path: '/admin/banners', icon: LayoutDashboard, label: 'Banner Manager', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
@@ -132,19 +133,25 @@ function AdminLayout({ children }) {
                     <div className="flex items-center gap-4">
                         <NotificationBell />
                         <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-                            <div className="flex items-center gap-2">
-                                <div className="text-right hidden sm:block">
-                                    <div className="text-sm font-semibold text-gray-900">{user?.name || 'Admin'}</div>
-                                    <div className="text-xs text-gray-500 capitalize">{user?.role || 'Administrator'}</div>
-                                </div>
-                                {user?.profile_image ? (
-                                    <img src={user.profile_image} className="w-9 h-9 rounded-full object-cover border border-gray-200" alt="Admin" />
-                                ) : (
-                                    <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
-                                        {user?.name?.charAt(0) || 'A'}
+                            <button
+                                onClick={() => navigate('/admin/security')}
+                                className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-2 py-1 transition-colors"
+                                title="Account & Security"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="text-right hidden sm:block">
+                                        <div className="text-sm font-semibold text-gray-900">{user?.name || 'Admin'}</div>
+                                        <div className="text-xs text-gray-500 capitalize">{user?.role || 'Administrator'}</div>
                                     </div>
-                                )}
-                            </div>
+                                    {user?.profile_image ? (
+                                        <img src={user.profile_image} className="w-9 h-9 rounded-full object-cover border border-gray-200" alt="Admin" />
+                                    ) : (
+                                        <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                                            {user?.name?.charAt(0) || 'A'}
+                                        </div>
+                                    )}
+                                </div>
+                            </button>
 
                             <button
                                 onClick={() => {

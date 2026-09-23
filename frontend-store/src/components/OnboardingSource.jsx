@@ -66,7 +66,12 @@ export default function OnboardingSource({ onComplete }) {
 
   return (
     <div className="fixed inset-0 z-[10050] overflow-y-auto flex bg-gradient-to-b from-[var(--color-surface)] via-[var(--color-surface-container)] to-[var(--color-surface)] text-[var(--color-on-surface)]">
-      <div className="m-auto w-full max-w-md flex flex-col px-6 py-8">
+      {/* paddingTop max(): clears the iOS notch while keeping the original
+          2rem (py-8) spacing on non-notched devices. */}
+      <div
+        className="m-auto w-full max-w-md flex flex-col px-6 py-8"
+        style={{ paddingTop: 'max(2rem, env(safe-area-inset-top, 0px))' }}
+      >
         {/* Top bar: skip */}
         <div className="w-full flex justify-between items-center mb-2">
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">

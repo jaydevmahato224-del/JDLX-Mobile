@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
     ShoppingBag, 
     Search, 
@@ -23,6 +24,7 @@ import { markOrdersSeen, ORDERS_SEEN_EVENT } from '../../components/WarehouseLay
 
 const WarehouseOrders = () => {
     const { warehouseLogout } = useStore()
+    const navigate = useNavigate()
     const [orders, setOrders] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
@@ -256,7 +258,11 @@ const WarehouseOrders = () => {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {filteredOrders.length > 0 ? filteredOrders.map((order) => (
-                                <tr key={order.id} className="group hover:bg-white/[0.02] transition-colors">
+                                <tr key={order.id}
+                                    onClick={() => navigate(`/warehouse/orders/${order.id}`)}
+                                    className="group hover:bg-white/[0.02] transition-colors cursor-pointer"
+                                    title="View full order details"
+                                >
                                     <td className="px-4 py-4 sm:px-6 sm:py-6">
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
@@ -306,7 +312,10 @@ const WarehouseOrders = () => {
                                         </span>
                                     </td>
                                     <td className="px-4 py-4 sm:px-6 sm:py-6 text-right">
-                                        <div className="flex items-center justify-end gap-2">
+                                        <div
+                                            className="flex items-center justify-end gap-2"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
                                             {(order.assignment_status?.toUpperCase() === 'CANCELLED' || order.order_status?.toUpperCase() === 'CANCELLED') ? (
                                                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[9px] font-black text-rose-400 uppercase tracking-widest">
                                                     <XCircle size={12} /> Cancelled by User

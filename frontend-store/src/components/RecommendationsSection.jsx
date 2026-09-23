@@ -8,6 +8,7 @@ import { useStore } from '../store/useStore';
 import { isStickerProduct } from '../utils/stickerCustomization';
 
 import { getProductUrl } from '../utils/productSlug';
+import PriceBlock from './PriceBlock';
 
 function extractFirstMediaUrl(value) {
   if (!value) {
@@ -121,12 +122,12 @@ const RecommendedCard = memo(({ product, onAddToCart }) => {
           {product.name}
         </h3>
         <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-lg font-black text-[var(--color-on-surface)]">₹{product.price}</span>
-            {product.mrp > product.price && (
-              <span className="text-[10px] text-[var(--color-on-surface)]/40 line-through">₹{product.mrp}</span>
-            )}
-          </div>
+          <PriceBlock
+            price={product.price}
+            mrp={product.mrp}
+            hasVariants={product.has_variants}
+            size="sm"
+          />
           <div className="flex items-center gap-1 text-[10px] font-bold text-red-500">
              <Sparkles size={12} className="text-red-400" />
              Best Deal

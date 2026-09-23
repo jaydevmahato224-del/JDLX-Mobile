@@ -512,7 +512,14 @@ function App() {
       <AppReviewPrompt show={showPrompt} reason={promptReason} onDismiss={dismissPrompt} />
       <PushNotificationManager />
       <TopLoader />
-      <Toaster position="top-center" toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }} />
+      {/* containerStyle pushes the toast viewport below the iOS notch/status
+          bar (viewport-fit=cover draws under it) — toasts were previously
+          rendered at the very top edge and got hidden behind the notch. */}
+      <Toaster
+        position="top-center"
+        containerStyle={{ top: 'max(16px, env(safe-area-inset-top))' }}
+        toastOptions={{ duration: 3000, className: 'glass-card text-sm font-bold rounded-2xl border-white/10' }}
+      />
       <Router>
         <AnalyticsWrapper>
           <AnalyticsTracker />

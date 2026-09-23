@@ -49,13 +49,19 @@ export default function UnderConstructionOverlay() {
     };
 
     return (
-        <div className="fixed inset-0 z-[99999] bg-[#0b0f19] flex flex-col items-center justify-between p-6 md:p-12 text-center overflow-y-auto">
+        // paddingTop max(): clears the iOS notch while keeping the original
+        // 1.5rem (p-6) spacing on non-notched devices.
+        <div
+            className="fixed inset-0 z-[99999] bg-[#0b0f19] flex flex-col items-center justify-between p-6 md:p-12 text-center overflow-y-auto"
+            style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top, 0px))' }}
+        >
             {/* Animated Ambient Background Glows */}
             <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-amber-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse duration-[6000ms]"></div>
             <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse duration-[8000ms]"></div>
 
-            {/* Top Bar / Brand Branding */}
-            <div className="relative z-10 w-full max-w-5xl flex items-center justify-center py-4">
+            {/* Top Bar / Brand Branding — safe-area-top keeps it below the
+                iOS notch / status bar (viewport-fit=cover) */}
+            <div className="safe-area-top relative z-10 w-full max-w-5xl flex items-center justify-center py-4">
                 <div className="flex items-center gap-3 backdrop-blur-md bg-white/5 px-6 py-3 rounded-full border border-white/10 shadow-lg">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center font-black text-[#0b0f19] text-sm tracking-tight shadow-md">
                         JD

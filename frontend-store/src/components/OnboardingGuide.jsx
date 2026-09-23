@@ -58,7 +58,12 @@ export default function OnboardingGuide({ onComplete }) {
     // there isn't — justify-center would clip the top of tall content.)
     <div className="fixed inset-0 z-[10050] overflow-y-auto flex bg-gradient-to-b from-[var(--color-surface)] via-[var(--color-surface-container)] to-[var(--color-surface)] text-[var(--color-on-surface)]">
       <style>{FLOAT_CSS}</style>
-      <div className="m-auto w-full max-w-md flex flex-col items-center px-6 py-8">
+      {/* paddingTop max(): clears the iOS notch while keeping the original
+          2rem (py-8) spacing on non-notched devices. */}
+      <div
+        className="m-auto w-full max-w-md flex flex-col items-center px-6 py-8"
+        style={{ paddingTop: 'max(2rem, env(safe-area-inset-top, 0px))' }}
+      >
         {/* Top bar: skip */}
         <div className="w-full flex justify-end mb-4">
           <button

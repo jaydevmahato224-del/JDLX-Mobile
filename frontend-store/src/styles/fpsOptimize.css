@@ -39,10 +39,14 @@ article.gpu-accelerated {
 }
 
 /* Optimize fixed/sticky elements — these repaint on every scroll frame
-   without layer promotion, causing major jank on 60fps devices */
+   without layer promotion, causing major jank on 60fps devices.
+   NOTE: transform: translateZ(0) is deliberately NOT applied here. On iOS,
+   a transform on the sticky header promotes it to its own GPU layer, and
+   the compositing of that layer over the page is rendered slightly
+   scaled/soft — the whole header (logo, text) looks BLURRED on iPhones.
+   position: sticky alone is already cheap (no JS-driven repaints). */
 .sticky {
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
 }
 
 /* Reduce backdrop-filter cost on scroll — backdrop-filter is one of

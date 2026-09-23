@@ -185,7 +185,6 @@ const WarehouseInventory = () => {
     const [hasSubCategory, setHasSubCategory] = useState(false)
     const [showLocationMapping, setShowLocationMapping] = useState(false)
     const [showLogistics, setShowLogistics] = useState(false)
-    const [recSearchTarget, setRecSearchTarget] = useState(null) // { type, rect }
     const [isWarehouseImageUploading, setIsWarehouseImageUploading] = useState(false)
     const fileInputRef = useRef(null)
 
@@ -1864,57 +1863,12 @@ const WarehouseInventory = () => {
                                     </div>
                                 )}
 
-                                {/* SECTION 6: SUPPLIER INFO */}
-                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 rounded-2xl bg-cyan-400/10 text-cyan-400">
-                                            <RefreshCw size={22} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Supplier Intelligence</h3>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Origins and procurement data</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4 sm:space-y-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Supplier / Vendor Name</label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. Reliance Logistics Pvt Ltd"
-                                                value={newProductData.supplier_name}
-                                                onChange={(e) => setNewProductData(prev => ({ ...prev, supplier_name: e.target.value }))}
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-cyan-400/50 transition-all outline-none"
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Contact Information</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Phone or Email"
-                                                    value={newProductData.contact_info}
-                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, contact_info: e.target.value }))}
-                                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-cyan-400/50 transition-all outline-none"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Purchase Date</label>
-                                                <div className="relative">
-                                                    <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700" size={16} />
-                                                    <input
-                                                        type="date"
-                                                        value={newProductData.purchase_date}
-                                                        onChange={(e) => setNewProductData(prev => ({ ...prev, purchase_date: e.target.value }))}
-                                                        className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-cyan-400/50 transition-all outline-none [color-scheme:dark]"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                {/* SECTION 6 (Supplier Intelligence) — removed by product
+                                    decision. The supplier_name / contact_info /
+                                    purchase_date state fields remain in
+                                    INITIAL_PRODUCT_STATE (sent as empty strings via the
+                                    payload spread), so the create/update payload shape
+                                    is unchanged and no backend flow is affected. */}
 
                                 {/* SECTION 7: STATUS & CONTROL */}
                                 <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
@@ -2046,119 +2000,14 @@ const WarehouseInventory = () => {
                                     </div>
                                 </div>
 
-                                {/* SECTION 6: RECOMMENDATION CONTROLS */}
-                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 rounded-2xl bg-indigo-400/10 text-indigo-400">
-                                            <TrendingUp size={22} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Recommendation Controls</h3>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Smart upsells & cross-sell mapping</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
-                                        <div className="space-y-4 sm:space-y-6">
-                                            {[
-                                                { label: 'Related Products', type: 'related', color: 'indigo' },
-                                                { label: 'Upsell Products', type: 'upsell', color: 'emerald' },
-                                                { label: 'Cross-Sell Products', type: 'cross_sell', color: 'amber' },
-                                                { label: 'Frequently Bought Together', type: 'frequent', color: 'rose' }
-                                            ].map((rec) => (
-                                                <div key={rec.type} className="space-y-3">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">{rec.label}</label>
-                                                    <div className="relative group/rec">
-                                                        <Search className="absolute left-4 top-4 text-slate-700 group-focus-within/rec:text-indigo-400 transition-colors" size={14} />
-                                                        <input
-                                                            type="text"
-                                                            placeholder={`Search to add ${rec.label.toLowerCase()}...`}
-                                                            onFocus={(e) => {
-                                                                const rect = e.target.getBoundingClientRect();
-                                                                setRecSearchTarget({ type: rec.type, rect });
-                                                            }}
-                                                            className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-3.5 pl-11 pr-6 text-xs text-white font-bold focus:outline-none focus:border-indigo-400/50 transition-all outline-none"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-2 min-h-[40px] p-2 rounded-2xl bg-slate-950/30 border border-white/5">
-                                                        {newProductData.recommendations[rec.type].map(prodId => {
-                                                            const prod = inventory.find(i => i.product_id === prodId) || foundProducts.find(p => p.id === prodId);
-                                                            return (
-                                                                <div key={prodId} className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl bg-white/5 border border-white/10 group/tag">
-                                                                    <div className="w-6 h-6 rounded-lg bg-slate-800 overflow-hidden">
-                                                                        <img src={resolveMediaUrl(prod?.images?.[0])} alt="" className="w-full h-full object-cover" />
-                                                                    </div>
-                                                                    <span className="text-[10px] font-bold text-white max-w-[100px] truncate">{prod?.name || 'Unknown'}</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setNewProductData(prev => ({
-                                                                            ...prev,
-                                                                            recommendations: {
-                                                                                ...prev.recommendations,
-                                                                                [rec.type]: prev.recommendations[rec.type].filter(id => id !== prodId)
-                                                                            }
-                                                                        }))}
-                                                                        className="text-slate-500 hover:text-rose-400"
-                                                                    >
-                                                                        <X size={12} />
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        {newProductData.recommendations[rec.type].length === 0 && (
-                                                            <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest m-auto">No products mapped</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="space-y-5 sm:space-y-8 bg-slate-950/20 p-4 sm:p-6 rounded-3xl border border-white/5">
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Manual Recommendation Priority</label>
-                                                    <span className="text-xs font-black text-indigo-400">{newProductData.recommendation_priority}</span>
-                                                </div>
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="100"
-                                                    value={newProductData.recommendation_priority}
-                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, recommendation_priority: parseInt(e.target.value) }))}
-                                                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                                                />
-                                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Higher priority products appear first in manual recommendation slots</p>
-                                            </div>
-
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Smart Recommendation Weight</label>
-                                                    <span className="text-xs font-black text-emerald-400">{newProductData.recommendation_weight}x</span>
-                                                </div>
-                                                <input
-                                                    type="range"
-                                                    min="0.1"
-                                                    max="5.0"
-                                                    step="0.1"
-                                                    value={newProductData.recommendation_weight}
-                                                    onChange={(e) => setNewProductData(prev => ({ ...prev, recommendation_weight: parseFloat(e.target.value) }))}
-                                                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                                                />
-                                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Influences AI-driven cross-sell probability (1.0 = neutral)</p>
-                                            </div>
-
-                                            <div className="p-4 rounded-2xl bg-indigo-400/5 border border-indigo-400/10 space-y-2">
-                                                <div className="flex items-center gap-2 text-indigo-400">
-                                                    <Info size={14} />
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Visibility Tip</span>
-                                                </div>
-                                                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                                                    Mapped products will be prioritized in "You May Also Like" sections. Upsells are shown in the product page, while Cross-Sells appear in the cart.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                {/* SECTION 6 (Recommendation Controls) — replaced by the backend
+                                    Smart Recommendation Engine (backend/utils/recommendation_engine.py).
+                                    related / upsell / cross_sell / frequent are generated automatically
+                                    from catalog + sales data on every product create/update — manual
+                                    mappings sent via the API still take precedence. The
+                                    recommendation_priority / recommendation_weight / recommendations
+                                    state fields remain in INITIAL_PRODUCT_STATE, so the create/update
+                                    payload shape is unchanged. */}
 
                                 {/* SECTION 7: PRODUCT CONTENT BUILDER */}
                                 <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
@@ -2741,74 +2590,6 @@ const WarehouseInventory = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Recommendation Search Overlay */}
-                            {recSearchTarget && (
-                                <div
-                                    className="fixed inset-0 z-[200]"
-                                    onClick={() => setRecSearchTarget(null)}
-                                >
-                                    <div
-                                        className="fixed w-[320px] max-h-[400px] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
-                                        style={{
-                                            top: Math.min(window.innerHeight - 420, recSearchTarget.rect.bottom + 10),
-                                            left: recSearchTarget.rect.left
-                                        }}
-                                        onClick={e => e.stopPropagation()}
-                                    >
-                                        <div className="p-3 border-b border-white/5 bg-slate-950/50 sticky top-0">
-                                            <div className="relative">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                                                <input
-                                                    autoFocus
-                                                    type="text"
-                                                    placeholder="Filter products..."
-                                                    value={productSearch}
-                                                    onChange={(e) => setProductSearch(e.target.value)}
-                                                    className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs text-white font-bold focus:outline-none"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="p-2 space-y-1">
-                                            {(productSearch ? [...foundProducts, ...inventory.map(i => ({ id: i.product_id, name: i.product_name, images: i.images, brand: i.brand }))] : inventory.map(i => ({ id: i.product_id, name: i.product_name, images: i.images, brand: i.brand })))
-                                                .filter((p, idx, self) => self.findIndex(t => t.id === p.id) === idx) // Unique
-                                                .filter(p => p.name?.toLowerCase().includes(productSearch.toLowerCase()))
-                                                .slice(0, 50)
-                                                .map(prod => (
-                                                    <button
-                                                        key={prod.id}
-                                                        type="button"
-                                                        disabled={newProductData.recommendations[recSearchTarget.type].includes(prod.id)}
-                                                        onClick={() => {
-                                                            setNewProductData(prev => ({
-                                                                ...prev,
-                                                                recommendations: {
-                                                                    ...prev.recommendations,
-                                                                    [recSearchTarget.type]: [...prev.recommendations[recSearchTarget.type], prod.id]
-                                                                }
-                                                            }));
-                                                            setProductSearch('');
-                                                            setRecSearchTarget(null);
-                                                        }}
-                                                        className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        <div className="w-10 h-10 rounded-lg bg-slate-800 overflow-hidden flex-shrink-0">
-                                                            <img src={resolveMediaUrl(prod.images?.[0])} alt="" className="w-full h-full object-cover" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-[11px] font-bold text-white truncate">{prod.name}</div>
-                                                            <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">{prod.brand || 'No Brand'}</div>
-                                                        </div>
-                                                        {newProductData.recommendations[recSearchTarget.type].includes(prod.id) && (
-                                                            <CheckCircle2 size={14} className="ml-auto text-emerald-500" />
-                                                        )}
-                                                    </button>
-                                                ))
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* STICKY ACTION BAR */}
                             <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8 pt-10 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent z-[100] flex justify-center">

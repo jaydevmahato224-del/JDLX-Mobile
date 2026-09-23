@@ -29,7 +29,7 @@ if os.environ.get("RENDER") != "true":
 # --- Third-Party Imports ---
 import razorpay
 import jwt
-from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory, Response
+from flask import Flask, jsonify, request, send_file, redirect, session, url_for, send_from_directory, Response, current_app
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -5472,7 +5472,9 @@ def get_order_status(order_id):
             WHERE oi.order_id = ?
         ''', (str(order_id),))
         items = [dict(row) for row in cursor.fetchall()]
-        conn.close()
+        # Manual-delivery code lookup needs the cursor, so conn.close() moved
+        # below it (close() is request-deferred; this keeps the read on an
+        # open connection regardless).
         
         # Add variant snapshot info to each item for historical accuracy
         for item in items:
@@ -5488,6 +5490,39 @@ def get_order_status(order_id):
         
         order_dict = dict(order)
         order_dict['items'] = items
+        # Manual (warehouse self-delivery) challenge: the order owner sees the
+        # 6-digit code ONLY while a live challenge exists for this order and
+        # the order isn't delivered yet. The code is HMAC-derived from a
+        # per-challenge salt (warehouse_routes._derive_manual_delivery_code),
+        # so it can be re-derived here without storing plaintext. Never
+        # exposes hash/salt — just the code the customer must read out.
+        try:
+            otp_row = cursor.execute(
+                """SELECT salt, expires_at FROM manual_delivery_otps
+                   WHERE order_id = ? AND consumed = 0
+                   ORDER BY id DESC LIMIT 1""",
+                (order_id,),
+            ).fetchone()
+            order_dict['delivery_code'] = None
+            if otp_row:
+                expires_dt = datetime.datetime.strptime(
+                    str(otp_row['expires_at'])[:19], '%Y-%m-%d %H:%M:%S'
+                )
+                if (
+                    datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+                ) <= expires_dt:
+                    import hmac as _hmac
+                    _digest = _hmac.new(
+                        (current_app.config.get('JWT_SECRET') or SECRET_KEY).encode(),
+                        f"manual-delivery:{otp_row['salt']}".encode(),
+                        hashlib.sha256,
+                    ).digest()
+                    order_dict['delivery_code'] = (
+                        f"{int.from_bytes(_digest[:4], 'big') % 1000000:06d}"
+                    )
+        except Exception:
+            order_dict['delivery_code'] = None
+        conn.close()
         return jsonify(order_dict)
     except Exception as e:
         return error_response(str(e), 500)
@@ -5534,6 +5569,43 @@ def get_user_orders():
                         'variant_image': item.get('variant_image'),
                     }
             order['items'] = items
+
+        # Manual-delivery codes for the user's active orders (order id -> code).
+        # Same derivation as /api/order/<id>/status; scoped to this user's
+        # orders only so no cross-user leakage is possible.
+        try:
+            order_ids = [o['id'] for o in orders]
+            if order_ids:
+                import hmac as _hmac
+                _secret = (current_app.config.get('JWT_SECRET') or SECRET_KEY).encode()
+                placeholders = ','.join('?' * len(order_ids))
+                otp_rows = cursor.execute(
+                    f"""SELECT order_id, salt, expires_at FROM manual_delivery_otps
+                        WHERE order_id IN ({placeholders}) AND consumed = 0""",
+                    tuple(order_ids),
+                ).fetchall()
+                _now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+                for otp_row in otp_rows:
+                    try:
+                        expires_dt = datetime.datetime.strptime(
+                            str(otp_row['expires_at'])[:19], '%Y-%m-%d %H:%M:%S'
+                        )
+                        if _now_ist <= expires_dt:
+                            _digest = _hmac.new(
+                                _secret,
+                                f"manual-delivery:{otp_row['salt']}".encode(),
+                                hashlib.sha256,
+                            ).digest()
+                            for o in orders:
+                                if o['id'] == otp_row['order_id']:
+                                    o['delivery_code'] = (
+                                        f"{int.from_bytes(_digest[:4], 'big') % 1000000:06d}"
+                                    )
+                                    break
+                    except Exception:
+                        continue
+        except Exception:
+            pass  # codes are a nice-to-have on the list; never break the page
         conn.close()
         return jsonify(orders), 200
     except Exception as e:

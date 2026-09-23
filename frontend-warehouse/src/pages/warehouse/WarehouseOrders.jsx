@@ -21,6 +21,7 @@ import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
 import { markOrdersSeen, ORDERS_SEEN_EVENT } from '../../components/WarehouseLayout'
+import ManualDeliveryModal from '../../components/ManualDeliveryModal'
 
 const WarehouseOrders = () => {
     const { warehouseLogout } = useStore()
@@ -35,6 +36,8 @@ const WarehouseOrders = () => {
     const [dispatchingId, setDispatchingId] = useState(null)
     const [weights, setWeights] = useState({})
     const [notification, setNotification] = useState(null)
+    // Manual (self) delivery with customer OTP verification
+    const [manualDeliveryOrder, setManualDeliveryOrder] = useState(null)
 
     const showNotification = (message, type = 'success') => {
         setNotification({ message, type })
@@ -383,6 +386,14 @@ const WarehouseOrders = () => {
                                                         </button>
                                                     </div>
                                                     <button
+                                                        onClick={() => setManualDeliveryOrder(order)}
+                                                        disabled={!!updatingId || !!dispatchingId}
+                                                        className="h-10 px-4 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all disabled:opacity-50"
+                                                        title="Deliver it yourself — customer confirms via delivery code"
+                                                    >
+                                                        Manual Delivery
+                                                    </button>
+                                                    <button
                                                         onClick={() => handleUpdateStatus(order.id, 'dispatched')}
                                                         disabled={!!updatingId || !!dispatchingId}
                                                         className="h-10 px-4 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all disabled:opacity-50"
@@ -457,6 +468,19 @@ const WarehouseOrders = () => {
                     </div>
                 </div>
             </div>
+
+            {manualDeliveryOrder && (
+                <ManualDeliveryModal
+                    assignmentId={manualDeliveryOrder.id}
+                    orderNumber={manualDeliveryOrder.order_number}
+                    onClose={() => setManualDeliveryOrder(null)}
+                    onCompleted={async () => {
+                        setManualDeliveryOrder(null)
+                        showNotification('Delivery verified — order marked as delivered')
+                        await fetchOrders()
+                    }}
+                />
+            )}
         </div>
     )
 }

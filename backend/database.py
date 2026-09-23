@@ -294,6 +294,33 @@ def init_db():
         "ON admin_security_events(admin_id, created_at)"
     )
 
+    # Manual (self) delivery OTP challenge — warehouse_routes.py.
+    # One active row per assignment: the warehouse manager marks a packed order
+    # as "delivered by me", the customer sees the 6-digit code on the order
+    # tracking page and gets a push notification, and the manager must read
+    # that code back before the order can move to DELIVERED.
+    # Additive table — existing order flows are untouched.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS manual_delivery_otps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        assignment_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        warehouse_id INTEGER NOT NULL,
+        code_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        consumed INTEGER DEFAULT 0,
+        initiated_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        verified_at TIMESTAMP,
+        delivered_at TIMESTAMP,
+        UNIQUE(assignment_id)
+    )''')
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_manual_delivery_otps_order "
+        "ON manual_delivery_otps(order_id, consumed)"
+    )
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_variant_group ON products(variant_group_id)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_share_token ON products(share_token)")

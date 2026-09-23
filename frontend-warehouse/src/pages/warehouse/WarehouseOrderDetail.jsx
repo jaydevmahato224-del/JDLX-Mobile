@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
+import ManualDeliveryModal from '../../components/ManualDeliveryModal'
 
 const WarehouseOrderDetail = () => {
     const { warehouseLogout } = useStore()
@@ -38,6 +39,8 @@ const WarehouseOrderDetail = () => {
     const [weight, setWeight] = useState('')
     const [notification, setNotification] = useState(null)
     const [itemSearch, setItemSearch] = useState('')
+    // Manual (self) delivery with customer OTP verification
+    const [showManualDelivery, setShowManualDelivery] = useState(false)
 
     const showNotification = (message, type = 'success') => {
         setNotification({ message, type })
@@ -304,6 +307,14 @@ const WarehouseOrderDetail = () => {
                             >
                                 {dispatching ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />}
                                 Ship via Shiprocket
+                            </button>
+                            <button
+                                onClick={() => setShowManualDelivery(true)}
+                                disabled={!!updatingId || dispatching}
+                                className="h-11 px-5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[11px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all disabled:opacity-50"
+                                title="Deliver it yourself — customer confirms via delivery code"
+                            >
+                                Manual Delivery
                             </button>
                             <button
                                 onClick={() => handleUpdateStatus('dispatched')}
@@ -610,6 +621,19 @@ const WarehouseOrderDetail = () => {
                     </div>
                 </div>
             </div>
+
+            {showManualDelivery && (
+                <ManualDeliveryModal
+                    assignmentId={Number(assignmentId)}
+                    orderNumber={order?.order_number}
+                    onClose={() => setShowManualDelivery(false)}
+                    onCompleted={async () => {
+                        setShowManualDelivery(false)
+                        showNotification('Delivery verified — order marked as delivered')
+                        await fetchOrder()
+                    }}
+                />
+            )}
         </div>
     )
 }

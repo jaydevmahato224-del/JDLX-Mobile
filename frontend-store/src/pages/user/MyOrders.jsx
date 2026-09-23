@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
 import { Link, useNavigate } from 'react-router-dom'
-import { MapPin, ChevronRight, CreditCard, Download } from 'lucide-react'
+import { MapPin, ChevronRight, CreditCard, Download, ShieldCheck } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
 import { downloadOrderInvoice, invoiceUnlocked } from '../../utils/downloadInvoice'
@@ -190,6 +190,21 @@ function MyOrders() {
                                     <CreditCard className="w-4 h-4" />
                                     {payingOrderId === order.id ? 'Opening payment…' : 'Complete Payment'}
                                 </button>
+                            )}
+
+                            {/* Manual-delivery code chip — the delivery person
+                                will ask for this on handover. */}
+                            {order.delivery_code && statusUpper !== 'DELIVERED' && (
+                                <Link
+                                    to={`/track/${order.id}`}
+                                    className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm hover:shadow-md transition-all"
+                                >
+                                    <span className="flex items-center gap-2 min-w-0">
+                                        <ShieldCheck className="w-4 h-4 shrink-0" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/85">Delivery Code</span>
+                                    </span>
+                                    <span className="text-lg font-black tracking-[0.3em] select-all">{order.delivery_code}</span>
+                                </Link>
                             )}
 
                             <div className="flex items-center justify-between border-t border-gray-50 pt-3">

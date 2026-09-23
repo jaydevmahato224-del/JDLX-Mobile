@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard, Download } from 'lucide-react'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard, Download, ShieldCheck } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
@@ -309,6 +309,11 @@ function OrderTracking() {
     );
 
     const activeIndex = getCurrentStageIndex();
+    // Manual (warehouse self) delivery: a live 6-digit code the delivery
+    // person must read back on handover. Shown only while the backend exposes
+    // it (challenge active + not yet delivered).
+    const deliveryCode = order?.delivery_code || null;
+    const showDeliveryCode = Boolean(deliveryCode) && order?.status?.toUpperCase() !== 'DELIVERED';
     // Human-friendly status copy for the hero. The old "Confirmed — In
     // Progress..." read like something was stuck; these say what is actually
     // happening at each step.
@@ -437,6 +442,30 @@ function OrderTracking() {
                                 </div>
                             </div>
                         </div>
+
+                        {showDeliveryCode && (
+                            <div className="relative rounded-2xl p-5 bg-gradient-to-br from-emerald-500 to-teal-600 text-white overflow-hidden shadow-lg shadow-emerald-500/25 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10 blur-2xl" />
+                                <div className="relative flex items-start justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/75 flex items-center gap-1.5">
+                                            <ShieldCheck size={12} /> Delivery Code
+                                        </p>
+                                        <p className="text-[11px] font-semibold text-white/85 mt-1">
+                                            Share this code ONLY with the delivery person handing you the order.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="relative mt-4 flex items-center justify-center">
+                                    <div className="tracking-[0.5em] text-4xl font-black bg-white/15 border border-white/25 rounded-2xl px-6 py-3 backdrop-blur select-all">
+                                        {deliveryCode}
+                                    </div>
+                                </div>
+                                <p className="relative text-center text-[10px] font-bold text-white/70 mt-3">
+                                    Delivery completes only after this code is verified.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Stepper timeline — connected icons with per-stage
                             descriptions; current step pulses, done steps check. */}

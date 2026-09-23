@@ -25,6 +25,7 @@ import sqlite3
 import subprocess
 import traceback
 import hashlib
+import hmac
 import secrets
 from jwt_config import get_jwt_secret
 from auth.role_guard import ADMIN_ROLES, normalize_role
@@ -3699,6 +3700,290 @@ def warehouse_update_order_status(assignment_id):
             "assignment_status": new_status,
             "order_status": mapped_order_status,
         }), 200
+    finally:
+        conn.close()
+
+
+# =============================================================================
+# Manual (self) delivery with customer OTP verification
+# =============================================================================
+# Flow: warehouse manager marks a PACKED order "I'll deliver this myself" →
+# server generates a 6-digit code, shows it to the CUSTOMER (order tracking
+# page) and pushes a notification → manager hands the package over, asks the
+# customer for the code, enters it → server marks the order DELIVERED.
+# Fully additive: the existing packed->dispatched Shiprocket / manual dispatch
+# paths are untouched; this is a third, guarded option for the packed state.
+
+MANUAL_DELIVERY_TTL_MINUTES = 20
+MANUAL_DELIVERY_MAX_ATTEMPTS = 5
+
+
+def _hash_manual_delivery_otp(code, salt):
+    """Same construction as _hash_admin_otp / _hash_warehouse_otp (sha256(salt:code))."""
+    return hashlib.sha256(f"{salt}:{code}".encode()).hexdigest()
+
+
+def _derive_manual_delivery_code(salt):
+    """Derives the customer's 6-digit delivery code from a per-challenge salt.
+
+    The code is never stored in plaintext: HMAC(server JWT secret, salt) is
+    reduced to 6 digits, so the order-tracking endpoint can re-derive and show
+    the SAME code to the customer later, while the DB only ever holds the
+    hash. A DB leak alone (without the JWT secret) reveals no codes.
+    """
+    import hmac as _hmac
+    digest = _hmac.new(
+        _get_jwt_secret().encode(), f"manual-delivery:{salt}".encode(), hashlib.sha256
+    ).digest()
+    return f"{int.from_bytes(digest[:4], 'big') % 1000000:06d}"
+
+
+def _get_active_manual_delivery(conn, assignment_id):
+    """Returns the live (unconsumed, unexpired) OTP row for an assignment, or None."""
+    row = conn.execute(
+        """SELECT * FROM manual_delivery_otps
+           WHERE assignment_id = ? AND consumed = 0
+           ORDER BY id DESC LIMIT 1""",
+        (assignment_id,),
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        expires_dt = datetime.datetime.strptime(str(row["expires_at"])[:19], "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+    if datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30) > expires_dt:
+        return None
+    return row
+
+
+def _manual_delivery_eligibility(conn, assignment_id, wh_id):
+    """Shared guard for start/verify: assignment must belong to this warehouse,
+    be in 'packed' state, and have a deliverable (non-cancelled) order.
+    Returns (assignment, order, error_response_or_None)."""
+    assignment = conn.execute(
+        """SELECT id, order_id, assignment_status
+           FROM warehouse_order_assignments
+           WHERE id = ? AND warehouse_id = ?""",
+        (assignment_id, wh_id),
+    ).fetchone()
+    if not assignment:
+        return None, None, error_response("Warehouse order not found", 404)
+    if assignment["assignment_status"] != "packed":
+        return assignment, None, error_response(
+            f"Manual delivery is only available for packed orders (current: {assignment['assignment_status']})", 400
+        )
+    order = conn.execute(
+        "SELECT id, order_number, order_status, user_id FROM orders WHERE id = ?",
+        (assignment["order_id"],),
+    ).fetchone()
+    if not order:
+        return assignment, None, error_response("Order not found", 404)
+    if (order["order_status"] or "").upper() in ("CANCELLED", "DELIVERED", "REFUNDED", "REJECTED"):
+        return assignment, None, error_response(
+            f"Order is {order['order_status']} and cannot be delivered manually", 400
+        )
+    return assignment, order, None
+
+
+def _push_manual_delivery_code(order_id, user_id, code):
+    """Notify the customer their delivery code (in-app + VAPID web push).
+    Fire-and-forget — a push failure must never block the delivery flow.
+    code=None means "re-nudge": the code itself is hashed server-side and
+    cannot be re-sent, so point the customer at the tracking page instead."""
+    if not user_id:
+        return
+    try:
+        if code:
+            message = (
+                f"Order #{order_id}: share code {code} with the delivery person "
+                "to receive your order. Do NOT share it with anyone else."
+            )
+        else:
+            message = (
+                f"Order #{order_id}: the delivery person re-requested your delivery "
+                "code. Open this order's tracking page to view it."
+            )
+        notification_service.notify_user_internal(
+            user_id,
+            "Your Delivery Code",
+            message,
+            "ORDER",
+            url=f"/track/{order_id}",
+        )
+    except Exception as push_err:
+        current_app.logger.warning(f"Manual delivery push failed for order {order_id}: {push_err}")
+
+
+@warehouse_bp.route("/api/warehouse/orders/<int:assignment_id>/manual-delivery/start", methods=["POST"])
+@require_warehouse_auth
+def warehouse_manual_delivery_start(assignment_id):
+    """Begin a manual delivery: generate the customer's 6-digit delivery code.
+
+    The code is returned ONLY to the customer (via in-app notification + the
+    order tracking page) — never in this API response, so a compromised
+    warehouse session cannot read it. Reselling an old code is idempotent:
+    calling start again while one is active returns the same challenge (the
+    customer is re-notified) instead of stacking codes.
+    """
+    wh_id = _get_current_warehouse_id()
+    conn = get_db()
+    try:
+        assignment, order, err = _manual_delivery_eligibility(conn, assignment_id, wh_id)
+        if err:
+            return err
+
+        existing = _get_active_manual_delivery(conn, assignment_id)
+        if existing:
+            # Re-nudge so the customer has the code handy. The code itself is
+            # hashed server-side and cannot be re-sent — the notification
+            # points at the tracking page where the code is shown.
+            conn.commit()
+            Thread(
+                target=_push_manual_delivery_code,
+                args=(order["id"], order["user_id"], None),
+                daemon=True,
+            ).start()
+            return success_response({
+                "assignment_id": assignment_id,
+                "active": True,
+                "expires_at": existing["expires_at"],
+                "reshared": True,
+            }, "Delivery code re-sent to the customer's app.")
+
+        # Retire stale (expired or attempt-exhausted) rows for this assignment
+        # so the UNIQUE(assignment_id) constraint never blocks a fresh start.
+        conn.execute(
+            "UPDATE manual_delivery_otps SET consumed = 1 WHERE assignment_id = ? AND consumed = 0",
+            (assignment_id,),
+        )
+
+        salt = secrets.token_hex(16)
+        code = _derive_manual_delivery_code(salt)
+        now_ist = ist_now_str()
+        expires_dt = (
+            datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+            + datetime.timedelta(minutes=MANUAL_DELIVERY_TTL_MINUTES)
+        )
+        conn.execute(
+            """INSERT INTO manual_delivery_otps
+               (assignment_id, order_id, warehouse_id, code_hash, salt, initiated_by, created_at, expires_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                assignment_id, order["id"], wh_id,
+                _hash_manual_delivery_otp(code, salt), salt,
+                request.warehouse_payload.get("email"), now_ist,
+                expires_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+        conn.commit()
+
+        Thread(
+            target=_push_manual_delivery_code,
+            args=(order["id"], order["user_id"], code),
+            daemon=True,
+        ).start()
+
+        return success_response({
+            "assignment_id": assignment_id,
+            "active": True,
+            "expires_at": expires_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "reshared": False,
+        }, "Delivery code sent to the customer's app. Ask them to read it out on handover.")
+    finally:
+        conn.close()
+
+
+@warehouse_bp.route("/api/warehouse/orders/<int:assignment_id>/manual-delivery/verify", methods=["POST"])
+@require_warehouse_auth
+def warehouse_manual_delivery_verify(assignment_id):
+    """Verify the customer's code and complete the manual delivery.
+
+    On success the assignment moves to 'dispatched' and the order to DELIVERED
+    (delivered_at stamped) — the exact terminal side effects the admin flow
+    applies, so settlement, invoices, referral rewards and review prompts keep
+    working unchanged. Attempt-limited and one-time-use like every other OTP
+    in this codebase.
+    """
+    wh_id = _get_current_warehouse_id()
+    data = request.get_json(silent=True) or {}
+    code = str(data.get("code") or "").strip()
+    if not code:
+        return error_response("Delivery code is required", 400)
+
+    conn = get_db()
+    try:
+        assignment, order, err = _manual_delivery_eligibility(conn, assignment_id, wh_id)
+        if err:
+            return err
+
+        otp = _get_active_manual_delivery(conn, assignment_id)
+        if not otp:
+            return error_response(
+                "No active delivery code. Start manual delivery again to send a fresh code.", 410
+            )
+
+        if not hmac.compare_digest(_hash_manual_delivery_otp(code, otp["salt"]), otp["code_hash"]):
+            attempts = int(otp["attempts"] or 0) + 1
+            if attempts >= MANUAL_DELIVERY_MAX_ATTEMPTS:
+                conn.execute("UPDATE manual_delivery_otps SET consumed = 1 WHERE id = ?", (otp["id"],))
+                conn.commit()
+                return error_response(
+                    "Too many wrong attempts. Start manual delivery again to send a fresh code.", 429
+                )
+            conn.execute("UPDATE manual_delivery_otps SET attempts = ? WHERE id = ?", (attempts, otp["id"]))
+            conn.commit()
+            return error_response(
+                f"Wrong code. {MANUAL_DELIVERY_MAX_ATTEMPTS - attempts} attempt(s) left.", 401
+            )
+
+        # One-time use: atomically consume the challenge so a concurrent second
+        # verify can never double-complete the delivery.
+        conn.execute(
+            "UPDATE manual_delivery_otps SET consumed = 1, verified_at = ?, delivered_at = ? WHERE id = ? AND consumed = 0",
+            (ist_now_str(), ist_now_str(), otp["id"]),
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] != 1:
+            conn.commit()
+            return error_response("Delivery code already used", 409)
+
+        conn.execute(
+            "UPDATE warehouse_order_assignments SET assignment_status = 'dispatched' WHERE id = ?",
+            (assignment_id,),
+        )
+        conn.execute(
+            """UPDATE orders
+               SET order_status = 'DELIVERED', delivered_at = COALESCE(delivered_at, ?)
+               WHERE id = ?""",
+            (ist_now_str(), order["id"]),
+        )
+        conn.commit()
+
+        # Post-delivery side effects — same set the admin status flow applies,
+        # wrapped so a failure never rolls back the delivery itself.
+        try:
+            if order["user_id"]:
+                notification_service.send_order_notification(order["user_id"], order["id"], "DELIVERED")
+        except Exception:
+            pass
+        try:
+            from app import check_and_trigger_review  # late import: app imports this module
+            check_and_trigger_review(conn.cursor(), order["user_id"])
+        except Exception:
+            pass
+        try:
+            from utils.referral import process_referral_reward
+            process_referral_reward(order["id"], order["user_id"], conn.execute(
+                "SELECT total_amount FROM orders WHERE id = ?", (order["id"],)
+            ).fetchone()["total_amount"])
+        except Exception:
+            pass
+
+        return success_response({
+            "assignment_id": assignment_id,
+            "assignment_status": "dispatched",
+            "order_status": "DELIVERED",
+        }, "Delivery verified. Order marked as delivered.")
     finally:
         conn.close()
 

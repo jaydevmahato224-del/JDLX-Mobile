@@ -4046,6 +4046,7 @@ def get_products():
             query = '''
                 SELECT p.id, p.name, p.variant_group_id, p.variant_name, p.is_parent,
                        p.price,
+                       p.mrp,
                        p.images, p.category_id, p.category, 
                        p.delivery_time, p.return_policy, p.is_featured, p.prepaid_only, p.share_token, p.seo_slug,
                        p.has_variants,
@@ -4072,6 +4073,7 @@ def get_products():
             query = '''
                 SELECT p.id, p.name, p.variant_group_id, p.variant_name, p.is_parent,
                        p.price,
+                       p.mrp,
                        p.images, p.category_id, p.category, 
                        p.delivery_time,
                        p.stock,
@@ -4538,7 +4540,7 @@ def get_product(product_id):
 
         # Fetch recommendations
         cursor.execute("""
-            SELECT pr.recommendation_type, p.id, p.name, p.price, p.images, p.brand
+            SELECT pr.recommendation_type, p.id, p.name, p.price, p.mrp, p.images, p.brand
             FROM product_recommendations pr
             JOIN products p ON pr.recommended_product_id = p.id
             WHERE pr.product_id = ?

@@ -2751,17 +2751,18 @@ def warehouse_create_product():
         cursor.execute(
             """
             INSERT INTO products (
-                name, description, sub_category, price, offline_price, category, category_id, images, 
+                name, description, sub_category, price, offline_price, mrp, category, category_id, images, 
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
                 color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                 is_featured, has_variants, is_parent, variant_group_id, variant_name,
                 recommendation_priority, recommendation_weight,
                 lifecycle_state, share_token
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                name, generated_description, sub_category, price or 0, offline_price, category, category_id, images, 
+                name, generated_description, sub_category, price or 0, offline_price,
+                data.get('mrp', 0.0), category, category_id, images, 
                 delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
                 color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date,
                 is_featured, 1 if has_variants else 0, 1 if has_variants else 0,
@@ -2940,16 +2941,16 @@ def warehouse_create_product():
                 # Insert variant as separate product linked via variant_group_id
                 cursor.execute(
                     """INSERT INTO products 
-                       (name, description, sub_category, price, offline_price, category, category_id, images, 
+                       (name, description, sub_category, price, offline_price, mrp, category, category_id, images, 
                         delivery_time, barcode, global_sku_code, brand, units_per_pack, material_type,
                         color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                         is_featured, has_variants, is_parent, variant_group_id, variant_name,
                         recommendation_priority, recommendation_weight,
                         lifecycle_state, share_token)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)""",
                     (
                         f"{name} - {v_name}", generated_description, sub_category, v_price, v_offline_price, 
-                        category, category_id, v_images,
+                        v.get('mrp', 0.0), category, category_id, v_images,
                         delivery_time, v_barcode, v_sku, brand, units_per_pack, material_type,
                         color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date,
                         is_featured, product_id, v_name,
@@ -3363,6 +3364,25 @@ def warehouse_patch_inventory(item_id):
             )
             if cursor.rowcount == 0 and "images" not in data:
                 return error_response("Inventory item not found", 404)
+
+            # Keep the global product row's price fields in sync so the
+            # storefront sees MRP/price changes immediately. The storefront
+            # reads products.mrp (not warehouse_inventory.mrp) — mirroring how
+            # selling_price maps to products.price. Sync ONLY when the field
+            # was actually sent; a stock-only edit never touches pricing.
+            if "mrp" in updates or "selling_price" in updates:
+                price_sync, price_vals = [], []
+                if "mrp" in updates:
+                    price_sync.append("mrp = ?")
+                    price_vals.append(updates["mrp"])
+                if "selling_price" in updates:
+                    price_sync.append("price = ?")
+                    price_vals.append(updates["selling_price"])
+                price_vals.append(inv["product_id"])
+                conn.execute(
+                    f"UPDATE products SET {', '.join(price_sync)} WHERE id = ?",
+                    price_vals,
+                )
 
         # Auto-sync available_stock = stock_quantity - reserved_stock
         if "stock_quantity" in updates or "reserved_stock" in updates:

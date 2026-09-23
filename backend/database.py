@@ -276,7 +276,12 @@ def init_db():
         ('recommendation_weight', 'REAL DEFAULT 1.0'), 
         ('lifecycle_state', "TEXT DEFAULT 'live'"), 
         ('share_token', 'TEXT'), 
-        ('seo_slug', 'TEXT')
+        ('seo_slug', 'TEXT'),
+        # Global MRP (strike-through price) shown on the storefront. The
+        # warehouse panel edits warehouse_inventory.mrp; both are kept in
+        # sync (see warehouse PATCH) — this column is the storefront's
+        # source of truth, matching how products.price works.
+        ('mrp', 'REAL')
     ])
     # Admin security audit trail (admin_auth_routes.py) — auto-provisioned so
     # deploys never need the standalone migrate_admin_auth.py step.
@@ -684,6 +689,17 @@ def init_db():
         ('available_stock', 'INTEGER DEFAULT 0'),
         ('variant_id', 'INTEGER REFERENCES product_variants(id)')
     ])
+    # One-time backfill: surface MRP values the warehouse panel saved into
+    # warehouse_inventory before products.mrp existed. Idempotent — only
+    # fills products whose mrp is still empty, never overwrites. Runs here
+    # (after warehouse_inventory is guaranteed to exist).
+    cursor.execute("""
+        UPDATE products SET mrp = (
+            SELECT wi.mrp FROM warehouse_inventory wi
+            WHERE wi.product_id = products.id AND wi.mrp IS NOT NULL AND wi.mrp > 0
+            ORDER BY wi.id LIMIT 1
+        ) WHERE (mrp IS NULL OR mrp = 0)
+    """)
     # Backfill warehouse_partner_id/warehouse_id so both naming conventions stay in sync.
     # Older DBs (created before the warehouse_id -> warehouse_partner_id rename) only have
     # warehouse_id; newer code reads COALESCE(warehouse_id, warehouse_partner_id). Keeping

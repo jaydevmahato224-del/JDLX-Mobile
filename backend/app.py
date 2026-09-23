@@ -123,6 +123,27 @@ from services.auto_healer import trigger_system_scan
 # APP INITIALIZATION & CONFIGURATION
 # ==============================================================================
 
+# Return-window -> customer-facing policy text. Mirrors the whitelist in
+# warehouse_routes (ALLOWED_RETURN_WINDOWS_DAYS): 0 = no returns, 1/2 are
+# surfaced as hours, 3/5/7 as days. Single source of truth for the storefront
+# so the product page, cards and any policy UI all show the same promise.
+RETURN_WINDOW_LABELS_DAYS = {
+    0: "No Returns",
+    1: "24 Hours Return Window",
+    2: "48 Hours Return Window",
+    3: "3 Days Return Policy",
+    5: "5 Days Return Policy",
+    7: "7 Days Return Policy",
+}
+
+
+def return_policy_text_for(return_window_days, fallback="7 Days Return Policy"):
+    """Customer-facing policy text for a fulfillment return_window value."""
+    try:
+        return RETURN_WINDOW_LABELS_DAYS.get(int(return_window_days), fallback)
+    except (TypeError, ValueError):
+        return fallback
+
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
@@ -464,6 +485,11 @@ limiter = Limiter(
     default_limits=rate_limit_defaults,
     storage_uri="memory://",
 )
+
+
+# (Return-window labels live at the top of this file:
+#  RETURN_WINDOW_LABELS_DAYS + return_policy_text_for — shared by the product
+#  list and detail endpoints so both always agree.)
 
 # 3. Caching
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
@@ -4113,10 +4139,35 @@ def get_products():
         row_global = cursor.fetchone()
         global_policy = row_global['value'] if row_global and row_global['value'] else "7 Days Return Policy"
 
+        # Batch-fetch fulfillment return windows for this page of products so
+        # the card-level policy matches the detail page (one query, no N+1).
+        product_ids = [r['id'] for r in rows]
+        window_by_pid = {}
+        if product_ids:
+            placeholders = ','.join('?' * len(product_ids))
+            try:
+                for wr in cursor.execute(
+                    f"SELECT product_id, return_window FROM product_fulfillment WHERE product_id IN ({placeholders})",
+                    tuple(product_ids),
+                ).fetchall():
+                    window_by_pid[wr['product_id']] = wr['return_window']
+            except Exception:
+                window_by_pid = {}  # fulfillment table missing on very old DBs
+
         products = []
         for row in rows:
             p_dict = normalize_product_row(row)
-            p_dict["final_return_policy"] = p_dict.get("return_policy") or p_dict.get("category_return_policy") or global_policy
+            window_days = window_by_pid.get(p_dict['id'])
+            if window_days is not None:
+                # fulfillment.return_window is authoritative (whitelist-
+                # validated at save time). 0 = No Returns overrides legacy text.
+                p_dict["final_return_policy"] = return_policy_text_for(
+                    window_days,
+                    fallback=(p_dict.get("return_policy") or p_dict.get("category_return_policy") or global_policy),
+                )
+            else:
+                p_dict["final_return_policy"] = p_dict.get("return_policy") or p_dict.get("category_return_policy") or global_policy
+            p_dict["return_window_days"] = window_days
             products.append(p_dict)
         
         total_count = None
@@ -4408,8 +4459,18 @@ def get_product(product_id):
         row_global = cursor.fetchone()
         global_policy = row_global['value'] if row_global and row_global['value'] else '7 Days Return Policy'
 
-        # Determine the effective return policy: Product > Category > Global
-        product_dict['final_return_policy'] = product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy
+        # Determine the effective return policy. The warehouse-controlled
+        # fulfillment.return_window is AUTHORITATIVE when a fulfillment row
+        # exists (it is whitelist-validated at save time: 0=no returns,
+        # 1/2=hours, 3/5/7=days). Legacy text policies (product > category >
+        # global) are the DEFAULT so products without a fulfillment row keep
+        # their policy text; the fulfillment fetch further below overrides
+        # this when a row exists.
+        product_dict['final_return_policy'] = (
+            product_dict.get('return_policy')
+            or product_dict.get('category_return_policy')
+            or global_policy
+        )
 
         # Fetch linked variant products (new system: variants are separate products linked via variant_group_id)
         variant_group_id = product_dict.get('variant_group_id')
@@ -4588,6 +4649,16 @@ def get_product(product_id):
         cursor.execute("SELECT * FROM product_fulfillment WHERE product_id = ?", (product_id,))
         fulfillment = cursor.fetchone()
         product_dict['fulfillment'] = dict(fulfillment) if fulfillment else None
+
+        # Effective return policy — resolved HERE because fulfillment is only
+        # available at this point. fulfillment.return_window is authoritative
+        # when present (whitelist-validated at save time); legacy text policy
+        # (product > category > global) remains the fallback otherwise.
+        if product_dict['fulfillment'] and product_dict['fulfillment'].get('return_window') is not None:
+            product_dict['final_return_policy'] = return_policy_text_for(
+                product_dict['fulfillment'].get('return_window'),
+                fallback=(product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy),
+            )
 
         # Fetch discovery
         cursor.execute("SELECT * FROM product_discovery WHERE product_id = ?", (product_id,))

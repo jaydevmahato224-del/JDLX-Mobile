@@ -246,6 +246,10 @@ def init_db():
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL DEFAULT 0, category_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(category_id) REFERENCES categories(id))''')
     ensure_columns('products', [
+        # Legacy TEXT category name (pre category_id). Production databases
+        # carry it and several read paths (product list/search, warehouse
+        # create) still reference it — keep it provisioned on fresh DBs too.
+        ('category', 'TEXT'), 
         ('barcode', 'TEXT'), 
         ('global_sku_code', 'TEXT'), 
         ('description', 'TEXT'), 

@@ -123,31 +123,33 @@ export default function ProductFulfillment({
                                 <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">hrs</div>
                                 <input
                                     type="number"
-                                    min="1"
-                                    value={newProductData.fulfillment?.dispatch_sla || 24}
-                                    onChange={(e) => setNewProductData(prev => ({
-                                        ...prev,
-                                        fulfillment: { ...prev.fulfillment, dispatch_sla: parseInt(e.target.value) || 24 }
-                                    }))}
-                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none"
+                                    value={24}
+                                    disabled
+                                    readOnly
+                                    title="Dispatch SLA is fixed at 24 hours for all products (platform policy)"
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-sm text-white font-bold focus:outline-none focus:ring-0 transition-all outline-none opacity-60 cursor-not-allowed"
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Return Window (days)</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Return Window</label>
                             <div className="relative">
-                                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">days</div>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={newProductData.fulfillment?.return_window || 7}
+                                <select
+                                    value={String(newProductData.fulfillment?.return_window ?? 0)}
                                     onChange={(e) => setNewProductData(prev => ({
                                         ...prev,
-                                        fulfillment: { ...prev.fulfillment, return_window: parseInt(e.target.value) || 7 }
+                                        fulfillment: { ...prev.fulfillment, return_window: parseInt(e.target.value) || 0 }
                                     }))}
-                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none"
-                                />
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none appearance-none"
+                                >
+                                    <option value="0">No Returns</option>
+                                    <option value="1">24 Hours</option>
+                                    <option value="2">48 Hours</option>
+                                    <option value="3">3 Days</option>
+                                    <option value="5">5 Days</option>
+                                    <option value="7">7 Days</option>
+                                </select>
                             </div>
                         </div>
                     </div>

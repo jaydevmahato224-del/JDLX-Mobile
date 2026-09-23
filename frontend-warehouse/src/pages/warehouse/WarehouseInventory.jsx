@@ -74,7 +74,7 @@ const generateSkuFromOptions = (baseSku, options, existingSkus = new Set()) => {
 };
 
 const INITIAL_PRODUCT_STATE = {
-    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '',    is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 7 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
+    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '',    is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
 const WarehouseInventory = () => {
@@ -529,7 +529,7 @@ const WarehouseInventory = () => {
                 is_cod_eligible: true,
                 is_fragile: false,
                 is_express_eligible: true,
-                return_window: 7
+                return_window: 0
             }
         }));
 
@@ -578,7 +578,7 @@ const WarehouseInventory = () => {
                             is_cod_eligible: !!fulfillment.is_cod_eligible,
                             is_fragile: !!fulfillment.is_fragile,
                             is_express_eligible: !!fulfillment.is_express_eligible,
-                            return_window: fulfillment.return_window || 7
+                            return_window: (fulfillment.return_window ?? 0)
                         } : prev.fulfillment,
                         discovery: discovery ? {
                             meta_title: discovery.meta_title || '',
@@ -784,8 +784,8 @@ const WarehouseInventory = () => {
                     length: parseFloat(newProductData.fulfillment.length) || 0,
                     width: parseFloat(newProductData.fulfillment.width) || 0,
                     height: parseFloat(newProductData.fulfillment.height) || 0,
-                    dispatch_sla: parseInt(newProductData.fulfillment.dispatch_sla) || 24,
-                    return_window: parseInt(newProductData.fulfillment.return_window) || 7
+                    dispatch_sla: 24, // platform-fixed — client value ignored server-side
+                    return_window: parseInt(newProductData.fulfillment.return_window) || 0
                 }
             }
 
@@ -2385,27 +2385,30 @@ const WarehouseInventory = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Dispatch SLA (Hours)</label>
                                                     <input
                                                         type="number"
-                                                        placeholder="24"
-                                                        value={newProductData.fulfillment.dispatch_sla}
-                                                        onChange={(e) => setNewProductData(prev => ({
-                                                            ...prev,
-                                                            fulfillment: { ...prev.fulfillment, dispatch_sla: parseInt(e.target.value) || 0 }
-                                                        }))}
-                                                        className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-sky-400/50 transition-all outline-none"
+                                                        value={24}
+                                                        disabled
+                                                        readOnly
+                                                        title="Dispatch SLA is fixed at 24 hours for all products (platform policy)"
+                                                        className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none outline-none opacity-60 cursor-not-allowed"
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Return Window (Days)</label>
-                                                    <input
-                                                        type="number"
-                                                        placeholder="7"
-                                                        value={newProductData.fulfillment.return_window}
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Return Window</label>
+                                                    <select
+                                                        value={String(newProductData.fulfillment.return_window ?? 0)}
                                                         onChange={(e) => setNewProductData(prev => ({
                                                             ...prev,
                                                             fulfillment: { ...prev.fulfillment, return_window: parseInt(e.target.value) || 0 }
                                                         }))}
                                                         className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-sky-400/50 transition-all outline-none"
-                                                    />
+                                                    >
+                                                        <option value="0">No Returns</option>
+                                                        <option value="1">24 Hours</option>
+                                                        <option value="2">48 Hours</option>
+                                                        <option value="3">3 Days</option>
+                                                        <option value="5">5 Days</option>
+                                                        <option value="7">7 Days</option>
+                                                    </select>
                                                 </div>
                                             </div>
 

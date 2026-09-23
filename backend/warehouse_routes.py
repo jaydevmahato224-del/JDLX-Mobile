@@ -2826,7 +2826,9 @@ def warehouse_create_product():
                     (product_id, b.get('type'), b.get('priority', 0), 1 if b.get('is_active', True) else 0)
                 )
 
-        # Save Fulfillment
+        # Save Fulfillment. Guardrails: dispatch SLA is platform-fixed (24h)
+        # and the return window must be one of the allowed options — client
+        # values are sanitized, never trusted.
         ful = data.get('fulfillment', {})
         if ful:
             cursor.execute(
@@ -2842,11 +2844,11 @@ def warehouse_create_product():
                     ful.get('width', 0),
                     ful.get('height', 0),
                     ful.get('shipping_tier', 'standard'),
-                    ful.get('dispatch_sla', 24),
+                    _sanitize_dispatch_sla(ful.get('dispatch_sla')),
                     1 if ful.get('is_cod_eligible', True) else 0,
                     1 if ful.get('is_fragile', False) else 0,
                     1 if ful.get('is_express_eligible', True) else 0,
-                    ful.get('return_window', 7)
+                    _sanitize_return_window(ful.get('return_window'))
                 )
             )
 
@@ -3059,7 +3061,15 @@ def warehouse_patch_inventory(item_id):
     }
     updates = {k: v for k, v in data.items() if k in allowed}
     
-    if not updates and "images" not in data and "description" not in data and "offline_price" not in data:
+    # Composite objects count as valid updates too (each is handled further
+    # below): fulfillment (dispatch SLA / return window / toggles), variants,
+    # option groups, recommendations, content, badges, discovery.
+    has_composite = any(k in data for k in (
+        "images", "description", "offline_price", "fulfillment", "variants",
+        "variant_options", "recommendations", "content", "badges", "discovery",
+        "has_variants",
+    ))
+    if not updates and not has_composite:
         return error_response("No valid fields to update", 400)
 
     conn = get_db()
@@ -3168,7 +3178,8 @@ def warehouse_patch_inventory(item_id):
                     (product_id, b.get('type'), b.get('priority', 0), 1 if b.get('is_active', True) else 0)
                 )
 
-        # Handle Fulfillment if provided
+        # Handle Fulfillment if provided. Guardrails (same as create):
+        # dispatch SLA is platform-fixed, return window must be whitelisted.
         if "fulfillment" in data:
             product_id = inv["product_id"]
             ful = data["fulfillment"]
@@ -3186,11 +3197,11 @@ def warehouse_patch_inventory(item_id):
                     ful.get('width', 0),
                     ful.get('height', 0),
                     ful.get('shipping_tier', 'standard'),
-                    ful.get('dispatch_sla', 24),
+                    _sanitize_dispatch_sla(ful.get('dispatch_sla')),
                     1 if ful.get('is_cod_eligible', True) else 0,
                     1 if ful.get('is_fragile', False) else 0,
                     1 if ful.get('is_express_eligible', True) else 0,
-                    ful.get('return_window', 7)
+                    _sanitize_return_window(ful.get('return_window'))
                 )
             )
 
@@ -3736,6 +3747,37 @@ def warehouse_update_order_status(assignment_id):
 
 MANUAL_DELIVERY_TTL_MINUTES = 20
 MANUAL_DELIVERY_MAX_ATTEMPTS = 5
+
+
+# -----------------------------------------------------------------------------
+# Fulfillment guardrails (security/consistency)
+# -----------------------------------------------------------------------------
+# Return window is NOT free-text: partners choose from a fixed set. 0 means
+# "no returns" (the default). 1/2 = hours-based windows surfaced as 24h/48h in
+# the UI, 3/5/7 = days. Dispatch SLA is a platform constant (24h) — partner
+# inputs are clamped so a rogue value can never break dispatch automation.
+ALLOWED_RETURN_WINDOWS_DAYS = (0, 1, 2, 3, 5, 7)
+DEFAULT_RETURN_WINDOW_DAYS = 0
+FIXED_DISPATCH_SLA_HOURS = 24
+
+
+def _sanitize_return_window(value):
+    """Clamp a client-supplied return window to the allowed options.
+
+    Anything missing/invalid/garbage becomes the default (0 = no returns).
+    Values are compared as ints so '24' (hours UI label) never slips through
+    as 24 days.
+    """
+    try:
+        v = int(float(value))
+    except (TypeError, ValueError):
+        return DEFAULT_RETURN_WINDOW_DAYS
+    return v if v in ALLOWED_RETURN_WINDOWS_DAYS else DEFAULT_RETURN_WINDOW_DAYS
+
+
+def _sanitize_dispatch_sla(value):
+    """Dispatch SLA is platform-fixed (24h) — every client value is ignored."""
+    return FIXED_DISPATCH_SLA_HOURS
 
 
 def _hash_manual_delivery_otp(code, salt):

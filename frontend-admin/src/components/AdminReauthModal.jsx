@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
-import { Loader2, Mail, ShieldCheck, LogOut, ArrowRight, RefreshCw } from 'lucide-react';
+import { Loader2, Mail, ShieldCheck, LogOut, ArrowRight, RefreshCw, KeyRound, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+/**
+ * Session re-authentication modal.
+ *
+ * PRIMARY: password re-verification via /admin/login-password (same endpoint
+ * as the login page — issues a fresh 8h JWT cookie). Email delivery is not
+ * reliable in this deployment, so the email OTP flow is kept only as an
+ * explicit fallback (all of its logic is unchanged).
+ */
 const AdminReauthModal = () => {
     const isReauthenticating = useStore(state => state.isReauthenticating);
     const setReauthenticating = useStore(state => state.setReauthenticating);
@@ -11,6 +19,10 @@ const AdminReauthModal = () => {
     const setAdminUser = useStore(state => state.setAdminUser);
     const adminLogout = useStore(state => state.adminLogout);
 
+    // mode: 'password' (default) | 'otp'
+    const [mode, setMode] = useState('password');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [requesting, setRequesting] = useState(false);
@@ -29,19 +41,66 @@ const AdminReauthModal = () => {
 
     if (!isReauthenticating || !adminUser) return null;
 
+    // Shared success path for BOTH verification methods: the backend answers
+    // with Set-Cookie (fresh 8h JWT). The localStorage Bearer token from the
+    // original OAuth login is now STALE: backend decodes header-first, so a
+    // stale header would shadow the fresh cookie and 401 the very next call
+    // (re-locking the modal). Drop it — cookie-only calls are fully supported.
+    const handleAuthSuccess = (data) => {
+        try {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('admin_token');
+        } catch (e) { /* storage unavailable — cookie still works */ }
+        setAdminUser(data.user);
+        setReauthenticating(false);
+        toast.success('Session extended successfully!');
+    };
+
+    // ---- PASSWORD (primary) ----
+    const handlePasswordReauth = async (e) => {
+        e.preventDefault();
+        if (!password) {
+            toast.error('Please enter your password');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/admin/login-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // CRITICAL: the backend answers with Set-Cookie (fresh 8h JWT).
+                credentials: 'include',
+                body: JSON.stringify({ identifier: adminUser.email, password })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                handleAuthSuccess(data);
+            } else {
+                toast.error(data.error || 'Invalid credentials');
+            }
+        } catch {
+            toast.error('Network error. Try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ---- EMAIL OTP (fallback — logic unchanged) ----
     const handleRequestOtp = async () => {
         if (timer > 0) return;
-        
+
         setRequesting(true);
         try {
             const res = await fetch(`${API_BASE_URL}/admin/request-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include', // cross-origin: without this the CSRF-exempt endpoint is fine but consistent cookie handling matters
+                credentials: 'include',
                 body: JSON.stringify({ email: adminUser.email })
             });
             const data = await res.json();
-            
+
             if (data.success) {
                 toast.success('OTP sent to your email');
                 setOtpSent(true);
@@ -68,33 +127,13 @@ const AdminReauthModal = () => {
             const res = await fetch(`${API_BASE_URL}/admin/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // CRITICAL: the backend answers with Set-Cookie (fresh 8h JWT).
-                // Cross-origin fetches drop response cookies unless credentials
-                // are included — without it the new token was never stored, the
-                // next admin API call 401'd, and this modal reopened forever.
                 credentials: 'include',
                 body: JSON.stringify({ email: adminUser.email, otp })
             });
             const data = await res.json();
 
             if (data.success) {
-                // The response body carries ONLY the user snapshot — the fresh
-                // 8h JWT arrives as an HttpOnly Set-Cookie (credentials:'include'
-                // above makes the browser store it). The localStorage Bearer
-                // token from the original OAuth login is now STALE: backend
-                // decodes header-first, so a stale header would shadow the
-                // fresh cookie and 401 the very next call (re-locking the
-                // modal). Drop it — cookie-only calls are fully supported.
-                try {
-                    localStorage.removeItem('adminToken');
-                    localStorage.removeItem('admin_token');
-                } catch (e) { /* storage unavailable — cookie still works */ }
-                setAdminUser(data.user);
-                setReauthenticating(false);
-                toast.success('Session extended successfully!');
-                // Reload to resume pending actions if necessary, 
-                // but usually the user just wants to continue.
-                // window.location.reload(); 
+                handleAuthSuccess(data);
             } else {
                 toast.error(data.error || 'Invalid OTP');
             }
@@ -136,62 +175,131 @@ const AdminReauthModal = () => {
                         </div>
                     </div>
 
-                    {!otpSent ? (
-                        <button
-                            onClick={handleRequestOtp}
-                            disabled={requesting}
-                            className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 group shadow-xl shadow-slate-900/20 active:scale-95"
-                        >
-                            {requesting ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <>
-                                    <span>Send Verification OTP</span>
-                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                </>
-                            )}
-                        </button>
-                    ) : (
-                        <form onSubmit={handleVerifyOtp} className="space-y-6">
+                    {mode === 'password' ? (
+                        <form onSubmit={handlePasswordReauth} className="space-y-6">
                             <div>
                                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
-                                    Enter 6-Digit Code
+                                    Enter Your Password
                                 </label>
-                                <input
-                                    type="text"
-                                    maxLength="6"
-                                    value={otp}
-                                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                                    placeholder="000000"
-                                    autoFocus
-                                    className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl font-black tracking-[0.5em] focus:border-primary focus:bg-white outline-none transition-all placeholder:text-slate-200"
-                                />
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300">
+                                        <KeyRound className="w-5 h-5" />
+                                    </div>
+                                    <input
+                                        type={showPassword ? 'text' : 'password'}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="Your admin password"
+                                        autoFocus
+                                        className="w-full bg-slate-50 border-2 border-slate-100 py-4 pl-12 pr-12 rounded-2xl text-base font-bold text-slate-800 focus:border-primary focus:bg-white outline-none transition-all placeholder:text-slate-300 placeholder:font-medium"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(prev => !prev)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                                        tabIndex={-1}
+                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                    >
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
                             </div>
 
                             <button
                                 type="submit"
-                                disabled={loading || otp.length !== 6}
-                                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-slate-900 font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl shadow-primary/20 active:scale-95"
+                                disabled={loading || !password}
+                                className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-900/20 active:scale-95"
                             >
                                 {loading ? (
                                     <Loader2 className="w-5 h-5 animate-spin" />
                                 ) : (
-                                    <span>Extend Session</span>
+                                    <>
+                                        <span>Extend Session</span>
+                                        <ArrowRight className="w-5 h-5" />
+                                    </>
                                 )}
                             </button>
 
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="text-center">
                                 <button
                                     type="button"
-                                    onClick={handleRequestOtp}
-                                    disabled={timer > 0 || requesting}
-                                    className="text-xs font-bold text-slate-400 hover:text-primary transition-colors flex items-center gap-1 disabled:opacity-50"
+                                    onClick={() => { setMode('otp'); setPassword(''); }}
+                                    className="text-xs font-bold text-slate-400 hover:text-primary transition-colors"
                                 >
-                                    <RefreshCw className={`w-3 h-3 ${requesting ? 'animate-spin' : ''}`} />
-                                    {timer > 0 ? `Resend in ${timer}s` : 'Resend Code'}
+                                    Can&apos;t use your password? Verify with email OTP instead
                                 </button>
                             </div>
                         </form>
+                    ) : (
+                        <>
+                            {!otpSent ? (
+                                <button
+                                    onClick={handleRequestOtp}
+                                    disabled={requesting}
+                                    className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 group shadow-xl shadow-slate-900/20 active:scale-95"
+                                >
+                                    {requesting ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <span>Send Verification OTP</span>
+                                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                        </>
+                                    )}
+                                </button>
+                            ) : (
+                                <form onSubmit={handleVerifyOtp} className="space-y-6">
+                                    <div>
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
+                                            Enter 6-Digit Code
+                                        </label>
+                                        <input
+                                            type="text"
+                                            maxLength="6"
+                                            value={otp}
+                                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                                            placeholder="000000"
+                                            autoFocus
+                                            className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl text-center text-3xl font-black tracking-[0.5em] focus:border-primary focus:bg-white outline-none transition-all placeholder:text-slate-200"
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={loading || otp.length !== 6}
+                                        className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-slate-900 font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl shadow-primary/20 active:scale-95"
+                                    >
+                                        {loading ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <span>Extend Session</span>
+                                        )}
+                                    </button>
+
+                                    <div className="flex items-center justify-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleRequestOtp}
+                                            disabled={timer > 0 || requesting}
+                                            className="text-xs font-bold text-slate-400 hover:text-primary transition-colors flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            <RefreshCw className={`w-3 h-3 ${requesting ? 'animate-spin' : ''}`} />
+                                            {timer > 0 ? `Resend in ${timer}s` : 'Resend Code'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            <div className="text-center mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => { setMode('password'); setOtp(''); setOtpSent(false); }}
+                                    className="text-xs font-bold text-slate-400 hover:text-primary transition-colors"
+                                >
+                                    Back to password verification
+                                </button>
+                            </div>
+                        </>
                     )}
 
                     <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-3">

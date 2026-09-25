@@ -3126,7 +3126,9 @@ def warehouse_patch_inventory(item_id):
 
         # SKU LOCK: Once an SKU has been assigned and saved, it cannot be changed
         # via the edit form. This prevents barcode/label mismatches and fraud.
-        if 'sku' in updates and inv.get('sku') and updates['sku'] != inv['sku']:
+        # (sqlite3.Row has no .get() — index with a default instead.)
+        current_sku = inv["sku"] if "sku" in inv.keys() else None
+        if 'sku' in updates and current_sku and updates['sku'] != current_sku:
             return error_response("SKU code is locked after creation and cannot be changed. Contact admin to modify.", 403)
             
         # Update product metadata (images, description, brand, etc) if provided
@@ -3275,131 +3277,215 @@ def warehouse_patch_inventory(item_id):
         # their id, removed rows are deleted, new rows are inserted. This only
         # runs when the client sends a full editor payload ("variants" key), so
         # minimal forms that merely toggle has_variants can never wipe data.
+        #
+        # LINKED-VARIANT GUARD: in the linked-variant system a parent product's
+        # variants are OTHER product rows (variant_group_id), NOT product_variants
+        # rows. The edit form echoes back the detail endpoint's "variants" array
+        # (ids = product ids). Running the legacy full-replace against those ids
+        # would treat every variant as "removed" and DELETE this warehouse's
+        # inventory lines plus any legacy variant rows — the product would vanish
+        # from the panel after one edit. So for linked parents, the per-variant
+        # price/stock edits are synced straight onto the linked product rows
+        # (and this warehouse's inventory lines) instead.
         if "variants" in data or "variant_options" in data:
             product_id = inv["product_id"]
-            product_name_row = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()
-            product_name = product_name_row["name"] if product_name_row else "Product"
-            has_variants = bool(data.get("has_variants", True))
-            if not has_variants:
-                conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
-                conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
-                conn.execute("UPDATE products SET has_variants = 0, is_parent = 0 WHERE id = ?", (product_id,))
-            else:
-                # Sync option groups: delete + re-insert (ids not referenced elsewhere).
-                conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
-                variant_options_data = data.get("variant_options") or []
-                option_groups = []
-                for idx, opt in enumerate(variant_options_data):
-                    opt_name = (opt.get("option_name") or "").strip()
-                    if not opt_name:
+            linked_row = conn.execute(
+                "SELECT is_parent, variant_group_id FROM products WHERE id = ?",
+                (product_id,),
+            ).fetchone()
+            # A parent is "linked" when it has no legacy variant rows to manage.
+            # variant_group_id may be NULL on some parents (their children point
+            # at the parent id), so it is NOT required here — the absence of
+            # product_variants rows is the deciding signal. A legacy parent
+            # (variant rows present) keeps the old full-replace path below.
+            is_linked_parent = bool(
+                linked_row
+                and linked_row["is_parent"]
+                and not (conn.execute(
+                    "SELECT 1 FROM product_variants WHERE product_id = ? LIMIT 1",
+                    (product_id,),
+                ).fetchone())
+            )
+            if is_linked_parent and "variants" in data:
+                for v in data.get("variants") or []:
+                    v_id = v.get("id")
+                    if v_id is None or not str(v_id).isdigit():
                         continue
-                    opt_values = opt.get("option_values") or []
-                    if isinstance(opt_values, str):
-                        try:
-                            opt_values = json.loads(opt_values)
-                        except Exception:
-                            opt_values = [opt_values]
-                    clean_values = [str(x).strip() for x in opt_values if str(x).strip()]
+                    # Only touch rows that genuinely belong to this parent's group.
+                    target = conn.execute(
+                        "SELECT id, variant_group_id FROM products WHERE id = ? AND variant_group_id = ?",
+                        (int(v_id), linked_row["variant_group_id"]),
+                    ).fetchone()
+                    if not target:
+                        continue
+                    v_price = v.get("price")
+                    v_mrp = v.get("mrp")
+                    v_stock = int(v.get("stock_quantity") if v.get("stock_quantity") is not None else v.get("stock") or 0)
                     conn.execute(
-                        "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
-                        (product_id, opt_name, json.dumps(clean_values), idx)
+                        "UPDATE products SET price = ?, mrp = COALESCE(?, mrp) WHERE id = ?",
+                        (v_price if v_price is not None else 0, v_mrp, int(v_id)),
                     )
-                    option_groups.append({'option_name': opt_name, 'option_values': clean_values})
+                    line = conn.execute(
+                        "SELECT id, reserved_stock FROM warehouse_inventory WHERE variant_id IS NULL AND product_id = ? AND warehouse_id = ?",
+                        (int(v_id), wh_id),
+                    ).fetchone()
+                    if line:
+                        new_avail = max(0, v_stock - (line["reserved_stock"] or 0))
+                        conn.execute(
+                            "UPDATE warehouse_inventory SET selling_price = ?, mrp = COALESCE(?, mrp), stock_quantity = ?, available_stock = ? WHERE id = ?",
+                            (v_price if v_price is not None else 0, v_mrp, v_stock, new_avail, line["id"]),
+                        )
+                # Option-group edits from the linked-parent form are display-only
+                # metadata for the storefront picker; the parent's stored groups
+                # stay authoritative unless a dedicated editor sends them via the
+                # admin panel. Skip legacy re-write entirely.
+            elif is_linked_parent:
+                # variant_options-only update on a linked parent: no legacy rows
+                # exist for it, so there is nothing to rewrite. Deliberate no-op
+                # (prevents the delete-all branch below from firing).
+                pass
+            else:
+                product_name_row = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()
+                product_name = product_name_row["name"] if product_name_row else "Product"
+                has_variants = bool(data.get("has_variants", True))
+                # ECHO GUARD: the detail endpoint (/api/products/<id>) returns
+                # variants=[] / variant_options=[] for ANY parent whose group it
+                # cannot resolve (variant_group_id NULL) — and the panel echoes
+                # that back verbatim on every save. An empty list here means
+                # "variants not managed in this request", NOT "delete all".
+                # Without this guard a plain edit-and-save wiped every legacy
+                # variant row AND this warehouse's inventory lines for that
+                # product — the product vanished from the panel (the reported
+                # "edit then save breaks/crashes" bug).
+                variants_sent = data.get("variants")
+                options_sent = data.get("variant_options")
+                echo_empty = (
+                    has_variants
+                    and (variants_sent is None or not variants_sent)
+                    and (options_sent is None or not options_sent)
+                )
+                if not has_variants:
+                    conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+                    conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
+                    conn.execute("UPDATE products SET has_variants = 0, is_parent = 0 WHERE id = ?", (product_id,))
+                elif echo_empty:
+                    pass  # protected echo — touch nothing
+                else:
+                    # Sync option groups: delete + re-insert (ids not referenced elsewhere).
+                    conn.execute("DELETE FROM product_variant_options WHERE product_id = ?", (product_id,))
+                    variant_options_data = data.get("variant_options") or []
+                    option_groups = []
+                    for idx, opt in enumerate(variant_options_data):
+                        opt_name = (opt.get("option_name") or "").strip()
+                        if not opt_name:
+                            continue
+                        opt_values = opt.get("option_values") or []
+                        if isinstance(opt_values, str):
+                            try:
+                                opt_values = json.loads(opt_values)
+                            except Exception:
+                                opt_values = [opt_values]
+                        clean_values = [str(x).strip() for x in opt_values if str(x).strip()]
+                        conn.execute(
+                            "INSERT INTO product_variant_options (product_id, option_name, option_values, sort_order) VALUES (?, ?, ?, ?)",
+                            (product_id, opt_name, json.dumps(clean_values), idx)
+                        )
+                        option_groups.append({'option_name': opt_name, 'option_values': clean_values})
 
-                # Validate option groups for duplicate names
-                seen_opt_names = set()
-                for g in option_groups:
-                    if g['option_name'] in seen_opt_names:
-                        return error_response(f"Duplicate option group name: {g['option_name']}", 400)
-                    seen_opt_names.add(g['option_name'])
+                    # Validate option groups for duplicate names
+                    seen_opt_names = set()
+                    for g in option_groups:
+                        if g['option_name'] in seen_opt_names:
+                            return error_response(f"Duplicate option group name: {g['option_name']}", 400)
+                        seen_opt_names.add(g['option_name'])
 
-                product_sku_base = _get_product_sku_base(cursor, product_id)
+                    product_sku_base = _get_product_sku_base(cursor, product_id)
 
-                if "variants" in data:
-                    variants_data = data.get("variants") or []
-                    existing_ids = set()
-                    for v in variants_data:
-                        v_id = v.get("id")
-                        v_name = (v.get("name") or "").strip() or f"{product_name} - Variant"
-                        v_sku = (v.get("sku") or "").strip() or None
-                        v_barcode = (v.get("barcode") or "").strip() or None
-                        v_price = v.get("price")
-                        v_mrp = v.get("mrp")
-                        v_stock = int(v.get("stock_quantity") if v.get("stock_quantity") is not None else v.get("stock") or 0)
-                        v_images = v.get("images")
-                        if isinstance(v_images, list):
-                            v_images = json.dumps(v_images)
-                        v_options = _normalize_variant_options(v.get("options"))
+                    if "variants" in data:
+                        variants_data = data.get("variants") or []
+                        existing_ids = set()
+                        for v in variants_data:
+                            v_id = v.get("id")
+                            v_name = (v.get("name") or "").strip() or f"{product_name} - Variant"
+                            v_sku = (v.get("sku") or "").strip() or None
+                            v_barcode = (v.get("barcode") or "").strip() or None
+                            v_price = v.get("price")
+                            v_mrp = v.get("mrp")
+                            v_stock = int(v.get("stock_quantity") if v.get("stock_quantity") is not None else v.get("stock") or 0)
+                            v_images = v.get("images")
+                            if isinstance(v_images, list):
+                                v_images = json.dumps(v_images)
+                            v_options = _normalize_variant_options(v.get("options"))
 
-                        # Validate against option groups
-                        validation_errors = _validate_variant_options(cursor, product_id, v_options, option_groups, exclude_variant_id=v_id if v_id and str(v_id).isdigit() else None)
-                        if validation_errors:
-                            return error_response(f"Variant validation failed: {'; '.join(validation_errors)}", 400)
+                            # Validate against option groups
+                            validation_errors = _validate_variant_options(cursor, product_id, v_options, option_groups, exclude_variant_id=v_id if v_id and str(v_id).isdigit() else None)
+                            if validation_errors:
+                                return error_response(f"Variant validation failed: {'; '.join(validation_errors)}", 400)
 
-                        # Check for duplicate variant combination (excluding self)
-                        exclude_vid = int(v_id) if v_id and str(v_id).isdigit() else None
-                        existing_vid = _check_duplicate_variant_combination(cursor, product_id, v_options, exclude_variant_id=exclude_vid)
-                        if existing_vid:
-                            return error_response(f"Variant with this option combination already exists (variant_id: {existing_vid})", 409)
+                            # Check for duplicate variant combination (excluding self)
+                            exclude_vid = int(v_id) if v_id and str(v_id).isdigit() else None
+                            existing_vid = _check_duplicate_variant_combination(cursor, product_id, v_options, exclude_variant_id=exclude_vid)
+                            if existing_vid:
+                                return error_response(f"Variant with this option combination already exists (variant_id: {existing_vid})", 409)
 
-                        if v_id and str(v_id).isdigit():
-                            existing_ids.add(int(v_id))
-                            set_parts = ["name = ?", "sku = ?", "price = ?", "barcode = ?", "options = ?", "mrp = ?"]
-                            set_params = [v_name, v_sku, v_price, v_barcode, json.dumps(v_options), v_mrp]
-                            if v_images:
-                                set_parts.append("images = ?")
-                                set_params.append(v_images)
-                            set_params.extend([int(v_id), product_id])
-                            conn.execute(
-                                f"UPDATE product_variants SET {', '.join(set_parts)} WHERE id = ? AND product_id = ?",
-                                set_params
-                            )
-                            # Keep THIS warehouse's inventory line (price/mrp/stock) in sync
-                            # with the edited variant so the storefront sees the change.
-                            line = conn.execute(
-                                "SELECT id, reserved_stock FROM warehouse_inventory WHERE variant_id = ? AND warehouse_id = ?",
-                                (int(v_id), wh_id)
-                            ).fetchone()
-                            if line:
-                                new_avail = max(0, v_stock - (line["reserved_stock"] or 0))
+                            if v_id and str(v_id).isdigit():
+                                existing_ids.add(int(v_id))
+                                set_parts = ["name = ?", "sku = ?", "price = ?", "barcode = ?", "options = ?", "mrp = ?"]
+                                set_params = [v_name, v_sku, v_price, v_barcode, json.dumps(v_options), v_mrp]
+                                if v_images:
+                                    set_parts.append("images = ?")
+                                    set_params.append(v_images)
+                                set_params.extend([int(v_id), product_id])
                                 conn.execute(
-                                    "UPDATE warehouse_inventory SET selling_price = ?, mrp = ?, stock_quantity = ?, available_stock = ? WHERE id = ?",
-                                    (v_price or 0, v_mrp or 0, v_stock, new_avail, line["id"])
+                                    f"UPDATE product_variants SET {', '.join(set_parts)} WHERE id = ? AND product_id = ?",
+                                    set_params
                                 )
-                        else:
-                            # Generate SKU from options if not provided
-                            if not v_sku:
-                                v_sku = _generate_variant_sku(product_sku_base, v_options)
-                            if not v_sku:
-                                v_sku = f"{product_sku_base}-{random.randint(10000, 99999)}"
-                            
-                            # Ensure SKU uniqueness
-                            while cursor.execute("SELECT id FROM product_variants WHERE sku = ?", (v_sku,)).fetchone():
-                                v_sku = f"{v_sku}-{random.randint(10, 99)}"
+                                # Keep THIS warehouse's inventory line (price/mrp/stock) in sync
+                                # with the edited variant so the storefront sees the change.
+                                line = conn.execute(
+                                    "SELECT id, reserved_stock FROM warehouse_inventory WHERE variant_id = ? AND warehouse_id = ?",
+                                    (int(v_id), wh_id)
+                                ).fetchone()
+                                if line:
+                                    new_avail = max(0, v_stock - (line["reserved_stock"] or 0))
+                                    conn.execute(
+                                        "UPDATE warehouse_inventory SET selling_price = ?, mrp = ?, stock_quantity = ?, available_stock = ? WHERE id = ?",
+                                        (v_price or 0, v_mrp or 0, v_stock, new_avail, line["id"])
+                                    )
+                            else:
+                                # Generate SKU from options if not provided
+                                if not v_sku:
+                                    v_sku = _generate_variant_sku(product_sku_base, v_options)
+                                if not v_sku:
+                                    v_sku = f"{product_sku_base}-{random.randint(10000, 99999)}"
 
-                            cur = conn.execute(
-                                """INSERT INTO product_variants
-                                   (product_id, name, sku, price, stock, barcode, images, options, mrp)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                                (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
-                            )
-                            new_vid = cur.lastrowid
-                            conn.execute(
-                                """INSERT INTO warehouse_inventory
-                                   (warehouse_id, warehouse_partner_id, product_id, variant_id, product_name, sku, stock_quantity, available_stock,
-                                    low_stock_threshold, selling_price, mrp, status)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
-                                (wh_id, wh_id, product_id, new_vid, v_name, v_sku, v_stock, v_stock, 2, v_price or 0, v_mrp or 0)
-                            )
-                            conn.execute("UPDATE product_variants SET stock = ? WHERE id = ?", (v_stock, new_vid))
+                                # Ensure SKU uniqueness
+                                while cursor.execute("SELECT id FROM product_variants WHERE sku = ?", (v_sku,)).fetchone():
+                                    v_sku = f"{v_sku}-{random.randint(10, 99)}"
 
-                    # Delete variants the client no longer sent (and this warehouse's lines).
-                    for row in conn.execute("SELECT id FROM product_variants WHERE product_id = ?", (product_id,)).fetchall():
-                        if row["id"] not in existing_ids:
-                            conn.execute("DELETE FROM warehouse_inventory WHERE variant_id = ? AND warehouse_id = ?", (row["id"], wh_id))
-                            conn.execute("DELETE FROM product_variants WHERE id = ?", (row["id"],))
+                                cur = conn.execute(
+                                    """INSERT INTO product_variants
+                                       (product_id, name, sku, price, stock, barcode, images, options, mrp)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                    (product_id, v_name, v_sku, v_price, v_stock, v_barcode, v_images, json.dumps(v_options), v_mrp)
+                                )
+                                new_vid = cur.lastrowid
+                                conn.execute(
+                                    """INSERT INTO warehouse_inventory
+                                       (warehouse_id, warehouse_partner_id, product_id, variant_id, product_name, sku, stock_quantity, available_stock,
+                                        low_stock_threshold, selling_price, mrp, status)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+                                    (wh_id, wh_id, product_id, new_vid, v_name, v_sku, v_stock, v_stock, 2, v_price or 0, v_mrp or 0)
+                                )
+                                conn.execute("UPDATE product_variants SET stock = ? WHERE id = ?", (v_stock, new_vid))
 
-                conn.execute("UPDATE products SET has_variants = 1, is_parent = 1 WHERE id = ?", (product_id,))
+                        # Delete variants the client no longer sent (and this warehouse's lines).
+                        for row in conn.execute("SELECT id FROM product_variants WHERE product_id = ?", (product_id,)).fetchall():
+                            if row["id"] not in existing_ids:
+                                conn.execute("DELETE FROM warehouse_inventory WHERE variant_id = ? AND warehouse_id = ?", (row["id"], wh_id))
+                                conn.execute("DELETE FROM product_variants WHERE id = ?", (row["id"],))
+
+                    conn.execute("UPDATE products SET has_variants = 1, is_parent = 1 WHERE id = ?", (product_id,))
         elif "has_variants" in data:
             # Flag-only update from a minimal form — never touches variant rows.
             product_id = inv["product_id"]

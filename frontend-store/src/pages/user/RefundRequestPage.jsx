@@ -87,7 +87,14 @@ function RefundRequestPage() {
                 const res = await apiFetch('/my-orders');
                 const data = await res.json();
                 if (res.ok) {
-                    setOrders(data.data || data);
+                    const all = data.data || data;
+                    // Only delivered/completed orders can be refunded (same rule
+                    // the backend enforces) — hide the rest from the dropdown so
+                    // users never pick an order that is guaranteed to fail.
+                    const refundable = all.filter(o =>
+                        ['delivered', 'completed'].includes(String(o.order_status || '').toLowerCase())
+                    );
+                    setOrders(refundable);
                 }
             } catch (err) {
                 console.error("Failed to load orders", err);
@@ -118,6 +125,12 @@ function RefundRequestPage() {
 
         if (form.description.length < 30) {
             toast.error("Description must be at least 30 characters");
+            return;
+        }
+
+        // Evidence photo is mandatory — admin verifies every claim against it.
+        if (!photo) {
+            toast.error("Please upload an evidence photo");
             return;
         }
 
@@ -254,6 +267,9 @@ function RefundRequestPage() {
                             {!isReadOnly && <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${orderDropdownOpen ? 'rotate-180' : ''}`} />}
                         </button>
                         {loadingEligibility && <p className="text-[10px] text-primary animate-pulse ml-1">Verifying eligibility...</p>}
+                        {!loadingOrders && !isReadOnly && orders.length === 0 && (
+                            <p className="text-[10px] text-gray-400 ml-1">No delivered orders available for a refund request.</p>
+                        )}
 
                         {orderDropdownOpen && (
                             <>
@@ -332,7 +348,6 @@ function RefundRequestPage() {
                                     <div className="fixed inset-0 z-40" onClick={() => setRequestTypeDropdownOpen(false)} />
                                     <div className="absolute top-full left-0 right-0 z-50 mt-1.5 p-1 bg-[var(--color-surface-card)] border border-[var(--color-surface-high)] rounded-2xl max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200 flex flex-col gap-0.5 shadow-xl">
                                         {[
-                                            "Refund only",
                                             "Return and Refund",
                                             "Exchange"
                                         ].map(typeVal => (
@@ -432,14 +447,14 @@ function RefundRequestPage() {
                         </div>
                     </div>
 
-                    {/* Photo Upload */}
+                    {/* Photo Upload — mandatory evidence for every refund request */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Evidence Photo (Optional)</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Evidence Photo <span className="text-red-400 normal-case tracking-normal">(Required)</span></label>
                         <div className="flex items-center gap-4">
-                            <label className="cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-surface-high)] hover:border-primary hover:bg-primary/5 transition-all text-gray-400 hover:text-primary">
+                            <label className={`cursor-pointer flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed transition-all ${photo ? 'border-emerald-400 bg-emerald-50 text-emerald-500' : 'border-[var(--color-surface-high)] hover:border-primary hover:bg-primary/5 text-gray-400 hover:text-primary'}`}>
                                 <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                                 <Camera size={24} />
-                                <span className="text-[9px] font-black uppercase mt-1">Upload</span>
+                                <span className="text-[9px] font-black uppercase mt-1">{photo ? 'Added ✓' : 'Upload'}</span>
                             </label>
                             {preview && (
                                 <div className="relative w-24 h-24 rounded-2xl overflow-hidden border border-[var(--color-surface-high)] shadow-sm group">
@@ -452,6 +467,9 @@ function RefundRequestPage() {
                                         <span className="text-[9px] font-black uppercase">Remove</span>
                                     </button>
                                 </div>
+                            )}
+                            {!preview && (
+                                <p className="text-[10px] text-gray-400 font-bold max-w-[180px] leading-relaxed">Photo of the item/packaging helps admin verify your claim faster.</p>
                             )}
                         </div>
                     </div>

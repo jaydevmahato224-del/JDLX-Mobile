@@ -48,6 +48,23 @@ import {
 import { API_BASE_URL, resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried } from '../../config'
 import { useStore } from '../../store/useStore'
 import VariantManager from './components/VariantManager'
+import RichTextEditor from '../../components/RichTextEditor'
+
+// Panel detail view renders the description as plain text — convert the
+// same simple HTML the editor emits (<br>, <strong>, <li>...) to readable
+// structure instead of showing raw tags. Mirrors the storefront converter.
+const htmlDescriptionToText = (value) => {
+    if (!value || typeof value !== 'string') return '';
+    return value
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(ul|ol)>/gi, '\n')
+        .replace(/<li\s*\/?>/gi, '• ')
+        .replace(/<\/(strong|b|em|i|p|div|span|a)>/gi, '')
+        .replace(/<(strong|b|em|i|p|div|span|a)[^>]*>/gi, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+};
 
 // Convert a variant's option map to editable text, e.g. "Size:M, Color:Red".
 
@@ -1060,12 +1077,10 @@ const WarehouseInventory = () => {
 
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Description / Spec Sheet</label>
-                                            <textarea
-                                                rows="4"
+                                            <RichTextEditor
                                                 placeholder="Detailed specifications, features, and model info..."
                                                 value={newProductData.description}
-                                                onChange={(e) => setNewProductData(prev => ({ ...prev, description: e.target.value }))}
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all resize-none outline-none"
+                                                onChange={(html) => setNewProductData(prev => ({ ...prev, description: html }))}
                                             />
                                         </div>
 
@@ -3417,7 +3432,7 @@ const WarehouseInventory = () => {
                             {selectedItem.description && (
                                 <div className="space-y-2">
                                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Description</p>
-                                    <p className="text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-line">{selectedItem.description}</p>
+                                    <p className="text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-line break-words">{htmlDescriptionToText(selectedItem.description)}</p>
                                 </div>
                             )}
 

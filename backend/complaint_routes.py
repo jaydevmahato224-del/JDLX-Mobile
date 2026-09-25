@@ -119,9 +119,12 @@ def get_my_orders_dropdown():
     user_id = request.user.get('user_id')
     conn = get_db()
     try:
-        # Fetch orders with product names for dropdown
+        # Fetch orders with product names for dropdown.
+        # order_status is included so callers (refund page) can filter to
+        # refund-eligible orders only; the complaint dropdown ignores it and
+        # keeps showing every order — fully additive, nothing breaks.
         query = """
-            SELECT o.id, o.order_number, o.created_at, GROUP_CONCAT(p.name, ', ') as product_names
+            SELECT o.id, o.order_number, o.created_at, o.order_status, GROUP_CONCAT(p.name, ', ') as product_names
             FROM orders o
             JOIN order_items oi ON o.id = oi.order_id
             JOIN products p ON oi.product_id = p.id
@@ -137,6 +140,7 @@ def get_my_orders_dropdown():
                 "id": row['id'],
                 "order_number": row['order_number'],
                 "created_at": row['created_at'],
+                "order_status": row['order_status'],
                 "product_names": row['product_names']
             })
             

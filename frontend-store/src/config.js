@@ -124,9 +124,11 @@ export function resolveMediaUrl(value) {
   return `${API_ORIGIN}/${value.replace(/^\.?\//, '')}`;
 }
 
-// True while the first (direct) attempt at this URL has already failed and we
-// are retrying through the backend DB proxy — prevents infinite onError loops.
-const MEDIA_PROXY_RETRIES = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+// Exactly-once retry bookkeeping per URL string. A WeakSet cannot hold
+// primitives (string URLs throw "Invalid value used in weak set"), so this
+// uses a plain Set — bounded in practice by the number of distinct image
+// URLs a session touches, and it keeps the onError retry exactly-once.
+const MEDIA_PROXY_RETRIES = typeof Set !== 'undefined' ? new Set() : null;
 
 export function markMediaProxyTried(url) {
   if (MEDIA_PROXY_RETRIES && typeof url === 'string') MEDIA_PROXY_RETRIES.add(url);

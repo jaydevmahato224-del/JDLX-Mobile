@@ -13,7 +13,11 @@ refund_bp = Blueprint('refund', __name__)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads', 'refunds')
 
-VALID_REQUEST_TYPES = {'Refund only', 'Return and Refund', 'Exchange'}
+# 'Refund only' was removed: a payout without the item ever coming back is not
+# an offered flow. Users must choose 'Return and Refund' (item goes back) or
+# 'Exchange'. Old rows in the DB may still carry 'Refund only' — read paths
+# render whatever is stored, only NEW submissions are restricted.
+VALID_REQUEST_TYPES = {'Return and Refund', 'Exchange'}
 VALID_REASONS = {
     'Item damaged on arrival', 'Wrong item delivered',
     'Item not as described', 'Changed my mind',
@@ -46,10 +50,16 @@ def submit_refund_request():
         return error_response("Missing required fields", 400)
 
     if request_type not in VALID_REQUEST_TYPES:
-        return error_response(f"Invalid request type. Allowed: {', '.join(VALID_REQUEST_TYPES)}", 400)
+        return error_response(f"Invalid request type. Allowed: {', '.join(sorted(VALID_REQUEST_TYPES))}", 400)
 
     if reason not in VALID_REASONS:
-        return error_response(f"Invalid reason. Allowed: {', '.join(VALID_REASONS)}", 400)
+        return error_response(f"Invalid reason. Allowed: {', '.join(sorted(VALID_REASONS))}", 400)
+
+    # Evidence photo is REQUIRED: the admin review (and any payout decision)
+    # depends on photographic proof of the item/packaging condition.
+    photo_file = request.files.get('photo')
+    if not photo_file or not photo_file.filename:
+        return error_response("Evidence photo is required. Please upload a photo of the item.", 400)
 
     conn = get_db()
     try:
@@ -91,20 +101,18 @@ def submit_refund_request():
         if existing and existing['status'] != 'Rejected':
             return error_response("A refund request for this order has already been submitted", 409)
 
-        # 5. Handle photo upload
+        # 5. Save the (mandatory) evidence photo
         photo_path = None
-        if 'photo' in request.files:
-            file = request.files['photo']
-            if file and file.filename != '':
-                if not allowed_file(file.filename):
-                    return error_response("Invalid file extension. Allowed: png, jpg, jpeg, webp", 400)
-                
-                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-                ext = file.filename.rsplit('.', 1)[1].lower()
-                filename = f"{uuid.uuid4().hex}.{ext}"
-                file_path = os.path.join(UPLOAD_FOLDER, filename)
-                file.save(file_path)
-                photo_path = f"/static/uploads/refunds/{filename}"
+        file = photo_file
+        if not allowed_file(file.filename):
+            return error_response("Invalid file extension. Allowed: png, jpg, jpeg, webp", 400)
+        
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{uuid.uuid4().hex}.{ext}"
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(file_path)
+        photo_path = f"/static/uploads/refunds/{filename}"
 
         # 6. Insert request
         refund_amount = order['total_amount']

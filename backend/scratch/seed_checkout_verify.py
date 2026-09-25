@@ -35,8 +35,8 @@ if cur.fetchone()[0] == 0:
     cur.execute("INSERT INTO categories (id, name, device_customization_enabled) VALUES (1, 'Accessories', 0)")
 cur.execute("""
     INSERT INTO products (id, name, price, stock, category_id, category, status, images, description, created_at)
-    VALUES (101, 'Verify Product Alpha', 200.0, 50, 1, 'Accessories', 'active', '[]', 'Seed product', ?)
-    ON CONFLICT(id) DO UPDATE SET name='Verify Product Alpha', price=200.0, stock=50, status='active', images='[]'
+    VALUES (101, 'Test Tempered Glass A', 200.0, 50, 1, 'Accessories', 'active', '[]', 'Seed product', ?)
+    ON CONFLICT(id) DO UPDATE SET name='Test Tempered Glass A', price=200.0, stock=50, status='active', images='[]'
 """, (now,))
 cur.execute("""
     INSERT INTO products (id, name, price, stock, category_id, category, status, images, description, created_at)
@@ -49,7 +49,7 @@ cur.execute("""
     ON CONFLICT(id) DO UPDATE SET name='Verify Product Gamma', price=100.0, stock=3, status='active', images='[]'
 """, (now,))
 
-cur.execute("INSERT OR IGNORE INTO warehouse_inventory (id, warehouse_id, product_id, product_name, stock_quantity, available_stock, status) VALUES (1, 1, 101, 'Verify Product Alpha', 50, 50, 'active')")
+cur.execute("INSERT OR IGNORE INTO warehouse_inventory (id, warehouse_id, product_id, product_name, stock_quantity, available_stock, status) VALUES (1, 1, 101, 'Test Tempered Glass A', 50, 50, 'active')")
 
 # ── Wallet: ₹600 balance for user 1 ─────────────────────────────────────
 cur.execute("SELECT COUNT(*) FROM wallet WHERE user_id=1")

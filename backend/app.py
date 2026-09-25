@@ -801,6 +801,13 @@ def security_shield_guard():
 
     ip_address = get_client_ip()
 
+    # Local testing escape hatch: every scratch e2e/browser test sets
+    # DISABLE_RATE_LIMIT=1 (the Flask-Limiter defaults above honor it, but the
+    # custom limiter below didn't — so heavy headless runs 429-blocked
+    # 127.0.0.1 and made unrelated checks fail with server errors).
+    if disable_rate_limit:
+        return None
+
     allowed, retry_after = check_and_record_request(ip_address)
     if allowed:
         return None

@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Store, Truck, Undo2, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Truck, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -383,10 +383,6 @@ export default function ProductDetails() {
     return availability?.scheduled_delivery_time || 'Today / Tomorrow';
   }, [availability]);
 
-  const deliveryNoteDisplay = useMemo(() => {
-    return availability?.scheduled_delivery_note || 'Reliable fulfillment from our central warehouse.';
-  }, [availability]);
-
   useEffect(() => {
     if (product) {
       trackViewItem(product);
@@ -608,15 +604,6 @@ export default function ProductDetails() {
               </div>
             </section>
           )}
-          <div className="grid gap-4 md:grid-cols-3">
-            {[ { icon: Truck, val: deliveryTimeDisplay, note: deliveryNoteDisplay, label: 'Delivery' }, { icon: ShieldCheck, val: 'Quality Checked', note: 'Managed inventory batches.', label: 'Quality' }, { icon: Store, val: `${stock} units`, note: 'Live inventory status.', label: 'Availability' } ].map((item, i) => (
-              <div key={i} className="glass-card p-6 transition-transform hover:-translate-y-1">
-                <div className="flex items-center gap-3"><div className="p-2.5 rounded-2xl bg-primary/10 text-primary"><item.icon size={20} /></div><span className="ui-label text-[var(--color-on-surface-variant)]">{item.label}</span></div>
-                <div className="mt-4 text-[17px] font-black tracking-tight text-[var(--color-on-surface)]">{item.val}</div>
-                <p className="mt-2 text-[13px] font-bold text-[var(--color-on-surface-variant)]">{item.note}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
         <div className="space-y-6">

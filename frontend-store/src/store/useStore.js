@@ -5,7 +5,20 @@ import { getDeviceModelValue } from '../utils/stickerCustomization'
 import { refreshRecentlyViewed } from '../utils/recentlyViewedSync'
 import { apiFetch } from '../utils/apiFetch'
 
-let processingSync = false;
+// Serialized server-sync queue: cart mutations apply locally FIRST (instant
+// UI), then persist to the server one-at-a-time in order. The old
+// module-level `processingSync` boolean silently DROPPED any addToCart /
+// updateQuantity arriving while a sync was in flight — rapid "+" taps lost
+// all but one input with zero feedback. Queueing keeps every mutation AND
+// preserves the local action order on the server.
+let syncChain = Promise.resolve();
+const enqueueCartSync = (task) => {
+    const run = syncChain.then(task);
+    // Keep the chain alive even if a task throws — one failed sync must not
+    // poison all later ones.
+    syncChain = run.catch(() => {});
+    return run;
+};
 
 const syncCartWithServer = async (productId, quantity, action = 'add', variantId = null) => {
     let sessionId = localStorage.getItem('sessionId');
@@ -32,6 +45,77 @@ const getAvailableStock = (product) => {
     const physical = Number(product.stock ?? product.physical_stock ?? product.stock_quantity ?? 0);
     const hardReserved = Number(product.hard_reserved ?? 0);
     return Math.max(0, physical - hardReserved);
+}
+
+// Bulk-fetch fresh catalog data for every cart item in ONE request instead of
+// one /products/:id call per item (N+1 storm: 20-item cart = 20 requests per
+// cart view/checkout, which also tripped the failure-batch error overlay on a
+// cold backend). Falls back to per-item fetches if the batch endpoint fails.
+const fetchProductsByIds = async (ids) => {
+    if (!ids.length) return [];
+    try {
+        const res = await apiFetch('/products/batch', {
+            method: 'POST',
+            body: JSON.stringify({ ids })
+        });
+        if (res.ok) {
+            const json = await res.json();
+            const list = Array.isArray(json.data) ? json.data : [];
+            if (list.length) return list;
+        }
+    } catch {
+        // fall through to per-item fallback
+    }
+    // Fallback: sequential-ish individual fetches (legacy path)
+    const results = await Promise.all(ids.map(async (id) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/products/${id}?_t=${Date.now()}`);
+            if (!res.ok) return null;
+            const json = await res.json();
+            return json.data || null;
+        } catch {
+            return null;
+        }
+    }));
+    return results.filter(Boolean);
+}
+
+// Merge fresh catalog data into a cart line. Variant cart lines keep their own
+// price/stock/images instead of inheriting the parent row's.
+const refreshCartItem = (item, freshProduct) => {
+    // Variant-aware refresh: a variant cart line must keep its own
+    // price/stock/images instead of inheriting the parent row's.
+    let stockSource = freshProduct;
+    if (item.variant_id && Array.isArray(freshProduct.variants)) {
+        const v = freshProduct.variants.find(v => String(v.id) === String(item.variant_id));
+        if (v) stockSource = v;
+    }
+
+    // Standardize stock field matching the refactor
+    const physical = Number(stockSource.stock ?? stockSource.physical_stock ?? stockSource.stock_quantity ?? 0);
+    const hardReserved = Number(stockSource.hard_reserved ?? 0);
+    const available = Math.max(0, physical - hardReserved);
+
+    const currentQty = Number(item.qty || item.quantity || 1);
+    const safeQty = isNaN(currentQty) ? 1 : currentQty;
+
+    const refreshed = {
+        ...item,
+        ...freshProduct,
+        stock: available,
+        qty: Math.min(safeQty, Math.max(1, available)),
+        removedFromInventory: false
+    };
+    // Restore variant-specific values so a variant line is never
+    // clobbered by the parent product row.
+    if (item.variant_id && stockSource !== freshProduct) {
+        refreshed.price = stockSource.price != null ? stockSource.price : refreshed.price;
+        refreshed.variant_name = stockSource.name || refreshed.variant_name;
+        if (Array.isArray(stockSource.images) && stockSource.images.length) {
+            refreshed.images = stockSource.images;
+        }
+    }
+    return refreshed;
 }
 
 const safeParse = (key) => {
@@ -150,10 +234,9 @@ export const useStore = create((set, get) => ({
                 set({ isCartLoaded: true });
 
                 // Sync unsynced items to the server in the background
-                if (itemsToSync.length > 0) {
-                    for (const { item, action } of itemsToSync) {
-                        await syncCartWithServer(item.id, item.qty, action);
-                    }
+                // (queued so these never race with user-initiated syncs)
+                for (const { item, action } of itemsToSync) {
+                    enqueueCartSync(() => syncCartWithServer(item.id, item.qty, action));
                 }
                 
                 // Refresh detailed stocks in background
@@ -323,63 +406,59 @@ export const useStore = create((set, get) => ({
     // sizes/colors) as separate lines. Products without variants keep their
     // legacy behavior (variant_id undefined/null).
     addToCart: async (product) => {
-        if (processingSync) return;
-        processingSync = true;
-        try {
-            const state = get();
-            const deviceModel = getDeviceModelValue(product?.device_model);
-            const variantId = product?.variant_id || null;
-            const existing = state.cart.find(item => String(item.id) === String(product.id) && 
-                (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)));
-            const availableStock = getAvailableStock(product)
-            
-            if (availableStock <= 0) {
-                toast.error("Item out of stock");
-                return;
-            }
+        // Local-first: compute + apply the optimistic update immediately (no
+        // sync guard can drop this call), then queue the server persistence.
+        const state = get();
+        const deviceModel = getDeviceModelValue(product?.device_model);
+        const variantId = product?.variant_id || null;
+        const existing = state.cart.find(item => String(item.id) === String(product.id) && 
+            (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)));
+        const availableStock = getAvailableStock(product)
 
-            if (existing && existing.qty >= availableStock) {
-                toast.error("Maximum available stock reached");
-                return;
-            }
-
-            const currentQty = Number(existing?.qty || 0);
-            const safeQty = isNaN(currentQty) ? 0 : currentQty;
-            const newQty = existing ? safeQty + 1 : 1;
-            
-            // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
-            set((state) => {
-                let newCart;
-                if (existing) {
-                    newCart = state.cart.map(item =>
-                        String(item.id) === String(product.id) && String(item.variant_id || '') === String(variantId || '') ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
-                    );
-                } else {
-                    newCart = [
-                        ...state.cart,
-                        {
-                            ...product,
-                            variant_id: variantId,
-                            device_model: deviceModel || null,
-                            fitting: product.fitting ?? false,
-                            stock: availableStock,
-                            reserved_stock: Number(product?.reserved_stock ?? 0),
-                            qty: 1,
-                        },
-                    ];
-                }
-                localStorage.setItem('cart', JSON.stringify(newCart));
-                return { cart: newCart };
-            });
-
-            // Sync with server in background
-            const success = await syncCartWithServer(product.id, 1, 'add', variantId);
-            if (!success) {
-                console.error('Failed to sync add-to-cart with server');
-            }
-        } finally {
-            processingSync = false;
+        if (availableStock <= 0) {
+            toast.error("Item out of stock");
+            return;
         }
+
+        if (existing && existing.qty >= availableStock) {
+            toast.error("Maximum available stock reached");
+            return;
+        }
+
+        const currentQty = Number(existing?.qty || 0);
+        const safeQty = isNaN(currentQty) ? 0 : currentQty;
+        const newQty = existing ? safeQty + 1 : 1;
+
+        // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
+        set((state) => {
+            let newCart;
+            if (existing) {
+                newCart = state.cart.map(item =>
+                    String(item.id) === String(product.id) && String(item.variant_id || '') === String(variantId || '') ? { ...item, device_model: deviceModel || item.device_model || null, fitting: product.fitting ?? item.fitting ?? false, qty: newQty } : item
+                );
+            } else {
+                newCart = [
+                    ...state.cart,
+                    {
+                        ...product,
+                        variant_id: variantId,
+                        device_model: deviceModel || null,
+                        fitting: product.fitting ?? false,
+                        stock: availableStock,
+                        reserved_stock: Number(product?.reserved_stock ?? 0),
+                        qty: 1,
+                    },
+                ];
+            }
+            localStorage.setItem('cart', JSON.stringify(newCart));
+            return { cart: newCart };
+        });
+
+            // Sync with server in background (queued, ordered)
+            enqueueCartSync(() => syncCartWithServer(product.id, 1, 'add', variantId))
+                .then((success) => {
+                    if (!success) console.error('Failed to sync add-to-cart with server');
+                });
     },
     removeFromCart: async (productId, variantId = null) => {
         // UPDATE LOCAL STATE IMMEDIATELY (Optimistic UI)
@@ -390,52 +469,48 @@ export const useStore = create((set, get) => ({
             return { cart: newCart };
         });
 
-        // Sync with server in background
-        const success = await syncCartWithServer(productId, 0, 'remove', variantId);
-        if (!success) {
-            console.error('Failed to sync remove-from-cart with server');
-        }
+        // Sync with server in background (queued, ordered)
+        enqueueCartSync(() => syncCartWithServer(productId, 0, 'remove', variantId))
+            .then((success) => {
+                if (!success) console.error('Failed to sync remove-from-cart with server');
+            });
     },
     updateQuantity: async (productId, qty, variantId = null) => {
-        if (processingSync) return;
-        processingSync = true;
+        // Local-first: every tap applies optimistically and is queued — rapid
+        // taps now all register (the last queued 'update' wins on the server,
+        // matching the last local state).
+        let requestedQty = Number(qty);
+        if (isNaN(requestedQty)) requestedQty = 1;
+        
+        let finalQty = requestedQty;
+        const state = get();
+        const item = state.cart.find(i => String(i.id) === String(productId) && 
+            (i.variant_id === variantId || (i.variant_id === null && variantId === null) || (i.variant_id === undefined && variantId === null)));
+        if (!item) return;
 
-        try {
-            let requestedQty = Number(qty);
-            if (isNaN(requestedQty)) requestedQty = 1;
-            
-            let finalQty = requestedQty;
-            const state = get();
-            const item = state.cart.find(i => String(i.id) === String(productId) && 
-                (i.variant_id === variantId || (i.variant_id === null && variantId === null) || (i.variant_id === undefined && variantId === null)));
-            if (!item) return;
+        const maxQty = getAvailableStock(item);
+        // In-stock items are clamped to [1, stock]. When an item has 0
+        // available stock, keep its current quantity instead of forcing it
+        // to 1 — the cart renders these lines as "sold out/unavailable"
+        // and shouldn't silently rewrite the user's quantity.
+        finalQty = maxQty > 0 ? Math.max(1, Math.min(requestedQty, maxQty)) : item.qty;
 
-            const maxQty = getAvailableStock(item);
-            // In-stock items are clamped to [1, stock]. When an item has 0
-            // available stock, keep its current quantity instead of forcing it
-            // to 1 — the cart renders these lines as "sold out/unavailable"
-            // and shouldn't silently rewrite the user's quantity.
-            finalQty = maxQty > 0 ? Math.max(1, Math.min(requestedQty, maxQty)) : item.qty;
-
-            // Update local state IMMEDIATELY for responsiveness
-            set((state) => {
-                const newCart = state.cart.map(item => {
-                    if (!(String(item.id) === String(productId) && 
-      (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)))) return item;
-                    return { ...item, qty: finalQty };
-                });
-                localStorage.setItem('cart', JSON.stringify(newCart));
-                return { cart: newCart };
+        // Update local state IMMEDIATELY for responsiveness
+        set((state) => {
+            const newCart = state.cart.map(item => {
+                if (!(String(item.id) === String(productId) && 
+  (item.variant_id === variantId || (item.variant_id === null && variantId === null) || (item.variant_id === undefined && variantId === null)))) return item;
+                return { ...item, qty: finalQty };
             });
+            localStorage.setItem('cart', JSON.stringify(newCart));
+            return { cart: newCart };
+        });
 
-            // PERSISTENCE FIX: Sync with server
-            const success = await syncCartWithServer(productId, finalQty, 'update', variantId);
-            if (!success) {
-                console.error('Failed to persist quantity to server');
-            }
-        } finally {
-            processingSync = false;
-        }
+        // PERSISTENCE: queue the server sync (ordered, never dropped)
+        enqueueCartSync(() => syncCartWithServer(productId, finalQty, 'update', variantId))
+            .then((success) => {
+                if (!success) console.error('Failed to persist quantity to server');
+            });
     },
     updateDeviceModel: (productId, deviceModel, variantId = null) => set((state) => {
         const normalizedDeviceModel = getDeviceModelValue(deviceModel);
@@ -456,7 +531,7 @@ export const useStore = create((set, get) => ({
     }),
     clearCart: () => {
         localStorage.removeItem('cart');
-        syncCartWithServer(null, 0, 'clear_cart');
+        enqueueCartSync(() => syncCartWithServer(null, 0, 'clear_cart'));
         set({ cart: [] });
     },
     registerForNotification: async (productId, email) => {
@@ -574,54 +649,30 @@ export const useStore = create((set, get) => ({
         if (state.cart.length === 0) return;
 
         try {
-            const promises = state.cart.map(async (item) => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/products/${item.id}?_t=${Date.now()}`);
-                    if (!res.ok) {
-                        return { ...item, removedFromInventory: true, stock: 0 };
-                    }
-                    const json = await res.json();
-                    const freshProduct = json.data || {};
-                    
-                    // Variant-aware refresh: a variant cart line must keep its own
-                    // price/stock/images instead of inheriting the parent row's.
-                    let stockSource = freshProduct;
-                    if (item.variant_id && Array.isArray(freshProduct.variants)) {
-                        const v = freshProduct.variants.find(v => String(v.id) === String(item.variant_id));
-                        if (v) stockSource = v;
-                    }
+            const freshProducts = await fetchProductsByIds(state.cart.map(item => item.id));
+            const byId = new Map(freshProducts.map(p => [String(p.id), p]));
 
-                    // Standardize stock field matching the refactor
-                    const physical = Number(stockSource.stock ?? stockSource.physical_stock ?? stockSource.stock_quantity ?? 0);
-                    const hardReserved = Number(stockSource.hard_reserved ?? 0);
-                    const available = Math.max(0, physical - hardReserved);
-                    
-                    const currentQty = Number(item.qty || item.quantity || 1);
-                    const safeQty = isNaN(currentQty) ? 1 : currentQty;
-                    
-                    const refreshed = { 
-                        ...item, 
-                        ...freshProduct, 
-                        stock: available,
-                        qty: Math.min(safeQty, Math.max(1, available)),
-                        removedFromInventory: false 
-                    };
-                    // Restore variant-specific values so a variant line is never
-                    // clobbered by the parent product row.
-                    if (item.variant_id && stockSource !== freshProduct) {
-                        refreshed.price = stockSource.price != null ? stockSource.price : refreshed.price;
-                        refreshed.variant_name = stockSource.name || refreshed.variant_name;
-                        if (Array.isArray(stockSource.images) && stockSource.images.length) {
-                            refreshed.images = stockSource.images;
+            const newCart = await Promise.all(state.cart.map(async (item) => {
+                try {
+                    const freshProduct = byId.get(String(item.id));
+                    if (!freshProduct) {
+                        // Product missing from the catalog response — treat as
+                        // removed only if a direct lookup confirms it (avoids
+                        // nuking items on a transient batch failure).
+                        try {
+                            const res = await fetch(`${API_BASE_URL}/products/${item.id}?_t=${Date.now()}`);
+                            if (!res.ok) return { ...item, removedFromInventory: true, stock: 0 };
+                            const json = await res.json();
+                            return refreshCartItem(item, json.data || {});
+                        } catch {
+                            return { ...item, removedFromInventory: true, stock: 0 };
                         }
                     }
-                    return refreshed;
+                    return refreshCartItem(item, freshProduct);
                 } catch {
                     return { ...item, removedFromInventory: true, stock: 0 };
                 }
-            });
-            
-            const newCart = await Promise.all(promises);
+            }));
             
             set({ cart: newCart });
             localStorage.setItem('cart', JSON.stringify(newCart));

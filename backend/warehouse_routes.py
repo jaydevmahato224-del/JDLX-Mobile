@@ -188,6 +188,21 @@ def _save_uploaded_asset(file_storage, prefix):
     # failsafe and saves the original bytes on any processing failure.
     from utils.image_optimizer import optimize_and_save
     optimize_and_save(file_storage, target_path)
+
+    try:
+        if os.path.isfile(target_path):
+            with open(target_path, "rb") as fh:
+                asset_data = fh.read()
+            mime_type = "application/pdf" if ext == ".pdf" else (
+                "image/png" if ext == ".png" else (
+                    "image/webp" if ext == ".webp" else "image/jpeg"
+                )
+            )
+            from services.cloud_image_service import save_media_to_db
+            save_media_to_db(f"warehouse_requests/{final_name}", mime_type, asset_data)
+            save_media_to_db(final_name, mime_type, asset_data)
+    except Exception as e:
+        logger.warning(f"Failed to persist asset to DB uploaded_media: {e}")
     
     return f"/static/uploads/warehouse_requests/{final_name}"
 
@@ -590,30 +605,60 @@ def warehouse_upload_product_image():
         if ext not in ALLOWED_UPLOAD_EXTENSIONS:
              return error_response("File type not allowed. Use JPG, PNG, WEBP or PDF.", 400)
 
-        # 1. Try uploading to persistent cloud storage first (ImgBB -> Catbox ->
-        #    Telegra.ph). Render's filesystem is ephemeral — local-only uploads
-        #    are wiped on every redeploy and the stored /static/uploads/... URL
-        #    then 404s for every visitor, which is why product images showed only
-        #    the text fallback on the storefront. Cloud URLs survive restarts.
+        # 1. Try uploading to persistent cloud storage first (ImgBB -> Catbox with browser headers).
+        # Cloud URLs survive restarts and CDN-deliver images globally.
+        file_data = file.read()
+        file.seek(0)
         try:
-            from services.cloud_image_service import upload_file_object_to_cloud
-            cloud_url = upload_file_object_to_cloud(file, filename)
+            from utils.image_optimizer import optimize_image_bytes
+            optimized_data = optimize_image_bytes(file_data, filename)
+        except Exception:
+            optimized_data = file_data
+
+        mime_type = "image/png" if ext == ".png" else (
+            "image/webp" if ext == ".webp" else (
+                "application/pdf" if ext == ".pdf" else "image/jpeg"
+            )
+        )
+
+        try:
+            from services.cloud_image_service import upload_image_to_cloud, save_media_to_db
+            cloud_url = upload_image_to_cloud(optimized_data, filename)
             if cloud_url:
                 current_app.logger.info(f"Warehouse product image uploaded to cloud: {cloud_url}")
+                # Secondary backup in DB table
+                try:
+                    save_media_to_db(cloud_url.rsplit('/', 1)[-1], mime_type, optimized_data)
+                except Exception:
+                    pass
                 return success_response({"url": cloud_url}, "Image uploaded successfully", 201)
         except Exception as cloud_error:
-            current_app.logger.warning(f"Cloud upload failed for product image, falling back to local: {cloud_error}")
+            current_app.logger.warning(f"Cloud upload failed for product image, falling back to database-backed local: {cloud_error}")
 
-        # 2. Fallback: save locally (dev / offline environments). The file stream
-        #    is re-readable here because upload_file_object_to_cloud seeks back;
-        #    reset explicitly so the fallback never writes from a bad offset.
-        file.seek(0)
+        # 2. Resilient Fallback: If cloud upload is unavailable, save to disk
+        # AND permanently persist into the uploaded_media table in Turso DB!
+        # When Render restarts/redeploys, /static/uploads/... dynamically rehydrates
+        # from the DB, ensuring images NEVER 404 or disappear!
         stamp = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
         final_name = f"product_{stamp}_{uuid.uuid4().hex[:10]}{ext}"
         
-        os.makedirs(PRODUCT_IMAGES_UPLOAD_DIR, exist_ok=True)
-        target_path = os.path.join(PRODUCT_IMAGES_UPLOAD_DIR, final_name)
-        file.save(target_path)
+        # Save to local disk cache
+        try:
+            os.makedirs(PRODUCT_IMAGES_UPLOAD_DIR, exist_ok=True)
+            target_path = os.path.join(PRODUCT_IMAGES_UPLOAD_DIR, final_name)
+            with open(target_path, "wb") as f_out:
+                f_out.write(optimized_data)
+        except Exception as disk_err:
+            current_app.logger.warning(f"Disk write warning for {final_name}: {disk_err}")
+
+        # Persist permanently to Turso DB uploaded_media
+        try:
+            from services.cloud_image_service import save_media_to_db
+            save_media_to_db(f"product_images/{final_name}", mime_type, optimized_data)
+            save_media_to_db(final_name, mime_type, optimized_data)
+            current_app.logger.info(f"Product image {final_name} permanently saved to uploaded_media DB")
+        except Exception as db_err:
+            current_app.logger.error(f"Failed to persist product image to DB: {db_err}")
         
         file_url = f"/static/uploads/product_images/{final_name}"
         return success_response({"url": file_url}, "Image uploaded successfully", 201)

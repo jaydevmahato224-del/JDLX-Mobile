@@ -45,11 +45,36 @@ import {
     Heart,
     Store
 } from 'lucide-react'
-import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { API_BASE_URL, resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried } from '../../config'
 import { useStore } from '../../store/useStore'
 import VariantManager from './components/VariantManager'
 
 // Convert a variant's option map to editable text, e.g. "Size:M, Color:Red".
+
+// Shared image error handler: when a cloud-hosted image fails to load
+// (Catbox etc. are intermittently blocked/down), retry once through the
+// backend's DB-backed media proxy — the same bytes were backed up in the
+// uploaded_media table at upload time. Exactly-once per URL, then stop.
+export const handleWarehouseImageError = (e) => {
+    const el = e.currentTarget;
+    const original = el.dataset.originalSrc || '';
+    if (!original) return;
+    const proxySrc = mediaProxyUrl(original);
+    if (proxySrc && !hasMediaProxyBeenTried(original)) {
+        markMediaProxyTried(original);
+        el.src = proxySrc;
+        return;
+    }
+    // Give up: swap to the generic package placeholder to avoid broken-image icons.
+    el.style.display = 'none';
+    const box = el.parentElement;
+    if (box && !box.querySelector('.img-fallback-icon')) {
+        const span = document.createElement('span');
+        span.className = 'img-fallback-icon text-[10px] font-black uppercase tracking-widest text-slate-500';
+        span.textContent = 'No image';
+        box.appendChild(span);
+    }
+};
 
 
 // Generate SKU from option values
@@ -2777,7 +2802,7 @@ const WarehouseInventory = () => {
                                                                 }
                                                                 if (displayImage) {
                                                                     if (displayImage.startsWith('/') || !displayImage.startsWith('http')) displayImage = resolveMediaUrl(displayImage);
-                                                                    return <img src={displayImage} alt={item.product_name} className="w-full h-full object-cover" />;
+                                                                    return <img src={displayImage} data-original-src={displayImage} onError={handleWarehouseImageError} alt={item.product_name} className="w-full h-full object-cover" />;
                                                                 }
                                                                 return <Package size={20} />;
                                                             })()}
@@ -3345,7 +3370,7 @@ const WarehouseInventory = () => {
                                     <div className="grid grid-cols-3 gap-3">
                                         {imageList.map((url, i) => (
                                             <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-white/5">
-                                                <img src={resolveMediaUrl(url)} alt={`img-${i + 1}`} className="w-full h-full object-cover" />
+                                                <img src={resolveMediaUrl(url)} data-original-src={resolveMediaUrl(url)} onError={handleWarehouseImageError} alt={`img-${i + 1}`} className="w-full h-full object-cover" />
                                             </div>
                                         ))}
                                     </div>

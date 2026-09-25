@@ -9,7 +9,6 @@ export default function PWAInstalledCelebration() {
 
   useEffect(() => {
     const handleAppInstalled = () => {
-      console.log('🎉 PWAInstalledCelebration: appinstalled event detected!');
       setIsOpen(true);
       
       // Play a subtle success vibration if supported

@@ -69,7 +69,8 @@ export default function MapPicker({ onLocationSelect }) {
                     setPosition(newPos);
                 },
                 () => {
-                    console.log("Geolocation blocked or failed.");
+                    // Geolocation denied/unavailable — silently keep the
+                    // default center; the user can still pick manually.
                 }
             );
         }

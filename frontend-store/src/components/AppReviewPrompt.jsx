@@ -35,7 +35,7 @@ export default function AppReviewPrompt({ show, onDismiss }) {
             if (res.ok) {
                 toast.success('Thank you for your feedback!');
                 if (wentToGoogle) {
-                    window.open(googleReviewUrl, '_blank');
+                    window.open(googleReviewUrl, '_blank', 'noopener,noreferrer');
                 }
                 onDismiss();
             } else {

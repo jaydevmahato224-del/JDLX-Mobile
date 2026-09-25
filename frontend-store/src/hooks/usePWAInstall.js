@@ -30,7 +30,6 @@ export function usePWAInstall() {
     const handleAppInstalled = () => {
       setIsInstalled(true);
       clearPwaInstallPrompt();
-      console.log('JDLX App was installed');
     };
 
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -64,7 +63,6 @@ export function usePWAInstall() {
         installPrompt.userChoice,
         new Promise((resolve) => setTimeout(() => resolve({ outcome: 'timeout' }), 5000)),
       ]);
-      console.log(`User response to install prompt: ${outcome}`);
       
       if (outcome === 'accepted') {
         clearPwaInstallPrompt();

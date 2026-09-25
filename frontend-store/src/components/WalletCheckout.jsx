@@ -32,6 +32,16 @@ const WalletCheckout = ({ onApply, totalAmount }) => {
     onApply(amountToApply);
   };
 
+  // Re-clamp the applied amount whenever the payable total or balance changes
+  // while the wallet stays applied (e.g. user removes a cart item after
+  // applying). Without this, Checkout kept the stale deduction: cart total
+  // ₹300 but UI still showed -₹500 and a mismatched pay-now amount. Applying
+  // the same number twice is a no-op for the parent's state.
+  useEffect(() => {
+    if (!isApplied) return;
+    onApply(Math.min(balance, totalAmount));
+  }, [isApplied, balance, totalAmount, onApply]);
+
   if (balance <= 0) return null;
 
   return (

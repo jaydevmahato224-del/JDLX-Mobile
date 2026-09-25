@@ -42,7 +42,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   useStore.getState().setPwaInstallPrompt(e);
-  console.log('PWA Install Prompt Captured in main.jsx');
 });
 
 // App-install tracking: records the logged-in user as "app installed" so the
@@ -58,7 +57,7 @@ async function reportAppInstalled() {
     localStorage.removeItem(APP_INSTALLED_FLAG);
   } catch (err) {
     // Keep the flag so a later visit retries the report.
-    console.log('App install report failed (will retry later):', err);
+    console.warn('App install report failed (will retry later):', err);
   }
 }
 
@@ -84,10 +83,9 @@ if (typeof window !== 'undefined' && useStore.getState().user && localStorage.ge
 // Register Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(registration => {
-      console.log('SW registered: ', registration);
-    }).catch(registrationError => {
-      console.log('SW registration failed: ', registrationError);
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW registration failure is non-fatal (app still works without offline
+      // support) — swallow quietly instead of logging in production.
     });
   });
 }

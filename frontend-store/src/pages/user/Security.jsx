@@ -15,11 +15,17 @@ function Security() {
 
     // Named fetchData (not `fetch`) so the browser's global fetch API is not
     // shadowed — a local `fetch` would recursively call itself and overflow.
+    // setState happens after the await (async callback), not synchronously in
+    // the effect body — satisfies react-hooks/set-state-in-effect.
     const fetchData = useCallback(async () => {
         const res = await apiFetch('/user/login-history');
         if (res.ok) setHistory(await res.json());
     }, []);
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        let cancelled = false;
+        Promise.resolve().then(() => { if (!cancelled) fetchData(); });
+        return () => { cancelled = true; };
+    }, [fetchData]);
 
     return (
         <div className="container-standard py-6">

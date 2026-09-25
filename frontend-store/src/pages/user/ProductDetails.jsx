@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useStore } from '../../store/useStore';
-import { resolveMediaUrl, API_BASE_URL } from '../../config';
+import { resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried, API_BASE_URL } from '../../config';
 import { trackViewItem, trackAddToCart } from '../../utils/analytics';
 import { shareProduct } from '../../utils/share';
 import SEO from '../../components/SEO';
@@ -17,6 +17,23 @@ import { useAnalyticsContext } from '../../context/AnalyticsContext';
 
 const LOW_STOCK_LIMIT = 2;
 const FALLBACK_IMAGE = 'https://placehold.co/800x800/f8fafc/0f172a?text=JDLX';
+
+// One shared retry handler for every product <img>: when the direct cloud URL
+// fails (cloud image hosts are intermittently blocked/down), retry once through
+// the backend's DB-backed media proxy, then fall back to the placeholder. The
+// WeakSet in config.js makes this exactly-once per URL — no infinite loops.
+function handleImageError(e) {
+  const el = e.currentTarget;
+  const original = el.dataset.originalSrc || '';
+  if (!original) return;
+  const proxySrc = mediaProxyUrl(original);
+  if (proxySrc && !hasMediaProxyBeenTried(original)) {
+    markMediaProxyTried(original);
+    el.src = proxySrc;
+    return;
+  }
+  if (el.src !== FALLBACK_IMAGE) el.src = FALLBACK_IMAGE;
+}
 
 function normalizeProductsPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -90,7 +107,6 @@ export default function ProductDetails() {
   const product = useMemo(() => {
     if (id) return products.find((p) => String(p.id) === String(id));
     if (resolvedToken) {
-      console.log('[DEBUG] Resolving Token:', resolvedToken);
       // 1. Match by share_token
       let p = products.find((p) => p.share_token === resolvedToken);
       // 2. Match by seo_slug
@@ -105,7 +121,6 @@ export default function ProductDetails() {
          p = products.find((p) => p.seo_slug === rawToken);
       }
       
-      if (p) console.log('[DEBUG] Found Product:', p.name, '(ID:', p.id, ')');
       return p || tokenProduct;
     }
     return null;
@@ -117,7 +132,6 @@ export default function ProductDetails() {
     if (id && product && !loadingToken) {
       const secureUrl = getProductUrl(product);
       if (!window.location.pathname.includes('/p/')) {
-        console.log('[DEBUG] Aggressive Redirect to:', secureUrl);
         window.history.replaceState(null, '', secureUrl);
         navigate(secureUrl, { replace: true });
       }
@@ -138,7 +152,6 @@ export default function ProductDetails() {
     }
 
     setLoadingToken(true);
-    console.log('[DEBUG] Remote Fetching for Token:', rawToken);
     
     // Try resolving with the raw token (whole slug) - backend handles the split logic
     fetch(`${API_BASE_URL}/products/s/${rawToken}`)
@@ -148,7 +161,6 @@ export default function ProductDetails() {
         // unwrap so the product object carries the id used below.
         const p = payload?.data || payload;
         if (p && p.id) {
-          console.log('[DEBUG] Remote matched Product:', p.name, '(ID:', p.id, ')');
           setTokenProduct(p);
         } else {
           console.error('[DEBUG] Remote resolution failed for:', rawToken);
@@ -516,8 +528,9 @@ export default function ProductDetails() {
               <div className="overflow-hidden bg-[var(--color-surface-card)]">
                 <img
                   src={productImages[activeImageIndex]}
+                  data-original-src={productImages[activeImageIndex]}
                   alt={product.name}
-                  onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+                  onError={handleImageError}
                   className="h-[400px] w-full object-contain transition-all duration-700 sm:h-[540px] md:rounded-[28px]"
                 />
               </div>
@@ -525,7 +538,7 @@ export default function ProductDetails() {
                 <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center gap-2 px-6">
                   <div className="flex gap-2 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10">
                     {productImages.map((img, idx) => (
-                      <button key={idx} onClick={() => setActiveImageIndex(idx)} className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${activeImageIndex === idx ? 'border-amber-400 scale-105' : 'border-transparent opacity-60'}`}><img src={img} alt="" onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }} className="h-full w-full object-cover" /></button>
+                      <button key={idx} onClick={() => setActiveImageIndex(idx)} className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${activeImageIndex === idx ? 'border-amber-400 scale-105' : 'border-transparent opacity-60'}`}><img src={img} data-original-src={img} alt="" onError={handleImageError} className="h-full w-full object-cover" /></button>
                     ))}
                   </div>
                 </div>
@@ -744,8 +757,9 @@ export default function ProductDetails() {
               <div key={i} className="glass-card overflow-hidden rounded-[2rem] p-2 group">
                 <img
                   src={img}
+                  data-original-src={img}
                   alt={`${product.name} — view ${i + 1}`}
-                  onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+                  onError={handleImageError}
                   loading="lazy"
                   className="w-full h-[300px] sm:h-[420px] object-contain rounded-[1.5rem] bg-[var(--color-surface-low)] transition-transform duration-700 group-hover:scale-[1.02]"
                 />
@@ -790,9 +804,10 @@ export default function ProductDetails() {
                   <div className="aspect-square bg-[var(--color-surface-low)] overflow-hidden relative">
                     <img 
                       src={resolveMediaUrl(firstImage)} 
+                      data-original-src={resolveMediaUrl(firstImage)}
                       alt={`${product.name} - ${variant.name}`}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                      onError={(e) => { if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE; }}
+                      onError={handleImageError}
                     />
                     {isActive && (
                       <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
@@ -898,7 +913,7 @@ function ProductRecommendationScroller({ currentProduct, allProducts }) {
     <div className="mt-20 border-t border-[var(--color-surface-high)] pt-16">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10"><div><span className="ui-label text-primary mb-3 block">From the same aisle</span><h2 className="text-3xl font-black tracking-tighter">You May Also Like</h2></div><Link to="/" className="text-sm font-bold text-primary flex items-center gap-2 group">View Collection <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" /></Link></div>
       <div className="flex gap-6 overflow-x-auto pb-8 no-scrollbar reveal-staggered">
-        {recommendations.map(p => (<Link key={p.id} to={getProductUrl(p)} className="flex-shrink-0 w-64 glass-card rounded-[32px] overflow-hidden group hover:-translate-y-2 transition-all duration-500"><div className="aspect-square bg-[var(--color-surface-low)] overflow-hidden"><img src={getProductImages(p)[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div><div className="p-6"><h4 className="font-bold text-[var(--color-on-surface)] truncate mb-1">{p.name}</h4><div className="text-lg font-black text-primary">₹{p.price}</div></div></Link>))}
+        {recommendations.map(p => (<Link key={p.id} to={getProductUrl(p)} className="flex-shrink-0 w-64 glass-card rounded-[32px] overflow-hidden group hover:-translate-y-2 transition-all duration-500"><div className="aspect-square bg-[var(--color-surface-low)] overflow-hidden"><img src={getProductImages(p)[0]} data-original-src={getProductImages(p)[0]} onError={handleImageError} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div><div className="p-6"><h4 className="font-bold text-[var(--color-on-surface)] truncate mb-1">{p.name}</h4><div className="text-lg font-black text-primary">₹{p.price}</div></div></Link>))}
       </div>
     </div>
   );

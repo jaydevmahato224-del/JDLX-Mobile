@@ -218,7 +218,9 @@ function OrderTracking() {
             finalReason = customReason.trim();
         }
         if (!finalReason) {
-            alert("Please select or enter a cancellation reason!");
+            // In-app toast instead of native alert() — matches the app's
+            // premium UI everywhere else.
+            toast.error("Please select or enter a cancellation reason!");
             return;
         }
         setActionLoading(true);

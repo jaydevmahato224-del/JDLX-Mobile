@@ -83,24 +83,47 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // Frequently-replaced same-origin assets (admin-uploaded banners,
+    // offer creatives under /banners/) get NETWORK-FIRST: users always see
+    // the newest image when online, cache only serves as the offline
+    // fallback. Everything else stays cache-first (offline-fast, unchanged).
+    const isNetworkFirst = requestUrl.pathname.startsWith('/banners/');
+
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            const networkResponse = fetch(event.request)
-                .then((response) => {
-                    if (response && response.ok) {
-                        const responseClone = response.clone();
+        (async () => {
+            if (isNetworkFirst) {
+                try {
+                    const fresh = await fetch(event.request);
+                    if (fresh && fresh.ok) {
+                        const clone = fresh.clone();
                         caches.open(CACHE_NAME).then((cache) => {
-                            cache.put(event.request, responseClone).catch((err) => {
-                                console.warn('Cache put failed in fetch event:', err);
-                            });
+                            cache.put(event.request, clone).catch(() => {});
                         });
                     }
-                    return response;
-                })
-                .catch(() => cachedResponse); // Fallback to cache on network failure
+                    return fresh;
+                } catch {
+                    const cached = await caches.match(event.request);
+                    if (cached) return cached;
+                    throw new Error('offline and not cached');
+                }
+            }
 
-            return cachedResponse || networkResponse;
-        })
+            const cachedResponse = await caches.match(event.request);
+            try {
+                const response = await fetch(event.request);
+                if (response && response.ok) {
+                    const responseClone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, responseClone).catch((err) => {
+                            console.warn('Cache put failed in fetch event:', err);
+                        });
+                    });
+                }
+                return response;
+            } catch {
+                return cachedResponse; // Fallback to cache on network failure
+            }
+        })()
     );
 });
 

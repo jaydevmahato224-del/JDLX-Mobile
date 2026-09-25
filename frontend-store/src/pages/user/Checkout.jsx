@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { 
@@ -43,7 +43,7 @@ function Checkout() {
     const [selectedAddressId, setSelectedAddressId] = useState(null);
     const [showPicker, setShowPicker] = useState(false);
     const [availability, setAvailability] = useState(null);
-    const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid'
+    const [pincodeStatus, setPincodeStatus] = useState('idle'); // 'idle', 'checking', 'serviceable', 'unserviceable', 'invalid', 'unverified'
     const [pincodeMessage, setPincodeMessage] = useState('');
     const syncCartWithInventory = useStore(state => state.syncCartWithInventory);
 
@@ -84,11 +84,16 @@ function Checkout() {
     const [couponLoading, setCouponLoading] = useState(false);
     const [walletAmount, setWalletAmount] = useState(0);
 
+    // Fire begin_checkout ONCE per checkout visit. Keying the effect on
+    // [cart, subtotal] re-fired it on every quantity change, inflating the
+    // conversion funnel (each tap = one more "checkout began" event).
+    const beginCheckoutTracked = useRef(false);
     useEffect(() => {
-        if (cart && cart.length > 0) {
+        if (!beginCheckoutTracked.current && cart && cart.length > 0) {
+            beginCheckoutTracked.current = true;
             trackBeginCheckout(cart, subtotal);
         }
-    }, [cart, subtotal]); // Include cart and subtotal for accuracy
+    }, [cart, subtotal]);
 
     useEffect(() => {
         // Refresh inventory data on mount
@@ -126,7 +131,13 @@ function Checkout() {
                             address: savedAddressText(defaultAddr),
                             pincode: extractedPin
                         }));
-                        setCoords({ latitude: defaultAddr.latitude, longitude: defaultAddr.longitude });
+                        // Legacy rows can have NULL latitude/longitude; fall
+                        // back to the geolocation/default coords instead of
+                        // sending undefined → null coordinates in the payload.
+                        setCoords(prev => ({
+                            latitude: Number(defaultAddr.latitude) || prev.latitude,
+                            longitude: Number(defaultAddr.longitude) || prev.longitude
+                        }));
                         // Saved addresses get the same serviceability check as
                         // manual entries (auto-forces PREPAID where COD is off).
                         if (extractedPin.length === 6) {
@@ -271,13 +282,17 @@ function Checkout() {
                     toast.error("Shiprocket does not deliver to this pincode. Please enter a different one.");
                 }
             } else {
-                setPincodeStatus('invalid');
-                setPincodeMessage('❌ Pincode check failed. Please check manually.');
+                // Distinguish "backend says invalid/unserviceable" (hard block)
+                // from "the check itself failed" (network hiccup, 5xx). A
+                // transient failure must NOT permanently block a genuinely
+                // valid pincode — mark it unverified; submit allows retry.
+                setPincodeStatus('unverified');
+                setPincodeMessage('⚠️ Pincode could not be verified (network issue). You can still place the order — we\'ll re-check at dispatch.');
             }
         } catch (err) {
             console.warn("Failed to auto-fetch pincode details:", err);
-            setPincodeStatus('invalid');
-            setPincodeMessage('❌ Connection error checking pincode.');
+            setPincodeStatus('unverified');
+            setPincodeMessage('⚠️ Connection error checking pincode. You can still place the order — we\'ll re-check at dispatch.');
         }
     };
 
@@ -487,6 +502,14 @@ function Checkout() {
             setIsProcessing(false);
             return;
         }
+        // 'unverified' (transient check failure) does NOT block the order — the
+        // backend re-validates serviceability server-side. 'checking' waits for
+        // the in-flight result.
+        if (pincodeStatus === 'checking') {
+            toast.error("Pincode check in progress — please wait a second and try again.");
+            setIsProcessing(false);
+            return;
+        }
 
         // Build the order payload — restored from the pre-refactor version so
         // every business field (items, address, payment type, offer, wallet
@@ -653,7 +676,12 @@ function Checkout() {
                                                 address: savedAddressText(addr),
                                                 pincode: extractedPin
                                             }));
-                                            setCoords({ latitude: addr.latitude, longitude: addr.longitude });
+                                            // Null-guard legacy rows (see
+                                            // default-address fetch above).
+                                            setCoords(prev => ({
+                                                latitude: Number(addr.latitude) || prev.latitude,
+                                                longitude: Number(addr.longitude) || prev.longitude
+                                            }));
                                             // Same serviceability check as manual
                                             // entries so saved addresses can't
                                             // bypass courier availability rules.
@@ -1007,10 +1035,18 @@ function Checkout() {
 
                         {/* Wallet Section */}
                         <div className="pt-4 border-t border-[var(--color-surface-high)]">
-                            <WalletCheckout
-                                totalAmount={subtotal - discountAmount + platformFee + deliveryCharge + fittingTotal} 
-                                onApply={(amt) => setWalletAmount(amt)} 
-                            />
+                        <WalletCheckout
+                            totalAmount={subtotal - discountAmount + platformFee + deliveryCharge + fittingTotal} 
+                            onApply={(amt) => {
+                                // Re-clamp against the CURRENT payable total:
+                                // if the cart shrank after the wallet was
+                                // applied (item removed), the applied amount
+                                // could exceed what's actually payable and the
+                                // summary would show a wrong deduction/total.
+                                const payable = Math.max(0, subtotal - discountAmount + platformFee + deliveryCharge + fittingTotal);
+                                setWalletAmount(Math.min(Number(amt) || 0, payable));
+                            }} 
+                        />
                         </div>
 
                         {/* Detailed Bill */}
@@ -1151,7 +1187,7 @@ function Checkout() {
             {showPicker && (
                 <AddressPicker
                     onClose={() => setShowPicker(false)}
-                    onSelect={(addr) => {
+                    onSelect={async (addr) => {
                         const pinMatch = addr.address.match(/\b\d{6}\b/);
                         const extractedPin = pinMatch ? pinMatch[0] : '';
                         setFormData(prev => ({ 
@@ -1159,20 +1195,37 @@ function Checkout() {
                             address: addr.address,
                             pincode: extractedPin 
                         }));
-setCoords({ latitude: addr.latitude, longitude: addr.longitude });
+                        // AddressPicker always returns real picked coordinates;
+                        // still null-guard for safety.
+                        setCoords(prev => ({
+                            latitude: Number(addr.latitude) || prev.latitude,
+                            longitude: Number(addr.longitude) || prev.longitude
+                        }));
                         // Same serviceability check as manual entries.
                         if (extractedPin.length === 6) {
                             fetchCityStateFromPincode(extractedPin, setFormData);
                         }
-                        apiFetch('/address/user')
-                            .then(res => res.json())
-                            .then(data => {
-                                setSavedAddresses(data);
-                                if (data.length > 0) {
-                                    const latest = data[0];
-                                    setSelectedAddressId(latest.id);
-                                }
-                            });
+                        try {
+                            const res = await apiFetch('/address/user');
+                            const data = await res.json();
+                            const addresses = Array.isArray(data) ? data : [];
+                            setSavedAddresses(addresses);
+                            // Match the JUST-SAVED address by its text, not
+                            // blindly by data[0] — backend ordering could change
+                            // and silently select the wrong address.
+                            const saved = addresses.find(a => a.address_text === addr.address)
+                                || addresses.find(a => savedAddressText(a) === addr.address)
+                                || addresses[0];
+                            if (saved) {
+                                setSelectedAddressId(saved.id);
+                                setCoords(prev => ({
+                                    latitude: Number(saved.latitude) || prev.latitude,
+                                    longitude: Number(saved.longitude) || prev.longitude
+                                }));
+                            }
+                        } catch (e) {
+                            console.error('Failed to refresh saved addresses:', e);
+                        }
                     }}
                 />
             )}

@@ -6,12 +6,19 @@
  */
 
 import { useState, useEffect, useRef, memo } from 'react'
+import { mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried } from '../config'
 import './BlurImage.css'
 
 const BlurImageInner = memo(({ src, alt, className = '', containerClassName = '', onLoad, ...props }) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [activeSrc, setActiveSrc] = useState(src)
   const imgRef = useRef(null)
+
+  // Reset the retry chain whenever a different image is requested.
+  useEffect(() => {
+    setActiveSrc(src)
+  }, [src])
 
   useEffect(() => {
     const img = imgRef.current
@@ -23,6 +30,17 @@ const BlurImageInner = memo(({ src, alt, className = '', containerClassName = ''
     }
 
     const handleError = () => {
+      // Cloud image hosts (Catbox etc.) are intermittently blocked or down.
+      // Retry once through the backend's DB-backed media proxy before giving
+      // up and showing the text fallback — the same bytes live in
+      // uploaded_media and are served from our own origin.
+      const proxySrc = mediaProxyUrl(src)
+      if (proxySrc && !hasMediaProxyBeenTried(src)) {
+        markMediaProxyTried(src)
+        setIsLoaded(false)
+        setActiveSrc(proxySrc)
+        return
+      }
       setHasError(true)
       setIsLoaded(true)
     }
@@ -42,7 +60,7 @@ const BlurImageInner = memo(({ src, alt, className = '', containerClassName = ''
         img.removeEventListener('error', handleError)
       }
     }
-  }, [src, onLoad])
+  }, [activeSrc, src, onLoad])
 
   if (hasError) {
     return (
@@ -88,7 +106,7 @@ const BlurImageInner = memo(({ src, alt, className = '', containerClassName = ''
       {/* Actual image */}
       <img
         ref={imgRef}
-        src={src}
+        src={activeSrc}
         alt={alt}
         className={`blur-image ${isLoaded ? 'blur-image-loaded' : ''} ${className}`}
         loading="lazy"

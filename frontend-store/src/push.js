@@ -70,7 +70,6 @@ export async function subscribeToPush() {
       permission = await Notification.requestPermission();
     }
     if (permission !== 'granted') {
-      console.log('Notification permission not granted.');
       return null;
     }
 
@@ -90,7 +89,7 @@ export async function subscribeToPush() {
     // { endpoint, expirationTime, keys: { p256dh, auth } }
     return subscription.toJSON();
   } catch (err) {
-    console.log('An error occurred while subscribing to push. ', err);
+    console.warn('An error occurred while subscribing to push. ', err);
     return null;
   }
 }

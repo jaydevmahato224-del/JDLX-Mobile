@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, ShoppingBag, Minus, Plus, Trash2, AlertCircle, LogIn, X, Info, CheckCircle2, ShieldCheck } from 'lucide-react'
-import { resolveMediaUrl } from '../../config'
+import { resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried } from '../../config'
 import { trackRemoveFromCart } from '../../utils/analytics'
 import DeviceModelSelector from '../../components/DeviceModelSelector'
 import LoadingScreen from '../../components/LoadingScreen'
@@ -30,6 +30,20 @@ function getProductImage(item) {
     }
     
     return resolveMediaUrl(images);
+}
+
+// Cloud image hosts are intermittently blocked/down — retry a failed image
+// once through the backend's DB-backed media proxy before giving up.
+function handleImgError(e) {
+    const el = e.currentTarget;
+    const original = el.dataset.originalSrc || '';
+    if (!original) return;
+    const proxySrc = mediaProxyUrl(original);
+    if (proxySrc && !hasMediaProxyBeenTried(original)) {
+        markMediaProxyTried(original);
+        el.src = proxySrc;
+        return;
+    }
 }
 
 function Cart() {
@@ -177,7 +191,7 @@ function Cart() {
                                 <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                     {/* Image Section */}
                                     <div className={`relative w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-[var(--color-surface-card)] p-3 flex-shrink-0 border border-[var(--color-surface-high)] shadow-sm transition-transform group-hover:rotate-2 ${isUnavailable ? 'grayscale opacity-60' : ''}`}>
-                                        <img src={getProductImage(item)} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-contain transition-transform group-hover:scale-110 duration-500" />
+                                        <img src={getProductImage(item)} data-original-src={getProductImage(item)} onError={handleImgError} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-contain transition-transform group-hover:scale-110 duration-500" />
                                         {isUnavailable && (
                                             <div className="absolute inset-0 bg-red-900/5 backdrop-blur-[2px] rounded-3xl flex items-center justify-center">
                                                 <X className="text-red-600 w-8 h-8" />

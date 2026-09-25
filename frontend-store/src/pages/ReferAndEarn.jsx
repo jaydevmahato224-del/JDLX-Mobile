@@ -44,7 +44,7 @@ const ReferAndEarn = () => {
   const shareOnWhatsApp = () => {
     if (!refData) return;
     const text = `Hey! Shop on JDLX Mobile — get ₹10 instantly + ₹20 after your first order! Use my link: ${refData.referral_url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) return <div className="flex justify-center items-center min-h-[60vh] animate-pulse text-slate-400 font-bold">Loading Referral Program...</div>;

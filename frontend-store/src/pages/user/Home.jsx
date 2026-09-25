@@ -322,15 +322,18 @@ export default function Home() {
     let finalUrl = url.trim();
     const isExternal = /^(https?:\/\/)?(www\.)?(youtube\.com|instagram\.com|facebook\.com|twitter\.com|t\.me|googl\.com|linktr\.ee)/i.test(finalUrl);
     
+    // 'noopener' is mandatory for window.open targets: without it the opened
+    // page gets window.opener and can redirect/phish this tab. <a> links imply
+    // noopener in modern browsers, window.open does not.
     if (isExternal) {
       if (!/^https?:\/\//i.test(finalUrl)) finalUrl = `https://${finalUrl}`;
-      window.open(finalUrl, '_blank');
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
     } else if (finalUrl.startsWith('/')) {
       navigate(finalUrl);
     } else if (finalUrl.startsWith('http')) {
-      window.open(finalUrl, '_blank');
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
     } else {
-      window.open(`https://${finalUrl}`, '_blank');
+      window.open(`https://${finalUrl}`, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -381,6 +384,11 @@ export default function Home() {
     setCurrentBannerIndex(prev => (prev - 1 + allBanners.length) % allBanners.length)
   }, [allBanners.length])
 
+  // bannerTimerKey remounts the interval whenever it changes, so a manual
+  // swipe/arrow click restarts the full 5s countdown instead of the next
+  // banner advancing ~1s after the swipe (timer was previously a no-op).
+  const [bannerTimerKey, setBannerTimerKey] = useState(0)
+
   useEffect(() => {
     if (allBanners.length <= 1) return
     
@@ -389,12 +397,10 @@ export default function Home() {
     }, 5000)
     
     return () => clearInterval(interval)
-  }, [allBanners.length])
+  }, [allBanners.length, bannerTimerKey])
 
   const resetBannerTimer = useCallback(() => {
-    // This now just triggers a re-render of the effect above by dependency logic if needed,
-    // but we'll keep it as a no-op or simple index reset to avoid disrupting existing swipe logic.
-    // The main interval is now cleanly managed by the dedicated useEffect.
+    setBannerTimerKey(key => key + 1)
   }, [])
 
   // Swipe Handlers

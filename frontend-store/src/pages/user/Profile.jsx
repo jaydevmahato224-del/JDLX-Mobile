@@ -20,7 +20,9 @@ function Profile() {
     const [error, setError] = useState('');
     const [imageFailed, setImageFailed] = useState(false);
     const [showPwaGuide, setShowPwaGuide] = useState(false);
-    const { isInstallable, isInstalled, handleInstallClick } = usePWAInstall();
+    // isInstallable unused here — the button itself decides: installed →
+    // success toast, else native prompt → step-by-step guide fallback.
+    const { isInstalled, handleInstallClick } = usePWAInstall();
     const [referralInfo, setReferralInfo] = useState({ is_referred: false, attempts: 0 });
     const [inputCode, setInputCode] = useState('');
     const [isApplying, setIsApplying] = useState(false);
@@ -140,7 +142,6 @@ function Profile() {
             icon: Download, 
             label: 'Download App', 
             onClick: async () => {
-                console.log('Download App Clicked. Status:', { isInstalled, isInstallable });
                 if (isInstalled) {
                     toast.success('JDLX Mobile is already installed!', {
                         icon: '🚀',

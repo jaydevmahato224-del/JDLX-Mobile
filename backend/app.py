@@ -4702,6 +4702,107 @@ def get_product(product_id):
     except Exception as e:
         return error_response(str(e), 500)
 
+@app.route('/api/products/batch', methods=['GET', 'POST'])
+def get_products_batch():
+    """Bulk fetch products by ids — used by the cart's inventory re-sync.
+
+    Replaces the N+1 pattern where every cart item fired its own
+    GET /api/products/<id> on every cart view/checkout (a 20-item cart = 20
+    requests, which on a cold backend tripped the failure-batch error
+    overlay). One request returns every product (with variant stock/prices)
+    in a single round-trip.
+    """
+    try:
+        ids = []
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            ids = data.get('ids') or []
+        else:
+            raw = request.args.get('ids', '')
+            ids = [x for x in raw.split(',') if x.strip()]
+
+        # De-duplicate, keep only integer ids, cap the batch size.
+        seen = set()
+        clean_ids = []
+        for raw_id in ids:
+            try:
+                int_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if int_id not in seen:
+                seen.add(int_id)
+                clean_ids.append(int_id)
+        clean_ids = clean_ids[:100]
+
+        if not clean_ids:
+            return success_response([], "No product ids provided")
+
+        conn = get_db()
+        cursor = conn.cursor()
+        placeholders = ','.join('?' for _ in clean_ids)
+        cursor.execute(f"""
+            SELECT p.*, c.name as category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.id IN ({placeholders})
+        """, clean_ids)
+        products = [normalize_product_row(r) for r in cursor.fetchall()]
+
+        # Include variant rows (variants are separate products linked via
+        # variant_group_id) so variant cart lines can refresh their own
+        # price/stock, matching the single-product endpoint's payload.
+        group_ids = {
+            p['variant_group_id'] for p in products
+            if p.get('variant_group_id')
+        }
+        variant_rows_by_group = {}
+        if group_ids:
+            vg_placeholders = ','.join('?' for _ in group_ids)
+            cursor.execute(f"""
+                SELECT id, variant_group_id, name, variant_name, price, stock, images, mrp,
+                       barcode, global_sku_code, offline_price, is_parent
+                FROM products
+                WHERE variant_group_id IN ({vg_placeholders})
+                ORDER BY is_parent DESC, id ASC
+            """, list(group_ids))
+            for row in cursor.fetchall():
+                v = dict(row)
+                v.pop('offline_price', None)  # never expose POS pricing online
+                if v.get('images'):
+                    try:
+                        v['images'] = json.loads(v['images'])
+                    except (TypeError, ValueError):
+                        pass
+                variant_rows_by_group.setdefault(v['variant_group_id'], []).append(v)
+
+        conn.close()
+
+        for p in products:
+            gid = p.get('variant_group_id')
+            siblings = variant_rows_by_group.get(gid, []) if gid else []
+            if siblings:
+                p['linked_variant_products'] = siblings
+                p['variants'] = [
+                    {
+                        'id': v['id'],
+                        'name': v.get('variant_name') or v.get('name'),
+                        'price': v.get('price'),
+                        'stock': v.get('stock'),
+                        'images': v.get('images'),
+                        'mrp': v.get('mrp'),
+                        'sku': v.get('global_sku_code'),
+                        'barcode': v.get('barcode'),
+                        'product_id': v['id'],
+                    }
+                    for v in siblings if not v.get('is_parent') and v['id'] != p['id']
+                ]
+            else:
+                p['variants'] = []
+
+        return success_response(products, "Products retrieved successfully")
+    except Exception as e:
+        return error_response(str(e), 500)
+
 @app.route('/api/products/<int:product_id>/stock', methods=['GET'])
 def get_product_stock(product_id):
     """Returns the latest available stock for a product."""
@@ -6061,7 +6162,7 @@ def user_profile():
 
                 # 2. Fallback to local storage if cloud storage fails or is unconfigured
                 if not image_url:
-                    logger.warning("Cloud upload failed for profile image. Falling back to ephemeral local storage.")
+                    logger.warning("Cloud upload failed for profile image. Falling back to database-backed local storage.")
                     filename = secure_filename(file.filename)
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     # Performance: resize + re-encode before saving. Same URL,
@@ -6070,6 +6171,17 @@ def user_profile():
                     from utils.image_optimizer import optimize_and_save
                     optimize_and_save(file, filepath)
                     image_url = f"/static/uploads/{filename}"
+
+                    try:
+                        if os.path.isfile(filepath):
+                            with open(filepath, "rb") as fh:
+                                p_data = fh.read()
+                            p_ext = os.path.splitext(filename)[1].lower()
+                            p_mime = "image/png" if p_ext == ".png" else ("image/webp" if p_ext == ".webp" else "image/jpeg")
+                            from services.cloud_image_service import save_media_to_db
+                            save_media_to_db(filename, p_mime, p_data)
+                    except Exception as p_err:
+                        logger.warning(f"Could not persist profile image to uploaded_media DB: {p_err}")
                 
         try:
             conn = get_db()
@@ -10349,14 +10461,135 @@ def health_check():
 # MAIN EXECUTION
 # ==============================================================================
 
+# ==============================================================================
+# DB-backed media proxy (resilient image delivery)
+# ==============================================================================
+# Product images are uploaded to keyless public cloud hosts (Catbox/Telegraph).
+# Those hosts are intermittently blocked (ISPs/Chrome Safe Browsing) or go down,
+# which made images vanish from the warehouse panel and the storefront even
+# though the products table still holds valid URLs. This endpoint serves the
+# SAME bytes from the persistent uploaded_media table (every upload writes a
+# backup copy there), so a blocked/dead cloud host can never blank a product.
+
+_MEDIA_PROXY_MIME_MAP = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
+
+
+@app.route('/api/media-proxy/<path:media_ref>')
+def media_proxy(media_ref):
+    """Serves a previously uploaded image straight from the uploaded_media DB table.
+
+    <media_ref> is either the bare filename stored at upload time (e.g.
+    mj7jvn.png) or a full cloud URL whose basename is looked up. Only image
+    MIME types are served and the lookup is name-scoped, so this is not an
+    open proxy.
+    """
+    try:
+        ref = (media_ref or "").strip()
+        if not ref:
+            return error_response("File not found", 404)
+
+        # Only http(s) references or bare filenames are accepted — anything
+        # else (data:, javascript:, etc.) is rejected outright.
+        if ref.startswith(("http://", "https://")):
+            if not ref.lower().startswith(("http://", "https://")):
+                return error_response("File not found", 404)
+            candidate = ref.rsplit("/", 1)[-1]
+        else:
+            # Path-traversal guard: we only ever look the name up in the DB,
+            # but keep the value a clean basename anyway.
+            candidate = os.path.basename(ref)
+
+        candidate = candidate.strip()
+        if not candidate or "." not in candidate:
+            return error_response("File not found", 404)
+
+        ext = candidate.rsplit(".", 1)[1].lower()
+        if ext not in _MEDIA_PROXY_MIME_MAP:
+            return error_response("File type not allowed", 403)
+
+        base_name = os.path.basename(candidate)
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT mime_type, data FROM uploaded_media WHERE filename = ? LIMIT 1",
+                (base_name,),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return error_response("File not found", 404)
+
+        mime_type = row["mime_type"] if hasattr(row, "keys") else row[0]
+        raw_data = row["data"] if hasattr(row, "keys") else row[1]
+        data_bytes = bytes(raw_data) if isinstance(raw_data, (bytes, bytearray, memoryview)) else (
+            raw_data.encode("utf-8") if isinstance(raw_data, str) else bytes(raw_data)
+        )
+
+        if not data_bytes:
+            return error_response("File not found", 404)
+
+        response = Response(data_bytes, mimetype=mime_type or _MEDIA_PROXY_MIME_MAP[ext])
+        # Long cache: rows in uploaded_media are immutable per filename.
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+    except Exception as e:
+        logger.error(f"media_proxy failed for {media_ref}: {str(e)}")
+        return error_response("File not found", 404)
+
+
 @app.route('/static/uploads/<path:filename>')
 def serve_uploads(filename):
-    """Serves uploaded files from the static/uploads directory."""
+    """Serves uploaded files from static/uploads directory with DB rehydration."""
     # Security: Only allow specific extensions
     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
     if ext not in ALLOWED_EXTENSIONS:
         return error_response("File type not allowed", 403)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+    # 1. Try disk first
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.isfile(file_path):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+    # 2. Database hydration fallback:
+    # If the file is not on disk (e.g. Render restarted/redeployed and wiped ephemeral disk),
+    # query uploaded_media in Turso DB to dynamically rehydrate and serve!
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        base_name = os.path.basename(filename)
+        row = cursor.execute(
+            "SELECT mime_type, data FROM uploaded_media WHERE filename = ? OR filename = ? OR filename LIKE ?",
+            (filename, base_name, f"%{base_name}")
+        ).fetchone()
+        if row:
+            mime_type = row["mime_type"] if hasattr(row, "keys") else row[0]
+            raw_data = row["data"] if hasattr(row, "keys") else row[1]
+            data_bytes = bytes(raw_data) if isinstance(raw_data, (bytes, bytearray, memoryview)) else (
+                raw_data.encode('utf-8') if isinstance(raw_data, str) else bytes(raw_data)
+            )
+
+            # Re-cache to disk so subsequent requests are served straight from disk
+            try:
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                with open(file_path, "wb") as f_out:
+                    f_out.write(data_bytes)
+            except Exception as cache_err:
+                app.logger.warning(f"Could not cache restored media to disk: {cache_err}")
+
+            response = Response(data_bytes, mimetype=mime_type or "image/jpeg")
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return response
+    except Exception as db_err:
+        app.logger.error(f"Failed to serve media from database for {filename}: {db_err}")
+
+    return error_response("File not found", 404)
 
 # Ensure database is initialized before any requests
 init_db()

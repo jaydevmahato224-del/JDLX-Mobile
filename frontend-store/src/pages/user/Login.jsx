@@ -80,7 +80,9 @@ function Login() {
         }
 
         if (errorParam) {
-            setError('Google login failed. Please try again.')
+            // Defer to a microtask so the effect doesn't setState synchronously
+            // (react-hooks/set-state-in-effect: cascading render).
+            Promise.resolve().then(() => setError('Google login failed. Please try again.'))
             return
         }
 

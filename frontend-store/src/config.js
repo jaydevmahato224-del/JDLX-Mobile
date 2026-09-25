@@ -5,6 +5,23 @@ const PROD_BACKEND_URL = "https://jdlx-mobile.onrender.com/api";
 // even when the API itself is served same-origin through a proxy.
 const PROD_BACKEND_ORIGIN = "https://jdlx-mobile.onrender.com";
 
+// Same-origin media proxy path. When a product image fails to load from its
+// original host (cloud image hosts are intermittently blocked/down), the
+// frontend retries once through the backend, which serves the same bytes from
+// the persistent uploaded_media DB table. On the production domain the /api
+// Vercel rewrite forwards this to the backend automatically.
+// Only the URL's basename is sent — it is the key the backend stored the
+// backup under, and it avoids slash-encoding issues in the path.
+export function mediaProxyUrl(value) {
+  if (!value || typeof value !== 'string') return '';
+  // Only cloud-hosted images can have a DB backup — local /static paths are
+  // already served (and rehydrated) by the backend itself.
+  if (!/^https?:\/\//i.test(value)) return '';
+  const base = value.split('?')[0].split('/').filter(Boolean).pop() || '';
+  if (!base || !base.includes('.')) return '';
+  return `${API_BASE_URL}/media-proxy/${base}`;
+}
+
 function getDefaultApiBaseUrl() {
   if (typeof window === 'undefined') {
     return 'http://localhost:5000/api';
@@ -105,4 +122,16 @@ export function resolveMediaUrl(value) {
   }
 
   return `${API_ORIGIN}/${value.replace(/^\.?\//, '')}`;
+}
+
+// True while the first (direct) attempt at this URL has already failed and we
+// are retrying through the backend DB proxy — prevents infinite onError loops.
+const MEDIA_PROXY_RETRIES = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+
+export function markMediaProxyTried(url) {
+  if (MEDIA_PROXY_RETRIES && typeof url === 'string') MEDIA_PROXY_RETRIES.add(url);
+}
+
+export function hasMediaProxyBeenTried(url) {
+  return Boolean(MEDIA_PROXY_RETRIES && typeof url === 'string' && MEDIA_PROXY_RETRIES.has(url));
 }

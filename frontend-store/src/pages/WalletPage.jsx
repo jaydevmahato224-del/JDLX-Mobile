@@ -4,7 +4,12 @@ import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
 import { apiFetch } from '../utils/apiFetch'
 
-const WalletPage = () => {
+// Shared wallet implementation. `endpoint` lets both routes reuse this UI
+// while keeping their original data source (business logic unchanged):
+//   /wallet          → /wallet/balance (referral wallet service)
+//   /profile/wallet  → /user/wallet    (account service)
+// Both return the same { balance, transactions } shape.
+const WalletPage = ({ endpoint = '/wallet/balance' }) => {
   const [wallet, setWallet] = useState({ balance: 0, transactions: [] });
   const [loading, setLoading] = useState(true);
   const user = useStore(state => state.user);
@@ -12,7 +17,7 @@ const WalletPage = () => {
   useEffect(() => {
     const fetchWallet = async () => {
       try {
-        const res = await apiFetch('/wallet/balance');
+        const res = await apiFetch(endpoint);
         if (res.ok) {
           const data = await res.json();
           setWallet(data);
@@ -25,7 +30,7 @@ const WalletPage = () => {
     };
 
     if (user) fetchWallet();
-  }, [user]);
+  }, [user, endpoint]);
 
   if (loading) return <div className="flex justify-center items-center min-h-[60vh] animate-pulse text-slate-400 font-bold">Accessing Secure Wallet...</div>;
 

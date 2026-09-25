@@ -1010,6 +1010,81 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
+    # --- Tables referenced by live endpoints but previously missing from
+    # init_db (same failure mode as stock_movements: code SELECT/INSERTed
+    # them, so on any DB where they hadn't been created manually the
+    # endpoints 500'd). Schemas mirror exactly the columns the code uses;
+    # CREATE IF NOT EXISTS keeps every row on DBs that already have them.
+
+    # Admin-editable notification/email templates. Readers fall back to
+    # hardcoded messages when a key is absent, so an empty table on fresh
+    # DBs preserves today's fallback behavior.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS notification_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_key TEXT UNIQUE NOT NULL,
+        slug TEXT,
+        type TEXT,
+        title TEXT,
+        subject TEXT,
+        message TEXT,
+        is_active INTEGER DEFAULT 1,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Warehouse vendor (supplier) management.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        contact TEXT,
+        email TEXT,
+        gst_in TEXT,
+        role TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Material purchase records + line items (warehouse procurement flow).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vendor_name TEXT,
+        invoice_no TEXT,
+        invoice_date TEXT,
+        total_amount REAL DEFAULT 0,
+        store_id INTEGER,
+        status TEXT DEFAULT 'COMPLETED',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(store_id) REFERENCES dark_stores(id)
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS purchase_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchase_id INTEGER NOT NULL,
+        product_id INTEGER,
+        quantity REAL DEFAULT 0,
+        unit_price REAL DEFAULT 0,
+        selling_price REAL DEFAULT 0,
+        FOREIGN KEY(purchase_id) REFERENCES purchases(id),
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+
+    # Product brands (public GET /api/brands + admin create).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS brands (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # Per-user login history (read-only endpoint; no writer in current code,
+    # so the table just starts empty and the endpoint returns [] instead of
+    # a 500 on fresh DBs).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS login_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        ip_address TEXT,
+        user_agent TEXT,
+        success INTEGER DEFAULT 1,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_history_user ON login_history(user_id, timestamp)")
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS mail_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         recipient_email TEXT NOT NULL,

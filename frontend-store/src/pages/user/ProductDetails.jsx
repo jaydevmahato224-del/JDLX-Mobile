@@ -54,6 +54,24 @@ function getProductImages(product) {
   return images.map(img => typeof img === 'string' ? resolveMediaUrl(img) : FALLBACK_IMAGE);
 }
 
+// The warehouse panel saves descriptions with simple HTML (<strong>, <br>,
+// <ul>/<li>). The storefront renders the description as plain text, so those
+// tags showed up literally. Convert the tiny allow-list of formatting tags to
+// text structure: <br> → newline, <li> → bullet, close/list/strong/b/em strip.
+// Everything else (raw user text) passes through unchanged.
+function descriptionToPlainText(value) {
+  if (!value || typeof value !== 'string') return '';
+  return value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(ul|ol)>/gi, '\n')
+    .replace(/<li\s*\/?>/gi, '• ')
+    .replace(/<\/(strong|b|em|i|p|div)>/gi, '')
+    .replace(/<(strong|b|em|i|p|div)[^>]*>/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export default function ProductDetails() {
   const { id, token, slugToken } = useParams();
   const navigate = useNavigate();
@@ -654,7 +672,11 @@ export default function ProductDetails() {
             </div>
             <div className="mt-8 space-y-4">
               <h3 className="ui-label text-slate-400">Description</h3>
-              <p className="text-[16px] md:text-lg font-bold opacity-70 leading-relaxed">{activeProduct.description || 'Premium daily essential from the JDLX collection.'}</p>
+              {activeProduct.description && descriptionToPlainText(activeProduct.description) ? (
+                <p className="text-[16px] md:text-lg font-bold opacity-70 leading-relaxed whitespace-pre-line">{descriptionToPlainText(activeProduct.description)}</p>
+              ) : (
+                <p className="text-[16px] md:text-lg font-bold opacity-70 leading-relaxed">Premium daily essential from the JDLX collection.</p>
+              )}
             </div>
             <div className="mt-8 overflow-hidden rounded-[2.5rem] border border-[var(--color-surface-high)] bg-[var(--color-surface-low)]">
               <div className="flex items-center justify-between bg-[var(--color-surface-card)] px-6 py-5 border-b border-[var(--color-surface-high)]">

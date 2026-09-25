@@ -743,6 +743,31 @@ def init_db():
         FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
     )''')
 
+    # Audit trail for warehouse stock adjustments (Stock IN/OUT). The panel's
+    # "Movement History" modal reads this table and every stock adjust is
+    # logged here — but the CREATE TABLE was never added to init_db, so both
+    # crashed with "no such table: stock_movements" on DBs where it hadn't
+    # been created manually. Idempotent: existing DBs (where the table was
+    # created by hand) keep all their rows.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL,
+        product_id INTEGER,
+        inventory_item_id INTEGER,
+        product_name TEXT,
+        movement_type TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        reason TEXT,
+        remark TEXT,
+        stock_before INTEGER,
+        stock_after INTEGER,
+        performed_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_stock_mov_item ON stock_movements(inventory_item_id, warehouse_id, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_stock_mov_prod ON stock_movements(product_id, created_at)")
+
     # --- Vendor (warehouse) settlements & payouts ---
     # Amazon-style model: customer pays the platform in full; after the return/
     # exchange/cancellation window closes, each warehouse gets credited its share

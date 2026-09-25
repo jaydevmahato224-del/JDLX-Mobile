@@ -147,6 +147,7 @@ const WarehouseInventory = () => {
     const [showHistory, setShowHistory] = useState(null) // inventory item
     const [movements, setMovements] = useState([])
     const [loadingMovements, setLoadingMovements] = useState(false)
+    const [movementsError, setMovementsError] = useState(false)
 
     // Product Reviews State for Detail Panel
     const [itemReviews, setItemReviews] = useState([]);
@@ -447,14 +448,21 @@ const WarehouseInventory = () => {
     const loadMovements = async (item) => {
         setShowHistory(item)
         setLoadingMovements(true)
+        setMovementsError(false)
         try {
             const res = await fetch(`${API_BASE_URL}/warehouse/inventory/${item.id}/movements`, {
                 headers: { Authorization: `Bearer ${warehouseToken}` }
             })
+            if (!res.ok) {
+                setMovements([])
+                setMovementsError(true)
+                return
+            }
             const data = await res.json()
             setMovements(data.data || [])
         } catch {
             setMovements([])
+            setMovementsError(true)
         } finally {
             setLoadingMovements(false)
         }
@@ -3151,6 +3159,17 @@ const WarehouseInventory = () => {
                             {loadingMovements ? (
                                 <div className="flex justify-center py-12">
                                     <Loader2 size={28} className="text-amber-400 animate-spin" />
+                                </div>
+                            ) : movementsError ? (
+                                <div className="text-center py-12">
+                                    <XCircle size={32} className="mx-auto mb-3 text-rose-400/50" />
+                                    <p className="text-sm font-bold text-slate-400">Couldn't load movement history</p>
+                                    <button
+                                        onClick={() => showHistory && loadMovements(showHistory)}
+                                        className="mt-3 px-4 py-2 rounded-xl bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-black uppercase tracking-widest hover:bg-amber-400/20 transition-all"
+                                    >
+                                        Retry
+                                    </button>
                                 </div>
                             ) : movements.length === 0 ? (
                                 <div className="text-center py-12 text-slate-600">

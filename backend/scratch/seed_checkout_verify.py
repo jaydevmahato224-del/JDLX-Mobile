@@ -25,8 +25,8 @@ cur.execute("""
 # ── Warehouse (needed for store selection + auto-COD-protection queries) ─
 cur.execute("""
     INSERT INTO warehouses (id, warehouse_name, email, operations_status, account_status, warehouse_role, created_at)
-    VALUES (1, 'Test Warehouse', 'wh@test.com', 'open', 'active', 'primary', ?)
-    ON CONFLICT(id) DO UPDATE SET operations_status='open', account_status='active'
+    VALUES (1, 'Test Warehouse', 'wh@test.com', 'open', 'active', 'owner', ?)
+    ON CONFLICT(id) DO UPDATE SET operations_status='open', account_status='active', warehouse_role='owner'
 """, (now,))
 
 # ── Category + products: 101 in-stock ₹200/50, 102 OOS, 103 in-stock ₹100/3 ─

@@ -33,7 +33,9 @@
   
   --color-surface: #ffffff;
   --color-on-surface: #0f172a;
-  --color-on-surface-variant: #64748b;
+  /* Muted text token: darkened from #64748b — the old value failed contrast on
+     bright surfaces and made descriptions/labels look washed out. */
+  --color-on-surface-variant: #3f4a5c;
   
   --color-surface-low: #f8fafc;
   --color-surface-container: #f1f5f9;
@@ -86,9 +88,10 @@
   --color-surface-white: var(--color-surface-card);
   --color-surface-high: #262626;
   
-  /* Dark Typography */
+  /* Dark Typography (variant lightened from #a3a3a3 for readable contrast
+     on dark surfaces) */
   --color-on-surface: #f5f5f5;
-  --color-on-surface-variant: #a3a3a3;
+  --color-on-surface-variant: #c9cdd4;
   
   /* Dark Glassmorphism */
   --glass-bg: rgba(23, 23, 23, 0.8);
@@ -244,7 +247,13 @@ body::before {
     letter-spacing: -0.02em;
   }
   :where(h1) { font-size: clamp(28px, 5vw, 40px); }
-  :where(p) { line-height: 1.6; color: var(--color-on-surface-variant); }
+  /* GLOBAL TEXT VISIBILITY RULE: paragraphs follow the theme's primary text
+     color — near-black on bright backgrounds, near-white on dark ones — instead
+     of a hard-coded gray (the old rule was the root cause of washed-out body
+     text). :where() has zero specificity, so explicit color utilities
+     (text-white, text-primary, text-slate-500 …) still override it freely and
+     no existing flow/layout changes. */
+  :where(p) { line-height: 1.6; color: inherit; }
 }
 
 .ui-h1 { @apply text-3xl font-black tracking-tighter sm:text-4xl md:text-5xl; }
@@ -430,6 +439,38 @@ button,
 @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 @keyframes reveal-in { to { opacity: 1; transform: translateY(0); } }
 
+/* ------------------------------------------------------------------------------
+   6b. GLOBAL PAGE-CHANGE ANIMATION (PageTransition.jsx)
+   Smooth, theme-aware page entrance for every storefront route change.
+   OPACITY-ONLY by design: a transform on this wrapper would create a CSS
+   containing block and silently break every position:fixed child (sticky
+   mobile bars, modals, map picker). Opacity composites on the GPU and
+   fixes nothing. Duration is short (260ms) so navigation stays snappy.
+   ------------------------------------------------------------------------------ */
+.page-transition-root {
+  will-change: opacity;
+}
+
+.page-enter {
+  animation: page-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes page-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Full accessibility: users who prefer reduced motion get an instant,
+   animation-free page change. */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+  .page-transition-root {
+    will-change: auto;
+  }
+}
+
 .animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
 .animate-marquee { display: flex; width: max-content; animation: marquee 30s linear infinite; }
 
@@ -475,6 +516,15 @@ button,
   background-color: rgba(255, 255, 255, 0.95);
   border-color: var(--color-primary);
   box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Dark mode: keep the dropdown surface dark on hover so var(--color-on-surface)
+   (near-white text) stays visible — the light hover bg above would wash it out. */
+.dark .glass-dropdown:hover {
+  background-color: rgba(23, 23, 23, 0.95);
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
   transform: translateY(-1px);
 }
 

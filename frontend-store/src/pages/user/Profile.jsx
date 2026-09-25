@@ -200,18 +200,18 @@ function Profile() {
                     <h2 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>
                         {user.name}
                     </h2>
-                    <p className="text-sm font-medium text-[var(--color-on-surface-variant)] opacity-70 flex items-center justify-center sm:justify-start gap-2">
+                    <p className="text-sm font-medium text-[var(--color-on-surface-variant)] flex items-center justify-center sm:justify-start gap-2">
                         <Mail className="w-3.5 h-3.5" />
                         {user.email}
                     </p>
                     {(user.phone || user.age) && (
-                        <p className="text-sm font-medium text-[var(--color-on-surface-variant)] opacity-70 flex items-center justify-center sm:justify-start gap-2">
+                        <p className="text-sm font-medium text-[var(--color-on-surface-variant)] flex items-center justify-center sm:justify-start gap-2">
                             <Smartphone className="w-3.5 h-3.5" />
                             {user.phone}{user.phone && user.age ? ' · ' : ''}{user.age ? `${user.age} yrs` : ''}
                         </p>
                     )}
                     {(user.about || '').trim() && (
-                        <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)] opacity-70 pt-2 max-w-xl">
+                        <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)] pt-2 max-w-xl">
                             {(user.about || '').trim()}
                         </p>
                     )}

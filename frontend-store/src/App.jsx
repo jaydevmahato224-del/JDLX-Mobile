@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navig
 import { Toaster } from 'react-hot-toast'
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Layout from './components/Layout'
+import PageTransition from './components/PageTransition'
 import ErrorBoundary from './components/ErrorBoundary'
 import TopLoader from './components/TopLoader'
 import LoadingScreen from './components/LoadingScreen'
@@ -531,6 +532,7 @@ function App() {
                 <>
                   <Layout>
                     <ProfileChatWidget />
+                    <PageTransition>
                     <Routes>
                       {/* Public Routes */}
                       <Route path="/" element={<HomePage />} />
@@ -576,6 +578,7 @@ function App() {
                       {/* Fallback */}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
+                    </PageTransition>
                   </Layout>
                 </>
               } />

@@ -138,7 +138,7 @@ function AboutSite() {
           <h1 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>
             About Us
           </h1>
-          <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)] opacity-70">
+          <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)]">
             Quick overview of JDLX MOBILE and how it works.
           </p>
         </div>
@@ -177,7 +177,7 @@ function AboutSite() {
       </div>
 
       <div className="glass-card p-5 border border-[var(--color-surface-high)]">
-        <div className="text-[12px] font-bold text-[var(--color-on-surface-variant)] opacity-70">
+        <div className="text-[12px] font-bold text-[var(--color-on-surface-variant)]">
           Tip: For the latest policy details (delivery/returns), check Support or contact the store team from your account.
         </div>
       </div>

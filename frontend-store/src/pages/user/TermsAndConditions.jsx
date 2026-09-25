@@ -129,7 +129,7 @@ function TermsAndConditions() {
           <h1 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>
             Terms & Conditions
           </h1>
-          <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)] opacity-70">
+          <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)]">
             Important terms for using JDLX MOBILE.
           </p>
         </div>
@@ -168,7 +168,7 @@ function TermsAndConditions() {
       </div>
 
       <div className="glass-card p-5 border border-[var(--color-surface-high)]">
-        <div className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] opacity-70 leading-relaxed">
+        <div className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] leading-relaxed">
           Note: This is a general summary for user clarity. For store-specific policy details, please contact Support.
         </div>
       </div>

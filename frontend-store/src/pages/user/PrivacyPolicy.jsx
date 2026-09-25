@@ -80,7 +80,7 @@ function PrivacyPolicy() {
           <h1 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]" style={{ fontFamily: 'Manrope, sans-serif' }}>
             Privacy Policy
           </h1>
-          <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)] opacity-70">
+          <p className="text-[12px] font-medium text-[var(--color-on-surface-variant)]">
             How JDLX MOBILE handles and protects your data.
           </p>
         </div>
@@ -119,7 +119,7 @@ function PrivacyPolicy() {
       </div>
 
       <div className="glass-card p-5 border border-[var(--color-surface-high)]">
-        <div className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] opacity-70 leading-relaxed">
+        <div className="text-[11px] font-semibold text-[var(--color-on-surface-variant)] leading-relaxed">
           Last Updated: August 2026. This policy reflects JDLX Mobile's commitment to secure data processing and absolute user transparency. For specific regulatory requests, please submit a Support ticket.
         </div>
       </div>

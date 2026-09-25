@@ -4810,6 +4810,68 @@ def get_products_batch():
     except Exception as e:
         return error_response(str(e), 500)
 
+@app.route('/api/products/fulfilling-warehouse', methods=['GET'])
+def get_fulfilling_warehouse():
+    """Which warehouse will fulfill this product — the exact warehouse the
+    checkout flow would assign (same priority: open+active holding stock →
+    any warehouse holding the product → any open+active warehouse), so the
+    product page can show the real dispatching hub instead of a hardcoded
+    'Central warehouse' label. Read-only; selection logic here MUST stay in
+    sync with the confirm-order flow's warehouse selection."""
+    try:
+        product_id = request.args.get('product_id', type=int)
+        variant_id = request.args.get('variant_id', type=int)
+        if not product_id:
+            return error_response("product_id is required", 400)
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        def _wh_row(require_stock, require_active):
+            """Mirrors the confirm-order warehouse queries exactly."""
+            stock_cond = "(wi.stock_quantity > 0 OR wi.available_stock > 0) AND " if require_stock else ""
+            active_cond = "w.operations_status = 'open' AND w.account_status = 'active' AND " if require_active else ""
+            sql = f"""
+                SELECT w.id, w.warehouse_name
+                FROM warehouse_inventory wi
+                JOIN warehouses w ON w.id = COALESCE(wi.warehouse_id, wi.warehouse_partner_id)
+                WHERE wi.product_id = ? {"AND wi.variant_id = ?" if variant_id else ""}
+                      AND {stock_cond}{active_cond}1=1
+                LIMIT 1
+            """
+            params = [product_id] + ([variant_id] if variant_id else [])
+            return cursor.execute(sql, params).fetchone()
+
+        row = None
+        # Priority 1: open+active warehouse currently holding stock (variant first)
+        if variant_id:
+            row = _wh_row(True, True)
+        if not row:
+            row = _wh_row(True, True)
+        # Priority 2: any warehouse holding the product, regardless of status
+        if not row:
+            if variant_id:
+                row = _wh_row(False, False)
+            if not row:
+                row = _wh_row(False, False)
+        # Priority 3: hard fallback — first open+active warehouse, then any
+        if not row:
+            row = cursor.execute(
+                "SELECT id, warehouse_name FROM warehouses WHERE operations_status = 'open' AND account_status = 'active' LIMIT 1"
+            ).fetchone()
+        if not row:
+            row = cursor.execute("SELECT id, warehouse_name FROM warehouses LIMIT 1").fetchone()
+
+        conn.close()
+        if not row:
+            return success_response(None, "No warehouse configured")
+        return success_response({
+            "id": row["id"],
+            "name": row["warehouse_name"],
+        }, "Fulfilling warehouse resolved")
+    except Exception as e:
+        return error_response(str(e), 500)
+
 @app.route('/api/products/<int:product_id>/stock', methods=['GET'])
 def get_product_stock(product_id):
     """Returns the latest available stock for a product."""

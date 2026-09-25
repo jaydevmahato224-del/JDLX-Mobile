@@ -398,12 +398,36 @@ export default function ProductDetails() {
   
   const productImages = useMemo(() => getProductImages(activeProduct), [activeProduct]);
   
+  // Real dispatching hub for THIS product — resolved from warehouse_inventory
+  // with the same priority the checkout assignment uses, so the highlight
+  // always names the warehouse the order would actually ship from instead of
+  // a hardcoded "Central warehouse". Falls back to the neutral label only
+  // while loading or if the backend has no warehouse configured.
+  const [fulfillingWarehouse, setFulfillingWarehouse] = useState(null);
+  useEffect(() => {
+    if (!activeProduct?.id) return;
+    let cancelled = false;
+    const params = new URLSearchParams({ product_id: String(activeProduct.id) });
+    if (activeProduct?.variant_id) params.set('variant_id', String(activeProduct.variant_id));
+    fetch(`${API_BASE_URL}/products/fulfilling-warehouse?${params.toString()}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(payload => {
+        if (cancelled) return;
+        const wh = payload?.data || null;
+        setFulfillingWarehouse(wh && wh.name ? wh.name : null);
+      })
+      .catch(() => { if (!cancelled) setFulfillingWarehouse(null); });
+    return () => { cancelled = true };
+  }, [activeProduct?.id, activeProduct?.variant_id]);
+
   const highlights = useMemo(() => [
     `${activeProduct?.category || 'Accessory'} essential ready for secure fulfillment`,
     `Available quantity: ${stock}`,
     `Dispatch window: ${deliveryTimeDisplay}`,
-    'Central warehouse dispatched for reliable fulfillment',
-  ], [activeProduct?.category, stock, deliveryTimeDisplay]);
+    fulfillingWarehouse
+      ? `Dispatched from ${fulfillingWarehouse} for reliable fulfillment`
+      : 'Dispatched for reliable fulfillment',
+  ], [activeProduct?.category, stock, deliveryTimeDisplay, fulfillingWarehouse]);
 
   const handleAddToCart = useCallback((toCart = false) => {
     if (!activeProduct) return;

@@ -153,6 +153,7 @@ def list_return_requests():
                    cr.verification_status, cr.verified_at, cr.verification_notes,
                    cr.exchange_product_id, cr.exchange_order_id, cr.exchange_status,
                    cr.refund_request_id,
+                   cr.sr_awb_code, cr.sr_courier_name, cr.sr_request_status,
                    GROUP_CONCAT(COALESCE(oi.product_name, p.name), ', ') AS product_names
             FROM complaints c
             JOIN orders o ON o.id = c.order_id
@@ -373,21 +374,50 @@ def trigger_pickup(complaint_id):
         )
         conn.commit()
 
-        # Best-effort Shiprocket reverse pickup request
-        shiprocket_status = 'skipped'
+        # Best-effort Shiprocket reverse pickup: SR return order + AWB +
+        # pickup scheduling. ANY failure keeps the internal state (scheduled
+        # + customer code) intact — the warehouse can always self-pickup.
+        sr_result = None
         try:
-            from shiprocket_client import sr_headers
-            headers = sr_headers()
-            if headers.get('Authorization'):
-                shiprocket_status = 'requested'
-        except Exception:
-            shiprocket_status = 'unavailable'
+            from services.sr_reverse_pickup import create_reverse_pickup
+            sr_result = create_reverse_pickup(
+                complaint_id=complaint_id,
+                order_id=complaint['order_id'],
+                warehouse_id=wh_id,
+                notes=notes,
+            )
+        except Exception as exc:
+            current_app.logger.warning(f"SR reverse pickup error for complaint {complaint_id}: {exc}")
+            sr_result = {"ok": False, "reason": f"unexpected: {exc}"}
+
+        if sr_result and sr_result.get("ok"):
+            courier = sr_result.get("sr_courier_name") or f"Shiprocket AWB {sr_result.get('sr_awb_code')}"
+            conn.execute(
+                """UPDATE complaint_returns
+                   SET sr_return_order_id = ?, sr_shipment_id = ?, sr_awb_code = ?,
+                       sr_courier_name = ?, sr_pickup_scheduled_date = ?,
+                       sr_request_status = 'created', updated_at = ?
+                   WHERE complaint_id = ?""",
+                (sr_result.get("sr_return_order_id"), sr_result.get("sr_shipment_id"),
+                 sr_result.get("sr_awb_code"), sr_result.get("sr_courier_name"),
+                 sr_result.get("sr_pickup_scheduled_date"), _now(), complaint_id),
+            )
+            conn.commit()
+        else:
+            conn.execute(
+                """UPDATE complaint_returns
+                   SET sr_request_status = ?
+                   WHERE complaint_id = ?""",
+                (f"not_created: {(sr_result or {}).get('reason', 'unknown')[:160]}", complaint_id),
+            )
+            conn.commit()
 
         # Customer notification with the pickup code
+        sr_note = f" Courier: {courier}." if sr_result and sr_result.get("ok") else ""
         _user_notification(
             conn, complaint['customer_user_id'],
             "Pickup scheduled",
-            f"Pickup for your order #{complaint['order_id']} return is scheduled via {courier}. "
+            f"Pickup for your order #{complaint['order_id']} return is scheduled.{sr_note} "
             f"Share this code with the pickup rider: {pickup_code}",
             complaint['order_id'],
         )
@@ -397,7 +427,7 @@ def trigger_pickup(complaint_id):
             "pickup_status": "scheduled",
             "pickup_courier": courier,
             "pickup_code": pickup_code,
-            "shiprocket": shiprocket_status,
+            "shiprocket": sr_result or {"ok": False, "reason": "unknown"},
         }, "Pickup triggered")
     finally:
         conn.close()

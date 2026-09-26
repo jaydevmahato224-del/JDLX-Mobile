@@ -251,6 +251,23 @@ const WarehouseReturns = () => {
                             </div>
                         )}
 
+                        {/* Shiprocket reverse AWB banner — courier will collect from the customer */}
+                        {ret.sr_awb_code && (
+                            <div className="bg-emerald-600 text-white rounded-xl p-3 flex items-center gap-3">
+                                <Truck size={18} className="shrink-0" />
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-200">Shiprocket reverse pickup</p>
+                                    <p className="text-sm font-black">AWB {ret.sr_awb_code} • {ret.sr_courier_name || 'Courier assigned'}</p>
+                                    {ret.sr_pickup_scheduled_date && (
+                                        <p className="text-[11px] text-emerald-100 font-bold">Pickup scheduled: {String(ret.sr_pickup_scheduled_date).slice(0, 16)}</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {ret.sr_request_status && ret.sr_request_status.startsWith('not_created') && (
+                            <p className="text-[11px] text-amber-400 font-bold">Shiprocket reverse order not created ({ret.sr_request_status.replace('not_created: ', '')}) — self pickup mode.</p>
+                        )}
+
                         {/* Action area per stage */}
                         {stageKey === 'pending_decision' && (
                             <div className="flex flex-col gap-2">

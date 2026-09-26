@@ -1354,6 +1354,17 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(complaint_id) REFERENCES complaints(id)
     )''')
+    # Shiprocket reverse-pickup integration (best-effort — the pipeline works
+    # without Shiprocket via self-pickup). Populated only when the SR API
+    # accepts the reverse order; NULL = SR not used for this return.
+    ensure_columns('complaint_returns', [
+        ('sr_return_order_id', 'INTEGER'),
+        ('sr_shipment_id', 'INTEGER'),
+        ('sr_awb_code', 'TEXT'),
+        ('sr_courier_name', 'TEXT'),
+        ('sr_pickup_scheduled_date', 'TEXT'),
+        ('sr_request_status', 'TEXT'),
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS bug_reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -536,10 +536,14 @@ def init_db():
         ('packed_at', 'TIMESTAMP'),
         ('shipped_at', 'TIMESTAMP'),
         ('delivered_at', 'TIMESTAMP'),
+        ('confirmed_at', 'TIMESTAMP'),
+        ('cancelled_at', 'TIMESTAMP'),
         # Order-tracking timestamps (used by the returns pipeline's window
         # math and refund eligibility). Historically these only existed on DBs
         # that ran migrate_order_tracking.py — provisioning them here so a
-        # fresh init_db() database no longer crashes those flows.
+        # fresh init_db() database no longer crashes those flows. The
+        # warehouse state machine also writes confirmed_at on accept
+        # (warehouse_routes.py), which 500'd on fresh DBs without it.
         ('status_packing_at', 'TIMESTAMP'),
         ('status_out_at', 'TIMESTAMP'),
         ('status_delivered_at', 'TIMESTAMP'),

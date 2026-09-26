@@ -284,9 +284,22 @@ def shiprocket_webhook():
 
     if new_jdlx_status:
         try:
-            # Update order based on shiprocket_order_id
+            # Update order based on shiprocket_order_id. The checkout flow
+            # stamps orders.shiprocket_order_id directly, but the WAREHOUSE
+            # dispatch flow only writes the SR ids into the shipments table —
+            # so fall back to a shipments-table lookup, otherwise every
+            # warehouse-dispatched order would silently ignore delivery
+            # webhooks (order stuck at SHIPPED forever).
             cursor.execute("SELECT id, user_id, total_amount, order_status FROM orders WHERE shiprocket_order_id = ?", (sr_order_id,))
             order = cursor.fetchone()
+            if not order:
+                cursor.execute(
+                    """SELECT o.id, o.user_id, o.total_amount, o.order_status
+                       FROM orders o JOIN shipments s ON s.order_id = o.id
+                       WHERE s.shiprocket_order_id = ?""",
+                    (sr_order_id,),
+                )
+                order = cursor.fetchone()
             
             if order:
                 order_id = order['id']

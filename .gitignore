@@ -20,3 +20,7 @@ backups/
 .aider*
 !.aider.md
 .vercel
+
+# Agent/workspace tooling — local only, never commit (89MB+ of session data)
+.claude/
+JDLX-Watch/

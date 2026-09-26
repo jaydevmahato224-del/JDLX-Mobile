@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
     Wallet,
     TrendingUp,
@@ -106,14 +106,22 @@ const WarehouseEarnings = () => {
         }
     }, [])
 
+    // Single mount effect: settlements load here too (filter starts at its
+    // initial value, so this covers the "load on mount" case). The separate
+    // filter effect below only fires on actual filter CHANGES — removing the
+    // duplicate settlement fetch that used to run on mount.
+    const filterRef = useRef(filter)
     useEffect(() => {
         setLoading(true)
-        Promise.all([fetchSummary(), fetchPayouts()])
+        Promise.all([fetchSummary(), fetchPayouts(), fetchSettlements(1, filterRef.current)])
             .finally(() => setLoading(false))
-        // Settlements are loaded by the filter effect below (runs once on mount).
-    }, [fetchSummary, fetchPayouts])
+    }, [fetchSummary, fetchPayouts, fetchSettlements])
 
     useEffect(() => {
+        // Skip the first run — the mount effect above already fetched with
+        // this same filter value; only respond to user-driven changes.
+        if (filterRef.current === filter) return
+        filterRef.current = filter
         fetchSettlements(1, filter)
     }, [filter, fetchSettlements])
 

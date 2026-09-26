@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
 import WarehouseRoute from './components/WarehouseRoute'
 import WarehouseLayout from './components/WarehouseLayout'
+const WarehouseReturns = lazy(() => import('./pages/warehouse/WarehouseReturns'))
 const WarehouseLogin = lazy(() => import('./pages/warehouse/WarehouseLogin'))
 import { useStore } from './store/useStore'
 import TopLoader from './components/TopLoader'
@@ -210,6 +211,11 @@ function App() {
             <Route path="/warehouse/orders/:assignmentId" element={
               <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']}>
                 <WarehouseOrderDetail />
+              </WarehouseRoute>
+            } />
+            <Route path="/warehouse/returns" element={
+              <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'admin', 'super_admin']}>
+                <WarehouseReturns />
               </WarehouseRoute>
             } />
             <Route path="/warehouse/procurement" element={

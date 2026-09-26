@@ -63,6 +63,7 @@ from admin_auth_routes import admin_auth_bp
 from delivery_routes import delivery_bp
 from admin_db import admin_db_bp
 from complaint_routes import complaint_bp
+from warehouse_returns import warehouse_returns_bp
 from support_routes import support_bp
 from report_routes import report_bp
 from refund_routes import refund_bp
@@ -343,6 +344,7 @@ app.register_blueprint(admin_auth_bp)
 app.register_blueprint(delivery_bp)
 app.register_blueprint(admin_db_bp)
 app.register_blueprint(complaint_bp)
+app.register_blueprint(warehouse_returns_bp)
 app.register_blueprint(support_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(refund_bp)
@@ -10065,44 +10067,21 @@ def cancel_order(order_id):
 @app.route('/api/order/<int:order_id>/refund-request', methods=['POST'])
 @token_required
 def request_refund(order_id):
-    """Initiates a refund request for a delivered order."""
-    user_id = request.user['user_id']
-    data = request.json
-    reason = data.get('reason')
+    """RETIRED: customers no longer raise refunds directly.
 
-    if not reason:
-        return error_response("Reason is required", 400)
-
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT order_status as status, user_id FROM orders WHERE id = ?", (order_id,))
-        order = cursor.fetchone()
-
-        if not order:
-            conn.close()
-            return error_response("Order not found", 404)
-
-        if order['user_id'] != user_id:
-            conn.close()
-            return error_response("Unauthorized", 403)
-
-        if order['status'].upper() != 'DELIVERED':
-            conn.close()
-            return error_response("Only delivered orders can be refunded", 400)
-
-        cursor.execute('''
-            INSERT INTO refund_requests (order_id, user_id, reason)
-            VALUES (?, ?, ?)
-        ''', (order_id, user_id, reason))
-        cursor.execute("UPDATE orders SET order_status = 'REFUND_REQUESTED' WHERE id = ?", (order_id,))
-
-        conn.commit()
-        conn.close()
-
-        return success_response(None, "Refund request submitted", 201)
-    except Exception as e:
-        return error_response(str(e), 500)
+    Refund authority moved to the warehouse returns pipeline: customers file
+    a complaint (optionally with return/exchange intent) at POST /api/complaint,
+    the warehouse decides and can trigger a refund from its panel; the admin
+    only executes the payout. Kept as an explicit 410 so stale storefront
+    builds (or an old APK) fail loudly instead of silently creating orphan
+    refund rows outside the pipeline.
+    """
+    return error_response(
+        "Direct refund requests are discontinued. Please raise a product issue from "
+        "Support → Report an Issue; the warehouse will review it and issue any "
+        "refund through the returns process.",
+        410,
+    )
 
 
 @app.route('/api/admin/refund-requests', methods=['GET'])
@@ -10133,22 +10112,41 @@ def get_admin_refund_requests():
 @require_admin()
 @require_permission("manage_orders")
 def update_refund_status(request_id):
-    """Updates the status of a refund request (APPROVED, REJECTED, etc.)."""
+    """Payout EXECUTION endpoint (decision authority = warehouse).
+
+    Refund POLICY (whether a customer gets money back) is decided by the
+    warehouse in the returns pipeline; the refund row    arrives here already 'Approved' with source='warehouse_complaint'. The admin only executes:
+        PROCESSED -> wallet credit + order marked REFUNDED
+    Legacy 'customer' rows (pre-pipeline) remain actionable for backward
+    compatibility, but the admin panel no longer offers Approve/Reject on new
+    rows coming from the pipeline.
+    """
     data = request.json
     new_status = data.get('status')
     
-    if new_status not in ['APPROVED', 'REJECTED', 'PROCESSED']:
+    if new_status not in ['PROCESSED', 'APPROVED', 'REJECTED']:
         return error_response("Invalid status", 400)
         
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT order_id, user_id, status FROM refund_requests WHERE id = ?", (request_id,))
+        cursor.execute("SELECT order_id, user_id, status, source FROM refund_requests WHERE id = ?", (request_id,))
         rr = cursor.fetchone()
         
         if not rr:
             conn.close()
             return error_response("Refund request not found", 404)
+
+        # Pipeline refunds: the warehouse already decided. Admin may only
+        # execute the payout (PROCESSED) — re-deciding policy here would
+        # silently override the warehouse's authority.
+        if (rr['source'] or 'customer') == 'warehouse_complaint' and new_status in ('APPROVED', 'REJECTED'):
+            conn.close()
+            return error_response(
+                "This refund was approved by the warehouse via the returns pipeline. "
+                "Admin can only execute the payout (status: PROCESSED).",
+                409,
+            )
             
         cursor.execute("UPDATE refund_requests SET status = ? WHERE id = ?", (new_status, request_id))
         

@@ -116,8 +116,19 @@ const fetchRequests = async () => {
                                 </div>
                             </div>
 
+                            {(req.source === 'warehouse_complaint') && (
+                                <div className="mb-1 text-[11px] font-black uppercase tracking-wider text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-2 py-1 w-fit">
+                                    Warehouse approved — payout execution only
+                                </div>
+                            )}
+
                             <div className="flex md:flex-col justify-end gap-2 shrink-0">
-                                {req._status === 'PENDING' && (
+                                {/* Decision authority = warehouse. Pipeline rows
+                                    (source=warehouse_complaint) arrive Approved:
+                                    admins only execute the wallet payout. Legacy
+                                    'customer' rows keep the old buttons so
+                                    pre-pipeline requests stay actionable. */}
+                                {req._status === 'PENDING' && req.source !== 'warehouse_complaint' && (
                                     <>
                                         <button
                                             onClick={() => handleAction(req.id, 'APPROVED')}
@@ -138,7 +149,7 @@ const fetchRequests = async () => {
                                         onClick={() => handleAction(req.id, 'PROCESSED')}
                                         className="flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl text-sm font-bold hover:bg-green-600 transition-colors"
                                     >
-                                        <RefreshCcw size={16} /> Mark Processed
+                                        <RefreshCcw size={16} /> Credit Wallet
                                     </button>
                                 )}
                             </div>

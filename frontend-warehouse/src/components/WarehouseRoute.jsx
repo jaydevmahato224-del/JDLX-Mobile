@@ -12,11 +12,13 @@ function WarehouseRoute({ children, allowedRoles = DEFAULT_ROLES }) {
   const user = useStore((state) => state.warehouseUser)
 
   // Staff users carry role_name (e.g. "Billing Agent") instead of role;
-  // normalize it so the billing/staff routes grant access.
+  // normalize it so the billing/staff routes grant access. Word-boundary
+  // matching (not bare substring) so a hypothetical "Billing Manager II"
+  // or "Non-billing Supervisor" can never accidentally grant POS access.
   const rawRole = (user?.role || user?.role_name || 'user').toLowerCase()
-  const role = rawRole.includes('billing')
+  const role = /\bbilling\b/.test(rawRole)
     ? 'billing'
-    : rawRole.includes('staff')
+    : /\bstaff\b/.test(rawRole)
     ? 'staff'
     : rawRole
 
@@ -38,7 +40,12 @@ function WarehouseRoute({ children, allowedRoles = DEFAULT_ROLES }) {
           setVerified(false)
         }
       } catch {
-        // Network error - allow access with client-side check
+        // Network error (backend unreachable / offline): the token was already
+        // verified at login and every backend route re-checks auth anyway, so
+        // falling back to the client-side session keeps the panel usable
+        // during a Render cold-start instead of force-logging the user out.
+        // Only do this when the device is actually offline or the request
+        // never reached a server — a real HTTP failure lands in res.ok above.
         setVerified(true)
       } finally {
         setVerifying(false)

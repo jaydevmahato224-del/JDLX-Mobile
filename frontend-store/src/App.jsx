@@ -263,7 +263,9 @@ const ComplaintPage = lazy(() => import('./pages/user/ComplaintPage'))
 const MyRequestsPage = lazy(() => import('./pages/user/MyRequestsPage'))
 const OrderReportPage = lazy(() => import('./pages/user/OrderReportPage'))
 const MyReportsPage = lazy(() => import('./pages/user/MyReportsPage'))
-const RefundRequestPage = lazy(() => import('./pages/user/RefundRequestPage'))
+// RefundRequestPage removed: direct customer refund requests are retired.
+// Every post-delivery issue goes through the complaint flow; the warehouse
+// decides return/exchange/refund from its panel.
 const MyRefundsPage = lazy(() => import('./pages/user/MyRefundsPage'))
 const Coupons = lazy(() => import('./pages/user/Coupons'))
 const AboutSite = lazy(() => import('./pages/user/AboutSite'))
@@ -565,7 +567,7 @@ function App() {
                       <Route path="/profile/complaint" element={<ProtectedRoute><ComplaintPage /></ProtectedRoute>} />
                       <Route path="/profile/order-report" element={<ProtectedRoute><OrderReportPage /></ProtectedRoute>} />
                       <Route path="/profile/my-reports" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
-                      <Route path="/profile/refund-request" element={<ProtectedRoute><RefundRequestPage /></ProtectedRoute>} />
+                      {/* /profile/refund-request removed — see complaint flow */}
                       <Route path="/profile/my-refunds" element={<ProtectedRoute><MyRefundsPage /></ProtectedRoute>} />
                       <Route path="/my-requests" element={<ProtectedRoute><MyRequestsPage /></ProtectedRoute>} />
                       <Route path="/profile/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />

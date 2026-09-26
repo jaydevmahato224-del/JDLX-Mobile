@@ -46,11 +46,17 @@ def update_complaint(complaint_id):
     admin_reply = data.get('admin_reply')
 
     allowed_statuses = ["Pending", "In Progress", "Resolved", "Closed"]
-    
+
+    # Statuses owned by the warehouse returns pipeline (warehouse_returns.py).
+    # The warehouse is the DECISION authority; admin support can still reply,
+    # but must not yank a live return/exchange/refund back to a generic label.
+    PIPELINE_STATUSES = {"Approved", "Pickup Scheduled", "Picked Up",
+                         "In Review", "Exchange Pending", "Refund Requested"}
+
     conn = get_db()
     try:
         # Check if complaint exists
-        complaint = conn.execute("SELECT id FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+        complaint = conn.execute("SELECT id, status, handled_by_warehouse FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
         if not complaint:
             return error_response("Complaint not found", 404)
 
@@ -60,6 +66,14 @@ def update_complaint(complaint_id):
         if status:
             if status not in allowed_statuses:
                 return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
+            current_status = complaint["status"] or "Pending"
+            if current_status in PIPELINE_STATUSES:
+                return error_response(
+                    "This request is in the warehouse returns pipeline ("
+                    f"{current_status}). Its status is managed by the warehouse; "
+                    "you can still post a reply.",
+                    409,
+                )
             updates.append("status = ?")
             params.append(status)
         

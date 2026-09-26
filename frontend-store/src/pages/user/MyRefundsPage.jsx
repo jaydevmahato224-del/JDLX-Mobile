@@ -72,10 +72,10 @@ function MyRefundsPage() {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">My Refunds</h1>
-                    <p className="text-[var(--color-on-surface-variant)] mt-1">Track the status of your return and refund requests.</p>
+                    <p className="text-[var(--color-on-surface-variant)] mt-1">History of refunds decided by the warehouse via your requests.</p>
                 </div>
-                <Link to="/profile/refund-request" className="btn-primary h-12 px-6">
-                    New Refund
+                <Link to="/profile/complaint" className="btn-primary h-12 px-6">
+                    Report an Issue
                 </Link>
             </div>
 
@@ -84,10 +84,10 @@ function MyRefundsPage() {
                     <div className="w-16 h-16 bg-[var(--color-surface-low)] rounded-full flex items-center justify-center text-gray-300 mb-4">
                         <RotateCcw size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-[var(--color-on-surface)]">No refund requests yet</h3>
-                    <p className="text-gray-400 text-sm mt-2 max-w-xs">When you submit a refund or exchange request, it will appear here.</p>
-                    <Link to="/profile/refund-request" className="btn-primary mt-6 px-8 h-12">
-                        Submit refund request
+                    <h3 className="text-xl font-bold text-[var(--color-on-surface)]">No refunds yet</h3>
+                    <p className="text-gray-400 text-sm mt-2 max-w-xs">Refunds approved by the warehouse through your issue requests will appear here.</p>
+                    <Link to="/profile/complaint" className="btn-primary mt-6 px-8 h-12">
+                        Report an issue
                     </Link>
                 </div>
             ) : (

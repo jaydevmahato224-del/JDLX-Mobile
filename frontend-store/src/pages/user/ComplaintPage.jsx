@@ -17,12 +17,17 @@ function ComplaintPage() {
     const [form, setForm] = useState({
         order_id: '',
         issue_type: '',
-        description: ''
+        description: '',
+        requested_action: ''
     });
     const [photo, setPhoto] = useState(null);
     const [preview, setPreview] = useState(null);
     const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
     const [issueDropdownOpen, setIssueDropdownOpen] = useState(false);
+    // Product rules for the selected order — which actions the customer may
+    // ask for (return / exchange), the window deadline, per-order cap. Fetched
+    // live from /complaint-options so policy changes apply instantly.
+    const [options, setOptions] = useState(null);
 
     useEffect(() => {
         if (!user) {
@@ -55,6 +60,20 @@ const fetchOrders = async () => {
     fetchOrders();
     }, [user, navigate]);
 
+    // Live rules for the selected order (drives the action selector)
+    useEffect(() => {
+        if (!form.order_id) { setOptions(null); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await apiFetch(`/complaint-options/${form.order_id}`);
+                const data = await res.json();
+                if (!cancelled && res.ok) setOptions(data.data || null);
+            } catch { /* selector falls back to disabled */ }
+        })();
+        return () => { cancelled = true; };
+    }, [form.order_id]);
+
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -76,6 +95,7 @@ const fetchOrders = async () => {
         formData.append('order_id', form.order_id);
         formData.append('issue_type', form.issue_type);
         formData.append('description', form.description);
+        if (form.requested_action) formData.append('requested_action', form.requested_action);
         if (photo) {
             formData.append('photo', photo);
         }
@@ -243,6 +263,52 @@ const fetchOrders = async () => {
                         className="w-full min-h-[120px] rounded-2xl bg-[var(--color-surface-low)] p-5 text-sm font-bold text-[var(--color-on-surface)] border-none outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                     />
                 </div>
+
+                {/* Requested action — what the customer wants (return / exchange).
+                    Options come from the live product rules; a product with
+                    returns disabled shows Exchange only, a "no returns, no
+                    exchange" product shows no selector at all. */}
+                {form.order_id && options && (options.return_enabled || options.exchange_enabled) && (
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">What would you like?</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {options.return_enabled && (
+                                <button
+                                    type="button"
+                                    onClick={() => setForm({ ...form, requested_action: form.requested_action === 'return' ? '' : 'return' })}
+                                    className={`h-12 rounded-2xl text-sm font-black uppercase tracking-wider border transition-all ${
+                                        form.requested_action === 'return'
+                                            ? 'bg-primary text-white border-primary'
+                                            : 'bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] border-transparent hover:border-primary/30'
+                                    }`}
+                                >
+                                    Return & Refund
+                                </button>
+                            )}
+                            {options.exchange_enabled && (
+                                <button
+                                    type="button"
+                                    onClick={() => setForm({ ...form, requested_action: form.requested_action === 'exchange' ? '' : 'exchange' })}
+                                    className={`h-12 rounded-2xl text-sm font-black uppercase tracking-wider border transition-all ${
+                                        form.requested_action === 'exchange'
+                                            ? 'bg-primary text-white border-primary'
+                                            : 'bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] border-transparent hover:border-primary/30'
+                                    }`}
+                                >
+                                    Exchange
+                                </button>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 ml-1 leading-relaxed">
+                            {options.window_expired
+                                ? 'The return window for this order has ended — the warehouse will still review your issue.'
+                                : options.window_end
+                                    ? `Warehouse decides your request. Return window ends: ${String(options.window_end).slice(0, 10)}`
+                                    : 'The warehouse will review your request and arrange pickup if approved.'}
+                            {options.cap_reached && ' — this order already has an open request.'}
+                        </p>
+                    </div>
+                )}
 
                 {/* Photo Upload */}
                 <div className="space-y-2">

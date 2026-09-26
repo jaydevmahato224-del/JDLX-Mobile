@@ -135,43 +135,42 @@ const FLOW_TREE = {
       en: (
         <>
           How to raise a Return/Refund:
-          <br />1. Within <b>7 days of delivery</b>, open the "Refund Request" page
-          <br />2. Select the order and describe the reason in detail
-          <br />3. Submit — our team reviews it right away
+          <br />1. Open <b>Report an Issue</b> from Support and select your order
+          <br />2. Describe the problem (add a photo — it helps the warehouse)
+          <br />3. The warehouse reviews it and schedules a pickup if approved
           <br /><br />
-          Live status shows on the "My Refunds" page.
+          Any refund is then issued to your wallet — track everything under <b>My Requests</b>.
         </>
       ),
       hi: (
         <>
           Return/Refund request ऐसे करें:
-          <br />1. Delivery के <b>7 दिन के अंदर</b> "Refund Request" page पर जाएँ
-          <br />2. Order select करके reason detail में लिखें
-          <br />3. Submit करते ही हमारी team review करती है
+          <br />1. Support से <b>Report an Issue</b> खोलें और अपना order चुनें
+          <br />2. Problem describe करें (photo ज़रूर लगाएँ)
+          <br />3. Warehouse review करके pickup schedule करेगा
           <br /><br />
-          Status "My Refunds" page पर live दिखता है।
+          Refund wallet में आ जाएगा — status <b>My Requests</b> में दिखेगा।
         </>
       ),
     },
     options: [
-      { label: { en: '🔍 Which orders are eligible? (Auto-check)', hi: '🔍 कौन से orders eligible हैं? (Auto-check)' }, next: 'refund_eligibility_check' },
-      { label: { en: '📄 Send a refund request', hi: '📄 Refund request भेजें' }, action: 'navigate', to: '/profile/refund-request' },
-      { label: { en: '📋 My refund statuses', hi: '📋 मेरे refunds का status' }, action: 'navigate', to: '/profile/my-refunds' },
+      { label: { en: '📄 Report an issue (return/exchange)', hi: '📄 Issue report करें (return/exchange)' }, action: 'navigate', to: '/profile/complaint' },
+      { label: { en: '📋 Track my requests', hi: '📋 मेरे requests का status' }, action: 'navigate', to: '/my-requests' },
       { label: { en: '🙋 Connect to an agent', hi: '🙋 Agent से connect करें' }, action: 'agent' },
       { label: { en: '⬅️ Back', hi: '⬅️ पीछे' }, next: 'exchange_return' },
     ],
   },
   refund_eligibility_check: {
     // Read-only scan: delivered orders → /api/refund-eligibility/<id> per order.
-    // The bot NEVER submits anything here — it only shows what qualifies and
-    // deep-links the user to the real request form.
+    // The bot NEVER submits anything here — it shows what still qualifies and
+    // deep-links the user to the complaint form (the single entry point).
     action: 'eligibility_check',
     title: {
       en: "Checking your delivered orders (read-only — nothing gets submitted)…",
       hi: "आपके delivered orders check हो रहे हैं (सिर्फ़ देखना — कुछ भी submit नहीं होता)…",
     },
     options: [
-      { label: { en: '📄 Open the refund request page', hi: '📄 Refund request page खोलें' }, action: 'navigate', to: '/profile/refund-request' },
+      { label: { en: '📄 Report an issue (return/exchange)', hi: '📄 Issue report करें (return/exchange)' }, action: 'navigate', to: '/profile/complaint' },
       { label: { en: '⬅️ Back', hi: '⬅️ पीछे' }, next: 'exchange_return' },
     ],
   },
@@ -1009,10 +1008,10 @@ export default function ChatWidget() {
                                 )}
                                 {r.eligible && (
                                   <button
-                                    onClick={() => { setOpen(false); navigate(`/profile/refund-request?order_id=${r.orderId}`) }}
+                                    onClick={() => { setOpen(false); navigate(`/profile/complaint?order_id=${r.orderId}`) }}
                                     className="mt-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-green-700 underline"
                                   >
-                                    {pick({ en: 'Open refund request for this order', hi: 'इस order का refund request खोलें' }, lang)} <ExternalLink size={10} />
+                                    {pick({ en: 'Report an issue with this order', hi: 'इस order के लिए issue report करें' }, lang)} <ExternalLink size={10} />
                                   </button>
                                 )}
                               </div>

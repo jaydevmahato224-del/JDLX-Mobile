@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, Undo2, AlertCircle, MessageSquare, Flag, RotateCcw, ExternalLink, ChevronDown, Check, Ban, CreditCard, Download, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, Phone, XCircle, AlertCircle, MessageSquare, Flag, ExternalLink, ChevronDown, Check, Ban, CreditCard, Download, ShieldCheck } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
@@ -20,8 +20,8 @@ function OrderTracking() {
     const [, setShipmentLoading] = useState(false);
     const [shipmentData, setShipmentData] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
-    const [refundReason, setRefundReason] = useState('');
-    const [showRefundForm, setShowRefundForm] = useState(false);
+    // (refund form state removed — direct refund requests retired; complaints
+    // drive the return/exchange/refund pipeline now)
     const [showCancelForm, setShowCancelForm] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
     const [customReason, setCustomReason] = useState('');
@@ -239,29 +239,6 @@ function OrderTracking() {
             }
         } catch {
             setMessage({ type: "error", text: "An error occurred." });
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const handleRefundRequest = async (e) => {
-        e.preventDefault();
-        setActionLoading(true);
-        try {
-            const res = await apiFetch(`/order/${orderId}/refund-request`, {
-                method: 'POST',
-                body: JSON.stringify({ reason: refundReason })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setMessage({ type: 'success', text: "Refund request submitted." });
-                setOrder(prev => ({ ...prev, status: 'REFUND_REQUESTED' }));
-                setShowRefundForm(false);
-            } else {
-                setMessage({ type: 'error', text: data.error || "Failed to submit request." });
-            }
-        } catch {
-            setMessage({ type: 'error', text: "An error occurred." });
         } finally {
             setActionLoading(false);
         }
@@ -838,15 +815,6 @@ function OrderTracking() {
                         </div>
                     )}
 
-                    {order?.status === 'DELIVERED' && !showRefundForm && (
-                        <button
-                            onClick={() => setShowRefundForm(true)}
-                            className="w-full py-3 bg-orange-50 text-orange-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-orange-100 transition-colors border border-orange-200"
-                        >
-                            <Undo2 size={18} /> Request Refund
-                        </button>
-                    )}
-
                     {order?.status === "DELIVERED" && (
                         <Link
                             to={`/profile/complaint?order_id=${orderId}`}
@@ -865,64 +833,10 @@ function OrderTracking() {
                         </Link>
                     )}
 
-                    {['DELIVERED', 'COMPLETED'].includes(order?.status?.toUpperCase()) && (
-                        (() => {
-                            const deliveryDate = new Date(order?.status_delivered_at || order?.updated_at || order?.created_at);
-                            const now = new Date();
-                            const diffDays = Math.ceil((now - deliveryDate) / (1000 * 60 * 60 * 24));
-                            const isWithinWindow = diffDays <= 7;
-
-                            if (isWithinWindow) {
-                                return (
-                                    <Link
-                                        to={`/profile/refund-request?order_id=${orderId}`}
-                                        className="w-full py-3 bg-emerald-50 text-emerald-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors border border-emerald-200"
-                                    >
-                                        <RotateCcw size={18} /> Refund / Return request
-                                    </Link>
-                                );
-                            } else {
-                                return (
-                                    <button
-                                        disabled
-                                        className="w-full py-3 bg-[var(--color-surface-low)] text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-[var(--color-surface-high)] cursor-not-allowed"
-                                    >
-                                        <RotateCcw size={18} /> Return window expired
-                                    </button>
-                                );
-                            }
-                        })()
-                    )}
-
-                    {showRefundForm && (
-                        <form onSubmit={handleRefundRequest} className="flex flex-col gap-3 animate-in slide-in-from-top-2">
-                            <label className="text-xs font-bold text-[var(--color-on-surface-variant)] uppercase tracking-wider">Reason for Refund</label>
-                            <textarea
-                                value={refundReason}
-                                onChange={(e) => setRefundReason(e.target.value)}
-                                required
-                                placeholder="E.g. Item damaged, wrong item received..."
-                                className="w-full p-3 bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] rounded-xl text-sm focus:ring-2 focus:ring-primary focus:outline-none"
-                                rows="3"
-                            />
-                            <div className="flex gap-2">
-                                <button
-                                    type="submit"
-                                    disabled={actionLoading}
-                                    className="flex-1 py-3 bg-primary text-white font-bold rounded-xl"
-                                >
-                                    {actionLoading ? 'Submitting...' : 'Submit Request'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowRefundForm(false)}
-                                    className="px-4 py-3 bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] font-bold rounded-xl"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    )}
+                    {/* Refund/return buttons removed: refunds are decided by the
+                        warehouse through the complaint flow. Customers report the
+                        issue above; the warehouse schedules pickup and issues any
+                        refund from its Returns panel. */}
 
                     {isOrderInactive && (
                         <div className="flex flex-col items-center gap-2 py-2">

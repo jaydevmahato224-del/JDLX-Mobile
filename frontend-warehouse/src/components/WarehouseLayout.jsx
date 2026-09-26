@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus, Wallet } from 'lucide-react'
+import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus, Wallet, Undo2 } from 'lucide-react'
 
 // Seen/unseen tracking for the Orders nav badge. Assignment ids are
 // monotonic, so "anything newer than what the partner last saw" is simply
@@ -191,6 +191,7 @@ export default function WarehouseLayout() {
     const navLinks = [
         { path: '/warehouse/dashboard', icon: LayoutDashboard, label: 'Operations Hub' },
         { path: '/warehouse/orders', icon: ShoppingBag, label: 'Orders' },
+        { path: '/warehouse/returns', icon: Undo2, label: 'Returns & Complaints' },
         { path: '/warehouse/offers', icon: BadgePercent, label: 'Offers & Promos' },
         { path: '/warehouse/procurement', icon: Truck, label: 'Material Purchase' },
         { path: '/warehouse/inventory', icon: Package, label: 'Inventory' },

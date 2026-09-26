@@ -336,8 +336,15 @@ def list_warehouse_delivery_applications():
         
     conn = get_db()
     try:
+        # Explicit column list (no SELECT *): only fields the panel needs —
+        # internal columns stay server-side.
         apps = conn.execute(
-            "SELECT * FROM delivery_applications WHERE warehouse_id = ? AND verification_status = 'pending_store' ORDER BY created_at DESC", 
+            """SELECT id, partner_id, name, email, phone, address, pincode,
+                      vehicle_type, verification_status, warehouse_id,
+                      created_at, updated_at
+               FROM delivery_applications
+               WHERE warehouse_id = ? AND verification_status = 'pending_store'
+               ORDER BY created_at DESC""",
             (warehouse_id,)
         ).fetchall()
         return jsonify([dict(row) for row in apps]), 200

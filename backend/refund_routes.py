@@ -40,101 +40,31 @@ def allowed_file(filename):
 @refund_bp.route('/api/refund-request', methods=['POST'])
 @token_required
 def submit_refund_request():
-    user_id = request.user.get('user_id')
-    order_id = request.form.get('order_id')
-    reason = request.form.get('reason')
-    request_type = request.form.get('request_type')
-    description = request.form.get('description')
+    """RETIRED: customers no longer raise refunds directly.
 
-    if not all([order_id, reason, request_type, description]):
-        return error_response("Missing required fields", 400)
+    Refund authority moved to the warehouse returns pipeline (see
+    warehouse_returns.py): customers file a complaint at POST /api/complaint,
+    the warehouse decides return/exchange/refund. This endpoint is kept as an
+    explicit 410 so stale storefront builds fail loudly instead of silently
+    creating orphan rows the pipeline never sees.
+    """
+    return error_response(
+        "Direct refund requests are discontinued. Please raise a product issue from "
+        "Support → Report an Issue; the warehouse will review it and issue any "
+        "refund through the returns process.",
+        410,
+    )
 
-    if request_type not in VALID_REQUEST_TYPES:
-        return error_response(f"Invalid request type. Allowed: {', '.join(sorted(VALID_REQUEST_TYPES))}", 400)
-
-    if reason not in VALID_REASONS:
-        return error_response(f"Invalid reason. Allowed: {', '.join(sorted(VALID_REASONS))}", 400)
-
-    # Evidence photo is REQUIRED: the admin review (and any payout decision)
-    # depends on photographic proof of the item/packaging condition.
-    photo_file = request.files.get('photo')
-    if not photo_file or not photo_file.filename:
-        return error_response("Evidence photo is required. Please upload a photo of the item.", 400)
-
-    conn = get_db()
-    try:
-        # 1. Verify ownership and get order info
-        order = conn.execute(
-            "SELECT id, order_status as status, total_amount, created_at, status_delivered_at FROM orders WHERE id = ? AND user_id = ?",
-            (order_id, user_id)
-        ).fetchone()
-
-        if not order:
-            return error_response("Order not found or access denied", 403)
-
-        # 2. Check status
-        status = (order['status'] or '').lower()
-        if status not in ['delivered', 'completed']:
-            return error_response("Sirf deliver hue orders ka refund request kar sakte hain", 400)
-
-        # 3. Check 7-day return window
-        # Use status_delivered_at if present, else created_at
-        delivery_time_str = order['status_delivered_at'] or order['created_at']
-        try:
-            delivery_time = datetime.datetime.fromisoformat(delivery_time_str)
-        except (ValueError, TypeError):
-            # Fallback for non-iso strings if any
-            delivery_time = datetime.datetime.now() # Should not happen with current DB setup
-
-        # DB timestamps are stored as IST wall-clock; compare against IST now
-        # (server clock is UTC on Render) so the window boundary is exact.
-        now_ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-        if (now_ist - delivery_time).days > 7:
-            return error_response("The 7-day return window has expired", 400)
-
-        # 4. Check for existing non-rejected request
-        existing = conn.execute(
-            "SELECT id, status FROM refund_requests WHERE order_id = ? AND user_id = ?",
-            (order_id, user_id)
-        ).fetchone()
-
-        if existing and existing['status'] != 'Rejected':
-            return error_response("A refund request for this order has already been submitted", 409)
-
-        # 5. Save the (mandatory) evidence photo
-        photo_path = None
-        file = photo_file
-        if not allowed_file(file.filename):
-            return error_response("Invalid file extension. Allowed: png, jpg, jpeg, webp", 400)
-        
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        ext = file.filename.rsplit('.', 1)[1].lower()
-        filename = f"{uuid.uuid4().hex}.{ext}"
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(file_path)
-        photo_path = f"/static/uploads/refunds/{filename}"
-
-        # 6. Insert request
-        refund_amount = order['total_amount']
-        cursor = conn.cursor()
-        cursor.execute(
-            """INSERT INTO refund_requests (user_id, order_id, reason, request_type, description, photo_path, refund_amount, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')""",
-            (user_id, order_id, reason, request_type, description, photo_path, refund_amount)
-        )
-        conn.commit()
-        request_id = cursor.lastrowid
-
-        return success_response({
-            "request_id": request_id,
-            "refund_amount": refund_amount
-        }, "Refund request submitted successfully", 201)
-    finally:
-        conn.close()
 
 @refund_bp.route('/api/refund-requests', methods=['GET'])
 @token_required
 def list_refund_requests():
+    """Customer's refund history (read-only, includes pipeline refunds).
+
+    Rows created by the warehouse returns pipeline (source='warehouse_complaint')
+    show the same fields — the storefront history page remains useful for
+    legacy rows and for tracking pipeline-approved refunds.
+    """
     user_id = request.user.get('user_id')
     conn = get_db()
     try:

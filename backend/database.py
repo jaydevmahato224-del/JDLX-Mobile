@@ -405,6 +405,20 @@ def init_db():
     )''')
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_fulfillment_product ON product_fulfillment(product_id)")
 
+    # Per-product return/exchange rule overrides (strongest level of the
+    # product → category → global fallback chain in product_rules.py). All
+    # columns nullable: NULL/missing = inherit from the level above.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS product_return_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL UNIQUE,
+        return_enabled INTEGER,
+        exchange_enabled INTEGER,
+        window_days REAL,
+        max_requests_per_order INTEGER,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )''')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS product_discovery (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         product_id INTEGER NOT NULL UNIQUE,
@@ -522,6 +536,13 @@ def init_db():
         ('packed_at', 'TIMESTAMP'),
         ('shipped_at', 'TIMESTAMP'),
         ('delivered_at', 'TIMESTAMP'),
+        # Order-tracking timestamps (used by the returns pipeline's window
+        # math and refund eligibility). Historically these only existed on DBs
+        # that ran migrate_order_tracking.py — provisioning them here so a
+        # fresh init_db() database no longer crashes those flows.
+        ('status_packing_at', 'TIMESTAMP'),
+        ('status_out_at', 'TIMESTAMP'),
+        ('status_delivered_at', 'TIMESTAMP'),
         ('estimated_delivery', "TEXT DEFAULT '15-25 mins'"),
         ('delivery_latitude', 'REAL'),
         ('delivery_longitude', 'REAL'),
@@ -1207,6 +1228,25 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id),
         FOREIGN KEY(order_id) REFERENCES orders(id)
     )''')
+    # --- Warehouse-driven returns pipeline (complaints are the single entry
+    # point for every post-delivery product issue; customers never file refund
+    # requests directly) ---
+    ensure_columns('complaints', [
+        # Warehouse that owns this complaint (resolved from the order's
+        # warehouse assignment at submit time; NULL = unassigned, admin sees it).
+        ('warehouse_id', 'INTEGER'),
+        # What the customer asked for: 'return' (item goes back, money back)
+        # or 'exchange' (item goes back, replacement out). Final say is the
+        # warehouse's — this is only the request.
+        ('requested_action', "TEXT DEFAULT 'return'"),
+        # Product-rules deadline (IST string): complaint must be filed before
+        # this. Computed at submit time from product/category/global rules.
+        ('return_window_end', 'TEXT'),
+        # Free-text final resolution note (what was actually done).
+        ('resolution', 'TEXT'),
+        # 1 once a warehouse took ownership (decided/pickup/verified).
+        ('handled_by_warehouse', 'INTEGER DEFAULT 0'),
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS order_reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1240,6 +1280,75 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id),
         FOREIGN KEY(order_id) REFERENCES orders(id)
+    )''')
+    # Refund provenance: 'customer' = legacy direct submissions (endpoint now
+    # retired), 'warehouse_complaint' = raised by the warehouse from the
+    # returns pipeline (decision authority = warehouse; admin only executes
+    # the payout). Default keeps every pre-existing row as 'customer'.
+    # NOTE: there are TWO historical shapes of this table (a legacy
+    # order_id/amount/reason schema and the full request_type/... schema).
+    # ensure_columns converges BOTH directions so every deployment has every
+    # column the code touches — the returns pipeline INSERTs request_type,
+    # refund_amount, admin_notes and the summary/aggregation queries read
+    # both amount and refund_amount.
+    ensure_columns('refund_requests', [
+        ('request_type', 'TEXT'),
+        ('description', 'TEXT'),
+        ('photo_path', 'TEXT'),
+        ('refund_amount', 'REAL'),
+        ('admin_notes', 'TEXT'),
+        ('resolution', 'TEXT'),
+        ('updated_at', 'TIMESTAMP'),
+        ('amount', 'REAL DEFAULT 0'),
+        ('source', "TEXT DEFAULT 'customer'"),
+        ('complaint_id', 'INTEGER'),
+    ])
+
+    # --- Warehouse returns pipeline (RMA) ---
+    # One row per complaint that a warehouse took on. Tracks the decision
+    # (return / exchange / refund / rejected), the reverse pickup, the item
+    # verification at the warehouse and the exchange re-dispatch. Created
+    # lazily on the first warehouse decision; complaints still in 'Pending'
+    # have no row yet.
+    # Warehouse bell notifications (also created lazily by
+    # warehouse_routes._ensure_warehouse_kyc_schema; creating here too so
+    # cross-module writes — e.g. new-return alerts from complaint_routes —
+    # never 500 on a fresh DB where no warehouse has logged in yet).
+    cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        type TEXT DEFAULT 'GENERAL',
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS complaint_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        complaint_id INTEGER NOT NULL UNIQUE,
+        warehouse_id INTEGER,
+        decision TEXT,
+        decided_by INTEGER,
+        decided_at TIMESTAMP,
+        decision_notes TEXT,
+        pickup_status TEXT DEFAULT 'not_scheduled',
+        pickup_courier TEXT,
+        pickup_code TEXT,
+        pickup_scheduled_at TIMESTAMP,
+        picked_up_at TIMESTAMP,
+        pickup_notes TEXT,
+        verification_status TEXT,
+        verified_at TIMESTAMP,
+        verification_notes TEXT,
+        exchange_product_id INTEGER,
+        exchange_order_id INTEGER,
+        exchange_status TEXT,
+        refund_request_id INTEGER,
+        refund_triggered_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(complaint_id) REFERENCES complaints(id)
     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS bug_reports (

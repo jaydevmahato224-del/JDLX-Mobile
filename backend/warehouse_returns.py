@@ -858,6 +858,119 @@ def trigger_refund(complaint_id):
 
 
 # =============================================================================
+# TRANSFERRED ORDER REPORTS — admin-reviewed reports routed here for action
+# =============================================================================
+
+@warehouse_returns_bp.route('/api/warehouse/order-reports', methods=['GET'])
+@require_warehouse_auth
+def list_transferred_order_reports():
+    """Order reports the admin reviewed and transferred to this warehouse.
+
+    Query: ?stage=pending|done  (default: all)
+    """
+    wh_id = _get_current_warehouse_id()
+    stage = (request.args.get('stage') or '').strip().lower()
+
+    conn = get_db()
+    try:
+        query = """
+            SELECT r.id, r.order_id, r.report_type, r.description, r.photo_path,
+                   r.status, r.admin_notes, r.transfer_note, r.transferred_at,
+                   r.action_taken, r.actioned_at, r.created_at,
+                   o.order_number, o.total_amount, o.order_status,
+                   u.name AS customer_name,
+                   (SELECT GROUP_CONCAT(COALESCE(oi.product_name, p.name), ', ')
+                      FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id
+                     WHERE oi.order_id = r.order_id) AS product_names
+            FROM order_reports r
+            JOIN orders o ON o.id = r.order_id
+            LEFT JOIN users u ON u.id = r.user_id
+            WHERE r.warehouse_id = ?
+        """
+        params = [wh_id]
+        if stage == 'pending':
+            query += " AND r.action_taken IS NULL"
+        elif stage == 'done':
+            query += " AND r.action_taken IS NOT NULL"
+        query += " ORDER BY COALESCE(r.transferred_at, r.created_at) DESC LIMIT 200"
+
+        rows = conn.execute(query, params).fetchall()
+        items = [dict(r) for r in rows]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM order_reports WHERE warehouse_id = ? AND action_taken IS NULL",
+            (wh_id,),
+        ).fetchone()[0]
+        return success_response({"items": items, "pending": pending})
+    finally:
+        conn.close()
+
+
+@warehouse_returns_bp.route('/api/warehouse/order-reports/<int:report_id>/action', methods=['POST'])
+@require_warehouse_auth
+def act_on_transferred_report(report_id):
+    """Warehouse processing action on a transferred report.
+
+    Body: { action: str (required, e.g. 'refund_processed'|'replacement_shipped'|
+                     'item_recovered'|'no_issue_found'|'escalate_to_admin'),
+            notes: str (optional) }
+
+    The report stays visible to the admin (status 'Action Taken'), which keeps
+    the admin's fraud-review loop closed: admin reviews -> warehouse acts ->
+    admin sees the outcome.
+    """
+    wh_id = _get_current_warehouse_id()
+    data = request.get_json(silent=True) or {}
+    action = (data.get('action') or '').strip()
+    notes = (data.get('notes') or '').strip() or None
+
+    if not action:
+        return error_response("action is required", 400)
+    if len(action) > 120:
+        return error_response("action too long (max 120 chars)", 400)
+
+    conn = get_db()
+    try:
+        report = conn.execute(
+            "SELECT id, warehouse_id, status, action_taken, order_id, user_id FROM order_reports WHERE id = ?",
+            (report_id,),
+        ).fetchone()
+        if not report:
+            return error_response("Report not found", 404)
+        if not report['warehouse_id'] or int(report['warehouse_id']) != int(wh_id):
+            return error_response("This report is not transferred to your warehouse", 403)
+        if (report['status'] or '') in ('Resolved', 'Rejected'):
+            return error_response("This report was closed by the admin", 409)
+
+        now = _now()
+        conn.execute(
+            """UPDATE order_reports
+               SET action_taken = ?,
+                   action_notes = ?,
+                   actioned_at = ?, actioned_by = ?,
+                   status = 'Action Taken', updated_at = ?
+               WHERE id = ?""",
+            (action, notes, now, f"warehouse:{wh_id}", now, report_id),
+        )
+
+        # Notify the customer: their report was processed
+        try:
+            _user_notification(
+                conn, report['user_id'], "Report processed",
+                f"Your report #{report_id} has been processed by the warehouse"
+                + (f": {notes}" if notes else "."),
+                report['order_id'],
+            )
+        except Exception:
+            pass
+
+        conn.commit()
+        updated = conn.execute("SELECT * FROM order_reports WHERE id = ?", (report_id,)).fetchone()
+        return success_response(dict(updated), "Action recorded")
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # DETAIL — one complaint with full pipeline state
 # =============================================================================
 

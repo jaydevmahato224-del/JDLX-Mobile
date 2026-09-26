@@ -7788,6 +7788,15 @@ def admin_dashboard_pulse():
         cursor.execute("SELECT COUNT(*) FROM delivery_applications WHERE LOWER(COALESCE(verification_status, 'pending')) = 'pending'")
         pending_delivery_requests = cursor.fetchone()[0]
 
+        # Order reports awaiting the admin fraud-review decision (Submitted =
+        # untouched; Under Review = being looked at). Transferred/Action Taken
+        # rows belong to the warehouse and don't need an admin decision.
+        cursor.execute(
+            """SELECT COUNT(*) FROM order_reports
+               WHERE status IN ('Submitted', 'Under Review')"""
+        )
+        pending_order_reports = cursor.fetchone()[0]
+
         cursor.execute("""
             SELECT COUNT(*)
             FROM warehouse_inventory wi
@@ -7808,6 +7817,7 @@ def admin_dashboard_pulse():
                 "complaints": pending_complaints,
                 "warehouse_requests": pending_warehouse_requests,
                 "delivery_requests": pending_delivery_requests,
+                "order_reports": pending_order_reports,
             },
             "warehouse_low_stock": warehouse_low_stock,
             "total_products": total_products,

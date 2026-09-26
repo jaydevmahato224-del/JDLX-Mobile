@@ -195,10 +195,16 @@ def admin_get_all_reports():
     try:
         query = """
             SELECT r.*, u.name as customer_name, u.email as customer_email,
-                   o.total_amount, o.created_at as order_date, o.order_number
+                   o.total_amount, o.created_at as order_date, o.order_number,
+                   o.order_status,
+                   w.warehouse_name AS transferred_warehouse_name,
+                   (SELECT GROUP_CONCAT(COALESCE(oi.product_name, p.name), ', ')
+                      FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id
+                     WHERE oi.order_id = r.order_id) AS product_names
             FROM order_reports r
             JOIN users u ON r.user_id = u.id
             JOIN orders o ON r.order_id = o.id
+            LEFT JOIN warehouses w ON w.id = r.warehouse_id
         """
         params = []
         if status_filter:
@@ -214,6 +220,105 @@ def admin_get_all_reports():
     finally:
         conn.close()
 
+
+@admin_db_bp.route('/api/admin/order-reports/<int:report_id>/transfer', methods=['POST'])
+@require_admin()
+def admin_transfer_report_to_warehouse(report_id):
+    """Fraud-review gate: transfer a reviewed report to the responsible warehouse.
+
+    Flow: customer reports an order-level issue (possible fraud etc.) → admin
+    reviews it → if it looks legitimate (no fraud found), the report is
+    TRANSFERRED to the warehouse that packed the order, which then takes the
+    processing action from its own panel. The warehouse is resolved
+    automatically from the order's assignment — the admin never picks one.
+
+    Body (optional): { note: str }
+    """
+    data = request.get_json(silent=True) or {}
+    note = (data.get('note') or '').strip() or None
+    admin_id = request.user.get('user_id')
+
+    conn = get_db()
+    try:
+        report = conn.execute(
+            "SELECT id, order_id, status, warehouse_id FROM order_reports WHERE id = ?",
+            (report_id,),
+        ).fetchone()
+        if not report:
+            return error_response("Report not found", 404)
+        if report['warehouse_id']:
+            return error_response("This report is already transferred to a warehouse", 409)
+        if (report['status'] or 'Submitted') in ('Resolved', 'Rejected'):
+            return error_response(f"Report is already {report['status']}", 409)
+
+        # Resolve the fulfilling warehouse from the order's latest assignment
+        assignment = conn.execute(
+            """SELECT warehouse_id FROM warehouse_order_assignments
+               WHERE order_id = ? ORDER BY id DESC LIMIT 1""",
+            (report['order_id'],),
+        ).fetchone()
+        if not assignment or not assignment['warehouse_id']:
+            return error_response(
+                "No warehouse assignment found for this order — it cannot be transferred",
+                409,
+            )
+
+        warehouse_id = assignment['warehouse_id']
+        now = "CURRENT_TIMESTAMP"
+        conn.execute(
+            f"""UPDATE order_reports
+                SET status = 'Transferred to Warehouse',
+                    warehouse_id = ?,
+                    transferred_by = ?,
+                    transferred_at = {now},
+                    transfer_note = COALESCE(?, transfer_note),
+                    updated_at = {now}
+                WHERE id = ?""",
+            (warehouse_id, admin_id, note, report_id),
+        )
+
+        # Notify the warehouse (bell notification)
+        try:
+            conn.execute(
+                """INSERT INTO warehouse_notifications (warehouse_id, title, message, type)
+                   VALUES (?, ?, ?, 'REPORT')""",
+                (warehouse_id,
+                 "Order report transferred to you",
+                 f"Admin reviewed and transferred report #{report_id} (order #{report['order_id']}) "
+                 "for processing action."),
+            )
+        except Exception:
+            pass
+
+        # Notify the customer that the report moved to processing
+        try:
+            cust = conn.execute(
+                "SELECT user_id FROM order_reports WHERE id = ?", (report_id,)
+            ).fetchone()
+            if cust:
+                from notifications.notification_service import notification_service
+                notification_service.notify_user_internal(
+                    cust['user_id'], "Report under processing",
+                    f"Your report #{report_id} passed the review and has been sent to the "
+                    "fulfilling warehouse for action.",
+                    'ORDER', url=f"/profile/my-reports",
+                )
+        except Exception:
+            pass
+
+        conn.commit()
+        updated = conn.execute(
+            """SELECT r.*, w.warehouse_name AS transferred_warehouse_name
+               FROM order_reports r LEFT JOIN warehouses w ON w.id = r.warehouse_id
+               WHERE r.id = ?""",
+            (report_id,),
+        ).fetchone()
+        return success_response(dict(updated), "Report transferred to warehouse")
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
 @admin_db_bp.route('/api/admin/order-reports/<int:report_id>', methods=['PATCH'])
 @require_admin()
 def admin_update_report(report_id):
@@ -223,13 +328,27 @@ def admin_update_report(report_id):
     admin_notes = data.get('admin_notes')
 
     allowed_statuses = ['Submitted', 'Under Review', 'Resolved', 'Rejected']
-    
+    # Statuses owned by the warehouse after a transfer — admin must not yank
+    # a live warehouse investigation back to a generic label.
+    WAREHOUSE_OWNED_STATUSES = {'Transferred to Warehouse', 'In Warehouse Review', 'Action Taken'}
+
     conn = get_db()
     try:
         # Check if report exists
-        report = conn.execute("SELECT id FROM order_reports WHERE id = ?", (report_id,)).fetchone()
+        report = conn.execute("SELECT id, status, warehouse_id FROM order_reports WHERE id = ?", (report_id,)).fetchone()
         if not report:
             return error_response("Report not found", 404)
+
+        current_status = report['status'] or 'Submitted'
+        admin_override_close = status in ('Resolved', 'Rejected')
+        if current_status in WAREHOUSE_OWNED_STATUSES and status and not admin_override_close:
+            # Admin may still close (Resolve/Reject) a transferred report as an
+            # override, but cannot set generic in-progress labels on it.
+            return error_response(
+                f"This report was transferred to a warehouse (status: {current_status}). "
+                "Its processing status is managed there; you can still Resolve or Reject it as an override.",
+                409,
+            )
 
         updates = ["updated_at = CURRENT_TIMESTAMP"]
         params = []
@@ -239,6 +358,8 @@ def admin_update_report(report_id):
                 return error_response(f"Invalid status. Allowed: {', '.join(allowed_statuses)}", 400)
             updates.append("status = ?")
             params.append(status)
+            # Closing as admin override also notifies the customer below via
+            # the resolution field; the warehouse's action_taken stays intact.
         
         if resolution is not None:
             updates.append("resolution = ?")

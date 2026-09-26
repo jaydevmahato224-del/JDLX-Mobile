@@ -49,6 +49,9 @@ function MyReportsPage() {
         const s = status?.toLowerCase();
         if (s === 'submitted') return 'bg-blue-100 text-blue-700 border-blue-200';
         if (s === 'under review') return 'bg-amber-100 text-amber-700 border-amber-200';
+        if (s === 'transferred to warehouse') return 'bg-violet-100 text-violet-700 border-violet-200';
+        if (s === 'in warehouse review') return 'bg-violet-100 text-violet-700 border-violet-200';
+        if (s === 'action taken') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
         if (s === 'resolved') return 'bg-green-100 text-green-700 border-green-200';
         if (s === 'rejected') return 'bg-red-100 text-red-700 border-red-200';
         return 'bg-[var(--color-surface-container)] text-[var(--color-on-surface-variant)] border-[var(--color-surface-high)]';
@@ -139,6 +142,24 @@ function MyReportsPage() {
                                 <div className="flex items-start gap-2 text-[11px] text-[var(--color-on-surface-variant)] bg-[var(--color-surface-low)] p-3 rounded-xl border border-[var(--color-surface-high)]">
                                     <Info size={14} className="shrink-0 mt-0.5" />
                                     <p>{report.admin_notes}</p>
+                                </div>
+                            )}
+
+                            {/* Transfer status timeline: review passed → warehouse is acting */}
+                            {['Transferred to Warehouse', 'In Warehouse Review'].includes(report.status) && (
+                                <div className="mt-2 flex items-start gap-2 text-[11px] text-violet-700 bg-violet-50 p-3 rounded-xl border border-violet-100">
+                                    <Package size={14} className="shrink-0 mt-0.5" />
+                                    <p>Review passed — the fulfilling warehouse is now handling your report and will take the required action.</p>
+                                </div>
+                            )}
+                            {report.action_taken && (
+                                <div className="mt-2 p-4 rounded-2xl border bg-emerald-50 border-emerald-100 text-emerald-700">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <CheckCircle2 size={14} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Warehouse action:</span>
+                                    </div>
+                                    <p className="text-sm font-bold">{report.action_taken}</p>
+                                    {report.action_notes && <p className="text-xs mt-1 text-emerald-600">{report.action_notes}</p>}
                                 </div>
                             )}
                         </div>

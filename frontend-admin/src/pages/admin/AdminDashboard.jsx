@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ShoppingBag, Users, TrendingUp, Package, ShieldAlert, History, Megaphone, Undo2, MessageSquare, Warehouse, Truck, Check, ClipboardList, AlertTriangle } from 'lucide-react'
+import { ShoppingBag, Users, TrendingUp, Package, ShieldAlert, History, Megaphone, Undo2, MessageSquare, Warehouse, Truck, Check, ClipboardList, AlertTriangle, Flag } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import adminLogo from '../../assets/admin-logo.svg'
 import { apiFetch } from '../../utils/apiFetch'
@@ -183,16 +183,18 @@ function AdminDashboard() {
                         <p className="text-xs text-gray-500 font-medium mt-0.5">Things waiting for your decision</p>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     {[
                         { to: '/admin/refunds', icon: Undo2, label: 'Refund Requests', value: pulse.pending_actions?.refunds || 0, tone: 'amber' },
                         { to: '/admin/complaints', icon: MessageSquare, label: 'Open Complaints', value: pulse.pending_actions?.complaints || 0, tone: 'rose' },
+                        { to: '/admin/order-reports', icon: Flag, label: 'Order Reports', value: pulse.pending_actions?.order_reports || 0, tone: 'violet' },
                         { to: '/admin/warehouse-applications', icon: Warehouse, label: 'Warehouse Requests', value: pulse.pending_actions?.warehouse_requests || 0, tone: 'indigo' },
                         { to: '/admin/delivery-applications', icon: Truck, label: 'Delivery Requests', value: pulse.pending_actions?.delivery_requests || 0, tone: 'blue' },
                     ].map(item => {
                         const tones = {
                             amber: 'bg-amber-50 border-amber-100 text-amber-600',
                             rose: 'bg-rose-50 border-rose-100 text-rose-600',
+                            violet: 'bg-violet-50 border-violet-100 text-violet-600',
                             indigo: 'bg-indigo-50 border-indigo-100 text-indigo-600',
                             blue: 'bg-blue-50 border-blue-100 text-blue-600',
                         };

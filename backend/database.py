@@ -1267,6 +1267,20 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id),
         FOREIGN KEY(order_id) REFERENCES orders(id)
     )''')
+    # Admin fraud-review -> warehouse transfer flow. Admin reviews a new
+    # report; if it looks legitimate it is TRANSFERRED to the warehouse that
+    # packed the order, which then takes the processing action. Columns are
+    # NULL until the transfer happens.
+    ensure_columns('order_reports', [
+        ('warehouse_id', 'INTEGER'),
+        ('transferred_by', 'INTEGER'),
+        ('transferred_at', 'TIMESTAMP'),
+        ('transfer_note', 'TEXT'),
+        ('action_taken', 'TEXT'),
+        ('action_notes', 'TEXT'),
+        ('actioned_at', 'TIMESTAMP'),
+        ('actioned_by', 'TEXT'),
+    ])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS refund_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

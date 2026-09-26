@@ -46,7 +46,7 @@ from google.auth.transport import requests as google_requests
 from database import get_db as _db_get_db, ist_now_str
 from utils.recommendation_engine import autofill_recommendations
 from utils.response_utils import success_response, error_response, safe_float
-from utils.product_url_utils import generate_share_token, generate_product_description
+from utils.product_url_utils import generate_share_token, generate_product_description, generate_seo_slug
 from notifier import (
     send_warehouse_application_email, 
     send_warehouse_registration_confirmation_email,
@@ -2590,7 +2590,7 @@ def warehouse_get_inventory():
                       p.is_perishable, p.expiry_date, p.is_featured,
                       p.return_policy,
                       p.recommendation_priority, p.recommendation_weight,
-                      p.lifecycle_state,
+                      p.lifecycle_state, p.approval_status, p.approval_note,
                       c.return_policy as category_return_policy,
                       ROUND(COALESCE((SELECT AVG(rating) FROM product_reviews WHERE product_id = p.id), 0), 1) as average_rating
                FROM warehouse_inventory wi
@@ -2801,9 +2801,11 @@ def warehouse_create_product():
                 color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                 is_featured, has_variants, is_parent, variant_group_id, variant_name,
                 recommendation_priority, recommendation_weight,
-                lifecycle_state, share_token
+                lifecycle_state, share_token,
+                approval_status, approval_source, approval_warehouse_id, approval_requested_at
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    'pending', 'warehouse', ?, CURRENT_TIMESTAMP)
             """,
             (
                 name, generated_description, sub_category, price or 0, offline_price,
@@ -2812,7 +2814,8 @@ def warehouse_create_product():
                 color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date,
                 is_featured, 1 if has_variants else 0, 1 if has_variants else 0,
                 None, None,
-                rec_priority, rec_weight, lifecycle_state, share_token
+                rec_priority, rec_weight, lifecycle_state, share_token,
+                wh_id
             )
         )
         product_id = cursor.lastrowid
@@ -2993,15 +2996,18 @@ def warehouse_create_product():
                         color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                         is_featured, has_variants, is_parent, variant_group_id, variant_name,
                         recommendation_priority, recommendation_weight,
-                        lifecycle_state, share_token)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)""",
+                        lifecycle_state, share_token,
+                        approval_status, approval_source, approval_warehouse_id, approval_requested_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?,
+                               'pending', 'warehouse', ?, CURRENT_TIMESTAMP)""",
                     (
                         f"{name} - {v_name}", generated_description, sub_category, v_price, v_offline_price, 
                         v.get('mrp', 0.0), category, category_id, v_images,
                         delivery_time, v_barcode, v_sku, brand, units_per_pack, material_type,
                         color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date,
                         is_featured, product_id, v_name,
-                        rec_priority, rec_weight, lifecycle_state, v_share_token
+                        rec_priority, rec_weight, lifecycle_state, v_share_token,
+                        wh_id
                     )
                 )
                 variant_product_id = cursor.lastrowid
@@ -3041,10 +3047,12 @@ def warehouse_create_product():
                 ) WHERE id = ?""",
                 (product_id, wh_id, product_id)
             )
-            
+
             conn.commit()
-            return success_response({"product_id": product_id, "variants": created_variants}, "Product and variants created", 201)
-        
+            return success_response(
+                {"product_id": product_id, "variants": created_variants, "approval_status": "pending"},
+                "Product submitted for admin approval — it will be public on the store once approved", 201
+            )
         else:
             # Original Single Product Logic
             # 2. Logic for Unique Identifier (SKU)
@@ -3082,7 +3090,10 @@ def warehouse_create_product():
             )
 
             conn.commit()
-            return success_response({"product_id": product_id, "sku": final_sku}, "Product created, added to inventory, and synced with catalog", 201)
+            return success_response(
+                {"product_id": product_id, "sku": final_sku, "approval_status": "pending"},
+                "Product submitted for admin approval — it will be public on the store once approved", 201
+            )
 
     except Exception as e:
         import logging

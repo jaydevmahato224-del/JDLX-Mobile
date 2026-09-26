@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ShoppingBag, Users, TrendingUp, Package, ShieldAlert, History, Megaphone, Undo2, MessageSquare, Warehouse, Truck, Check, ClipboardList, AlertTriangle, Flag } from 'lucide-react'
+import { ShoppingBag, Users, TrendingUp, Package, ShieldAlert, History, Megaphone, Undo2, MessageSquare, Warehouse, Truck, Check, ClipboardList, AlertTriangle, Flag, PackageCheck } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import adminLogo from '../../assets/admin-logo.svg'
 import { apiFetch } from '../../utils/apiFetch'
@@ -188,6 +188,7 @@ function AdminDashboard() {
                         { to: '/admin/refunds', icon: Undo2, label: 'Refund Requests', value: pulse.pending_actions?.refunds || 0, tone: 'amber' },
                         { to: '/admin/complaints', icon: MessageSquare, label: 'Open Complaints', value: pulse.pending_actions?.complaints || 0, tone: 'rose' },
                         { to: '/admin/order-reports', icon: Flag, label: 'Order Reports', value: pulse.pending_actions?.order_reports || 0, tone: 'violet' },
+                        { to: '/admin/product-review', icon: PackageCheck, label: 'Product Approvals', value: pulse.pending_actions?.product_approvals || 0, tone: 'emerald' },
                         { to: '/admin/warehouse-applications', icon: Warehouse, label: 'Warehouse Requests', value: pulse.pending_actions?.warehouse_requests || 0, tone: 'indigo' },
                         { to: '/admin/delivery-applications', icon: Truck, label: 'Delivery Requests', value: pulse.pending_actions?.delivery_requests || 0, tone: 'blue' },
                     ].map(item => {
@@ -197,6 +198,7 @@ function AdminDashboard() {
                             violet: 'bg-violet-50 border-violet-100 text-violet-600',
                             indigo: 'bg-indigo-50 border-indigo-100 text-indigo-600',
                             blue: 'bg-blue-50 border-blue-100 text-blue-600',
+                            emerald: 'bg-emerald-50 border-emerald-100 text-emerald-600',
                         };
                         return (
                             <Link key={item.to} to={item.to} className={`p-5 rounded-3xl border flex flex-col gap-2 transition-all hover:scale-[1.02] hover:shadow-md ${tones[item.tone]}`}>

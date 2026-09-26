@@ -4025,7 +4025,7 @@ def get_category_products(category_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM products WHERE status='available' AND category_id=? AND lifecycle_state IN ('live', 'coming_soon')", (category_id,))
+        cursor.execute("SELECT * FROM products WHERE status='available' AND category_id=? AND lifecycle_state IN ('live', 'coming_soon') AND approval_status='approved'", (category_id,))
         products = [normalize_product_row(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(products)
@@ -4052,6 +4052,7 @@ def search_products():
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.status = 'available' AND p.lifecycle_state IN ('live', 'coming_soon')
+                  AND p.approval_status = 'approved'
         """
         params = []
         
@@ -4126,6 +4127,7 @@ def get_products():
                 INNER JOIN warehouse_inventory wi ON p.id = wi.product_id
                 LEFT JOIN product_reviews r ON p.id = r.product_id
                 WHERE p.status = 'available' AND wi.warehouse_id = ? AND p.lifecycle_state IN ('live', 'coming_soon')
+                      AND p.approval_status = 'approved'
             '''
             params = [store_id]
         else:
@@ -4152,6 +4154,7 @@ def get_products():
                 LEFT JOIN categories c ON p.category_id = c.id
                 LEFT JOIN product_reviews r ON p.id = r.product_id
                 WHERE p.status = 'available' AND p.lifecycle_state IN ('live', 'coming_soon')
+                      AND p.approval_status = 'approved'
             '''
             params = []
         
@@ -4207,10 +4210,10 @@ def get_products():
         total_count = None
         if request.args.get('include_count'):
             if store_id:
-                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p INNER JOIN warehouse_inventory wi ON p.id = wi.product_id WHERE p.status = "available" AND wi.warehouse_id = ? AND p.lifecycle_state IN ("live", "coming_soon")'
+                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p INNER JOIN warehouse_inventory wi ON p.id = wi.product_id WHERE p.status = "available" AND wi.warehouse_id = ? AND p.lifecycle_state IN ("live", "coming_soon") AND p.approval_status = "approved"'
                 count_params = [store_id]
             else:
-                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p WHERE p.status = "available" AND p.lifecycle_state IN ("live", "coming_soon")'
+                count_query = 'SELECT COUNT(DISTINCT p.id) as total FROM products p WHERE p.status = "available" AND p.lifecycle_state IN ("live", "coming_soon") AND p.approval_status = "approved"'
                 count_params = []
                 
             if category_id:
@@ -4321,7 +4324,7 @@ def share_product_html(token):
         cursor.execute("""
             SELECT p.id, p.name, p.price, p.description, p.images, p.share_token, p.seo_slug
             FROM products p 
-            WHERE p.id = ?
+            WHERE p.id = ? AND p.approval_status = 'approved'
         """, (product_id,))
         product = cursor.fetchone()
         conn.close()
@@ -4480,7 +4483,15 @@ def get_product(product_id):
         if not product:
             conn.close()
             return error_response("Product not found", 404)
-            
+
+        # Catalog approval gate: pending/rejected warehouse submissions must
+        # never be reachable by direct URL/share-link either. Admin-created
+        # products are 'approved' by default, so this only blocks the
+        # not-yet-reviewed ones.
+        if (product['approval_status'] or 'approved') != 'approved':
+            conn.close()
+            return error_response("Product not found", 404)
+
         cursor.execute("SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews FROM product_reviews WHERE product_id = ?", (product_id,))
         stats = cursor.fetchone()
         
@@ -4779,6 +4790,7 @@ def get_products_batch():
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.id IN ({placeholders})
+              AND p.approval_status = 'approved'
         """, clean_ids)
         products = [normalize_product_row(r) for r in cursor.fetchall()]
 
@@ -5232,12 +5244,14 @@ def checkout():
             return error_response("Invalid order items", 400)
 
         placeholders = ",".join(["?"] * len(product_ids))
+        # approval_status filter: a pending/rejected catalog submission must
+        # not be purchasable by crafting a cart directly against the API.
         cursor.execute(f"""
             SELECT p.id, p.name, p.category, p.stock, p.prepaid_only, p.price, p.sub_category, c.name as category_name,
                    COALESCE(c.device_customization_enabled, 0) as device_customization_enabled
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.id IN ({placeholders})
+            WHERE p.id IN ({placeholders}) AND p.approval_status = 'approved'
         """, product_ids)
         product_meta = {row['id']: dict(row) for row in cursor.fetchall()}
 
@@ -7797,6 +7811,12 @@ def admin_dashboard_pulse():
         )
         pending_order_reports = cursor.fetchone()[0]
 
+        # Catalog approvals: warehouse-created products waiting to go public
+        cursor.execute(
+            "SELECT COUNT(*) FROM products WHERE approval_status = 'pending'"
+        )
+        pending_product_approvals = cursor.fetchone()[0]
+
         cursor.execute("""
             SELECT COUNT(*)
             FROM warehouse_inventory wi
@@ -7818,6 +7838,7 @@ def admin_dashboard_pulse():
                 "warehouse_requests": pending_warehouse_requests,
                 "delivery_requests": pending_delivery_requests,
                 "order_reports": pending_order_reports,
+                "product_approvals": pending_product_approvals,
             },
             "warehouse_low_stock": warehouse_low_stock,
             "total_products": total_products,

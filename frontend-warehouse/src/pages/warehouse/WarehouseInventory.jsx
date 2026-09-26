@@ -851,7 +851,13 @@ const WarehouseInventory = () => {
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'Operation failed')
 
-            showNotification(editingItemId ? 'Product updated successfully' : 'Product added successfully')
+            // New warehouse submissions await admin catalog approval before
+            // they appear on the storefront — set expectation immediately.
+            if (!editingItemId && result.data?.approval_status === 'pending') {
+                showNotification('Product submitted — admin approval ke baad store pe public hoga')
+            } else {
+                showNotification(editingItemId ? 'Product updated successfully' : 'Product added successfully')
+            }
             setShowAddProductView(false)
             setEditingItemId(null)
             setNewProductData(INITIAL_PRODUCT_STATE)
@@ -2912,6 +2918,16 @@ const WarehouseInventory = () => {
                                                             }`}>
                                                             {item.lifecycle_state || 'live'}
                                                         </span>
+                                                        {item.approval_status === 'pending' && (
+                                                            <span className="px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 text-[9px] font-black uppercase tracking-widest border border-amber-400/20" title="Admin approval pending — store pe abhi public nahi he">
+                                                                Awaiting Approval
+                                                            </span>
+                                                        )}
+                                                        {item.approval_status === 'rejected' && (
+                                                            <span className="px-2 py-0.5 rounded-full bg-rose-400/10 text-rose-400 text-[9px] font-black uppercase tracking-widest border border-rose-400/20" title={item.approval_note || 'Rejected by admin'}>
+                                                                Rejected
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 sm:px-6 sm:py-4 text-right">

@@ -174,7 +174,7 @@ class ProductQueryOptimizer:
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN product_reviews r ON p.id = r.product_id
-            WHERE p.status = 'available'
+            WHERE p.status = 'available' AND p.approval_status = 'approved'
             GROUP BY p.id
             ORDER BY average_rating DESC, total_reviews DESC, p.id DESC
             LIMIT ?

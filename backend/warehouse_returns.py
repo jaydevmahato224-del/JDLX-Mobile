@@ -877,6 +877,8 @@ def list_transferred_order_reports():
             SELECT r.id, r.order_id, r.report_type, r.description, r.photo_path,
                    r.status, r.admin_notes, r.transfer_note, r.transferred_at,
                    r.action_taken, r.actioned_at, r.created_at,
+                   r.action_required, r.directive_deadline,
+                   r.escalated_at, r.escalation_note,
                    o.order_number, o.total_amount, o.order_status,
                    u.name AS customer_name,
                    (SELECT GROUP_CONCAT(COALESCE(oi.product_name, p.name), ', ')
@@ -931,7 +933,7 @@ def act_on_transferred_report(report_id):
     conn = get_db()
     try:
         report = conn.execute(
-            "SELECT id, warehouse_id, status, action_taken, order_id, user_id FROM order_reports WHERE id = ?",
+            "SELECT id, warehouse_id, status, action_taken, order_id, user_id, action_required FROM order_reports WHERE id = ?",
             (report_id,),
         ).fetchone()
         if not report:
@@ -940,6 +942,30 @@ def act_on_transferred_report(report_id):
             return error_response("This report is not transferred to your warehouse", 403)
         if (report['status'] or '') in ('Resolved', 'Rejected'):
             return error_response("This report was closed by the admin", 409)
+        if (report['status'] or '') == 'Escalated to Admin':
+            return error_response("This report was escalated to the admin — it is out of your hands now", 409)
+
+        # Directive enforcement: the admin transfer can FORCE a specific
+        # action (refund / exchange / investigate). A non-compliant action is
+        # rejected so the directed remedy is actually delivered to the
+        # customer instead of being waved away with a generic note.
+        directive = (report['action_required'] or '').strip().lower()
+        if directive:
+            a = action.lower()
+            compliant = {
+                'refund': ('refund',),
+                'exchange': ('exchange', 'replace', 'replacement'),
+                'refund_or_exchange': ('refund', 'exchange', 'replace', 'replacement'),
+                'investigate': (),  # any recorded action counts as investigation
+            }.get(directive)
+            if compliant is None:
+                compliant = ()  # unknown directive — treat as investigate
+            if compliant and not any(k in a for k in compliant):
+                return error_response(
+                    f"Admin directive requires: {directive.replace('_', ' ')}. "
+                    f"Your action must clearly mention one of: {', '.join(compliant)}.",
+                    409,
+                )
 
         now = _now()
         conn.execute(

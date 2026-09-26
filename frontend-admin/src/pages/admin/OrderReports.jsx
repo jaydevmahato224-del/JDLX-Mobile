@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Search, Flag, Clock, CheckCircle, XCircle, Send, Loader2, Eye, X, ShieldCheck, Package, RefreshCcw, Building2 } from 'lucide-react'
+import { ArrowLeft, Search, Flag, Clock, CheckCircle, XCircle, Send, Loader2, Eye, X, ShieldCheck, Package, RefreshCcw, Building2, AlertTriangle, ArrowUpCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { API_BASE_URL } from '../../config'
@@ -11,7 +11,10 @@ import { apiFetch } from '../../utils/apiFetch'
  * Flow: customer "Report this order" -> report lands here (Submitted)
  *   -> admin reviews (Under Review)
  *   -> legit?  TRANSFER to the responsible warehouse (auto-resolved from the
- *      order's assignment) -> warehouse takes the processing action
+ *      order's assignment) with a FORCED directive (refund / exchange /
+ *      investigate) -> warehouse must record the directed action
+ *   -> warehouse handling unsatisfactory? ESCALATE against the warehouse
+ *      (formal warning, admin takes over)
  *   -> fraud/malicious? REJECT (closed here, never reaches a warehouse)
  * Admin can Resolve/Reject a transferred report as an override at any time.
  */
@@ -22,9 +25,17 @@ const STATUS_TONES = {
     'Transferred to Warehouse': 'bg-violet-100 text-violet-700 border-violet-200',
     'In Warehouse Review': 'bg-violet-100 text-violet-700 border-violet-200',
     'Action Taken': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    'Escalated to Admin': 'bg-orange-100 text-orange-700 border-orange-200',
     'Resolved': 'bg-green-100 text-green-700 border-green-200',
     'Rejected': 'bg-red-100 text-red-600 border-red-200',
 }
+
+const DIRECTIVE_OPTIONS = [
+    { value: 'refund', label: 'Force refund — warehouse must refund the customer' },
+    { value: 'exchange', label: 'Force exchange — warehouse must arrange replacement' },
+    { value: 'refund_or_exchange', label: 'Refund OR exchange — warehouse picks one' },
+    { value: 'investigate', label: 'Investigate — record findings (no forced remedy)' },
+]
 
 const REPORT_TYPES = [
     'Item not delivered', 'Wrong item received', 'Missing item in package',
@@ -42,6 +53,11 @@ function OrderReports() {
     const [transferring, setTransferring] = useState(false);
     const [updateLoading, setUpdateLoading] = useState(false);
     const [resolutionText, setResolutionText] = useState('');
+    const [directive, setDirective] = useState('');
+    const [deadlineHours, setDeadlineHours] = useState('');
+    const [harassment, setHarassment] = useState(false);
+    const [escalating, setEscalating] = useState(false);
+    const [escalationNote, setEscalationNote] = useState('');
 
     useEffect(() => {
         fetchReports();
@@ -72,13 +88,19 @@ function OrderReports() {
             const res = await apiFetch(`/admin/order-reports/${selectedReport.id}/transfer`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ note: transferNote || null })
+                body: JSON.stringify({
+                    note: transferNote || null,
+                    action_required: directive || null,
+                    directive_deadline_hours: deadlineHours ? Number(deadlineHours) : null,
+                    harassment_warning: harassment,
+                })
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
-                toast.success(`Transferred to ${data.data?.transferred_warehouse_name || 'warehouse'}`);
+                toast.success(`Transferred to ${data.data?.transferred_warehouse_name || 'warehouse'}${directive ? ` — directive: ${directive.replace('_', ' ')}` : ''}`);
                 setSelectedReport(null);
                 setTransferNote('');
+                setDirective(''); setDeadlineHours(''); setHarassment(false);
                 fetchReports();
             } else {
                 toast.error(data.message || "Transfer failed");
@@ -88,6 +110,32 @@ function OrderReports() {
             toast.error("Network error — please retry");
         } finally {
             setTransferring(false);
+        }
+    };
+
+    const handleEscalate = async () => {
+        if (!selectedReport || !escalationNote.trim()) return;
+        setEscalating(true);
+        try {
+            const res = await apiFetch(`/admin/order-reports/${selectedReport.id}/escalate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ note: escalationNote })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                toast.success("Report escalated — formal warning recorded against the warehouse");
+                setSelectedReport(null);
+                setEscalationNote('');
+                fetchReports();
+            } else {
+                toast.error(data.message || "Escalation failed");
+            }
+        } catch (error) {
+            console.error("Escalation failed:", error);
+            toast.error("Network error — please retry");
+        } finally {
+            setEscalating(false);
         }
     };
 
@@ -364,13 +412,42 @@ function OrderReports() {
                                             placeholder="Transfer note for the warehouse (optional)"
                                             className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
                                         />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <select
+                                                value={directive}
+                                                onChange={e => setDirective(e.target.value)}
+                                                className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                            >
+                                                <option value="">No forced directive</option>
+                                                {DIRECTIVE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                            <input
+                                                type="number" min="1" max="720"
+                                                value={deadlineHours}
+                                                onChange={e => setDeadlineHours(e.target.value)}
+                                                placeholder="Deadline (hours, optional)"
+                                                className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                            />
+                                        </div>
+                                        <label className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={harassment}
+                                                onChange={e => setHarassment(e.target.checked)}
+                                                className="mt-0.5 accent-red-600"
+                                            />
+                                            <span className="text-[11px] text-red-700 leading-snug">
+                                                <b>Issue formal harassment warning</b> — warehouse ko warning record hogi.
+                                                Customer ko harassment na ho, warna warehouse ke against action liya jayega.
+                                            </span>
+                                        </label>
                                         <button
                                             onClick={handleTransfer}
                                             disabled={transferring}
                                             className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
                                         >
                                             {transferring ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                                            Transfer to Warehouse
+                                            Transfer to Warehouse{directive ? ' + Directive' : ''}
                                         </button>
                                     </div>
 
@@ -426,6 +503,11 @@ function OrderReports() {
                                             With {selectedReport.transferred_warehouse_name || 'warehouse'} for processing
                                         </p>
                                     </div>
+                                    {selectedReport.action_required && (
+                                        <p className="text-[11px] font-black uppercase tracking-wider text-violet-600 bg-violet-50 border border-violet-100 rounded-xl px-3 py-2">
+                                            Directive: {selectedReport.action_required.replace(/_/g, ' ')}
+                                        </p>
+                                    )}
                                     {selectedReport.action_taken && (
                                         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm">
                                             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-0.5">Action taken by warehouse</p>
@@ -458,11 +540,71 @@ function OrderReports() {
                                             <XCircle size={14} /> Reject (override)
                                         </button>
                                     </div>
+
+                                    {/* Escalate against warehouse */}
+                                    <div className="border border-orange-200 bg-orange-50/50 rounded-2xl p-3 space-y-2">
+                                        <p className="text-sm font-bold text-orange-700 flex items-center gap-1.5">
+                                            <ArrowUpCircle size={15} /> Unsatisfactory handling? Escalate against warehouse
+                                        </p>
+                                        <textarea
+                                            value={escalationNote}
+                                            onChange={e => setEscalationNote(e.target.value)}
+                                            rows={2}
+                                            placeholder="Escalation note — why the warehouse's handling is unacceptable (formal warning recorded)"
+                                            className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400"
+                                        />
+                                        <button
+                                            onClick={handleEscalate}
+                                            disabled={escalating || !escalationNote.trim()}
+                                            className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {escalating ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
+                                            Escalate + Formal Warning
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Escalated state */}
+                            {selectedReport.status === 'Escalated to Admin' && (
+                                <div className="border border-orange-200 bg-orange-50 rounded-xl p-3 space-y-2">
+                                    <p className="text-sm font-black text-orange-700 flex items-center gap-1.5">
+                                        <AlertTriangle size={15} /> Escalated to Admin — admin owns this report now
+                                    </p>
+                                    {selectedReport.escalation_note && (
+                                        <p className="text-xs text-orange-800"><b>Escalation note:</b> {selectedReport.escalation_note}</p>
+                                    )}
+                                    {selectedReport.action_taken && (
+                                        <p className="text-xs text-gray-600"><b>Warehouse had recorded:</b> {selectedReport.action_taken}</p>
+                                    )}
+                                    <textarea
+                                        value={resolutionText}
+                                        onChange={e => setResolutionText(e.target.value)}
+                                        rows={2}
+                                        placeholder="Final resolution (customer-visible)"
+                                        className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300"
+                                    />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => handleClose('Resolved')}
+                                            disabled={updateLoading}
+                                            className="py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            <CheckCircle size={14} /> Resolve
+                                        </button>
+                                        <button
+                                            onClick={() => handleClose('Rejected')}
+                                            disabled={updateLoading}
+                                            className="py-2.5 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            <XCircle size={14} /> Reject
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
                             {/* Closed states */}
-                            {['Action Taken', 'Resolved', 'Rejected'].includes(selectedReport.status) && (
+                            {['Action Taken', 'Resolved', 'Rejected'].includes(selectedReport.status) && selectedReport.status !== 'Escalated to Admin' && (
                                 <div className="border-t border-slate-100 pt-4 space-y-2">
                                     {selectedReport.action_taken && (
                                         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm">

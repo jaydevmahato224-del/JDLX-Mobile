@@ -290,6 +290,18 @@ def init_db():
         ('lifecycle_state', "TEXT DEFAULT 'live'"), 
         ('share_token', 'TEXT'), 
         ('seo_slug', 'TEXT'),
+        # Catalog approval gate: warehouse-created products start as
+        # 'pending' and are only publicly visible on the storefront after an
+        # admin approves them (see /api/admin/products/<id>/approve).
+        # Admin-created products default to 'approved' (admin is the
+        # trusted source). approval_* columns keep the audit trail.
+        ('approval_status', "TEXT DEFAULT 'approved'"),
+        ('approval_source', "TEXT DEFAULT 'admin'"),
+        ('approval_warehouse_id', 'INTEGER'),
+        ('approval_requested_at', 'TIMESTAMP'),
+        ('approval_decided_at', 'TIMESTAMP'),
+        ('approval_decided_by', 'INTEGER'),
+        ('approval_note', 'TEXT'),
         # Global MRP (strike-through price) shown on the storefront. The
         # warehouse panel edits warehouse_inventory.mrp; both are kept in
         # sync (see warehouse PATCH) — this column is the storefront's
@@ -1280,7 +1292,37 @@ def init_db():
         ('action_notes', 'TEXT'),
         ('actioned_at', 'TIMESTAMP'),
         ('actioned_by', 'TEXT'),
+        # Admin directive attached at transfer time: the warehouse is
+        # FORCED to record one of the directed actions (refund / exchange /
+        # investigation) before the report can be closed out.
+        ('action_required', 'TEXT'),
+        ('directive_deadline', 'TIMESTAMP'),
+        ('escalated_from_warehouse_id', 'INTEGER'),
+        ('escalated_at', 'TIMESTAMP'),
+        ('escalation_note', 'TEXT'),
     ])
+
+    # Warehouse misconduct warnings (harassment notices from the admin
+    # fraud-review desk). Counts feed the suspend threshold.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_warnings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL,
+        report_id INTEGER,
+        reason TEXT NOT NULL,
+        issued_by INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id)
+    )''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS admin_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        type TEXT DEFAULT 'INFO',
+        report_id INTEGER,
+        product_id INTEGER,
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS refund_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

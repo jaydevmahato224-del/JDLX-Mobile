@@ -580,7 +580,25 @@ const WarehouseReturns = () => {
                                             }`}>
                                                 {r.action_taken ? 'Action Taken' : 'Needs Action'}
                                             </span>
+                                            {r.status === 'Escalated to Admin' && (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-orange-50 text-orange-700 border-orange-200">
+                                                    Escalated
+                                                </span>
+                                            )}
                                         </div>
+                                        {r.action_required && !r.action_taken && (
+                                            <p className="mt-1 text-[11px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1">
+                                                ⚠ Admin directive: {String(r.action_required).replace(/_/g, ' ')} — sirf yahi action record hoga
+                                            </p>
+                                        )}
+                                        {r.directive_deadline && !r.action_taken && (
+                                            <p className="text-[11px] text-slate-400 mt-0.5">Deadline: {String(r.directive_deadline).slice(0, 16).replace('T', ' ')}</p>
+                                        )}
+                                        {r.escalation_note && (
+                                            <p className="mt-1 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1">
+                                                <b>Escalated by admin:</b> {r.escalation_note}
+                                            </p>
+                                        )}
                                         <p className="text-sm font-bold text-slate-700">{r.report_type}</p>
                                         <p className="text-xs text-slate-500 truncate">{r.product_names || '—'}</p>
                                         <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[11px] text-slate-400 font-bold uppercase tracking-wider">

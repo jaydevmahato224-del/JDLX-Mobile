@@ -8,6 +8,57 @@ import sqlite3
 
 admin_db_bp = Blueprint('admin_db', __name__)
 
+
+def _notify_admins(title, message, ntype='INFO', report_id=None, product_id=None):
+    """Drop a row into the adminNotifications feed (admin panel bell/pulse).
+
+    Own-connection insert + commit: never rides a request-scoped connection
+    that could roll back on teardown (same class of bug fixed earlier in the
+    complaint route).
+    """
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                """INSERT INTO admin_notifications (title, message, type, report_id, product_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (title, message, ntype, report_id, product_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass  # notification must never break the main flow
+
+
+def _clear_storefront_cache():
+    """Bust the storefront product-list cache so approval/reject decisions are
+    visible immediately (get_products is @cache.cached 60s by query string)."""
+    try:
+        from flask import current_app
+        import app as _app_module
+        c = getattr(_app_module, 'cache', None)
+        if c:
+            with _app_module.app.app_context():
+                c.clear()
+    except Exception:
+        pass  # cache bust is best-effort
+
+
+def _admin_approval_counts():
+    """Pending catalog approvals + unreviewed reports for the pulse badge."""
+    conn = get_db()
+    try:
+        pending_products = conn.execute(
+            "SELECT COUNT(*) FROM products WHERE approval_status = 'pending'"
+        ).fetchone()[0]
+        pending_reports = conn.execute(
+            "SELECT COUNT(*) FROM order_reports WHERE status IN ('Submitted', 'Under Review')"
+        ).fetchone()[0]
+        return pending_products, pending_reports
+    finally:
+        conn.close()
+
 _SQL_IDENTIFIER_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
 
@@ -228,20 +279,41 @@ def admin_transfer_report_to_warehouse(report_id):
 
     Flow: customer reports an order-level issue (possible fraud etc.) → admin
     reviews it → if it looks legitimate (no fraud found), the report is
-    TRANSFERRED to the warehouse that packed the order, which then takes the
-    processing action from its own panel. The warehouse is resolved
-    automatically from the order's assignment — the admin never picks one.
+    TRANSFERRED to the warehouse that packed the order, which is then FORCED
+    to record the directed action (refund/exchange/investigation) — the
+    warehouse action endpoint rejects closing the report without doing the
+    directed action.
 
-    Body (optional): { note: str }
+    Optional harassment flag issues a formal warning to the warehouse (stored
+    in warehouse_warnings; visible in the panel and counted for suspension).
+
+    Body: { note: str?, action_required: 'refund'|'exchange'|'investigate'|str?,
+            directive_deadline_hours: int?, harassment_warning: bool? }
     """
     data = request.get_json(silent=True) or {}
     note = (data.get('note') or '').strip() or None
     admin_id = request.user.get('user_id')
 
+    DIRECTIVE_ACTIONS = {'refund', 'exchange', 'investigate', 'refund_or_exchange'}
+    action_required = (data.get('action_required') or '').strip().lower() or None
+    if action_required and action_required not in DIRECTIVE_ACTIONS:
+        return error_response(
+            f"Invalid action_required. Allowed: {', '.join(sorted(DIRECTIVE_ACTIONS))}", 400
+        )
+
+    deadline_hours = data.get('directive_deadline_hours')
+    if deadline_hours is not None:
+        try:
+            deadline_hours = max(1, min(int(deadline_hours), 720))
+        except (TypeError, ValueError):
+            deadline_hours = None
+
+    harassment_warning = bool(data.get('harassment_warning'))
+
     conn = get_db()
     try:
         report = conn.execute(
-            "SELECT id, order_id, status, warehouse_id FROM order_reports WHERE id = ?",
+            "SELECT id, order_id, status, warehouse_id, user_id, report_type FROM order_reports WHERE id = ?",
             (report_id,),
         ).fetchone()
         if not report:
@@ -265,6 +337,9 @@ def admin_transfer_report_to_warehouse(report_id):
 
         warehouse_id = assignment['warehouse_id']
         now = "CURRENT_TIMESTAMP"
+        deadline_sql = (
+            f"datetime('now', '+{int(deadline_hours)} hours')" if deadline_hours else "NULL"
+        )
         conn.execute(
             f"""UPDATE order_reports
                 SET status = 'Transferred to Warehouse',
@@ -272,37 +347,58 @@ def admin_transfer_report_to_warehouse(report_id):
                     transferred_by = ?,
                     transferred_at = {now},
                     transfer_note = COALESCE(?, transfer_note),
+                    action_required = ?,
+                    directive_deadline = {deadline_sql},
                     updated_at = {now}
                 WHERE id = ?""",
-            (warehouse_id, admin_id, note, report_id),
+            (warehouse_id, admin_id, note, action_required, report_id),
         )
+
+        directive_label = {
+            'refund': 'Issue a REFUND to the customer',
+            'exchange': 'Arrange an EXCHANGE/REPLACEMENT',
+            'investigate': 'Investigate and record findings',
+            'refund_or_exchange': 'Issue a refund OR arrange an exchange',
+        }.get(action_required)
 
         # Notify the warehouse (bell notification)
         try:
+            msg = f"Admin reviewed and transferred report #{report_id} (order #{report['order_id']}) for processing action."
+            if directive_label:
+                msg += f" Required action: {directive_label}."
+            if deadline_hours:
+                msg += f" Deadline: {deadline_hours}h."
+            if harassment_warning:
+                msg += " FORMAL WARNING issued: repeated customer harassment leads to account action."
             conn.execute(
                 """INSERT INTO warehouse_notifications (warehouse_id, title, message, type)
                    VALUES (?, ?, ?, 'REPORT')""",
-                (warehouse_id,
-                 "Order report transferred to you",
-                 f"Admin reviewed and transferred report #{report_id} (order #{report['order_id']}) "
-                 "for processing action."),
+                (warehouse_id, "Order report transferred to you", msg),
             )
         except Exception:
             pass
 
+        # Formal harassment warning — persisted record + counted for suspension
+        if harassment_warning:
+            try:
+                conn.execute(
+                    """INSERT INTO warehouse_warnings (warehouse_id, report_id, reason, issued_by)
+                       VALUES (?, ?, ?, ?)""",
+                    (warehouse_id, report_id,
+                     note or f"Customer harassment flagged on report #{report_id}", admin_id),
+                )
+            except Exception:
+                pass
+
         # Notify the customer that the report moved to processing
         try:
-            cust = conn.execute(
-                "SELECT user_id FROM order_reports WHERE id = ?", (report_id,)
-            ).fetchone()
-            if cust:
-                from notifications.notification_service import notification_service
-                notification_service.notify_user_internal(
-                    cust['user_id'], "Report under processing",
-                    f"Your report #{report_id} passed the review and has been sent to the "
-                    "fulfilling warehouse for action.",
-                    'ORDER', url=f"/profile/my-reports",
-                )
+            from notifications.notification_service import notification_service
+            notification_service.notify_user_internal(
+                report['user_id'], "Report under processing",
+                f"Your report #{report_id} passed the review and has been sent to the "
+                "fulfilling warehouse for action.",
+                'ORDER', url=f"/profile/my-reports",
+            )
         except Exception:
             pass
 
@@ -319,6 +415,116 @@ def admin_transfer_report_to_warehouse(report_id):
     finally:
         conn.close()
 
+
+@admin_db_bp.route('/api/admin/order-reports/<int:report_id>/escalate', methods=['POST'])
+@require_admin()
+def admin_escalate_report_against_warehouse(report_id):
+    """Escalate a report AGAINST the warehouse after its action (or inaction).
+
+    Used when the admin finds the warehouse's handling unsatisfactory: pulls
+    the report back into the admin-owned state, issues a formal warning
+    record, and notifies the warehouse that further action will be taken.
+
+    Body: { note: str (required) }
+    """
+    data = request.get_json(silent=True) or {}
+    note = (data.get('note') or '').strip()
+    if not note:
+        return error_response("An escalation note is required", 400)
+    admin_id = request.user.get('user_id')
+
+    conn = get_db()
+    try:
+        report = conn.execute(
+            "SELECT id, order_id, status, warehouse_id, user_id FROM order_reports WHERE id = ?",
+            (report_id,),
+        ).fetchone()
+        if not report:
+            return error_response("Report not found", 404)
+        if not report['warehouse_id']:
+            return error_response("Report was never transferred to a warehouse", 409)
+        if (report['status'] or '') in ('Resolved', 'Rejected'):
+            return error_response("Report is already closed", 409)
+
+        now = "CURRENT_TIMESTAMP"
+        conn.execute(
+            f"""UPDATE order_reports
+                SET status = 'Escalated to Admin',
+                    escalated_from_warehouse_id = warehouse_id,
+                    escalated_at = {now},
+                    escalation_note = ?,
+                    updated_at = {now}
+                WHERE id = ?""",
+            (note, report_id),
+        )
+        try:
+            conn.execute(
+                """INSERT INTO warehouse_warnings (warehouse_id, report_id, reason, issued_by)
+                   VALUES (?, ?, ?, ?)""",
+                (report['warehouse_id'], report_id, f"Escalation: {note}", admin_id),
+            )
+        except Exception:
+            pass
+        try:
+            conn.execute(
+                """INSERT INTO warehouse_notifications (warehouse_id, title, message, type)
+                   VALUES (?, ?, ?, 'REPORT')""",
+                (report['warehouse_id'],
+                 "Report escalated against you",
+                 f"Report #{report_id} was escalated to the admin. Further action may be taken "
+                 "against repeated offenses."),
+            )
+        except Exception:
+            pass
+        conn.commit()
+
+        try:
+            from notifications.notification_service import notification_service
+            notification_service.notify_user_internal(
+                report['user_id'], "Report escalated",
+                f"Your report #{report_id} has been escalated to senior admins for direct action.",
+                'ORDER', url=f"/profile/my-reports",
+            )
+        except Exception:
+            pass
+
+        _notify_admins(
+            "Report escalated",
+            f"Report #{report_id} escalated against warehouse #{report['warehouse_id']}: {note}",
+            'REPORT', report_id=report_id,
+        )
+
+        updated = conn.execute("SELECT * FROM order_reports WHERE id = ?", (report_id,)).fetchone()
+        return success_response(dict(updated), "Report escalated — formal warning recorded")
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+
+@admin_db_bp.route('/api/admin/warehouse-warnings', methods=['GET'])
+@require_admin()
+def admin_list_warehouse_warnings():
+    """Warning records per warehouse — feeds the suspension decision."""
+    warehouse_id = request.args.get('warehouse_id', type=int)
+    conn = get_db()
+    try:
+        query = """
+            SELECT ww.*, w.warehouse_name, r.order_id
+            FROM warehouse_warnings ww
+            LEFT JOIN warehouses w ON w.id = ww.warehouse_id
+            LEFT JOIN order_reports r ON r.id = ww.report_id
+        """
+        params = []
+        if warehouse_id:
+            query += " WHERE ww.warehouse_id = ?"
+            params.append(warehouse_id)
+        query += " ORDER BY ww.created_at DESC LIMIT 200"
+        rows = conn.execute(query, params).fetchall()
+        return success_response([dict(r) for r in rows])
+    finally:
+        conn.close()
+
 @admin_db_bp.route('/api/admin/order-reports/<int:report_id>', methods=['PATCH'])
 @require_admin()
 def admin_update_report(report_id):
@@ -328,9 +534,9 @@ def admin_update_report(report_id):
     admin_notes = data.get('admin_notes')
 
     allowed_statuses = ['Submitted', 'Under Review', 'Resolved', 'Rejected']
-    # Statuses owned by the warehouse after a transfer — admin must not yank
-    # a live warehouse investigation back to a generic label.
-    WAREHOUSE_OWNED_STATUSES = {'Transferred to Warehouse', 'In Warehouse Review', 'Action Taken'}
+    # Statuses owned by the warehouse / escalation flow after a transfer —
+    # admin must not yank a live investigation back to a generic label.
+    WAREHOUSE_OWNED_STATUSES = {'Transferred to Warehouse', 'In Warehouse Review', 'Action Taken', 'Escalated to Admin'}
 
     conn = get_db()
     try:
@@ -383,6 +589,193 @@ def admin_update_report(report_id):
         return error_response(str(e))
     finally:
         conn.close()
+
+# =============================================================================
+# CATALOG APPROVAL — warehouse-created products go live only after admin approval
+# =============================================================================
+
+@admin_db_bp.route('/api/admin/product-approvals', methods=['GET'])
+@require_admin()
+def admin_list_pending_products():
+    """Products waiting for catalog approval.
+
+    Query: ?status=pending|approved|rejected|all  (default: pending)
+    """
+    status = (request.args.get('status') or 'pending').strip().lower()
+    conn = get_db()
+    try:
+        query = """
+            SELECT p.id, p.name, p.price, p.mrp, p.category, p.category_id, p.images,
+                   p.description, p.brand, p.stock, p.lifecycle_state, p.approval_status,
+                   p.approval_source, p.approval_warehouse_id, p.approval_requested_at,
+                   p.approval_decided_at, p.approval_decided_by, p.approval_note,
+                   p.has_variants, p.is_parent,
+                   w.warehouse_name AS submitted_by_warehouse,
+                   c.name AS category_name
+            FROM products p
+            LEFT JOIN warehouses w ON w.id = p.approval_warehouse_id
+            LEFT JOIN categories c ON c.id = p.category_id
+        """
+        params = []
+        if status == 'pending':
+            query += " WHERE p.approval_status = 'pending'"
+        elif status == 'approved':
+            query += " WHERE p.approval_status = 'approved'"
+        elif status == 'rejected':
+            query += " WHERE p.approval_status = 'rejected'"
+        elif status != 'all':
+            return error_response("Invalid status filter", 400)
+        query += " ORDER BY COALESCE(p.approval_requested_at, p.created_at) DESC LIMIT 300"
+        rows = conn.execute(query, params).fetchall()
+        items = []
+        for r in rows:
+            d = dict(r)
+            # Variants of a pending parent ride the same decision — show the count
+            d['variant_count'] = conn.execute(
+                "SELECT COUNT(*) FROM products WHERE variant_group_id = ? AND id != ?",
+                (d['id'], d['id']),
+            ).fetchone()[0]
+            items.append(d)
+        pending, _reports = _admin_approval_counts()
+        return success_response({"items": items, "pending": pending})
+    finally:
+        conn.close()
+
+
+@admin_db_bp.route('/api/admin/products/<int:product_id>/approve', methods=['POST'])
+@require_admin()
+def admin_approve_product(product_id):
+    """Approve a warehouse-submitted product (and its variants) for the storefront."""
+    admin_id = request.user.get('user_id')
+    data = request.get_json(silent=True) or {}
+    note = (data.get('note') or '').strip() or None
+    conn = get_db()
+    try:
+        product = conn.execute(
+            "SELECT id, name, approval_status, approval_source, approval_warehouse_id, variant_group_id FROM products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        if not product:
+            return error_response("Product not found", 404)
+        if product['approval_status'] == 'approved':
+            return error_response("Product is already approved", 409)
+
+        now = "CURRENT_TIMESTAMP"
+        # Approve the product and (when it is a parent) its whole variant group
+        group_id = product['variant_group_id'] or product_id
+        conn.execute(
+            f"""UPDATE products
+                SET approval_status = 'approved',
+                    approval_decided_at = {now}, approval_decided_by = ?,
+                    approval_note = COALESCE(?, approval_note)
+                WHERE id = ? OR variant_group_id = ?""",
+            (admin_id, note, product_id, group_id),
+        )
+        conn.commit()
+
+        if product['approval_warehouse_id']:
+            try:
+                conn.execute(
+                    """INSERT INTO warehouse_notifications (warehouse_id, title, message, type)
+                       VALUES (?, ?, ?, 'PRODUCT')""",
+                    (product['approval_warehouse_id'],
+                     "Product approved",
+                     f"\"{product['name']}\" is now live on the storefront." +
+                     (f" Note: {note}" if note else "")),
+                )
+                conn.commit()
+            except Exception:
+                pass
+        _clear_storefront_cache()
+        _notify_admins(
+            "Product approved",
+            f"Product #{product_id} ({product['name']}) approved and published to the storefront.",
+            'PRODUCT', product_id=product_id,
+        )
+        try:
+            log_admin_action(admin_id, 'approve_product', f"product:{product_id}")
+        except Exception:
+            pass
+
+        updated = conn.execute(
+            "SELECT id, name, approval_status, approval_decided_at FROM products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        return success_response(dict(updated), "Product approved and published")
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
+
+@admin_db_bp.route('/api/admin/products/<int:product_id>/reject', methods=['POST'])
+@require_admin()
+def admin_reject_product(product_id):
+    """Reject a warehouse-submitted product — it stays invisible on the storefront.
+
+    Body: { note: str (required — the warehouse needs to know why) }
+    """
+    admin_id = request.user.get('user_id')
+    data = request.get_json(silent=True) or {}
+    note = (data.get('note') or '').strip()
+    if not note:
+        return error_response("A rejection note is required so the warehouse can fix the listing", 400)
+    conn = get_db()
+    try:
+        product = conn.execute(
+            "SELECT id, name, approval_status, approval_warehouse_id, variant_group_id FROM products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        if not product:
+            return error_response("Product not found", 404)
+        if product['approval_status'] == 'rejected':
+            return error_response("Product is already rejected", 409)
+
+        now = "CURRENT_TIMESTAMP"
+        group_id = product['variant_group_id'] or product_id
+        conn.execute(
+            f"""UPDATE products
+                SET approval_status = 'rejected',
+                    approval_decided_at = {now}, approval_decided_by = ?,
+                    approval_note = ?
+                WHERE id = ? OR variant_group_id = ?""",
+            (admin_id, note, product_id, group_id),
+        )
+        conn.commit()
+
+        if product['approval_warehouse_id']:
+            try:
+                conn.execute(
+                    """INSERT INTO warehouse_notifications (warehouse_id, title, message, type)
+                       VALUES (?, ?, ?, 'PRODUCT')""",
+                    (product['approval_warehouse_id'],
+                     "Product rejected",
+                     f"\"{product['name']}\" was not approved for the store. Reason: {note}"),
+                )
+                conn.commit()
+            except Exception:
+                pass
+        _clear_storefront_cache()
+        _notify_admins(
+            "Product rejected",
+            f"Product #{product_id} ({product['name']}) rejected. Reason: {note}",
+            'PRODUCT', product_id=product_id,
+        )
+        try:
+            log_admin_action(admin_id, 'reject_product', f"product:{product_id}")
+        except Exception:
+            pass
+
+        updated = conn.execute(
+            "SELECT id, name, approval_status, approval_note, approval_decided_at FROM products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        return success_response(dict(updated), "Product rejected")
+    except Exception as e:
+        return error_response(str(e))
+    finally:
+        conn.close()
+
 
 @admin_db_bp.route('/api/admin/refund-requests', methods=['GET'])
 @require_admin()

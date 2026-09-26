@@ -294,8 +294,51 @@ def generate_order_invoice_pdf(order, items, vendor=None, settings=None):
     pdf.multi_cell(
         0,
         4.5,
-        "Note: This invoice reflects the amount payable for this order as per the "
-        "selected payment method. Prices are inclusive of applicable taxes where levied.",
+        ("Note: Payment for this order was collected on delivery. "
+         if _is_paid(order) else
+         "Note: This invoice reflects the amount payable for this order as per the "
+         "selected payment method. ")
+        + "Prices are inclusive of applicable taxes where levied.",
     )
 
+    # ── Payment status stamp (top-right, rotated) ────────────────────────
+    # Paid invoices get a green PAID seal; pending ones get a red
+    # PAYMENT DUE seal. Purely presentational — driven by the same
+    # payment_status the rest of the system uses.
+    _draw_payment_stamp(pdf, order)
+
     return bytes(pdf.output())
+
+
+def _is_paid(order):
+    """True when the order's payment is settled (paid / advance collected on
+    delivery). 'pending' and 'advance_paid' (balance not yet collected) are
+    unpaid."""
+    status = str(order.get("payment_status") or "pending").strip().lower()
+    return status in ("paid", "completed", "success", "captured")
+
+
+def _draw_payment_stamp(pdf, order):
+    """Rotated PAID / PAYMENT DUE seal in the upper-right area of the invoice."""
+    paid = _is_paid(order)
+    label = "PAID" if paid else "PAYMENT DUE"
+
+    pdf.set_font("dejavu", "B", 22)
+    text_w = pdf.get_string_width(label) + 16
+    text_h = 12
+
+    green, red = (46, 125, 50), (198, 40, 40)
+    color = green if paid else red
+
+    # fpdf2's rotation() wraps q/Q + cm matrices and auto-restores state.
+    with pdf.rotation(18, 158, 74):
+        pdf.set_draw_color(*color)
+        pdf.set_text_color(*color)
+        pdf.set_line_width(0.9)
+        pdf.rect(158 - text_w / 2, 74 - text_h / 2 - 2, text_w, text_h + 4, style="D")
+        pdf.set_font("dejavu", "B", 20)
+        pdf.set_xy(158 - text_w / 2, 74 - text_h / 2)
+        pdf.cell(text_w, text_h, label, align="C")
+
+    pdf.set_text_color(*INK)
+    pdf.set_line_width(0.2)

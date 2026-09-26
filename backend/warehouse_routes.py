@@ -4150,6 +4150,14 @@ def warehouse_manual_delivery_verify(assignment_id):
                WHERE id = ?""",
             (ist_now_str(), order["id"]),
         )
+        # COD settlement: self-delivered COD money was collected at the door —
+        # flip payment to 'paid' in the SAME transaction (idempotent, no-op
+        # for prepaid).
+        try:
+            from services.cod_settlement import settle_cod_payment
+            settle_cod_payment(conn, order["id"])
+        except Exception:
+            pass  # never break the delivery itself
         conn.commit()
 
         # Post-delivery side effects — same set the admin status flow applies,

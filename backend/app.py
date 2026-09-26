@@ -324,6 +324,16 @@ def shiprocket_webhook():
                 
                 # Update status and timestamp
                 cursor.execute(f"UPDATE orders SET order_status = ?, {timestamp_col} = CURRENT_TIMESTAMP WHERE id = ?", (new_jdlx_status, order_id))
+
+                # COD money is collected at the door — on delivery the payment
+                # settles to 'paid' (invoices/filter/tracking stop showing
+                # 'pending'). Idempotent; no-op for prepaid orders.
+                if new_jdlx_status == 'DELIVERED':
+                    try:
+                        from services.cod_settlement import settle_cod_payment
+                        settle_cod_payment(cursor, order_id)
+                    except Exception as settle_err:
+                        logger.warning(f"COD settlement failed for order #{order_id}: {settle_err}")
                 
                 # Notify user
                 notification_service.send_order_notification(user_id, order_id, new_jdlx_status)
@@ -6152,6 +6162,13 @@ def admin_update_order_status(order_id):
             check_and_trigger_review(cursor, user_id)
 
             if new_status == 'DELIVERED':
+                # COD settlement: door collection completes the payment
+                # (same rule as the Shiprocket webhook path).
+                try:
+                    from services.cod_settlement import settle_cod_payment
+                    settle_cod_payment(cursor, order_id)
+                except Exception:
+                    pass  # never break order flow
                 # Referral reward check (additive)
                 try:
                     from utils.referral import process_referral_reward
@@ -8027,6 +8044,12 @@ def update_order_status(order_id):
             check_and_trigger_review(cursor, user_id)
 
             if new_status == 'DELIVERED':
+                # COD settlement: door collection completes the payment.
+                try:
+                    from services.cod_settlement import settle_cod_payment
+                    settle_cod_payment(cursor, order_id)
+                except Exception:
+                    pass  # never break order flow
                 # Referral reward check (additive)
                 try:
                     from utils.referral import process_referral_reward

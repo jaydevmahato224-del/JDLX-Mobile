@@ -1098,6 +1098,16 @@ def warehouse_auth_google_request():
 def partner_login_google():
     """Initiate server-side Google OAuth for partners."""
     flow = request.args.get("flow", "warehouse_login")
+
+    # ── Delivery partner service: temporarily unavailable ───────────────────
+    # Block the OAuth round-trip EARLY so the user never completes Google
+    # sign-in only to bounce back from the callback. The callback-side branch
+    # for flow == "delivery_login" (error=delivery_under_construction) is kept
+    # intact below for relaunch compatibility — nothing removed.
+    if flow in ("delivery_login", "delivery"):
+        warehouse_frontend = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
+        return redirect(f"{warehouse_frontend}/warehouse/login?error=delivery_unavailable")
+
     redirect_uri = os.environ.get("PARTNER_GOOGLE_REDIRECT_URI") or url_for("warehouse.partner_auth_google_callback", _external=True)
     oauth = current_app.config.get("PARTNER_OAUTH_CLIENT") or current_app.config["OAUTH_CLIENT"]
 

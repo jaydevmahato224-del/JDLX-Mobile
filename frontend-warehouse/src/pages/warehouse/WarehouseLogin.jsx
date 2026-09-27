@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, FileText, ShieldCheck, Package, Truck, BarChart, Bike, ReceiptText, KeyRound, Loader2 } from 'lucide-react'
+import { Building2, FileText, ShieldCheck, Package, Truck, BarChart, Bike, ReceiptText, KeyRound, Loader2, Lock, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { API_BASE_URL, API_ORIGIN } from '../../config'
 import { useStore } from '../../store/useStore'
@@ -16,6 +16,15 @@ function WarehouseLogin() {
 
     const [loading, setLoading] = useState(false)
     const [deliveryLoading, setDeliveryLoading] = useState(false)
+
+    // ── Delivery Login: service temporarily unavailable ─────────────────────
+    // Delivery partner onboarding AND delivery login are both closed right
+    // now (backend returns error=delivery_under_construction for the OAuth
+    // flow — kept intact for relaunch). Nothing was removed: the original
+    // handleGoogleLogin('delivery_login') flow stays here for when the
+    // service comes back; we just gate the UI entry point.
+    const DELIVERY_SERVICE_AVAILABLE = false
+    const [showDeliveryNotice, setShowDeliveryNotice] = useState(false)
 
     // Billing agent (staff) login
     const [staffEmail, setStaffEmail] = useState('')
@@ -61,13 +70,33 @@ function WarehouseLogin() {
         if (errorCode === 'session_expired') return 'Your warehouse session expired. Please sign in again.'
         if (errorCode === 'google_link_conflict') return 'This Google account is already linked to another account.'
         if (errorCode === 'otp_send_failed') return 'Could not send the OTP email. Please check your email address and try again.'
+        // Delivery login is closed server-side too — both OAuth entry points
+        // bounce back with these codes. (Original error=delivery_under_construction
+        // from warehouse_routes is kept for compatibility.)
+        if (errorCode === 'delivery_unavailable' || errorCode === 'delivery_under_construction') return 'Delivery partner service is currently unavailable. Warehouse login is unaffected.'
         return ''
     }, [errorCode])
 
+    // Clear the stale ?error=... from the URL once shown, so a page refresh
+    // does not keep re-displaying the banner.
+    useEffect(() => {
+        if (!errorCode) return
+        const t = setTimeout(() => {
+            navigate('/warehouse/login', { replace: true })
+        }, 8000)
+        return () => clearTimeout(t)
+    }, [errorCode, navigate])
+
     const handleGoogleLogin = (flowType) => {
+        // Delivery login is blocked at the UI layer — popup instead of the
+        // OAuth round-trip that used to silently bounce back to this page.
+        if (flowType === 'delivery_login' && !DELIVERY_SERVICE_AVAILABLE) {
+            setShowDeliveryNotice(true)
+            return
+        }
         if (flowType === 'warehouse_login') setLoading(true)
         if (flowType === 'delivery_login') setDeliveryLoading(true)
-        
+
         window.location.href = `${API_ORIGIN}/partner/login/google?flow=${flowType}`
     }
 
@@ -219,15 +248,49 @@ function WarehouseLogin() {
                             </button>
                         </div>
 
-                        {/* Delivery Partner Login Option */}
-                        <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '20px' }}>
+                        {/* Delivery Partner Login Option — service temporarily unavailable */}
+                        <div style={{
+                            background: 'rgba(0,0,0,0.2)',
+                            border: '1px solid rgba(251,191,36,0.2)',
+                            borderRadius: '16px', padding: '20px', position: 'relative', overflow: 'hidden',
+                            opacity: 0.75,
+                        }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
                                 <Bike size={18} style={{ color: '#fbbf24' }} />
                                 <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Delivery Partner Access</h3>
+                                <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#fcd34d', borderRadius: '100px', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                    <Lock size={10} /> Temporarily Unavailable
+                                </span>
                             </div>
+                            {showDeliveryNotice && (
+                                <div role="alert" style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: '10px',
+                                    background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)',
+                                    borderRadius: '12px', padding: '12px 14px', marginBottom: '12px',
+                                    animation: 'dlx-fade-slide 0.2s ease-out',
+                                }}>
+                                    <AlertTriangle size={16} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
+                                    <div>
+                                        <p style={{ fontSize: '13px', fontWeight: 700, color: '#fcd34d', margin: '0 0 3px' }}>
+                                            This service is currently not available
+                                        </p>
+                                        <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+                                            We are not offering delivery partner onboarding right now. Warehouse login is fully available.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowDeliveryNotice(false)}
+                                        aria-label="Dismiss notice"
+                                        style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px', flexShrink: 0 }}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            )}
                             <button
                                 onClick={() => handleGoogleLogin('delivery_login')}
                                 disabled={loading || deliveryLoading}
+                                aria-disabled={true}
                                 style={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                                     padding: '14px 24px', background: 'rgba(255,255,255,0.08)',

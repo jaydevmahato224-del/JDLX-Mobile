@@ -2087,6 +2087,15 @@ def email_save_signup_details():
 def login_google():
     """Redirects to Google for customer authentication using a stateless flow."""
     flow = request.args.get('flow', 'user')
+
+    # ── Delivery partner service: temporarily unavailable ───────────────────
+    # Early-block so users never complete Google sign-in just to bounce back
+    # later in the flow. The delivery_login branch further below is kept
+    # intact for relaunch compatibility — nothing removed.
+    if flow in ('delivery_login', 'delivery'):
+        _wh_frontend = os.environ.get("WAREHOUSE_FRONTEND_URL", "http://localhost:5175").rstrip("/")
+        return redirect(f"{_wh_frontend}/warehouse/login?error=delivery_unavailable")
+
     frontend_url = request.args.get('frontend_url')
     
     if not frontend_url:

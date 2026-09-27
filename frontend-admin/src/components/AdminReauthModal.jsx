@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
+import { markSessionRefreshed } from '../utils/apiFetch';
 import { Loader2, Mail, ShieldCheck, LogOut, ArrowRight, RefreshCw, KeyRound, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -53,6 +54,10 @@ const AdminReauthModal = () => {
         } catch (e) { /* storage unavailable — cookie still works */ }
         setAdminUser(data.user);
         setReauthenticating(false);
+        // Tell AdminRoute this session was just server-verified — without
+        // this, a pending route-level re-verification raced the modal close
+        // and re-locked the modal right after "Session extended".
+        markSessionRefreshed();
         toast.success('Session extended successfully!');
     };
 

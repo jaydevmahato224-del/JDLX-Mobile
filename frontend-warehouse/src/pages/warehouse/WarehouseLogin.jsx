@@ -12,7 +12,11 @@ function WarehouseLogin() {
     const setWarehouseUser = useStore((state) => state.setWarehouseUser)
 
     const params = useMemo(() => new URLSearchParams(location.search), [location.search])
-    const errorCode = params.get('error')
+    // The App.jsx 401 interceptor redirects here with ?reason=session_expired,
+    // while the OAuth callback uses ?error=... — read both so the expired-
+    // session banner actually shows (previously only 'error' was read and the
+    // most common expiry path displayed no message at all).
+    const errorCode = params.get('error') || params.get('reason')
 
     const [loading, setLoading] = useState(false)
     const [deliveryLoading, setDeliveryLoading] = useState(false)

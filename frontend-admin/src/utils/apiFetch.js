@@ -1,5 +1,55 @@
 import { API_BASE_URL } from '../config'
 
+// Mirrors the backend's JWT lifetime for admin tokens (8h). Used ONLY to drop
+// a provably-expired Bearer snapshot from localStorage — an expired snapshot
+// otherwise shadows the fresh HttpOnly auth cookie (the backend decodes
+// header-first), so every call 401s and the "Extend Session" modal re-opens in
+// a loop even after a successful re-auth.
+const ADMIN_TOKEN_TTL_MS = 8 * 60 * 60 * 1000
+const MAX_SKEW_MS = 30 * 1000
+
+function dropStaleAdminToken() {
+  try {
+    const saved = localStorage.getItem('adminTokenSavedAt')
+    if (saved && Date.now() - Number(saved) > ADMIN_TOKEN_TTL_MS + MAX_SKEW_MS) {
+      localStorage.removeItem('adminToken')
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('adminTokenSavedAt')
+    }
+  } catch {
+    // storage unavailable — nothing to clean
+  }
+}
+
+// Central 401 hook: fired once when the session cookie itself is dead, so the
+// re-auth modal opens exactly once instead of once-per-background-poll.
+let _onSessionExpired = null
+export function setOnSessionExpired(handler) {
+  _onSessionExpired = typeof handler === 'function' ? handler : null
+}
+
+export function markSessionRefreshed() {
+  // Called after a successful login / re-auth. Refreshes the snapshot-age
+  // marker so an in-flight token stays trusted for a full new TTL window.
+  try {
+    if (localStorage.getItem('adminToken') || localStorage.getItem('admin_token')) {
+      localStorage.setItem('adminTokenSavedAt', String(Date.now()))
+    }
+  } catch {
+    // storage unavailable
+  }
+  // Reset AdminRoute's module-level verify cache via the registered hook, so a
+  // route change right after "Session extended" doesn't immediately 401-recheck
+  // against the pre-extend cookie state and re-open the modal.
+  try {
+    if (typeof window !== 'undefined' && typeof window.__markAdminSessionVerified === 'function') {
+      window.__markAdminSessionVerified()
+    }
+  } catch {
+    // noop
+  }
+}
+
 /**
  * Wrapper around fetch that automatically includes credentials (HttpOnly cookies)
  * and sets common headers. Use this instead of raw fetch for all API calls.
@@ -17,15 +67,20 @@ export async function apiFetch(endpoint, options = {}) {
       : API_BASE_URL
     url = `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
   }
-  
+
   // Role-scoped tokens: warehouse and admin sessions live in their own
-  // localStorage keys. The backend's warehouse endpoints require a Bearer
-  // warehouse JWT and reject admin/user tokens, so the warehouse token must
-  // take precedence when present (an admin tab in the same browser must not
-  // downgrade a warehouse call to an admin token that would 403).
-  const warehouseToken = localStorage.getItem('warehouseToken') || localStorage.getItem('warehouse_token')
+  // localStorage keys. Tokens are now ENDPOINT-SCOPED so a warehouse tab in the
+  // same browser can never attach an admin token to /warehouse/* calls (and
+  // vice versa) — mismatched tokens made backend `role` checks 403/401 and
+  // showed the session-expired modal on pages that were actually fine.
+  const path = new URL(url, window.location.origin).pathname
+  const isWarehouseEndpoint = path.includes('/api/warehouse') || path.includes('/api/partner')
   const adminToken = localStorage.getItem('adminToken') || localStorage.getItem('admin_token')
-  const activeToken = warehouseToken || adminToken
+  const warehouseToken = localStorage.getItem('warehouseToken') || localStorage.getItem('warehouse_token')
+
+  if (!isWarehouseEndpoint) dropStaleAdminToken()
+
+  const activeToken = isWarehouseEndpoint ? warehouseToken : adminToken
   const defaultHeaders = {
     'Content-Type': 'application/json',
     ...(activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}),
@@ -39,6 +94,19 @@ export async function apiFetch(endpoint, options = {}) {
     ...options,
     headers: defaultHeaders,
     credentials: 'include',
+  }).then((res) => {
+    // Central "session actually dead" signal. Only real 401s from
+    // auth-guarded backend routes trigger it — never OPTIONS preflights or
+    // pre-auth login endpoints, so the re-auth modal can't be opened by the
+    // login page's own failed attempts (the previous loop path).
+    if (res.status === 401 && _onSessionExpired && !res.url.includes('/login')) {
+      try {
+        _onSessionExpired(url)
+      } catch {
+        // handler errors must never break the caller's flow
+      }
+    }
+    return res
   })
 }
 

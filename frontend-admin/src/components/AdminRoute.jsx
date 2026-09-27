@@ -31,6 +31,15 @@ const DEFAULT_ROLES = ['admin', 'super_admin', 'manager', 'inventory_admin', 'de
 let _lastVerifiedAt = 0
 const VERIFY_INTERVAL_MS = 5 * 60 * 1000 // Re-verify every 5 minutes
 
+// Called after successful re-auth (via apiFetch.markSessionRefreshed) so a
+// route change right after "Session extended" trusts the fresh cookie instead
+// of immediately re-verifying against the pre-extend state.
+if (typeof window !== 'undefined') {
+  window.__markAdminSessionVerified = () => {
+    _lastVerifiedAt = Date.now()
+  }
+}
+
 function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
   const user = useStore((state) => state.adminUser)
   const adminLogout = useStore((state) => state.adminLogout)
@@ -63,6 +72,8 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
             setVerified(true)
             _lastVerifiedAt = Date.now()
           }
+          // Note: no reauth modal on cookie-absent failure — the login
+          // redirect below handles that case silently.
         } catch {
           // cookie absent/invalid — fall through to the login redirect below
         } finally {
@@ -90,12 +101,24 @@ function AdminRoute({ children, allowedRoles = DEFAULT_ROLES }) {
     const verifyWithServer = async () => {
       setVerifying(true)
       try {
-        const res = await apiFetch('/auth/verify-token')
+        const res = await apiFetch('/auth/verify-token', { skipGlobalError: true })
         if (cancelled) return
         if (res.status === 401) {
-          useStore.getState().setReauthenticating(true)
-          // adminLogout()
-          // window.location.replace('/admin/login?reason=session_expired')
+          // A 401 here can be a RACE: an earlier admin API call may have just
+          // rotated the JWT via Set-Cookie while this verify used the previous
+          // one. Re-check with the current cookie before showing the re-auth
+          // modal — otherwise the modal opened on a session that was already
+          // valid again (the "baar baar Extend Session popup" loop).
+          const recheck = await apiFetch('/auth/verify-token', { skipGlobalError: true })
+          if (cancelled) return
+          if (recheck.status === 401) {
+            if (!useStore.getState().isReauthenticating) {
+              useStore.getState().setReauthenticating(true)
+            }
+          } else {
+            _lastVerifiedAt = Date.now()
+            setVerified(true)
+          }
         } else {
           _lastVerifiedAt = Date.now()
           setVerified(true)

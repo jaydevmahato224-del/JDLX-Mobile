@@ -13,6 +13,8 @@ import { useStore } from './store/useStore'
 import TopLoader from './components/TopLoader'
 import { useLoadingStore } from './store/useLoadingStore'
 import { API_BASE_URL } from './config'
+import { setOnSessionExpired } from './utils/apiFetch'
+import { apiFetch } from './utils/apiFetch'
 
 // Global fetch interceptor to trigger TopLoader on API calls
 const originalFetch = window.fetch;
@@ -42,16 +44,14 @@ window.fetch = async (...args) => {
   try {
     const response = await originalFetch(...args);
 
-    if (
-      response.status === 401 &&
-      requestUrl.includes('/api/admin/') &&
-      !window.location.pathname.startsWith('/admin/login')
-    ) {
-      // Instead of logging out, trigger the re-authentication modal
-      useStore.getState().setReauthenticating(true);
-      // We don't redirect anymore, the modal will handle it
-      // window.location.replace('/admin/login?reason=session_expired');
-    }
+    // NOTE: raw window.fetch no longer opens the re-auth modal on 401. The
+    // modal used to pop up while a token ROTATION was in flight (a fresh JWT
+    // was already set by an earlier request's Set-Cookie, but an older request
+    // still answered 401) — the modal locked the whole panel, the newer page
+    // requests raced in behind it, and their 200s re-rendered the page over
+    // the open modal with no way to close it. apiFetch() now owns the 401
+    // signal with a short re-entry lock, so a stale racing 401 can never
+    // re-open the modal after recovery.
 
     // Detection Logic for Server Errors - ONLY for our backend
     if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground && !skipGlobalError) {
@@ -157,6 +157,33 @@ const AdminLayoutWrapper = () => (
 );
 
 function App() {
+  // Central "session is genuinely dead" signal from apiFetch. Replaces the
+  // old per-401 window.fetch hook that re-opened the Extend Session modal
+  // during token-rotation races (stale 401 landing after a fresh Set-Cookie),
+  // which locked the panel with an un-dismissable modal — the reported
+  // "baar baar extend session popup" bug.
+  useEffect(() => {
+    setOnSessionExpired(() => {
+      const { adminUser, isReauthenticating } = useStore.getState()
+      if (!adminUser || isReauthenticating) return
+      // Cookie-only check first: a valid cookie means the 401 was just a
+      // stale Bearer header racing ahead of a rotation — never open the modal
+      // when the server still recognizes the session.
+      try {
+        apiFetch('/api/auth/verify-token', { skipGlobalError: true })
+          .then((res) => {
+            if (res.status === 401) {
+              useStore.getState().setReauthenticating(true)
+            }
+          })
+          .catch(() => {})
+      } catch {
+        useStore.getState().setReauthenticating(true)
+      }
+    })
+    return () => setOnSessionExpired(null)
+  }, [])
+
   return (
     <ErrorBoundary>
       <GlobalErrorOverlay />
@@ -333,11 +360,6 @@ function App() {
                 <AdminRecovery />
               </AdminRoute>
             } />
-            <Route path="intelligence" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin']}>
-                <AdminIntelligence />
-              </AdminRoute>
-            } />
             <Route path="banners" element={
               <AdminRoute allowedRoles={['super_admin', 'admin', 'inventory_admin']}>
                 <AdminBanners />
@@ -348,49 +370,9 @@ function App() {
                 <AdminNotifications />
               </AdminRoute>
             } />
-            <Route path="reviews" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
-                <AdminReviews />
-              </AdminRoute>
-            } />
-            <Route path="app-reviews" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
-                <AppReviewsDashboard />
-              </AdminRoute>
-            } />
-            <Route path="device-models" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'inventory_admin']}>
-                <AdminDeviceModels />
-              </AdminRoute>
-            } />
             <Route path="database" element={
               <AdminRoute allowedRoles={['super_admin']}>
                 <AdminDatabase />
-              </AdminRoute>
-            } />
-            <Route path="analytics" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager']}>
-                <Analytics />
-              </AdminRoute>
-            } />
-            <Route path="complaints" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
-                <AdminComplaints />
-              </AdminRoute>
-            } />
-            <Route path="order-reports" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'support_admin']}>
-                <OrderReports />
-              </AdminRoute>
-            } />
-            <Route path="product-review" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin']}>
-                <ProductReview />
-              </AdminRoute>
-            } />
-            <Route path="shipments" element={
-              <AdminRoute allowedRoles={['super_admin', 'admin', 'delivery_admin']}>
-                <AdminShipments />
               </AdminRoute>
             } />
             <Route path="settings" element={

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { API_BASE_URL, STORE_FRONTEND_URL } from '../../config'
-import { apiFetch } from '../../utils/apiFetch'
+import { apiFetch, markSessionRefreshed } from '../../utils/apiFetch'
 import { Loader2, Mail, Lock, Smartphone, ShieldQuestion, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import adminLogo from '../../assets/admin-logo.svg'
@@ -57,6 +57,11 @@ function AdminLogin() {
             if (ADMIN_ROLES.includes(role)) {
                 setAdminUser(userData);
                 localStorage.setItem('adminToken', oauthToken);
+                // Snapshot-age marker: dropStaleAdminToken() uses this to drop
+                // the Bearer snapshot after the 8h TTL. Without it a stale
+                // OAuth token would shadow a fresh rotation cookie forever
+                // (backend decodes header-first) and re-open the 401 loop.
+                localStorage.setItem('adminTokenSavedAt', String(Date.now()));
                 window.history.replaceState({}, '', '/admin/dashboard');
                 navigate('/admin/dashboard', { replace: true });
             } else {
@@ -135,8 +140,10 @@ function AdminLogin() {
                 try {
                     localStorage.removeItem('adminToken');
                     localStorage.removeItem('admin_token');
+                    localStorage.removeItem('adminTokenSavedAt');
                 } catch (e) { /* storage unavailable */ }
                 setAdminUser(data.user)
+                markSessionRefreshed()
                 toast.success(`Welcome back, ${data.user?.name || 'Admin'}!`)
                 navigate('/admin/dashboard', { replace: true })
             } else {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../utils/apiFetch';
 
 export function useAppReview() {
     const user = useStore(state => state.user);
@@ -37,13 +37,19 @@ export function useAppReview() {
 
         const checkEligibility = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/app-review/should-prompt`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                // apiFetch (not raw fetch): sends the Bearer token AND the
+                // HttpOnly session cookie. Cookie-only sessions (storefront
+                // login stores no localStorage token) previously got 401 here
+                // and the prompt never appeared.
+                // The backend answers success_response({show, reason}) → the
+                // flags live under data.data. Reading data.show (top level)
+                // was always undefined, so the prompt NEVER fired.
+                const res = await apiFetch('/app-review/should-prompt');
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.show) {
-                        setPromptReason(data.reason);
+                    const flags = data?.data || {};
+                    if (flags.show) {
+                        setPromptReason(flags.reason);
                         // Wait 3 seconds before showing as per requirements
                         const timer = setTimeout(() => {
                             setShowPrompt(true);

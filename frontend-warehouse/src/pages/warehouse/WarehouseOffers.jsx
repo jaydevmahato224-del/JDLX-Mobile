@@ -192,6 +192,12 @@ export default function WarehouseOffers() {
             const res = await fetch(`${API_BASE_URL}/warehouse/upload`, {
                 method: 'POST',
                 credentials: 'include',
+                // Authorization header is REQUIRED: /warehouse/upload reads
+                // only the Bearer header (never the cookie). Without it every
+                // banner upload 401'd.
+                headers: {
+                    Authorization: `Bearer ${warehouseToken}`
+                },
                 body: fd,
             })
             const json = await res.json()

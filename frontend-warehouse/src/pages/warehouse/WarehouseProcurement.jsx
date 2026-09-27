@@ -435,9 +435,15 @@ const WarehouseProcurement = () => {
         formData.append('file', file)
         
         try {
+            // Authorization header is REQUIRED: /warehouse/scan-invoice is
+            // guarded by require_warehouse_auth which reads only the Bearer
+            // header (never the cookie). Without it every scan 401'd.
             const response = await fetch(`${API_BASE_URL}/warehouse/scan-invoice`, {
                 method: 'POST',
                 credentials: 'include',
+                headers: {
+                    Authorization: `Bearer ${useStore.getState().warehouseToken || ''}`
+                },
                 body: formData
             })
             const result = await response.json()

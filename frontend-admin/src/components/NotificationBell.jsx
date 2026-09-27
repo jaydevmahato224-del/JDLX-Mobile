@@ -9,7 +9,11 @@ function NotificationBell() {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const dropdownRef = useRef(null);
-    const user = useStore(state => state.user);
+    // Admin panel: poll only when an ADMIN session exists. Previously this
+    // read the storefront `user` state (always null here), so notifications
+    // never loaded — and after the token-scoping fix this must match the
+    // admin identity, not a cross-app snapshot.
+    const user = useStore(state => state.adminUser);
 
     useEffect(() => {
         const fetchNotifications = async () => {

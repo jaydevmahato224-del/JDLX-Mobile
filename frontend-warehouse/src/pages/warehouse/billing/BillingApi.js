@@ -39,9 +39,13 @@ export const billingApi = {
 export async function billingUploadDamageImage(file) {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${API_BASE_URL}/warehouse/billing/damage-upload`, {
+  // apiFetch (not raw fetch): require_warehouse_staff_permission reads ONLY
+  // the Bearer header — a cookie-only request 401'd here, so damage-proof
+  // image upload never worked. apiFetch attaches the token and (after the
+  // FormData hardening) does NOT force a JSON Content-Type, so the browser
+  // still sets the multipart boundary automatically.
+  const res = await apiFetch(`${API_BASE_URL}/warehouse/billing/damage-upload`, {
     method: 'POST',
-    // Don't set Content-Type for FormData - browser sets it with boundary
     credentials: 'include',
     body: form,
   })

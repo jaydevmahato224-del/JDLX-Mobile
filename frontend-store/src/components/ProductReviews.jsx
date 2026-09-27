@@ -2,9 +2,13 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Star, ThumbsUp, CheckCircle2, MessageSquare, AlertCircle, Send, X, Camera, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { API_BASE_URL, resolveMediaUrl } from '../config'
 import toast from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
+import { useStore } from '../store/useStore'
 import { apiFetch } from '../utils/apiFetch'
 
 export default function ProductReviews({ productId }) {
+    const navigate = useNavigate();
+    const user = useStore((state) => state.user);
     const [reviews, setReviews] = useState([]);
     const [stats, setStats] = useState({ total: 0, average: 0, distribution: {} });
     const [loading, setLoading] = useState(true);
@@ -52,6 +56,15 @@ export default function ProductReviews({ productId }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        // Login gate: the submit endpoint requires auth. Without this,
+        // a guest who filled the whole form got a raw 401 toast at the very
+        // end — worse UX than asking up front.
+        if (!user) {
+            setShowForm(false);
+            toast.error('Please login to write a review');
+            navigate('/login');
+            return;
+        }
         if (rating === 0) return toast.error('Please select a rating');
 
         setSubmitting(true);
@@ -140,6 +153,11 @@ export default function ProductReviews({ productId }) {
                         <MessageSquare size={18} />
                         Write a Review
                     </button>
+                    {!user && (
+                        <p className="text-xs text-center text-[var(--color-on-surface-variant)] font-medium">
+                            You'll need to sign in to submit your review.
+                        </p>
+                    )}
                 </div>
 
                 {/* Distribution Bars */}

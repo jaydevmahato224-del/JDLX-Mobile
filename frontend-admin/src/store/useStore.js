@@ -78,6 +78,7 @@ export const useStore = create((set, get) => ({
         // logs in next and break their session with 401s.
         localStorage.removeItem('adminToken');
         localStorage.removeItem('admin_token');
+        localStorage.removeItem('adminTokenSavedAt');
         apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         set({ adminUser: null });
     },

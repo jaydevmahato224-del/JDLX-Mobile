@@ -19,8 +19,13 @@ export async function apiFetch(endpoint, options = {}) {
   }
 
   const warehouseToken = localStorage.getItem('warehouseToken') || localStorage.getItem('warehouse_token') || localStorage.getItem('staff_token')
+  // Never force a JSON Content-Type on a FormData body: it strips the multipart
+  // boundary, so the server sees no files/form fields at all (this silently
+  // broke every multipart upload routed through apiFetch). Let the browser set
+  // the multipart Content-Type automatically in that case.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
   const defaultHeaders = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(warehouseToken ? { 'Authorization': `Bearer ${warehouseToken}` } : {}),
     ...options.headers,
   }

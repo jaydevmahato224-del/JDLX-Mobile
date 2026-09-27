@@ -4373,7 +4373,10 @@ def share_product_html(token):
         product_url = f"https://jdlxmobile.in/s/{share_token}"
         
         # Build the HTML response with OG meta tags
-        html = f"""
+        # (variable is page_html — naming it `html` shadows the html module
+        # used by html.escape above and crashed this endpoint with
+        # "cannot access local variable 'html'" on every share preview)
+        page_html = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4443,14 +4446,14 @@ def share_product_html(token):
     <div class="container">
         <div class="spinner"></div>
         <h1>{product_name}</h1>
-        <p className="price">₹{product_price}</p>
+        <p class="price">₹{product_price}</p>
         <p>{product_desc}</p>
         <p style="margin-top: 30px; color: #999; font-size: 14px;">Redirecting to JDLX Mobile...</p>
     </div>
 </body>
 </html>
 """
-        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+        return page_html, 200, {'Content-Type': 'text/html; charset=utf-8'}
     except Exception as e:
         logger.error(f"Error generating share product HTML: {str(e)}")
         return redirect('/', code=302)

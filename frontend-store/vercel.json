@@ -6,6 +6,10 @@
       "destination": "https://jdlx-mobile.onrender.com/api/:path*"
     },
     {
+      "source": "/s/:path*",
+      "destination": "https://jdlx-mobile.onrender.com/s/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

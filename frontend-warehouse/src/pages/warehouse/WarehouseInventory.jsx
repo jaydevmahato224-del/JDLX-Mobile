@@ -35,6 +35,8 @@ import {
     ArrowDownCircle,
     ArrowUpCircle,
     History,
+    RotateCcw,
+    Undo2,
     TrendingUp,
     TrendingDown,
     Star,
@@ -219,6 +221,13 @@ const WarehouseInventory = () => {
     const [showAddProductView, setShowAddProductView] = useState(false)
     const [editingItemId, setEditingItemId] = useState(null)
     const [newProductData, setNewProductData] = useState(INITIAL_PRODUCT_STATE)
+    // The pristine inventory row being edited — "Discard Changes" (edit mode
+    // only) re-runs the SAME load path (handleEditItem) with it, so the form
+    // is rebuilt from source with zero drift (deep metadata included).
+    const [editSnapshot, setEditSnapshot] = useState(null)
+    // Guards the async deep-metadata fetch in handleEditItem against closing
+    // races (see the editSession check below).
+    const editSessionRef = useRef(0)
 
     const [productSearch, setProductSearch] = useState('')
     const [foundProducts, setFoundProducts] = useState([])
@@ -486,7 +495,13 @@ const WarehouseInventory = () => {
     }
 
     const handleEditItem = async (item) => {
+        // Session token for the async deep-metadata fetch: if the user closes
+        // the form (Escape/back) before the fetch resolves, the late response
+        // must NOT repopulate a closed form with stale data.
+        const editSession = ++editSessionRef.current;
         setEditingItemId(item.id);
+        // Capture the pristine item for Discard Changes (edit mode)
+        setEditSnapshot(item);
         let parsedImages = [];
         if (item.images) {
             if (Array.isArray(item.images)) {
@@ -588,6 +603,10 @@ const WarehouseInventory = () => {
             try {
                 const res = await fetch(`${API_BASE_URL}/products/${item.product_id}`);
                 const data = await res.json();
+                // The user may have closed/reopened the form while this fetch
+                // was in flight — only apply if this edit session is still the
+                // active one (prevents stale repopulation of a closed form).
+                if (editSession !== editSessionRef.current) return;
                 if (res.ok) {
                     const controls = data.data?.recommendation_controls;
                     const content = data.data?.content;
@@ -674,6 +693,18 @@ const WarehouseInventory = () => {
 
         setShowAddProductView(true);
     }
+
+    // Single source of truth for closing the product form. Every exit path
+    // (header back button, Escape, discard, post-save) MUST reset the edit
+    // session together with the view flag — otherwise the next "ADD NEW
+    // PRODUCT" click reopened the form still bound to the last-edited product
+    // and its save UPDATED that product instead of creating a new one.
+    const closeProductForm = () => {
+        setShowAddProductView(false);
+        setEditingItemId(null);
+        setEditSnapshot(null);
+        setNewProductData(INITIAL_PRODUCT_STATE);
+    };
 
     const handleDeleteItem = async (id) => {
         if (!warehouseToken) return
@@ -851,23 +882,28 @@ const WarehouseInventory = () => {
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'Operation failed')
 
-            // New warehouse submissions await admin catalog approval before
-            // they appear on the storefront — set expectation immediately.
-            if (!editingItemId && result.data?.approval_status === 'pending') {
-                showNotification('Product submitted — admin approval ke baad store pe public hoga')
-            } else {
-                showNotification(editingItemId ? 'Product updated successfully' : 'Product added successfully')
-            }
-            setShowAddProductView(false)
-            setEditingItemId(null)
-            setNewProductData(INITIAL_PRODUCT_STATE)
+            // Close the form FIRST (single close helper keeps the edit session
+            // consistent), then show exactly ONE notification. Previously two
+            // notifications fired back-to-back and the second overwrote the
+            // first — the admin-approval message never reached the user.
+            closeProductForm()
             setProductSearch('')
             setFoundProducts([])
             setSelectedCategoryId(null)
             setHasSubCategory(false)
             setShowLocationMapping(false)
             setShowLogistics(false)
-            showNotification(newProductData.product_id ? 'SKU linked successfully' : 'Product created and linked')
+            if (!editingItemId && result.data?.approval_status === 'pending') {
+                // New warehouse submissions await admin catalog approval before
+                // they appear on the storefront — set expectation immediately.
+                showNotification('Product submitted — admin approval ke baad store pe public hoga')
+            } else if (editingItemId) {
+                showNotification('Product updated successfully')
+            } else if (newProductData.product_id) {
+                showNotification('SKU linked successfully')
+            } else {
+                showNotification('Product created and linked')
+            }
             await fetchInventory()
         } catch (err) {
             showNotification(err.message, 'error')
@@ -877,7 +913,12 @@ const WarehouseInventory = () => {
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape' && showAddProductView) {
-                setShowAddProductView(false)
+                // Close the form AND reset the edit session — without the
+                // reset, the next "ADD NEW PRODUCT" click reopened the form
+                // still bound to the previous product (editingItemId set),
+                // so saving from it UPDATED that product instead of creating
+                // a new one.
+                closeProductForm()
             }
         }
         window.addEventListener('keydown', handleKeyDown)
@@ -934,11 +975,7 @@ const WarehouseInventory = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <button
-                                onClick={() => {
-                                    setShowAddProductView(false);
-                                    setEditingItemId(null);
-                                    setNewProductData(INITIAL_PRODUCT_STATE)
-                                }}
+                                onClick={closeProductForm}
                                 className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors mb-4 group"
                             >
                                 <ChevronRight size={18} className="rotate-180 transition-transform group-hover:-translate-x-1" />
@@ -2648,27 +2685,45 @@ const WarehouseInventory = () => {
                                 </div>
                             </div>
 
-                            {/* STICKY ACTION BAR */}
-                            <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8 pt-10 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent z-[100] flex justify-center">
-                                <div className="max-w-5xl w-full flex items-center justify-between gap-4 sm:gap-6 px-10 py-6 bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl shadow-amber-400/5 animate-in slide-in-from-bottom-12 duration-700">
+                            {/* ACTION BAR — in-flow (not floating) so it can never
+                                overlap or hide form fields on small screens. */}
+                            <div className="flex justify-center pt-2 pb-8">
+                                <div className="max-w-5xl w-full flex items-center justify-between gap-4 sm:gap-6 px-6 sm:px-10 py-5 sm:py-6 bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl shadow-amber-400/5">
                                     <div className="hidden md:block">
                                         <div className="text-xs font-black text-white uppercase tracking-widest">Unsaved Configuration</div>
-                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">Review all sections before global registration</p>
+                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter mt-0.5">Review all sections before {editingItemId ? 'saving' : 'global registration'}</p>
                                     </div>
 
                                     <div className="flex items-center gap-4 w-full md:w-auto">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowAddProductView(false);
-                                                setEditingItemId(null);
-                                                setNewProductData(INITIAL_PRODUCT_STATE);
-                                                setProductSearch('');
-                                            }}
-                                            className="flex-1 md:w-48 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all outline-none"
-                                        >
-                                            Discard Changes
-                                        </button>
+                                        {/* Discard only exists in EDIT mode: in add mode
+                                            nothing has been saved yet, so "Back to
+                                            Inventory" already covers leaving. */}
+                                        {editingItemId && editSnapshot ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    // Re-run the exact load path so the form is
+                                                    // rebuilt from source (incl. deep metadata).
+                                                    setProductSearch('');
+                                                    handleEditItem(editSnapshot);
+                                                    showNotification('Changes discarded — original details restored');
+                                                }}
+                                                className="flex-1 md:w-48 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all outline-none flex items-center justify-center gap-2"
+                                                title="Restore the product's saved details"
+                                            >
+                                                <Undo2 size={14} />
+                                                Discard Changes
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={closeProductForm}
+                                                className="flex-1 md:w-48 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all outline-none flex items-center justify-center gap-2"
+                                            >
+                                                <RotateCcw size={14} />
+                                                Back to Inventory
+                                            </button>
+                                        )}
                                         <button
                                             type="submit"
                                             disabled={loading}
@@ -2705,7 +2760,16 @@ const WarehouseInventory = () => {
 
                         <div className="flex items-center gap-3">
                             <button
-                                onClick={() => setShowAddProductView(true)}
+                                onClick={() => {
+                                    // Always open in a CLEAN create session — belt-and-
+                                    // suspenders against any stale edit state (the close
+                                    // helper already resets, this makes it impossible).
+                                    editSessionRef.current++; // invalidate any in-flight edit fetch
+                                    setEditingItemId(null);
+                                    setEditSnapshot(null);
+                                    setNewProductData(INITIAL_PRODUCT_STATE);
+                                    setShowAddProductView(true);
+                                }}
                                 className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-slate-950 px-8 py-3.5 rounded-2xl font-black text-sm transition-all hover:scale-105 active:scale-95 shadow-xl shadow-amber-400/10 group"
                             >
                                 <Plus size={18} className="transition-transform group-hover:rotate-90" />

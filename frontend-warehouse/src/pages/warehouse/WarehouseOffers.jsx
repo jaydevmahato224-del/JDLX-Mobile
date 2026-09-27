@@ -65,6 +65,7 @@ const isOfferActive = (offer) => {
 }
 
 export default function WarehouseOffers() {
+    const { warehouseToken } = useStore()
     const [offers, setOffers] = useState([])
     const [products, setProducts] = useState([])
     const [categories, setCategories] = useState([])

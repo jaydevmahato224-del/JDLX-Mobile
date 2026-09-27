@@ -53,15 +53,17 @@ export async function billingUploadDamageImage(file) {
   return (data.data && data.data.url) || data.url || ''
 }
 
-// The DB stores created_at as UTC ("YYYY-MM-DD HH:MM:SS", CURRENT_TIMESTAMP).
-// JavaScript treats space-separated strings as LOCAL time, which would show
-// UTC wall-clock as local — so parse those as UTC first. ISO strings pass
-// through unchanged.
+// The DB stores created_at as IST wall-clock ("YYYY-MM-DD HH:MM:SS" — the
+// system-wide convention: the orders table default is datetime('now','+5h','+30m')
+// and offline bills are written via ist_now_str()). JavaScript treats
+// space-separated strings as LOCAL time, so parse them AS IST (+05:30)
+// explicitly — otherwise every bill showed a time 5:30 ahead and the 24h
+// return window / day grouping drifted. ISO strings pass through unchanged.
 export function parseDbDate(value) {
   if (!value) return null
   const normalized =
     typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(value)
-      ? value.replace(' ', 'T') + 'Z'
+      ? value.replace(' ', 'T') + '+05:30'
       : value
   const d = new Date(normalized)
   return Number.isNaN(d.getTime()) ? null : d

@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { API_BASE_URL, resolveMediaUrl } from '../../config';
 import SalesHistory from './billing/SalesHistory';
 import InvoiceModal from './billing/InvoiceModal';
-import { billingUploadDamageImage, billingFetch } from './billing/BillingApi';
+import { billingUploadDamageImage } from './billing/BillingApi';
 import { apiFetch } from '../../utils/apiFetch'
 
 export default function StaffBilling() {

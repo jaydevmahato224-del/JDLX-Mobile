@@ -5608,8 +5608,14 @@ def staff_login():
             role_name=staff["role_name"],
             permissions=perms
         )
-        
+
+        # The token is returned in the body AND set as an HttpOnly cookie:
+        # the billing permission guard only accepts Bearer tokens, and the
+        # warehouse frontend is a separate origin from the API, so a
+        # cookie-only response left the agent logged in with a session that
+        # could not call any /billing/* endpoint (401 on every request).
         resp = jsonify({
+            "token": jwt_token,
             "user": {
                 "staff_id": staff["staff_id"],
                 "vendor_id": staff["vendor_id"],

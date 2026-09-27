@@ -28,12 +28,23 @@ const STATUS_LABELS = {
 
 const FILTERS = ['ALL', 'active', 'partially_returned', 'partially_exchanged', 'returned', 'exchanged', 'cancelled'];
 
-/* Local-day boundaries converted to UTC strings for API filtering. The DB
-   stores created_at in UTC, so local midnight -> its UTC equivalent keeps
-   "Today" exactly the agent's local day regardless of timezone. */
+/* Local-day boundaries converted to IST wall-clock strings for API filtering.
+   The DB stores created_at as IST wall-clock (system-wide convention), so the
+   agent's local day maps to IST (+05:30 is effectively "wall clock" for an
+   India-based counter) — keeps "Today" matching what the bill timestamps
+   actually show. */
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
 const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-const toUtc = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+const IST_OFFSET_MIN = 330; // IST = UTC+05:30 (kept for reference)
+const istFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata', hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+const toIst = (d) => {
+  const p = istFmt.formatToParts(d).reduce((acc, x) => { acc[x.type] = x.value; return acc; }, {});
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+};
 
 /* Counter-sale bills follow a 24-hour return/exchange/cancel window (offline
    POS policy only — the online store's return policy is unaffected). The
@@ -170,26 +181,26 @@ export default function SalesHistory() {
     const now = new Date();
     switch (dateFilter) {
       case 'TODAY':
-        return { from: toUtc(startOfDay(now)), to: toUtc(endOfDay(now)) };
+        return { from: toIst(startOfDay(now)), to: toIst(endOfDay(now)) };
       case 'YESTERDAY': {
         const y = new Date(now);
         y.setDate(now.getDate() - 1);
-        return { from: toUtc(startOfDay(y)), to: toUtc(endOfDay(y)) };
+        return { from: toIst(startOfDay(y)), to: toIst(endOfDay(y)) };
       }
       case 'WEEK': {
         const monday = new Date(now);
         monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-        return { from: toUtc(startOfDay(monday)), to: toUtc(endOfDay(now)) };
+        return { from: toIst(startOfDay(monday)), to: toIst(endOfDay(now)) };
       }
       case 'MONTH': {
         const first = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { from: toUtc(startOfDay(first)), to: toUtc(endOfDay(now)) };
+        return { from: toIst(startOfDay(first)), to: toIst(endOfDay(now)) };
       }
       case 'CUSTOM':
         if (customFrom && customTo) {
           return {
-            from: toUtc(startOfDay(new Date(`${customFrom}T00:00:00`))),
-            to: toUtc(endOfDay(new Date(`${customTo}T00:00:00`))),
+            from: toIst(startOfDay(new Date(`${customFrom}T00:00:00`))),
+            to: toIst(endOfDay(new Date(`${customTo}T00:00:00`))),
           };
         }
         return null;

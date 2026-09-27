@@ -603,6 +603,17 @@ def run_vendor_settlement_sweep_job():
     except Exception as e:
         logger.error(f"Vendor settlement sweep failed: {str(e)}")
 
+    # COD backfill in the same 30-minute beat: repairs orders delivered
+    # before the settlement helper existed (they stayed 'pending' forever,
+    # showing PAYMENT DUE on invoices despite successful COD delivery).
+    try:
+        from services.cod_settlement import settle_overdue_cod_orders
+        repaired = settle_overdue_cod_orders()
+        if repaired:
+            logger.info(f"COD backfill sweep: settled {repaired} overdue delivered COD order(s)")
+    except Exception as e:
+        logger.error(f"COD backfill sweep failed: {str(e)}")
+
 
 should_start_scheduler = (
     (os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug)
@@ -10252,6 +10263,14 @@ def update_refund_status(request_id):
             notification_service.notify_user_internal(rr['user_id'], "Refund Approved", f"Your refund request for order #{rr['order_id']} has been approved.", "SYSTEM")
         elif new_status == 'REJECTED':
             cursor.execute("UPDATE orders SET order_status = 'DELIVERED' WHERE id = ?", (rr['order_id'],))
+            # The order just returned to DELIVERED — settle its COD payment if
+            # the door collection covered it (same rule as every other
+            # delivery path; idempotent, no-op for prepaid orders).
+            try:
+                from services.cod_settlement import settle_cod_payment
+                settle_cod_payment(cursor, rr['order_id'])
+            except Exception:
+                pass  # never break the refund decision flow
             notification_service.notify_user_internal(rr['user_id'], "Refund Rejected", f"Your refund request for order #{rr['order_id']} has been rejected.", "SYSTEM")
             
             # Referral reward check (additive). The refund was REJECTED, so the

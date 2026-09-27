@@ -24,6 +24,13 @@ Call sites (all three delivery paths):
     app.py            Shiprocket webhook 'delivered'
     app.py            admin status endpoint (manual DELIVERED)
     warehouse_routes  manual delivery OTP verify (self-delivered)
+
+Backfill sweep:
+    Orders delivered BEFORE this helper existed keep 'pending' forever (the
+    fix is not retroactive). settle_overdue_cod_orders() repairs those rows
+    in batches; it is wired into the periodic scheduler alongside the
+    vendor-settlement sweep and is safe to run any time — idempotent and
+    bounded so it never hammers the DB.
 """
 from database import ist_now_str
 
@@ -83,3 +90,44 @@ def settle_cod_payment(cursor, order_id, delivered_at=None):
             (order_id,),
         )
     return cursor.rowcount > 0
+
+
+def settle_overdue_cod_orders(batch_size=100):
+    """Backfill: settles COD orders that reached DELIVERED but never had their
+    payment flipped (delivered before the settlement fix shipped, or through
+    a path that predates the helper).
+
+    Idempotent by construction — it only touches rows that are still
+    pending/advance_paid — and bounded to `batch_size` rows per run so the
+    first sweep after deploy stays cheap. Returns the number of repaired
+    orders. Runs its own commit via the shared connection; safe to call from
+    a scheduler job.
+    """
+    from database import get_db
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT id FROM orders
+               WHERE UPPER(COALESCE(payment_type, 'COD')) = 'COD'
+                 AND UPPER(COALESCE(order_status, '')) IN ('DELIVERED', 'COMPLETED')
+                 AND LOWER(COALESCE(payment_status, 'pending')) IN ('pending', 'advance_paid')
+               ORDER BY id ASC
+               LIMIT ?""",
+            (batch_size,),
+        ).fetchall()
+        if not rows:
+            return 0
+        repaired = 0
+        cur = conn.cursor()
+        for r in rows:
+            if settle_cod_payment(cur, r["id"]):
+                repaired += 1
+        conn.commit()
+        return repaired
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise

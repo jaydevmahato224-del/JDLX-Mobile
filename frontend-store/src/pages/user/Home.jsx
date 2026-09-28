@@ -13,7 +13,8 @@ import PromoBanner from '../../components/PromoBanner'
 import RecommendationsSection from '../../components/RecommendationsSection'
 import PriceBlock from '../../components/PriceBlock'
 import useSmartProductLoader from '../../hooks/useSmartProductLoader'
-import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { resolveMediaUrl } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 import { useStore } from '../../store/useStore'
 import { refreshRecentlyViewed } from '../../utils/recentlyViewedSync'
 import { getProductUrl } from '../../utils/productSlug'
@@ -104,7 +105,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock`);
+      const res = await apiFetch(`/products/${product.id}/stock`);
       const json = await res.json();
       const stockData = json.data || {};
       
@@ -146,7 +147,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         navigate(getProductUrl(product));
         return;
       }
-      const res = await fetch(`${API_BASE_URL}/products/${product.id}/stock`);
+      const res = await apiFetch(`/products/${product.id}/stock`);
       const json = await res.json();
       const stockData = json.data || {};
 
@@ -170,7 +171,16 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
   return (
     <article className="gpu-accelerated group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:-translate-y-2 hover:border-primary/20">
-      <div onClick={() => navigate(getProductUrl(product))} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
+      {/* Keyboard a11y: image is the primary tap target; expose it as a link
+          for tab/AT users. Enter-only handler — mouse/touch behaviour unchanged. */}
+      <div
+        role="link"
+        tabIndex={0}
+        aria-label={`View ${product.name}`}
+        onClick={() => navigate(getProductUrl(product))}
+        onKeyDown={(e) => { if (e.key === 'Enter') navigate(getProductUrl(product)) }}
+        className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer"
+      >
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-1 md:gap-2">
           {outOfStock ? (
@@ -457,7 +467,7 @@ export default function Home() {
   const logInteraction = useCallback(async (type, targetId, category) => {
     try {
       const sessionId = localStorage.getItem('jdlx_session_id') || 'anon'
-      await fetch(`${API_BASE_URL}/user/interactions`, {
+      await apiFetch('/user/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -493,7 +503,7 @@ export default function Home() {
     // from it. Only hit the fallback endpoint when the store had nothing yet.
     const preloadedBanners = useStore.getState().banners;
     if (!preloadedBanners || preloadedBanners.length === 0) {
-      fetch(`${API_BASE_URL}/banners`)
+      apiFetch('/banners')
         .then((r) => r.json())
         .then((json) => {
           if (json.success && json.data) {
@@ -504,7 +514,7 @@ export default function Home() {
     }
 
     // Fetch Offer Banners
-    fetch(`${API_BASE_URL}/offers/banners`)
+    apiFetch('/offers/banners')
       .then(res => res.json())
       .then(json => {
         if (json.success && Array.isArray(json.data)) {
@@ -516,7 +526,7 @@ export default function Home() {
       .catch(e => console.error('Offer banners failed:', e))
 
     // Fetch Active Offers (for text-based offer cards)
-    fetch(`${API_BASE_URL}/offers/active`)
+    apiFetch('/offers/active')
       .then(res => res.json())
       .then(json => {
         if (json.success && Array.isArray(json.data)) {

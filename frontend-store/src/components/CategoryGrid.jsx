@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { API_BASE_URL } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import categoryPrefetchService from '../services/categoryPrefetchService'
 
 function CategoryGrid({ onCategorySelect, activeCategory }) {
@@ -9,7 +9,7 @@ function CategoryGrid({ onCategorySelect, activeCategory }) {
     useEffect(() => {
         const fetchCategories = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/categories`);
+                const response = await apiFetch('/categories');
                 const data = await response.json();
                 setCategories(data);
                 setLoading(false);

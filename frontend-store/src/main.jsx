@@ -37,6 +37,21 @@ try {
   }
 } catch { /* storage unavailable — callers already fall back to 'anon' */ }
 
+// Deploy-safe lazy chunks: jab ek purana tab naye deploy ke baad koi chunk
+// request kare jo ab exist nahi karta (Vercel purane assets hata deta hai),
+// Vite ek preload error throw karta hai aur page blank/white ho sakta hai.
+// One-shot auto-reload se fresh index.html (aur naye chunk map) mil jata hai.
+// Session-guard ensures a broken build can never cause a reload loop.
+window.addEventListener('vite:preloadError', () => {
+  const KEY = 'jdlx_chunk_reload_at'
+  try {
+    const last = Number(sessionStorage.getItem(KEY) || 0)
+    if (Date.now() - last < 10000) return
+    sessionStorage.setItem(KEY, String(Date.now()))
+  } catch { /* sessionStorage unavailable — still reload once, guard is best-effort */ }
+  window.location.reload()
+})
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

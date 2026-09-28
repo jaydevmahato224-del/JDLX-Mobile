@@ -1,7 +1,6 @@
 import toast from "react-hot-toast"
 import { useState } from 'react'
 import { X, Save, Info } from 'lucide-react'
-import { API_BASE_URL } from '../config'
 import MapPicker from './MapPicker'
 import { apiFetch } from '../utils/apiFetch'
 
@@ -23,7 +22,7 @@ function AddressPicker({ onSelect, onClose }) {
         setPincodeStatus('checking');
         setPincodeMessage('Checking pincode validity and serviceability...');
         try {
-            const res = await fetch(`${API_BASE_URL}/pincode/check/${pin}`);
+            const res = await apiFetch(`/pincode/check/${pin}`);
             if (res.ok) {
                 const checkData = await res.json();
                 const details = checkData.data || checkData;

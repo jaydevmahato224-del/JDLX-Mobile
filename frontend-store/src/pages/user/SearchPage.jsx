@@ -11,7 +11,8 @@ import ProductLoadingGrid from '../../components/ProductLoadingGrid'
 import RecommendationsSection from '../../components/RecommendationsSection'
 import PriceBlock from '../../components/PriceBlock'
 import useSmartProductLoader from '../../hooks/useSmartProductLoader'
-import { API_BASE_URL, resolveMediaUrl } from '../../config'
+import { resolveMediaUrl } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 import { useStore } from '../../store/useStore'
 import { isStickerProduct } from '../../utils/stickerCustomization'
 import { getProductUrl } from '../../utils/productSlug'
@@ -67,7 +68,16 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
 
   return (
     <article className="group relative flex flex-col h-full bg-[var(--color-surface-white)] rounded-[1.5rem] overflow-hidden border border-[var(--color-surface-high)] transition-all duration-500 hover:shadow-xl hover:-translate-y-1.5 hover:border-primary/20">
-      <div onClick={() => navigate(getProductUrl(product))} className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer">
+      {/* Keyboard a11y: image is the primary tap target; expose it as a link
+          for tab/AT users. Enter-only handler — mouse/touch behaviour unchanged. */}
+      <div
+        role="link"
+        tabIndex={0}
+        aria-label={`View ${product.name}`}
+        onClick={() => navigate(getProductUrl(product))}
+        onKeyDown={(e) => { if (e.key === 'Enter') navigate(getProductUrl(product)) }}
+        className="relative block aspect-square overflow-hidden bg-[var(--color-surface-low)]/30 cursor-pointer"
+      >
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">
           {outOfStock ? (
@@ -302,7 +312,7 @@ export default function SearchPage() {
   }, [debouncedQuery, initialLoading, hasLoadedOnce, products.length, trackSearch, trackEvent])
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/categories`)
+    apiFetch('/categories')
       .then(res => res.json())
       .then(json => {
         if (json.success) setCategories(json.data)

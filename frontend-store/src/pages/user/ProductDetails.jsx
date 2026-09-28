@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useStore } from '../../store/useStore';
-import { resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried, API_BASE_URL } from '../../config';
+import { resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasMediaProxyBeenTried } from '../../config';
+import { apiFetch } from '../../utils/apiFetch';
 import { trackViewItem, trackAddToCart } from '../../utils/analytics';
 import { shareProduct } from '../../utils/share';
 import SEO from '../../components/SEO';
@@ -173,7 +174,7 @@ export default function ProductDetails() {
     setLoadingToken(true);
     
     // Try resolving with the raw token (whole slug) - backend handles the split logic
-    fetch(`${API_BASE_URL}/products/s/${rawToken}`)
+    apiFetch(`/products/s/${rawToken}`)
       .then(r => r.json())
       .then(payload => {
         // Backend wraps token lookups as {success, data: {product}, message};
@@ -211,7 +212,7 @@ export default function ProductDetails() {
   const productIsParent = product?.is_parent;
   useEffect(() => {
     if (!productId || (!productHasVariants && !productVariantGroupId)) return;
-    fetch(`${API_BASE_URL}/products/${productId}?_t=${Date.now()}`)
+    apiFetch(`/products/${productId}?_t=${Date.now()}`)
       .then(r => r.json())
       .then(payload => {
         const data = payload?.data || payload || {};
@@ -373,8 +374,8 @@ export default function ProductDetails() {
     const fetchMeta = async () => {
       try {
         const [availRes, settingsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/warehouse/availability?cb=${Date.now()}`).then(r => r.json()),
-          fetch(`${API_BASE_URL}/settings?cb=${Date.now()}`).then(r => r.json())
+          apiFetch(`/warehouse/availability?cb=${Date.now()}`).then(r => r.json()),
+          apiFetch(`/settings?cb=${Date.now()}`).then(r => r.json())
         ]);
         setAvailability({ ...(availRes.data || availRes), ...(settingsRes.data || {}) });
       } catch (e) { console.error('Meta fetch failed:', e); }
@@ -384,7 +385,7 @@ export default function ProductDetails() {
 
   useEffect(() => {
     if (storeProducts?.length) return;
-    fetch(`${API_BASE_URL}/products`)
+    apiFetch('/products')
       .then(r => r.json())
       .then(payload => setRemoteProducts(normalizeProductsPayload(payload)))
       .catch(() => {});
@@ -428,7 +429,7 @@ export default function ProductDetails() {
     let cancelled = false;
     const params = new URLSearchParams({ product_id: String(activeProduct.id) });
     if (activeProduct?.variant_id) params.set('variant_id', String(activeProduct.variant_id));
-    fetch(`${API_BASE_URL}/products/fulfilling-warehouse?${params.toString()}`)
+    apiFetch(`/products/fulfilling-warehouse?${params.toString()}`)
       .then(r => (r.ok ? r.json() : null))
       .then(payload => {
         if (cancelled) return;

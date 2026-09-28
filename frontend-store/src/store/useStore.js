@@ -1,6 +1,5 @@
 import toast from "react-hot-toast"
 import { create } from 'zustand'
-import { API_BASE_URL } from '../config'
 import { getDeviceModelValue } from '../utils/stickerCustomization'
 import { refreshRecentlyViewed } from '../utils/recentlyViewedSync'
 import { apiFetch } from '../utils/apiFetch'
@@ -69,7 +68,7 @@ const fetchProductsByIds = async (ids) => {
     // Fallback: sequential-ish individual fetches (legacy path)
     const results = await Promise.all(ids.map(async (id) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/products/${id}?_t=${Date.now()}`);
+            const res = await apiFetch(`/products/${id}?_t=${Date.now()}`);
             if (!res.ok) return null;
             const json = await res.json();
             return json.data || null;
@@ -580,7 +579,7 @@ export const useStore = create((set, get) => ({
     banners: [],
     fetchBanners: async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/settings?_t=${Date.now()}`);
+            const res = await apiFetch(`/settings?_t=${Date.now()}`);
             const json = await res.json();
             let bannersData = [];
             if (res.ok && json.data) {
@@ -601,7 +600,7 @@ export const useStore = create((set, get) => ({
             // carousel still renders even when settings lacks a banners key.
             if (!Array.isArray(bannersData) || bannersData.length === 0) {
                 try {
-                    const bRes = await fetch(`${API_BASE_URL}/banners?_t=${Date.now()}`);
+                    const bRes = await apiFetch(`/banners?_t=${Date.now()}`);
                     const bJson = await bRes.json();
                     if (bRes.ok && Array.isArray(bJson.data)) {
                         bannersData = bJson.data;
@@ -621,7 +620,7 @@ export const useStore = create((set, get) => ({
     products: [],
     fetchProducts: async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/products?_t=${Date.now()}`);
+            const res = await apiFetch(`/products?_t=${Date.now()}`);
             const data = await res.json();
             const normalized = Array.isArray(data) ? data : (data.data || []);
             set({ products: normalized });
@@ -660,7 +659,7 @@ export const useStore = create((set, get) => ({
                         // removed only if a direct lookup confirms it (avoids
                         // nuking items on a transient batch failure).
                         try {
-                            const res = await fetch(`${API_BASE_URL}/products/${item.id}?_t=${Date.now()}`);
+                            const res = await apiFetch(`/products/${item.id}?_t=${Date.now()}`);
                             if (!res.ok) return { ...item, removedFromInventory: true, stock: 0 };
                             const json = await res.json();
                             return refreshCartItem(item, json.data || {});
@@ -767,7 +766,7 @@ export const useStore = create((set, get) => ({
     appliedOffer: null, // { offer_id, discount_amount, title, code }
     fetchActiveOffers: async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/offers/active`);
+            const res = await apiFetch('/offers/active');
             const json = await res.json();
             if (res.ok && json.data) {
                 set({ activeOffers: json.data });

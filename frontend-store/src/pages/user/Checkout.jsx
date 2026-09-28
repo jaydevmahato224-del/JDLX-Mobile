@@ -6,7 +6,6 @@ import {
     ShieldCheck, Truck, ShoppingBag, Info, BadgePercent, Lock, 
     Zap, CreditCard, Wallet, AlertTriangle, ArrowRight 
 } from 'lucide-react'
-import { API_BASE_URL } from '../../config'
 import { loadRazorpay } from '../../utils/loadRazorpay'
 import { trackBeginCheckout, trackPurchase } from '../../utils/analytics'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
@@ -14,6 +13,23 @@ import AddressPicker from '../../components/AddressPicker'
 import WalletCheckout from '../../components/WalletCheckout'
 import { apiFetch } from '../../utils/apiFetch'
 import { toast } from 'react-hot-toast'
+
+// Payment-status polling fallback: jab Razorpay verify call network-issue se
+// fail ho jaye (user ko paisa kat gaya par confirmation nahi mila), to server
+// se authoritative status poll karte hain. Webhook (payment.captured) ne
+// payments.status='paid' kar diya hoga to order-success pe le jate hain.
+// Polling sirf tab tak chalti hai jab tak user checkout page par hai.
+async function fetchPaymentStatus(orderId) {
+    try {
+        const res = await apiFetch(`/payment/status/${orderId}`, { timeoutMs: 10000 })
+        if (!res.ok) return null
+        const payload = await res.json().catch(() => null)
+        const p = payload?.data || payload
+        return p?.status || null
+    } catch {
+        return null
+    }
+}
 
 function Checkout() {
     const navigate = useNavigate();
@@ -152,7 +168,7 @@ function Checkout() {
         fetchAddresses();
 
         // Fetch availability for delivery time context
-        fetch(`${API_BASE_URL}/warehouse/availability`)
+        apiFetch('/warehouse/availability')
             .then(r => r.json())
             .then(data => {
                 // Handle both flat response (from blueprint) and wrapped response (from success_response)
@@ -242,7 +258,7 @@ function Checkout() {
         setPincodeStatus('checking');
         setPincodeMessage('Checking pincode validity and serviceability...');
         try {
-            const res = await fetch(`${API_BASE_URL}/pincode/check/${pin}`);
+            const res = await apiFetch(`/pincode/check/${pin}`);
             if (res.ok) {
                 const checkData = await res.json();
                 const details = checkData.data || checkData;
@@ -316,6 +332,7 @@ function Checkout() {
             // Step 1: Create Razorpay order
             const res = await apiFetch('/payment/create-order', {
                 method: 'POST',
+                timeoutMs: 30000,
                 body: JSON.stringify({ order_id: orderId })
             });
 
@@ -332,6 +349,36 @@ function Checkout() {
             // removed from index.html so it no longer blocks every page load).
             // The loader resolves only after the SDK is ready.
             await loadRazorpay();
+
+            // Server-authoritative rescue: when the browser-side verify call
+            // fails but the payment actually went through (webhook marked it
+            // paid), this takes the EXACT same success path as a normal
+            // verified payment. Returns true only when the backend confirmed.
+            const rescueConfirmedPayment = async () => {
+                const status = await fetchPaymentStatus(orderId)
+                if (status !== 'paid' && status !== 'refunded') return false
+                trackPurchase(orderId, finalTotal, cart)
+                trackEvent('purchase', 'order', String(orderId), finalTotal)
+                if (appliedOffer) {
+                    try {
+                        await apiFetch('/offers/record-usage', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                offer_id: appliedOffer.offer_id,
+                                order_id: orderId,
+                                discount_applied: discountAmount
+                            })
+                        })
+                    } catch (e) {
+                        console.error('Failed to record offer usage', e)
+                    }
+                }
+                toast.success('Payment successful!')
+                setOrderPlaced(true)
+                clearCart()
+                navigate(`/order-success/${orderId}`)
+                return true
+            }
 
             // Step 2: Open Razorpay checkout
             const paymentData = data.data || {};
@@ -392,6 +439,14 @@ function Checkout() {
                         } else {
                             let verifyData;
                             try { verifyData = await verifyRes.json(); } catch { verifyData = {}; }
+                            // Verify endpoint rejected (transient server error, race
+                            // with webhook): re-check the authoritative status once
+                            // before declaring failure — same rescue as above.
+                            try {
+                                if (await rescueConfirmedPayment()) return
+                            } catch (pollErr) {
+                                console.error('Payment status polling error:', pollErr)
+                            }
                             toast.error(
                                 verifyData?.message || `Order #${orderId} is saved but payment couldn't be verified. Retry from Profile → My Orders.`,
                                 { duration: 8000 }
@@ -399,9 +454,17 @@ function Checkout() {
                             setIsProcessing(false);
                         }
                     } catch (verifyErr) {
-                        console.error('Payment verification error:', verifyErr);
-                        toast.error('Payment verification encountered an error. Please check your orders.');
-                        setIsProcessing(false);
+                        console.error('Payment verification error:', verifyErr)
+                        // Network/verify failure ≠ payment failure: the money may
+                        // have gone through and the webhook may still mark it paid.
+                        // Ask the server before telling the user anything wrong.
+                        try {
+                            if (await rescueConfirmedPayment()) return
+                        } catch (pollErr) {
+                            console.error('Payment status polling error:', pollErr)
+                        }
+                        toast.error('Payment verification encountered an error. Please check your orders.')
+                        setIsProcessing(false)
                     }
                 },
                 modal: {

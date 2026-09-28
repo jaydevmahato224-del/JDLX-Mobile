@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, ShoppingBag } from 'lucide-react';
-import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
 import { apiFetch } from '../utils/apiFetch'
 
@@ -71,7 +70,7 @@ const WalletPage = ({ endpoint = '/wallet/balance' }) => {
           <div className="bg-[var(--color-surface-card)] rounded-[2rem] overflow-hidden shadow-sm border border-[var(--color-surface-high)]">
             {wallet.transactions.map((tx, idx) => (
               <div 
-                key={idx} 
+                key={tx.id ?? `tx-${idx}`} 
                 className={`p-6 flex items-center justify-between border-b border-slate-50 last:border-0 hover:bg-[var(--color-surface-low)] transition-colors ${idx === 0 ? 'animate-in fade-in slide-in-from-top-2 duration-500' : ''}`}
               >
                 <div className="flex items-center gap-4">

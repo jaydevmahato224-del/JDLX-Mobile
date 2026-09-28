@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { FileText, ShieldCheck, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react'
-import { API_BASE_URL } from '../config'
 import { useStore } from '../store/useStore'
 import { apiFetch } from '../utils/apiFetch'
 
@@ -34,7 +33,7 @@ function TermsGate() {
     const run = async () => {
       try {
         const [settingsRes, profileRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/settings`),
+          apiFetch('/settings'),
           apiFetch('/user/profile'),
         ])
 

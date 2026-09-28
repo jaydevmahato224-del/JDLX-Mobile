@@ -4,7 +4,7 @@
  * Ensures instant loading when category is opened
  */
 
-import { API_BASE_URL } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import productCache from '../utils/productCache'
 
 class CategoryPrefetchService {
@@ -40,11 +40,11 @@ class CategoryPrefetchService {
    */
   async fetchAndCache(categoryId, pageSize = 20) {
     try {
-      const url = `${API_BASE_URL}/products?category_id=${categoryId}&page=1&limit=${pageSize}`
+      const url = `/products?category_id=${categoryId}&page=1&limit=${pageSize}`
       const params = { category_id: String(categoryId), page: '1', limit: String(pageSize) }
 
       const data = await productCache.deduplicateRequest('/products', params, async () => {
-        const response = await fetch(url)
+        const response = await apiFetch(url)
         if (!response.ok) return []
         return response.json()
       })
@@ -64,11 +64,11 @@ class CategoryPrefetchService {
    */
   async prefetchNextPage(categoryId, pageSize = 20, page = 2) {
     try {
-      const url = `${API_BASE_URL}/products?category_id=${categoryId}&page=${page}&limit=${pageSize}`
+      const url = `/products?category_id=${categoryId}&page=${page}&limit=${pageSize}`
       const params = { category_id: String(categoryId), page: String(page), limit: String(pageSize) }
 
       await productCache.deduplicateRequest('/products', params, async () => {
-        const response = await fetch(url)
+        const response = await apiFetch(url)
         if (!response.ok) return []
         return response.json()
       })

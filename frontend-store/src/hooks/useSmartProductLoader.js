@@ -27,6 +27,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { API_BASE_URL } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import productCache from '../utils/productCache'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -230,7 +231,9 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
 
           try {
             const url = buildProductsUrl(categoryId, page, searchQuery, storeId)
-            const response = await fetch(url, { signal: controller.signal })
+            // signal pass-through: apiFetch merges it with its own timeout
+            // logic and honours caller-driven aborts.
+            const response = await apiFetch(url, { signal: controller.signal })
             clearTimeout(timeoutId)
 
             if (!response.ok) {
@@ -339,7 +342,7 @@ export const useSmartProductLoader = (pageSize = DEFAULT_PAGE_SIZE) => {
                   '/products',
                   params,
                   async () => {
-                    const response = await fetch(url)
+                    const response = await apiFetch(url)
                     if (!response.ok) return []
                     return response.json()
                   }

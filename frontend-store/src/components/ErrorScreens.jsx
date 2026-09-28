@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCcw, Server, CloudOff, AlertTriangle, Send, X, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { API_BASE_URL } from '../config';
 import { captureApiFailure } from '../utils/errorReporter';
+import { apiFetch } from '../utils/apiFetch';
 import toast from 'react-hot-toast';
 
 // ─── Network Error Screen (Cartoonish) ────────────────────────────────────────
@@ -158,7 +158,7 @@ const ReportModal = ({ onClose }) => {
         };
 
         try {
-            const res = await fetch(`${API_BASE_URL}/report-issue`, {
+            const res = await apiFetch('/report-issue', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(reportData)
@@ -301,7 +301,7 @@ export const GlobalErrorOverlay = () => {
             try {
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 8000);
-                const res = await fetch(`${API_BASE_URL}/health`, {
+                const res = await apiFetch('/health', {
                     signal: controller.signal,
                     cache: 'no-store',
                 });

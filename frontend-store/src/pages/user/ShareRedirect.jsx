@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../utils/apiFetch';
 import LoadingScreen from '../../components/LoadingScreen';
 import { getProductUrl } from '../../utils/productSlug';
 
@@ -16,7 +16,7 @@ const ShareRedirect = () => {
   useEffect(() => {
     const fetchProductByToken = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/products/s/${token}`);
+        const response = await apiFetch(`/products/s/${token}`);
         if (!response.ok) throw new Error('Product not found');
         
         const payload = await response.json();

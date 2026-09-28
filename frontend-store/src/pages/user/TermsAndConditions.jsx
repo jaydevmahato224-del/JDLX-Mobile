@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FileText, Shield, Truck, CreditCard, RefreshCcw, AlertTriangle, ChevronRight, FileDown } from 'lucide-react'
-import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 // Module-level constant so the useMemo below has a stable dependency
 // (kept outside the component so it isn't recreated on every render).
@@ -76,7 +76,7 @@ function TermsAndConditions() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/settings`)
+        const res = await apiFetch('/settings')
         const json = await res.json()
         const content = json?.data?.terms_and_conditions_content
         if (res.ok && typeof content === 'string') {

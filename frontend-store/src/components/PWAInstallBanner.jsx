@@ -3,7 +3,7 @@ import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import useScrollLock from '../hooks/useScrollLock';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../utils/apiFetch';
 
 /**
  * PWAInstallBanner - A bottom-left floating card inviting the user to install
@@ -63,7 +63,7 @@ const PWAInstallBanner = () => {
   useScrollLock(showPwaGuide);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/settings`)
+    apiFetch('/settings')
       .then(res => res.json())
       .then(json => {
         if (json?.data) {

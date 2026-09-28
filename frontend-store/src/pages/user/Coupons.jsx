@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
 import { BadgePercent, Copy, CheckCircle2, Clock, ShoppingBag, Sparkles, Tag, Gift, Zap } from 'lucide-react'
@@ -15,7 +15,7 @@ function Coupons() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
 
-        fetch(`${API_BASE_URL}/offers/active`)
+        apiFetch('/offers/active')
             .then(res => res.json())
             .then(json => {
                 if (json.success && Array.isArray(json.data)) {

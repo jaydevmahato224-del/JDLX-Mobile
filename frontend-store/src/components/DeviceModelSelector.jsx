@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../utils/apiFetch';
 
 export default function DeviceModelSelector({ value, onChange, required = false, compact = false }) {
   const listId = useId();
@@ -7,7 +7,7 @@ export default function DeviceModelSelector({ value, onChange, required = false,
 
   useEffect(() => {
     let active = true;
-    fetch(`${API_BASE_URL}/device-models`)
+    apiFetch('/device-models')
       .then((response) => response.ok ? response.json() : { data: [] })
       .then((result) => {
         if (!active) return;

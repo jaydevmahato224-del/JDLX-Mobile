@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import { apiFetch } from '../utils/apiFetch';
 
 function getSessionId() {
   let sid = sessionStorage.getItem('jdlx_sid');
@@ -50,7 +51,7 @@ export function useAnalytics(userId = null) {
     const deviceInfo = getDeviceInfo();
     const utmParams = getUTMParams();
 
-    fetch(`${API_BASE_URL}/analytics/pageview`, {
+    apiFetch('/analytics/pageview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -84,7 +85,7 @@ export function useAnalytics(userId = null) {
 
   // Track custom events
   const trackEvent = useCallback((event_type, event_category, event_label = null, event_value = null) => {
-    fetch(`${API_BASE_URL}/analytics/event`, {
+    apiFetch('/analytics/event', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -101,7 +102,7 @@ export function useAnalytics(userId = null) {
 
   // Track search queries
   const trackSearch = useCallback((query, results_count = 0) => {
-    fetch(`${API_BASE_URL}/analytics/search`, {
+    apiFetch('/analytics/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

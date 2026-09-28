@@ -19,6 +19,7 @@
  */
 
 import { API_BASE_URL } from '../config'
+import { apiFetch } from './apiFetch'
 
 const FLUSH_INTERVAL_MS = 10000
 const MAX_BATCH = 10
@@ -115,12 +116,11 @@ function flush() {
       const blob = new Blob([body], { type: 'application/json' })
       if (navigator.sendBeacon(`${API_BASE_URL}/client-error`, blob)) return
     }
-    fetch(`${API_BASE_URL}/client-error`, {
+    // keepalive lets the batch survive tab close when sendBeacon is missing.
+    apiFetch('/client-error', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body,
       keepalive: true,
-      credentials: 'include',
     }).catch(() => { /* telemetry is best-effort */ })
   } catch { /* never let telemetry break the app */ }
 }

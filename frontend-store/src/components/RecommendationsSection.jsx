@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, memo } from 'react';
 import { Sparkles, ChevronRight, Star, ShoppingBag, Zap } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import BlurImage from './BlurImage';
-import { API_BASE_URL, resolveMediaUrl } from '../config';
+import { resolveMediaUrl } from '../config';
+import { apiFetch } from '../utils/apiFetch';
 import toast from 'react-hot-toast';
 import { useStore } from '../store/useStore';
 import { isStickerProduct } from '../utils/stickerCustomization';
@@ -146,7 +147,7 @@ export default function RecommendationsSection() {
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch(`${API_BASE_URL}/products/recommendations?limit=8`, { signal: controller.signal })
+    apiFetch('/products/recommendations?limit=8', { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(`Recommendations request failed with ${response.status}`);

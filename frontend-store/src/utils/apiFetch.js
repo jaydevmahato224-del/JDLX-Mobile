@@ -19,6 +19,29 @@ export async function apiFetch(endpoint, options = {}) {
   }
   
   const userToken = localStorage.getItem('userToken') || localStorage.getItem('token')
+  // Optional per-call timeout: aborts the request after `timeoutMs` so a hung
+  // server (e.g. Render cold start gone wrong) can't leave the user spinning
+  // forever. Opt-in via `options.timeoutMs` — callers without it keep the
+  // browser's default (no timeout), so existing flows are untouched.
+  let timeoutController = null
+  let timeoutId = null
+  if (Number.isFinite(options.timeoutMs) && options.timeoutMs > 0) {
+    timeoutController = new AbortController()
+    timeoutId = setTimeout(() => timeoutController.abort(), options.timeoutMs)
+  }
+  // Compose an abort signal from BOTH the caller's signal (if any) and the
+  // timeout controller, so either one aborting cancels the request.
+  const signals = [options.signal, timeoutController?.signal].filter(Boolean)
+  let combinedSignal = options.signal
+  if (signals.length === 1) {
+    combinedSignal = signals[0]
+  } else if (signals.length > 1 && typeof AbortSignal.any === 'function') {
+    combinedSignal = AbortSignal.any(signals)
+  } else if (signals.length > 1) {
+    // Older browsers without AbortSignal.any: honour the caller's signal and
+    // skip the timeout in that rare case — never break caller-driven aborts.
+    combinedSignal = options.signal
+  }
   // Spread only works on plain objects — a `Headers` instance (as passed by
   // some callers) spreads into nothing and silently drops the headers.
   // Convert it to a plain object first so the merge below keeps every header.
@@ -37,10 +60,15 @@ export async function apiFetch(endpoint, options = {}) {
     ...(extraHeaders || {}),
   }
 
+  const timeoutOptions = {}
+  if (combinedSignal) timeoutOptions.signal = combinedSignal
   return fetch(url, {
     ...options,
+    ...timeoutOptions,
     headers: defaultHeaders,
     credentials: 'include',
+  }).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId)
   })
 }
 

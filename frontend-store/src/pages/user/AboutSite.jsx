@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Info, Truck, Clock, Shield, CreditCard, RefreshCcw, Headphones, MapPin, ChevronRight } from 'lucide-react'
-import { API_BASE_URL } from '../../config'
+import { apiFetch } from '../../utils/apiFetch'
 
 // Module-level constant so the useMemo below has a stable dependency
 // (kept outside the component so it isn't recreated on every render).
@@ -85,7 +85,7 @@ function AboutSite() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/settings`)
+        const res = await apiFetch('/settings')
         const json = await res.json()
         const content = json?.data?.about_us_content
         if (res.ok && typeof content === 'string') {

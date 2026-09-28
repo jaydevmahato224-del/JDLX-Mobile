@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Instagram, Twitter, Facebook, Mail, Phone, MapPin } from 'lucide-react';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../utils/apiFetch';
 
 const Footer = () => {
   const [settings, setSettings] = useState({
@@ -15,7 +15,7 @@ const Footer = () => {
   });
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/settings`)
+    apiFetch('/settings')
       .then(res => res.json())
       .then(json => {
         if (json?.success && json.data) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, Loader2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE_URL } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import { getProductUrl } from '../utils/productSlug'
 
 function SearchBar() {
@@ -33,7 +33,7 @@ function SearchBar() {
         }
         setIsLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/products/search?q=${encodeURIComponent(searchQuery)}`)
+            const res = await apiFetch(`/products/search?q=${encodeURIComponent(searchQuery)}`)
             const data = await res.json()
             setSuggestions(data)
         } catch (err) {

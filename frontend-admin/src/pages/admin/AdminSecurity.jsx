@@ -14,7 +14,6 @@ const SECURITY_QUESTIONS = [
 ]
 
 const AdminSecurity = () => {
-    const adminUser = useStore(state => state.adminUser)
     const setAdminUser = useStore(state => state.setAdminUser)
 
     const [status, setStatus] = useState(null)

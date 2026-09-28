@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, History } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../../config'
-import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
 
 function AdminActivityLogs() {

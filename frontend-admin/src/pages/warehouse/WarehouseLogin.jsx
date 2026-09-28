@@ -91,7 +91,7 @@ function WarehouseLogin() {
             } else {
                 toast.error(data.error || 'Verification failed')
             }
-        } catch (err) {
+        } catch {
             toast.error('Network error. Please try again.')
         } finally {
             setLinkVerifying(false)

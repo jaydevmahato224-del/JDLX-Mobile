@@ -87,7 +87,6 @@ const WarehouseAnalytics = () => {
     // --- Real metrics (backend-computed) ---
     const totalAssignments = analytics?.total_assignments || 0
     const acceptedAssignments = analytics?.accepted_assignments || 0
-    const rejectedAssignments = analytics?.rejected_assignments || 0
     const pendingDispatch = analytics?.pending_dispatch || 0
     const acceptanceRate = totalAssignments > 0
         ? `${Math.round((acceptedAssignments / totalAssignments) * 100)}%`

@@ -74,7 +74,7 @@ const htmlDescriptionToText = (value) => {
 // (Catbox etc. are intermittently blocked/down), retry once through the
 // backend's DB-backed media proxy — the same bytes were backed up in the
 // uploaded_media table at upload time. Exactly-once per URL, then stop.
-export const handleWarehouseImageError = (e) => {
+const handleWarehouseImageError = (e) => {
     const el = e.currentTarget;
     const original = el.dataset.originalSrc || '';
     if (!original) return;

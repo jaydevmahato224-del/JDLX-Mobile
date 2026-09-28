@@ -50,7 +50,7 @@ const formatDate = (value) => {
 }
 
 const WarehouseEarnings = () => {
-    const { warehouseToken, warehouseUser, warehouseLogout } = useStore()
+    const { warehouseToken, warehouseUser } = useStore()
     const [summary, setSummary] = useState(null)
     const [settlements, setSettlements] = useState([])
     const [payouts, setPayouts] = useState([])

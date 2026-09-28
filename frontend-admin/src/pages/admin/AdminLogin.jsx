@@ -141,7 +141,7 @@ function AdminLogin() {
                     localStorage.removeItem('adminToken');
                     localStorage.removeItem('admin_token');
                     localStorage.removeItem('adminTokenSavedAt');
-                } catch (e) { /* storage unavailable */ }
+                } catch { /* storage unavailable */ }
                 setAdminUser(data.user)
                 markSessionRefreshed()
                 toast.success(`Welcome back, ${data.user?.name || 'Admin'}!`)

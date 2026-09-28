@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Image, Type, Link as LinkIcon, Save, Plus, Trash2, CheckCircle2, AlertCircle, ImagePlus, LayoutDashboard, Upload, Scissors } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
-import { useStore } from '../../store/useStore'
 import ImageCropperModal from '../../components/ImageCropperModal'
 import { apiFetch } from '../../utils/apiFetch'
 

@@ -20,7 +20,7 @@ import {
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { apiFetch } from '../../utils/apiFetch'
-import { markOrdersSeen, ORDERS_SEEN_EVENT } from '../../components/WarehouseLayout'
+import { markOrdersSeen, ORDERS_SEEN_EVENT } from '../../utils/ordersSeen'
 import ManualDeliveryModal from '../../components/ManualDeliveryModal'
 
 const WarehouseOrders = () => {

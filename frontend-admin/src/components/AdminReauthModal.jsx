@@ -51,7 +51,7 @@ const AdminReauthModal = () => {
         try {
             localStorage.removeItem('adminToken');
             localStorage.removeItem('admin_token');
-        } catch (e) { /* storage unavailable — cookie still works */ }
+        } catch { /* storage unavailable — cookie still works */ }
         setAdminUser(data.user);
         setReauthenticating(false);
         // Tell AdminRoute this session was just server-verified — without

@@ -279,7 +279,6 @@ function InventoryContent() {
                                 currentItems.map(product => {
                                     const isParentWithVariants = product.is_parent === 1 && product.has_variants;
                                     const isVariantProduct = product.variant_group_id && product.variant_group_id !== product.id;
-                                    const isVariantOrParent = isParentWithVariants || isVariantProduct;
                                     const isLowStock = product.stock <= product.low_stock_threshold;
                                     return (
                                         <tr key={product.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${!product.status || product.status === 'disabled' ? 'opacity-50' : ''}`}>

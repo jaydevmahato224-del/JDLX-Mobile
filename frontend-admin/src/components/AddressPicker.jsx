@@ -44,8 +44,6 @@ function AddressPicker({ onSelect, onClose }) {
             });
             if (res.ok) {
                 await res.json();
-
-(Showing lines 30-50 of 133. Use offset=51 to continue.)
                 onSelect({ address: addressText, latitude: location.lat, longitude: location.lng });
                 onClose();
             }

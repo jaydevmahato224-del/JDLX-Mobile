@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../../config';
-import { useStore } from '../../store/useStore';
 import { apiFetch } from '../../utils/apiFetch'
 
 const AdminDatabase = () => {

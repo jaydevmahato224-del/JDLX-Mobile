@@ -28,12 +28,6 @@ const fmtUptime = (s) => {
 
 const fmtMinute = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-const scoreColor = (score) =>
-    score >= 80 ? 'text-emerald-600' : score >= 55 ? 'text-amber-600' : 'text-red-600'
-
-const scoreBg = (score) =>
-    score >= 80 ? 'from-emerald-500 to-green-400' : score >= 55 ? 'from-amber-500 to-yellow-400' : 'from-red-600 to-orange-500'
-
 const statusPill = (status) => ({
     ok: { cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'ALL SYSTEMS OPERATIONAL' },
     warning: { cls: 'bg-amber-100 text-amber-800 border-amber-200', label: 'PERFORMANCE DEGRADED' },

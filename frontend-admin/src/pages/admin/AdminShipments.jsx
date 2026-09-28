@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
-import { useStore } from '../../store/useStore'
 import { Truck, Package, User, MapPin, Calendar, ExternalLink, Search, Filter, Loader2, RefreshCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { apiFetch } from '../../utils/apiFetch'

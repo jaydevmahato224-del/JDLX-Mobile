@@ -7,6 +7,7 @@ import { initFrameRateDetection } from './hooks/useFrameRate'
 import { initPerformanceManager } from './utils/performanceManager'
 import initAppShellBehavior from './utils/appShell'
 import { initErrorReporter } from './utils/errorReporter'
+import { initGlobalModalScrollLock } from './utils/modalScrollLock'
 import { useStore } from './store/useStore'
 import { API_BASE_URL } from './config'
 import { apiFetch } from './utils/apiFetch'
@@ -20,6 +21,10 @@ initAppShellBehavior();
 // Client error telemetry: capture crashes + unhandled rejections for the admin
 // Error Center. Fail-silent — can never affect app behaviour.
 initErrorReporter();
+// Global UX rule: jab bhi koi full-screen popup/modal khule, background page
+// completely block ho jata hai (scroll/touch/wheel) — interaction sirf popup
+// me hota hai jab tak user use back/cross se band na kar de.
+initGlobalModalScrollLock();
 
 // Session id for interaction/onboarding analytics (read by Home.jsx
 // logInteraction and OnboardingSource). Previously nothing ever wrote this

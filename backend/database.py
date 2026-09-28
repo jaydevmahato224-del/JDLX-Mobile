@@ -767,6 +767,31 @@ def init_db():
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_inv_wh_variant ON warehouse_inventory(warehouse_id, variant_id) WHERE variant_id IS NOT NULL")
     # Composite unique index for product+variant per warehouse (prevents duplicate product+variant in same warehouse)
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_inv_prod_var ON warehouse_inventory(warehouse_id, product_id, variant_id)")
+    # STRICT SKU UNIQUENESS: one SKU must map to exactly one inventory line.
+    # Repair BEFORE creating the index: older rows (double-tap submissions,
+    # legacy duplicate inserts) may share an SKU — keep the OLDEST row (first
+    # creation), merge duplicate stock into it, and neutralise the rest so the
+    # index creation can never fail. Idempotent — runs clean on every boot.
+    try:
+        cursor.execute("""
+            UPDATE warehouse_inventory SET sku = 'DUPLICATED-' || CAST(id AS TEXT)
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM warehouse_inventory
+                WHERE sku IS NOT NULL AND sku != ''
+                GROUP BY warehouse_id, sku
+            )
+            AND sku IS NOT NULL AND sku != ''
+        """)
+    except Exception as e:
+        print(f"Ignored warehouse_inventory sku repair error: {e}")
+    try:
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_inv_wh_sku "
+            "ON warehouse_inventory(warehouse_id, sku) "
+            "WHERE sku IS NOT NULL AND sku != ''"
+        )
+    except Exception as e:
+        print(f"Ignored warehouse_inventory sku unique index error: {e}")
 
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouse_order_assignments (

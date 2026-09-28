@@ -511,6 +511,130 @@ def _check_duplicate_variant_combination(cursor, product_id, variant_options, ex
     return row['id'] if row else None
 
 
+def _ensure_parent_inventory_row(cursor, product_id, wh_id, base_name, base_sku, price, stock):
+    """Guarantee the parent product has its own warehouse_inventory row.
+
+    In the linked-variant system variants are separate product rows, each with
+    an inventory line of their own. The parent ALSO needs one — otherwise the
+    product the warehouse actually added (the parent) never appears in the
+    inventory list even though the storefront and admin approval see it.
+
+    For a variant parent the line's stock mirrors its variant group (sum of
+    the linked variant lines in this warehouse, excluding the parent's own
+    line to avoid double counting). For a plain product the caller's stock is
+    used as-is. Idempotent — returns the existing row id when present.
+    """
+    existing = cursor.execute(
+        "SELECT id FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
+        (wh_id, product_id),
+    ).fetchone()
+    if existing:
+        inv_id = existing['id']
+    else:
+        cursor.execute(
+            """INSERT INTO warehouse_inventory
+               (warehouse_id, product_id, product_name, sku, stock_quantity, available_stock,
+                low_stock_threshold, selling_price, mrp, unit)
+               VALUES (?, ?, ?, ?, ?, ?, 2, ?, 0, 'pcs')""",
+            (wh_id, product_id, base_name, base_sku, stock, stock, price),
+        )
+        inv_id = cursor.lastrowid
+
+    # Variant parent: keep the line's stock in sync with the group total
+    # (sum of variant lines in THIS warehouse, excluding the parent's own
+    # line). Plain products keep their own stock untouched. IMPORTANT: only
+    # sync when at least one variant line actually exists — during product
+    # creation the parent row is made BEFORE the variant loop, and syncing
+    # then would zero out the typed initial stock.
+    is_variant_parent = cursor.execute(
+        "SELECT 1 FROM products WHERE id = ? AND has_variants = 1",
+        (product_id,),
+    ).fetchone()
+    if is_variant_parent:
+        has_variant_lines = cursor.execute(
+            """SELECT 1 FROM warehouse_inventory wi
+               JOIN products p ON p.id = wi.product_id
+               WHERE wi.warehouse_id = ?
+                 AND p.variant_group_id = (SELECT variant_group_id FROM products WHERE id = ?)
+                 AND wi.product_id != ? LIMIT 1""",
+            (wh_id, product_id, product_id),
+        ).fetchone()
+        if has_variant_lines:
+            sum_row = cursor.execute(
+                """SELECT COALESCE(SUM(wi.stock_quantity), 0) AS total
+                   FROM warehouse_inventory wi
+                   JOIN products p ON p.id = wi.product_id
+                   WHERE wi.warehouse_id = ?
+                     AND p.variant_group_id = (SELECT variant_group_id FROM products WHERE id = ?)
+                     AND wi.product_id != ?""",
+                (wh_id, product_id, product_id),
+            ).fetchone()
+            group_stock = max(0, sum_row['total'] if sum_row else 0)
+            cursor.execute(
+                "UPDATE warehouse_inventory SET stock_quantity = ?, available_stock = ? WHERE id = ?",
+                (group_stock, group_stock, inv_id),
+            )
+    return inv_id
+
+
+def _sync_variant_group_stock(conn, product_id, wh_id=None):
+    """Keep products.stock correct for a variant product AND its whole group.
+
+    In the linked-variant system the parent's products.stock is supposed to
+    mirror the variant group total. Naive per-product syncs from stock edits
+    (adjust/PATCH) recomputed only that line's own product, which overwrote
+    the parent's group total with a single variant's stock. This helper:
+      - recomputes products.stock = SUM(inventory stock) for the touched
+        product and for every other product in its variant group,
+      - keeps the parent's inventory line in sync with the group total so the
+        panel, storefront and billing all read one consistent number.
+    """
+    cursor = conn.cursor()
+    row = cursor.execute(
+        "SELECT variant_group_id, has_variants FROM products WHERE id = ?", (product_id,)
+    ).fetchone()
+    if not row:
+        return
+    group_id = row['variant_group_id']
+    is_parent = bool(row['has_variants'])
+    if not group_id and not is_parent:
+        # Plain product — single sync (legacy behaviour).
+        cursor.execute(
+            """UPDATE products SET stock = (
+                SELECT COALESCE(SUM(stock_quantity), 0)
+                FROM warehouse_inventory WHERE product_id = ?
+            ) WHERE id = ?""",
+            (product_id, product_id),
+        )
+        return
+
+    # ORDER MATTERS: first sync the parent's inventory LINE to the variant
+    # group total (own line excluded — no double counting), THEN recompute
+    # products.stock for every member from their (now correct) lines.
+    parent = cursor.execute(
+        "SELECT id, name, global_sku_code FROM products WHERE id = ? AND has_variants = 1", (group_id,)
+    ).fetchone()
+    if parent and wh_id is not None:
+        _ensure_parent_inventory_row(
+            cursor, parent['id'], wh_id,
+            parent['name'] or 'Product',
+            parent['global_sku_code'] or str(parent['id']),
+            0, 0,
+        )
+    group_members = cursor.execute(
+        "SELECT id FROM products WHERE variant_group_id = ? OR id = ?",
+        (group_id, product_id),
+    ).fetchall()
+    for member in group_members:
+        cursor.execute(
+            """UPDATE products SET stock = (
+                SELECT COALESCE(SUM(stock_quantity), 0)
+                FROM warehouse_inventory WHERE product_id = ?
+            ) WHERE id = ?""",
+            (member['id'], member['id']),
+        )
+
+
 def _get_product_option_groups(cursor, product_id):
     """Fetch option groups for a product, returning list of dicts with option_name and option_values."""
     cursor.execute(
@@ -2576,6 +2700,38 @@ def warehouse_get_inventory():
 
     conn = get_db()
     try:
+        # SELF-HEAL (legacy data): the old variant-create flow never inserted
+        # the PARENT product's own inventory row — the product the warehouse
+        # added was invisible in the panel while its variants showed fine.
+        # Detect parents of this warehouse's variant lines that lack their own
+        # line and create it (idempotent; after the first run this is a no-op).
+        missing_parents = conn.execute(
+            """SELECT DISTINCT p.id, p.name, p.price, p.global_sku_code
+               FROM warehouse_inventory wi
+               JOIN products v ON v.id = wi.product_id
+               JOIN products p ON p.id = v.variant_group_id
+               WHERE wi.warehouse_id = ? AND p.has_variants = 1
+                 AND NOT EXISTS (
+                     SELECT 1 FROM warehouse_inventory x
+                     WHERE x.warehouse_id = wi.warehouse_id AND x.product_id = p.id
+                 )""",
+            (wh_id,),
+        ).fetchall()
+        if missing_parents:
+            for mp in missing_parents:
+                try:
+                    _ensure_parent_inventory_row(
+                        conn.cursor(), mp['id'], wh_id,
+                        mp['name'] or 'Product',
+                        mp['global_sku_code'] or str(mp['id']),
+                        mp['price'] or 0, 0
+                    )
+                except Exception:
+                    current_app.logger.warning(
+                        "Parent inventory self-heal failed for product %s", mp['id'], exc_info=True
+                    )
+            conn.commit()
+
         rows = conn.execute(
             """SELECT wi.id, COALESCE(p.name, wi.product_name) as product_name, 
                       COALESCE(wi.sku, CAST(p.id AS TEXT)) as sku, wi.stock_quantity, 
@@ -2662,6 +2818,19 @@ def warehouse_add_inventory():
         
         if existing:
             return error_response("This product is already in your inventory", 409)
+
+        # STRICT SKU RULE: one SKU per warehouse, one line. Reject duplicates
+        # with a clear message instead of letting the DB unique index surface
+        # as a generic 500.
+        sku_taken = conn.execute(
+            "SELECT id FROM warehouse_inventory WHERE warehouse_id = ? AND sku = ?",
+            (wh_id, sku),
+        ).fetchone()
+        if sku_taken:
+            return error_response(
+                f"SKU '{sku}' is already used by another item in your inventory. SKUs must be unique — please change it.",
+                409,
+            )
 
         # Get product name for fallback
         product = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()
@@ -2801,6 +2970,21 @@ def warehouse_create_product():
             if existing:
                 return error_response(f"Product with barcode {barcode} already exists in global catalog.", 409)
 
+        # STRICT SKU RULE: an SKU must be globally unique across the catalog.
+        # Reject duplicates with a clear 409 instead of silently creating a
+        # second product that shares the code (breaks billing, labels and
+        # stock sync). generation endpoint was the only enforcement point.
+        candidate_sku = (sku or global_sku_code or '').strip()
+        if candidate_sku:
+            sku_owner = cursor.execute(
+                "SELECT id FROM products WHERE global_sku_code = ? LIMIT 1", (candidate_sku,)
+            ).fetchone()
+            if sku_owner:
+                return error_response(
+                    f"SKU '{candidate_sku}' already exists (product #{sku_owner['id']}). SKUs must be unique — please change it.",
+                    409,
+                )
+
         # 1. Insert parent product with generated description
         share_token = generate_share_token()
         cursor.execute(
@@ -2836,6 +3020,17 @@ def warehouse_create_product():
         
         # Set variant_group_id to its own id for parent
         cursor.execute("UPDATE products SET variant_group_id = ? WHERE id = ?", (product_id, product_id))
+
+        # Variant parent: create the parent's own inventory row BEFORE the
+        # variant loop. Early-return validation failures below (bad option
+        # combo, duplicate variant SKU) must not leave a product with no
+        # inventory line — the exact bug where the added product vanished
+        # from the panel while its variants showed up.
+        if has_variants:
+            _ensure_parent_inventory_row(
+                cursor, product_id, wh_id, name, candidate_sku or str(product_id),
+                price or 0, initial_stock or 0,
+            )
 
         # Save Recommendations
         for rec_type, prod_ids in recommendations.items():
@@ -2994,8 +3189,13 @@ def warehouse_create_product():
                 if not v_sku:
                     v_sku = f"{product_sku_base}-{random.randint(10000, 99999)}"
                 
-                # Ensure SKU uniqueness
+                # Ensure SKU uniqueness — STRICT, across the global catalog:
+                # parent products, other variants, everything. The old check
+                # only looked at the legacy product_variants table, so a
+                # variant SKU could collide with any product row.
                 while cursor.execute("SELECT id FROM products WHERE global_sku_code = ?", (v_sku,)).fetchone():
+                    v_sku = f"{v_sku}-{random.randint(10, 99)}"
+                while cursor.execute("SELECT 1 FROM warehouse_inventory WHERE sku = ? AND warehouse_id != ?", (v_sku, wh_id)).fetchone():
                     v_sku = f"{v_sku}-{random.randint(10, 99)}"
 
                 # Generate unique share_token and seo_slug for variant
@@ -3051,16 +3251,10 @@ def warehouse_create_product():
                     "stock": v_stock
                 })
 
-            # Sync parent stock (sum of all variant stocks in this warehouse)
-            conn.execute(
-                """UPDATE products SET stock = (
-                    SELECT COALESCE(SUM(stock_quantity), 0)
-                    FROM warehouse_inventory WHERE product_id IN (
-                        SELECT id FROM products WHERE variant_group_id = ?
-                    ) AND warehouse_id = ?
-                ) WHERE id = ?""",
-                (product_id, wh_id, product_id)
-            )
+            # Sync parent + variant stock (variant-group aware: the parent's
+            # inventory line mirrors the group total, then products.stock is
+            # recomputed for every group member from their lines).
+            _sync_variant_group_stock(conn, product_id, wh_id)
 
             conn.commit()
             return success_response(
@@ -3074,9 +3268,24 @@ def warehouse_create_product():
             
             if not final_sku:
                 final_sku = str(random.randint(100000, 999999))
-                # Verify uniqueness in warehouse inventory
-                while cursor.execute("SELECT id FROM warehouse_inventory WHERE sku = ?", (final_sku,)).fetchone():
+                # Verify uniqueness in warehouse inventory AND the global catalog
+                while (
+                    cursor.execute("SELECT id FROM warehouse_inventory WHERE sku = ?", (final_sku,)).fetchone()
+                    or cursor.execute("SELECT id FROM products WHERE global_sku_code = ?", (final_sku,)).fetchone()
+                ):
                     final_sku = str(random.randint(100000, 999999))
+
+            # STRICT SKU RULE (same as the catalog check above): the inventory
+            # line's SKU must not collide with another line in THIS warehouse.
+            sku_collision = cursor.execute(
+                "SELECT id FROM warehouse_inventory WHERE warehouse_id = ? AND sku = ?",
+                (wh_id, final_sku),
+            ).fetchone()
+            if sku_collision:
+                return error_response(
+                    f"SKU '{final_sku}' is already used by another item in your inventory. SKUs must be unique — please change it.",
+                    409,
+                )
             
             # 3. Add to warehouse_inventory
             cursor.execute(
@@ -3563,14 +3772,10 @@ def warehouse_patch_inventory(item_id):
                     "UPDATE warehouse_inventory SET available_stock = ? WHERE id = ?",
                     (new_available, item_id)
                 )
-                # Sync global products.stock (sum of all warehouses)
-                conn.execute(
-                    """UPDATE products SET stock = (
-                        SELECT COALESCE(SUM(stock_quantity), 0)
-                        FROM warehouse_inventory WHERE product_id = ?
-                    ) WHERE id = ?""",
-                    (inv["product_id"], inv["product_id"])
-                )
+                # Sync global products.stock (sum of all warehouses) —
+                # variant-group aware so the parent's group total survives
+                # single-line edits.
+                _sync_variant_group_stock(conn, inv["product_id"], wh_id)
 
                 # Sync variant stock if applicable
                 inv_variant = conn.execute(
@@ -3616,13 +3821,7 @@ def warehouse_delete_inventory(item_id):
         if cursor.rowcount == 0:
             return error_response("Inventory item not found", 404)
         if item and item["product_id"]:
-            conn.execute(
-                """UPDATE products SET stock = (
-                    SELECT COALESCE(SUM(stock_quantity), 0)
-                    FROM warehouse_inventory WHERE product_id = ?
-                ) WHERE id = ?""",
-                (item["product_id"], item["product_id"])
-            )
+            _sync_variant_group_stock(conn, item["product_id"], wh_id)
         conn.commit()
         return success_response(None, "SKU removed from inventory", 200)
     finally:
@@ -3677,15 +3876,11 @@ def warehouse_adjust_stock(item_id):
             (stock_after, new_available, item_id)
         )
 
-        # Sync global products.stock
+        # Sync global products.stock — variant-group aware: the parent's stock
+        # mirrors the whole group, so a single-variant adjustment must refresh
+        # the parent (and siblings) too, not just its own row.
         if item["product_id"]:
-            conn.execute(
-                """UPDATE products SET stock = (
-                    SELECT COALESCE(SUM(stock_quantity), 0)
-                    FROM warehouse_inventory WHERE product_id = ?
-                ) WHERE id = ?""",
-                (item["product_id"], item["product_id"])
-            )
+            _sync_variant_group_stock(conn, item["product_id"], wh_id)
             
             # Trigger low-stock notifications if applicable
             cursor = conn.execute("SELECT name, stock FROM products WHERE id = ?", (item["product_id"],))

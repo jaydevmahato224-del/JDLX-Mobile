@@ -151,6 +151,11 @@ const WarehouseInventory = () => {
         }
     }
     const [loading, setLoading] = useState(true)
+    // Submit guard for the Add/Edit Product form: `loading` above tracks the
+    // inventory FETCH, so the submit button's disabled={loading} never armed
+    // — a double-tap on "CREATE & REGISTER PRODUCT" fired two POSTs and
+    // created two identical products. `submitting` gates the whole handler.
+    const [submitting, setSubmitting] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [filterStatus, setFilterStatus] = useState('all') // all, low, out
     const [lifecycleFilter, setLifecycleFilter] = useState('all') // all, draft, testing, live, archived, discontinued, coming_soon
@@ -177,6 +182,12 @@ const WarehouseInventory = () => {
     // (ghost click / touch-release mishap) and re-opened the panel right after
     // closing it — the "detail page baar baar aa raha he" glitch.
     const lastRowClickAt = useRef(0);
+    // SCROLL-TAP GUARD: on touch devices, scrolling the inventory list ends
+    // with the finger still on the last row; the browser fires a click there
+    // when the finger lifts. We record the row the touch STARTED on and skip
+    // the click when the finger moved (scroll) or simply drifted to another
+    // row mid-gesture — so a scroll can never open the wrong product.
+    const touchStartRef = useRef(null);
 
     const fetchItemReviews = useCallback(async (productId) => {
         if (!productId) return;
@@ -778,6 +789,10 @@ const WarehouseInventory = () => {
     const handleAddProduct = async (e) => {
         e.preventDefault()
         if (!warehouseToken) return
+        // Double-submit guard: ignore re-entrant calls entirely (button
+        // double-tap, Enter spam). One submission at a time.
+        if (submitting) return
+        setSubmitting(true)
 
         // Frontend Validation for Barcode format (Optional but must be 13 digits if provided)
         if (newProductData.barcode && (newProductData.barcode.length < 8 || newProductData.barcode.length > 14)) {
@@ -788,7 +803,23 @@ const WarehouseInventory = () => {
         // Image Validation: Minimum 3 images required
         if (newProductData.images.length < 3) {
             showNotification('A minimum of 3 product images are required.', 'error')
+            setSubmitting(false)
             return
+        }
+
+        // STRICT SKU RULE (frontend mirror of the backend 409): block the
+        // obvious duplicate early with a clear message; the backend re-checks
+        // authoritatively (unique index + endpoint checks).
+        const typedSku = (newProductData.sku || '').trim()
+        if (!editingItemId && typedSku) {
+            const duplicateSku = inventory.some(
+                (inv) => (inv.sku || '').trim().toLowerCase() === typedSku.toLowerCase()
+            )
+            if (duplicateSku) {
+                showNotification(`SKU '${typedSku}' already exists in your inventory. SKUs must be unique — please change it.`, 'error')
+                setSubmitting(false)
+                return
+            }
         }
 
         try {
@@ -912,6 +943,8 @@ const WarehouseInventory = () => {
             await fetchInventory()
         } catch (err) {
             showNotification(err.message, 'error')
+        } finally {
+            setSubmitting(false)
         }
     }
 
@@ -2736,7 +2769,7 @@ const WarehouseInventory = () => {
                                         )}
                                         <button
                                             type="submit"
-                                            disabled={loading}
+                                            disabled={loading || submitting}
                                             className="flex-[2] md:w-72 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 py-4 rounded-2xl font-black text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-amber-400/20 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:grayscale outline-none"
                                         >
                                             {loading ? (
@@ -2889,17 +2922,35 @@ const WarehouseInventory = () => {
                                         const isLow = item.stock_quantity <= (item.low_stock_threshold || 5) && item.stock_quantity > 0;
 
                                         return (
-                                            <tr key={item.id} onClick={() => {
-                                                // Double-fire guard: ghost clicks / touch-release
-                                                // mishaps re-opened the detail panel right after
-                                                // closing it (the "baar baar khul raha he" glitch).
-                                                // Row action buttons already stopPropagation; this
-                                                // timing guard is belt-and-braces on top.
-                                                const now = Date.now();
-                                                if (now - lastRowClickAt.current < 350) return;
-                                                lastRowClickAt.current = now;
-                                                setSelectedItem(item);
-                                            }} className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
+                                            <tr key={item.id}
+                                                onTouchStart={(e) => {
+                                                    const el = document.elementFromPoint(
+                                                        e.touches[0]?.clientX ?? 0,
+                                                        e.touches[0]?.clientY ?? 0
+                                                    );
+                                                    touchStartRef.current = el ? Number(el.closest('tr')?.dataset.rowId ?? NaN) : NaN;
+                                                }}
+                                                onTouchMove={() => { touchStartRef.current = NaN; }}
+                                                onClick={() => {
+                                                    // Double-fire guard: ghost clicks / touch-release
+                                                    // mishaps re-opened the detail panel right after
+                                                    // closing it (the "baar baar khul raha he" glitch).
+                                                    // Row action buttons already stopPropagation; this
+                                                    // timing guard is belt-and-braces on top.
+                                                    const now = Date.now();
+                                                    if (now - lastRowClickAt.current < 350) return;
+                                                    lastRowClickAt.current = now;
+                                                    // Scroll-tap guard: ignore taps that started on a
+                                                    // DIFFERENT row than the one firing the click (a
+                                                    // scroll gesture that ended here), or one that moved.
+                                                    if (!Number.isNaN(touchStartRef.current)) {
+                                                        if (touchStartRef.current !== item.id) return;
+                                                        touchStartRef.current = NaN;
+                                                    }
+                                                    setSelectedItem(item);
+                                                }}
+                                                data-row-id={item.id}
+                                                className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
                                                 <td className="px-4 py-4 sm:px-6 sm:py-5">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-800 border border-white/5 flex items-center justify-center text-slate-500 overflow-hidden group-hover:border-amber-400/20 transition-all">

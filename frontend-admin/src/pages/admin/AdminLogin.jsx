@@ -7,15 +7,6 @@ import { Loader2, Mail, Lock, Smartphone, ShieldQuestion, ArrowLeft, Eye, EyeOff
 import toast from 'react-hot-toast'
 import adminLogo from '../../assets/admin-logo.svg'
 
-// Backend-sanctioned security questions (must match SECURITY_QUESTIONS list).
-const SECURITY_QUESTIONS = [
-    "What was the name of your first school?",
-    "What is your mother's maiden name?",
-    "What was the make of your first car/bike?",
-    "What is the name of the street you grew up on?",
-    "What was your childhood nickname?",
-]
-
 function AdminLogin() {
     const navigate = useNavigate();
     const adminUser = useStore(state => state.adminUser);
@@ -349,11 +340,6 @@ function AdminLogin() {
                         <div className="w-full flex justify-center mb-4">
                             <button
                                 onClick={() => {
-                                    try {
-                                        localStorage.setItem('is_admin_login_attempt', 'true');
-                                    } catch (e) {
-                                        console.warn('Unable to access localStorage:', e);
-                                    }
                                     window.location.href = oauthLoginUrl;
                                 }}
                                 className="flex items-center justify-center gap-3 w-full border border-gray-300 rounded-xl py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors bg-white shadow-sm cursor-pointer"

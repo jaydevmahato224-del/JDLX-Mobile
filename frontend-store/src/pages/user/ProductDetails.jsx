@@ -1,5 +1,6 @@
 import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Truck, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useStore } from '../../store/useStore';
@@ -879,21 +880,26 @@ export default function ProductDetails() {
         <ProductReviews productId={product.id} />
       </section>
 
-      {/* Policy Modal */}
-      {showPolicyModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
+      {/* Policy Modal — portaled to <body> so page-level stacking contexts
+          (sticky header, bottom nav's inline z-index) can never cover it.
+          Card is a flex column pinned inside the padded backdrop: header and
+          footer stay visible, only the policy body scrolls — fixes the
+          top-clipping/overlap glitch on long policies, mobile and desktop. */}
+      {showPolicyModal && createPortal(
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowPolicyModal(false)} />
-          <div className="relative w-full max-w-lg bg-[var(--color-surface-card)] rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="relative w-full max-w-lg max-h-full flex flex-col bg-[var(--color-surface-card)] rounded-[1.75rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
             {/* Header — theme surfaces (was a hardcoded dark slate block that
                 clashed with the app theme in light mode) */}
-            <div className="bg-[var(--color-surface-card)] border-b border-[var(--color-surface-high)] p-8 relative">
-              <button onClick={() => setShowPolicyModal(false)} aria-label="Close" className="absolute top-6 right-6 p-2 rounded-full bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] border border-[var(--color-surface-high)]"><X size={20} /></button>
-              <div className="flex items-center gap-4"><div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-500"><Undo2 size={24} /></div><div><h3 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]">Return Policy</h3><p className="ui-label text-[var(--color-on-surface-variant)]">Verified by JDLX</p></div></div>
+            <div className="bg-[var(--color-surface-card)] border-b border-[var(--color-surface-high)] p-6 sm:p-8 relative shrink-0">
+              <button onClick={() => setShowPolicyModal(false)} aria-label="Close" className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 rounded-full bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] border border-[var(--color-surface-high)]"><X size={20} /></button>
+              <div className="flex items-center gap-4 pr-12"><div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-500"><Undo2 size={24} /></div><div><h3 className="text-2xl font-black tracking-tight text-[var(--color-on-surface)]">Return Policy</h3><p className="ui-label text-[var(--color-on-surface-variant)]">Verified by JDLX</p></div></div>
             </div>
-            <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar bg-[var(--color-surface-card)]"><div className="space-y-4">{(product.final_return_policy || '7 Days Return Policy').split('\n').filter(p => p.trim()).map((p, i) => (<div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]"><div className="w-2 h-2 rounded-full bg-[var(--color-on-surface)] mt-1.5 shrink-0" /><p className="text-[13px] font-bold text-[var(--color-on-surface)] leading-relaxed">{p.replace(/\*\*/g, '').replace(/^\s*[*-]\s*/, '').trim()}</p></div>))}</div></div>
-            <div className="p-6 bg-[var(--color-surface-low)] border-t border-[var(--color-surface-high)]"><button onClick={() => setShowPolicyModal(false)} className="w-full py-4 bg-[var(--color-on-surface)] text-[var(--color-surface-card)] rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Got it</button></div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain no-scrollbar p-5 sm:p-8 bg-[var(--color-surface-card)]"><div className="space-y-4">{(product.final_return_policy || '7 Days Return Policy').split('\n').filter(p => p.trim()).map((p, i) => (<div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-[var(--color-surface-low)] border border-[var(--color-surface-high)]"><div className="w-2 h-2 rounded-full bg-[var(--color-on-surface)] mt-1.5 shrink-0" /><p className="text-[13px] font-bold text-[var(--color-on-surface)] leading-relaxed">{p.replace(/\*\*/g, '').replace(/^\s*[*-]\s*/, '').trim()}</p></div>))}</div></div>
+            <div className="p-5 sm:p-6 pt-4 sm:pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-[var(--color-surface-low)] border-t border-[var(--color-surface-high)] shrink-0"><button onClick={() => setShowPolicyModal(false)} className="w-full py-4 bg-[var(--color-on-surface)] text-[var(--color-surface-card)] rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Got it</button></div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Mobile Sticky Bar */}

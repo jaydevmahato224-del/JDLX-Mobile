@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import {
     Package,
@@ -172,6 +173,10 @@ const WarehouseInventory = () => {
     const [itemReviews, setItemReviews] = useState([]);
     const [itemStats, setItemStats] = useState({ total: 0, average: 0, distribution: {} });
     const [loadingReviews, setLoadingReviews] = useState(false);
+    // Double-click guard for the row→detail panel: a click event fires twice
+    // (ghost click / touch-release mishap) and re-opened the panel right after
+    // closing it — the "detail page baar baar aa raha he" glitch.
+    const lastRowClickAt = useRef(0);
 
     const fetchItemReviews = useCallback(async (productId) => {
         if (!productId) return;
@@ -920,10 +925,15 @@ const WarehouseInventory = () => {
                 // a new one.
                 closeProductForm()
             }
+            // Detail panel: Escape closes it too — same interaction as the
+            // backdrop click and the header Back/X buttons.
+            if (e.key === 'Escape' && selectedItem) {
+                setSelectedItem(null)
+            }
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [showAddProductView])
+    }, [showAddProductView, selectedItem])
 
     const uniqueSubCategories = Array.from(new Set(inventory.map(item => item.sub_category).filter(Boolean)));
     const filteredInventory = inventory.filter(item => {
@@ -2879,7 +2889,17 @@ const WarehouseInventory = () => {
                                         const isLow = item.stock_quantity <= (item.low_stock_threshold || 5) && item.stock_quantity > 0;
 
                                         return (
-                                            <tr key={item.id} onClick={() => setSelectedItem(item)} className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
+                                            <tr key={item.id} onClick={() => {
+                                                // Double-fire guard: ghost clicks / touch-release
+                                                // mishaps re-opened the detail panel right after
+                                                // closing it (the "baar baar khul raha he" glitch).
+                                                // Row action buttons already stopPropagation; this
+                                                // timing guard is belt-and-braces on top.
+                                                const now = Date.now();
+                                                if (now - lastRowClickAt.current < 350) return;
+                                                lastRowClickAt.current = now;
+                                                setSelectedItem(item);
+                                            }} className="group hover:bg-white/[0.03] transition-colors cursor-pointer">
                                                 <td className="px-4 py-4 sm:px-6 sm:py-5">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 shrink-0 rounded-xl bg-slate-800 border border-white/5 flex items-center justify-center text-slate-500 overflow-hidden group-hover:border-amber-400/20 transition-all">
@@ -3457,9 +3477,18 @@ const WarehouseInventory = () => {
                     <div className="fixed right-0 top-0 h-full w-full max-w-md bg-slate-950 border-l border-white/5 z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
                         {/* Header */}
                         <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 shrink-0">
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-amber-500 mb-1">Product Details</p>
-                                <h2 className="text-lg font-black text-white truncate">{selectedItem.product_name}</h2>
+                            <div className="flex items-center gap-3 min-w-0">
+                                <button
+                                    onClick={() => setSelectedItem(null)}
+                                    title="Back to inventory list"
+                                    className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-300 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                                >
+                                    <ChevronLeft size={18} />
+                                </button>
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500 mb-1">Product Details</p>
+                                    <h2 className="text-lg font-black text-white truncate">{selectedItem.product_name}</h2>
+                                </div>
                             </div>
                             <button
                                 onClick={() => setSelectedItem(null)}

@@ -2811,10 +2811,10 @@ def warehouse_create_product():
                 color, weight, dimensions, is_fragile, is_temp_sensitive, is_perishable, expiry_date, 
                 is_featured, has_variants, is_parent, variant_group_id, variant_name,
                 recommendation_priority, recommendation_weight,
-                lifecycle_state, share_token,
+                lifecycle_state, share_token, return_policy,
                 approval_status, approval_source, approval_warehouse_id, approval_requested_at
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     'pending', 'warehouse', ?, CURRENT_TIMESTAMP)
             """,
             (
@@ -2825,6 +2825,10 @@ def warehouse_create_product():
                 is_featured, 1 if has_variants else 0, 1 if has_variants else 0,
                 None, None,
                 rec_priority, rec_weight, lifecycle_state, share_token,
+                # The warehouse-typed return policy text. Empty string is
+                # normalized to NULL so the storefront's fallback chain
+                # (product > category > global) kicks in cleanly.
+                ((data.get('return_policy') or '').strip() or None),
                 wh_id
             )
         )
@@ -3133,7 +3137,7 @@ def warehouse_patch_inventory(item_id):
     has_composite = any(k in data for k in (
         "images", "description", "offline_price", "fulfillment", "variants",
         "variant_options", "recommendations", "content", "badges", "discovery",
-        "has_variants",
+        "has_variants", "return_policy",
     ))
     if not updates and not has_composite:
         return error_response("No valid fields to update", 400)
@@ -3158,7 +3162,7 @@ def warehouse_patch_inventory(item_id):
             "color", "category_id", "sub_category", "weight", "dimensions", "is_fragile", 
             "is_temp_sensitive", "is_perishable", "expiry_date", "is_featured",
             "recommendation_priority", "recommendation_weight", "lifecycle_state",
-            "offline_price", "usage_instructions"
+            "offline_price", "usage_instructions", "return_policy"
         ]
         meta_updates = []
         meta_values = []

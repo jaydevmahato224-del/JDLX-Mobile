@@ -4215,15 +4215,26 @@ def get_products():
         for row in rows:
             p_dict = normalize_product_row(row)
             window_days = window_by_pid.get(p_dict['id'])
-            if window_days is not None:
-                # fulfillment.return_window is authoritative (whitelist-
-                # validated at save time). 0 = No Returns overrides legacy text.
+            own_policy = (p_dict.get("return_policy") or '').strip()
+            if window_days == 0:
+                # Hard rule: the warehouse explicitly chose "No Returns" —
+                # nothing overrides it.
+                p_dict["final_return_policy"] = "No Returns"
+            elif own_policy:
+                # The warehouse typed a custom policy for THIS product — show
+                # it verbatim instead of the generic window label.
+                p_dict["final_return_policy"] = own_policy
+            elif window_days is not None:
+                # fulfillment.return_window is whitelist-validated at save
+                # time; only its generic label applies when no custom text.
                 p_dict["final_return_policy"] = return_policy_text_for(
                     window_days,
-                    fallback=(p_dict.get("return_policy") or p_dict.get("category_return_policy") or global_policy),
+                    fallback=(p_dict.get("category_return_policy") or global_policy),
                 )
             else:
-                p_dict["final_return_policy"] = p_dict.get("return_policy") or p_dict.get("category_return_policy") or global_policy
+                p_dict["final_return_policy"] = (
+                    p_dict.get("category_return_policy") or global_policy
+                )
             p_dict["return_window_days"] = window_days
             products.append(p_dict)
         
@@ -4719,14 +4730,23 @@ def get_product(product_id):
         product_dict['fulfillment'] = dict(fulfillment) if fulfillment else None
 
         # Effective return policy — resolved HERE because fulfillment is only
-        # available at this point. fulfillment.return_window is authoritative
-        # when present (whitelist-validated at save time); legacy text policy
-        # (product > category > global) remains the fallback otherwise.
+        # available at this point. Precedence (mirrors the list endpoint so
+        # card and detail always agree): "No Returns" (return_window=0) is a
+        # hard override; the warehouse-typed product policy text beats the
+        # generic window label; the window label covers window-only products;
+        # category/global text is the last fallback.
         if product_dict['fulfillment'] and product_dict['fulfillment'].get('return_window') is not None:
-            product_dict['final_return_policy'] = return_policy_text_for(
-                product_dict['fulfillment'].get('return_window'),
-                fallback=(product_dict.get('return_policy') or product_dict.get('category_return_policy') or global_policy),
-            )
+            _window_days = product_dict['fulfillment'].get('return_window')
+            _own_policy = (product_dict.get('return_policy') or '').strip()
+            if _window_days == 0:
+                product_dict['final_return_policy'] = "No Returns"
+            elif _own_policy:
+                product_dict['final_return_policy'] = _own_policy
+            else:
+                product_dict['final_return_policy'] = return_policy_text_for(
+                    _window_days,
+                    fallback=(product_dict.get('category_return_policy') or global_policy),
+                )
 
         # Fetch discovery
         cursor.execute("SELECT * FROM product_discovery WHERE product_id = ?", (product_id,))

@@ -75,6 +75,18 @@ def main():
         r = client.open(path, method=method, headers=headers,
                         data=json.dumps(payload) if payload else None,
                         content_type="application/json")
+        # The approval-gate feature creates warehouse products as 'pending'
+        # while the storefront list/detail endpoints only serve 'approved'
+        # rows — this suite exercises the storefront read paths, so each
+        # created product is auto-approved here. Approval itself has its
+        # own dedicated tests.
+        if method == "POST" and path.endswith("/api/warehouse/products"):
+            conn.execute("UPDATE products SET approval_status = 'approved'")
+            conn.commit()
+            # /api/products is served through Flask-Caching (60s per query
+            # string). Clear it so list assertions after a create see the new
+            # row instead of a stale cached page.
+            appmod.cache.clear()
         body = r.get_json()
         if isinstance(body, dict) and "data" in body:
             body = body["data"]
@@ -159,6 +171,35 @@ def main():
           f"got {plist.get(pid_detail, {}).get('final_return_policy')!r}")
     check("list: 'No Returns' matches detail", plist.get(pid_default, {}).get("final_return_policy") == "No Returns",
           f"got {plist.get(pid_default, {}).get('final_return_policy')!r}")
+
+    # ---- 7b. Warehouse-typed policy text beats the generic window label ----
+    # (Both list and detail must show the typed text; PATCH must update it.)
+    p = dict(base_payload, name="Custom Policy", price=100,
+             fulfillment={"return_window": 3},
+             return_policy="7 Days Replacement\nOriginal packaging required")
+    s, r = api("POST", "/api/warehouse/products", wh_token(), p)
+    check("create (custom policy): 201", s == 201, f"got {s} {r if s != 201 else ''}")
+    pid_custom = r.get("product_id")
+    s, detail = api("GET", f"/api/products/{pid_custom}")
+    pol = (detail or {}).get("final_return_policy", "")
+    check("detail: typed policy wins over generic label", "7 Days Replacement" in pol and "Original packaging required" in pol,
+          f"got {pol!r}")
+    s, products = api("GET", "/api/products")
+    plist = {x["id"]: x for x in (products if isinstance(products, list) else [])}
+    check("list: typed policy matches detail", plist.get(pid_custom, {}).get("final_return_policy") == pol,
+          f"list={plist.get(pid_custom, {}).get('final_return_policy')!r} detail={pol!r}")
+    inv_id_custom = conn.execute("SELECT id FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid_custom, wh_id)).fetchone()["id"]
+    s, _ = api("PATCH", f"/api/warehouse/inventory/{inv_id_custom}", wh_token(), {"return_policy": "Updated policy text"})
+    check("PATCH return_policy: 200", s == 200, f"got {s}")
+    s, detail = api("GET", f"/api/products/{pid_custom}")
+    check("detail: PATCHed policy visible on edit-reload", (detail or {}).get("final_return_policy") == "Updated policy text",
+          f"got {(detail or {}).get('final_return_policy')!r}")
+
+    # No Returns (rw=0) still overrides even a typed policy — hard rule.
+    s, _ = api("PATCH", f"/api/warehouse/inventory/{inv_id_custom}", wh_token(), {"fulfillment": {"return_window": 0}})
+    s, detail = api("GET", f"/api/products/{pid_custom}")
+    check("detail: rw=0 'No Returns' overrides typed policy", (detail or {}).get("final_return_policy") == "No Returns",
+          f"got {(detail or {}).get('final_return_policy')!r}")
 
     # ---- 8. Legacy fallback: product WITHOUT fulfillment row keeps old text ----
     cur.execute(

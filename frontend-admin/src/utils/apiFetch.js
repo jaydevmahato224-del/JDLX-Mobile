@@ -21,6 +21,24 @@ function dropStaleAdminToken() {
   }
 }
 
+// Persist a fresh JWT as a Bearer snapshot after login / re-auth. The admin
+// SPA is served cross-site (Vercel → Render), and browsers that block
+// third-party cookies silently drop the Set-Cookie — without this snapshot
+// every post-login call went out credential-less, 401'd, and re-opened the
+// "Session Expired" modal in a loop. token_required accepts a Bearer header,
+// so the snapshot carries the session even when cookies can't. The marker
+// feeds dropStaleAdminToken's 8h TTL so a dead snapshot can never shadow a
+// fresher cookie.
+export function storeAdminTokenSnapshot(token) {
+  if (!token) return
+  try {
+    localStorage.setItem('adminToken', token)
+    localStorage.setItem('adminTokenSavedAt', String(Date.now()))
+  } catch {
+    // storage unavailable — cookie (if allowed) still works
+  }
+}
+
 // Central 401 hook: fired once when the session cookie itself is dead, so the
 // re-auth modal opens exactly once instead of once-per-background-poll.
 let _onSessionExpired = null
@@ -90,24 +108,49 @@ export async function apiFetch(endpoint, options = {}) {
   // skipGlobalError is intentionally NOT stripped: fetch() itself ignores
   // unknown RequestInit fields, while the App.jsx window.fetch interceptor
   // reads it from the options object to skip the full-screen error takeover.
-  return fetch(url, {
-    ...options,
-    headers: defaultHeaders,
-    credentials: 'include',
-  }).then((res) => {
-    // Central "session actually dead" signal. Only real 401s from
-    // auth-guarded backend routes trigger it — never OPTIONS preflights or
-    // pre-auth login endpoints, so the re-auth modal can't be opened by the
-    // login page's own failed attempts (the previous loop path).
-    if (res.status === 401 && _onSessionExpired && !res.url.includes('/login')) {
-      try {
-        _onSessionExpired(url)
-      } catch {
-        // handler errors must never break the caller's flow
-      }
+  const doFetch = (withAuthHeader) => {
+    const headers = { ...defaultHeaders }
+    if (!withAuthHeader) {
+      // Retry variant: drop the Authorization header entirely so a VALID
+      // HttpOnly cookie can answer instead of being shadowed by a stale
+      // snapshot. (Setting it to `undefined` would send the literal string.)
+      delete headers.Authorization
     }
-    return res
-  })
+    return fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    })
+  }
+
+  const hadAuthHeader = Boolean(defaultHeaders.Authorization)
+  const httpMethod = (options.method || 'GET').toUpperCase()
+  let res = await doFetch(true)
+
+  if (res.status === 401 && hadAuthHeader && (httpMethod === 'GET' || httpMethod === 'HEAD')) {
+    // A 401 with a Bearer attached has two possible causes: the token is
+    // genuinely dead (modal time) OR the snapshot is stale while the cookie
+    // is still valid (backend decodes header-first, so the bad header wins).
+    // Retry once without the header before declaring the session dead —
+    // this kills the last "modal opened although the session was fine" path.
+    // GET/HEAD only: re-sending a mutation could double-run a handler whose
+    // 401 came from a post-auth permission check, and the polling calls that
+    // fed the modal loop are all GETs anyway.
+    res = await doFetch(false)
+  }
+
+  // Central "session actually dead" signal. Only real 401s from
+  // auth-guarded backend routes trigger it — never OPTIONS preflights or
+  // pre-auth login endpoints, so the re-auth modal can't be opened by the
+  // login page's own failed attempts (the previous loop path).
+  if (res.status === 401 && _onSessionExpired && !res.url.includes('/login')) {
+    try {
+      _onSessionExpired(url)
+    } catch {
+      // handler errors must never break the caller's flow
+    }
+  }
+  return res
 }
 
 /**

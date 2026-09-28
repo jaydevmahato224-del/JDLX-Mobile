@@ -169,7 +169,13 @@ def admin_login_password():
                     "Admin logged in via password")
     _log_security_event(user['id'], user['email'], "login_password", "Password login success", ip)
 
-    resp = jsonify({"success": True, "user": user_data})
+    # The JWT is ALSO returned in the body as a Bearer fallback: the admin
+    # SPA is served cross-site from Vercel while the API lives on Render, and
+    # browsers that block third-party cookies silently drop the Set-Cookie —
+    # the admin then re-verified fine but every next call 401'd, re-opening
+    # the "Session Expired" modal in a loop. token_required accepts a Bearer
+    # header, so the SPA can persist this token and ride out cookie blocking.
+    resp = jsonify({"success": True, "user": user_data, "token": token})
     cookie_settings = get_cookie_settings()
     resp.set_cookie('token', token, **cookie_settings)
     return resp

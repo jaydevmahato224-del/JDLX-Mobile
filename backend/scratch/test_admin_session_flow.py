@@ -117,6 +117,19 @@ r = client.post("/api/admin/login-password",
 check("fresh password login 200 after logout-all", r.status_code == 200, f"got {r.status_code} {r.get_json()}")
 # (cookie presence implicitly verified by the verify-token check below)
 
+# --- 2c. login body carries the JWT as a Bearer fallback ---
+# The deployed admin SPA is cross-site (Vercel → Render); browsers that block
+# third-party cookies drop the Set-Cookie entirely, so the SPA persists this
+# body token and sends it as Authorization: Bearer on every call.
+login_body = r.get_json()
+check("login response carries Bearer fallback token", bool(login_body.get("token")),
+      "missing 'token' in login response body")
+
+# --- 2d. that body token authenticates via header alone (cookie-blocked path) ---
+r = client.get("/api/auth/verify-token",
+               headers={"Authorization": f"Bearer {login_body.get('token', '')}"})
+check("body token works as Bearer with no cookie", r.status_code == 200, f"got {r.status_code}")
+
 # --- 3. new cookie works on verify-token ---
 r = client.get("/api/auth/verify-token")
 check("verify-token 200 with fresh password-login cookie", r.status_code == 200, f"got {r.status_code}")

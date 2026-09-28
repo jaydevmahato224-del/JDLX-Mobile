@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import { API_BASE_URL, STORE_FRONTEND_URL } from '../../config'
-import { apiFetch, markSessionRefreshed } from '../../utils/apiFetch'
+import { apiFetch, markSessionRefreshed, storeAdminTokenSnapshot } from '../../utils/apiFetch'
 import { Loader2, Mail, Lock, Smartphone, ShieldQuestion, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import adminLogo from '../../assets/admin-logo.svg'
@@ -125,14 +125,16 @@ function AdminLogin() {
             })
             const data = await res.json()
             if (data.success) {
-                // Same token hygiene as AdminReauthModal: cookie carries the
-                // fresh JWT; drop any stale Bearer snapshot so the header can
-                // never shadow the newer cookie.
+                // Token hygiene: the backend now returns the fresh JWT in the
+                // body as a Bearer fallback for browsers that drop cross-site
+                // cookies (Vercel → Render, third-party-cookie blocking). The
+                // Set-Cookie still lands for cookie-allowing browsers. Replace
+                // any stale snapshot with the fresh token so the very next
+                // call authenticates one way or the other.
                 try {
-                    localStorage.removeItem('adminToken');
                     localStorage.removeItem('admin_token');
-                    localStorage.removeItem('adminTokenSavedAt');
                 } catch { /* storage unavailable */ }
+                storeAdminTokenSnapshot(data.token);
                 setAdminUser(data.user)
                 markSessionRefreshed()
                 toast.success(`Welcome back, ${data.user?.name || 'Admin'}!`)

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { API_BASE_URL } from '../config';
-import { markSessionRefreshed } from '../utils/apiFetch';
+import { markSessionRefreshed, storeAdminTokenSnapshot } from '../utils/apiFetch';
 import { Loader2, Mail, ShieldCheck, LogOut, ArrowRight, KeyRound, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -26,16 +26,18 @@ const AdminReauthModal = () => {
 
     if (!isReauthenticating || !adminUser) return null;
 
-    // Shared success path: the backend answers with Set-Cookie (fresh 8h JWT).
-    // The localStorage Bearer token from the original OAuth login is now STALE:
-    // backend decodes header-first, so a stale header would shadow the fresh
-    // cookie and 401 the very next call (re-locking the modal). Drop it —
-    // cookie-only calls are fully supported.
+    // Shared success path: the backend answers with Set-Cookie (fresh 8h JWT)
+    // AND the same JWT in the body. Store the fresh token as the Bearer
+    // snapshot: browsers that block third-party cookies (Vercel → Render)
+    // never persist the cookie, so without this the next call went out
+    // credential-less, 401'd, and re-opened this modal in a loop. When cookies
+    // ARE allowed, backend header-first decode means the fresh snapshot also
+    // matches the fresh cookie — either way the session sticks.
     const handleAuthSuccess = (data) => {
         try {
-            localStorage.removeItem('adminToken');
             localStorage.removeItem('admin_token');
         } catch { /* storage unavailable — cookie still works */ }
+        storeAdminTokenSnapshot(data.token);
         setAdminUser(data.user);
         setReauthenticating(false);
         // Tell AdminRoute this session was just server-verified — without

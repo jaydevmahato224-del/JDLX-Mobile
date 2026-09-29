@@ -11,6 +11,7 @@ import hmac
 import json
 import math
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -4119,17 +4120,35 @@ def get_category_products(category_id):
 
 @app.route('/api/products/search', methods=['GET'])
 def search_products():
-    """Search for products by name, category, or description."""
+    """Smart token-based product search.
+
+    The old implementation LIKE-matched the WHOLE query string as one phrase,
+    so "iphone 15 pro cover" found nothing when the product name was
+    "Apple iPhone 15 Pro Premium Liquid Silicone Case" — the words exist but
+    not contiguously. Now the query is split into tokens and a product matches
+    when (roughly in order of relevance):
+      1. exact phrase hit in name (best),
+      2. EVERY token hits some searchable field (name/category/discovery
+         keywords/tags/synonyms) — e.g. "iphone" + "15" + "pro" + "cover",
+      3. a strong majority of tokens hit (typo/extra-word tolerance),
+      4. any single token hits (broad fallback).
+    Results are ranked so the best matches come first, and the storefront's
+    client-side filters still work on the returned list.
+    """
     query = request.args.get('q', '').strip()
     category_id = request.args.get('category_id')
-    
+
     if not query and not category_id:
         return jsonify([])
     try:
-        print(f"[DEBUG] search_products: query='{query}', category_id={category_id}")
         conn = get_db()
         cursor = conn.cursor()
-        
+
+        # Tokenize: lowercase words of 2+ chars. Numbers like "15"/
+        # "pro"/"magsafe" all stay meaningful; punctuation is dropped.
+        tokens = [t for t in re.split(r'[^a-z0-9]+', query.lower()) if len(t) >= 2][:8]
+        phrase_pattern = f"%{query.lower()}%"
+
         sql = """
             SELECT p.*, c.name as category_name,
                    COALESCE(c.device_customization_enabled, 0) as device_customization_enabled
@@ -4139,13 +4158,51 @@ def search_products():
                   AND p.approval_status = 'approved'
         """
         params = []
-        
-        if query:
-            search_pattern = f"%{query}%"
-            # Discovery fields (keywords/tags/synonyms from the warehouse
-            # panel's SEO section) now participate in search — merchants who
-            # fill them get real findability, e.g. synonym "mobile" finds
-            # "phone cover" products.
+
+        if tokens:
+            # Per-token hit-test across every searchable field. Each condition
+            # block consumes exactly 9 params in this order.
+            token_conditions = []
+            token_params = []
+            for tok in tokens:
+                pat = f"%{tok}%"
+                token_conditions.append(
+                    """(p.name LIKE ? OR c.name LIKE ? OR p.category LIKE ? OR p.sub_category LIKE ?
+                        OR EXISTS (SELECT 1 FROM product_discovery pd
+                                   WHERE pd.product_id = p.id
+                                     AND (pd.search_keywords LIKE ?
+                                          OR pd.product_tags LIKE ?
+                                          OR pd.search_synonyms LIKE ?
+                                          OR pd.meta_title LIKE ?
+                                          OR pd.meta_description LIKE ?)))"""
+                )
+                token_params.extend([pat] * 9)
+
+            # Reuse the SAME condition strings in the ranking CASE below —
+            # every inline reuse re-consumes its 9 params:
+            #   gate (1x all_tokens) + rank CASE (1x phrase, 1x all_tokens, 1x strong_tokens)
+
+            all_tokens = " AND ".join(token_conditions)
+            strong_tokens = " OR ".join(token_conditions)
+
+            sql += f""" AND ({all_tokens})"""
+            params.extend(token_params)
+
+            # Relevance ranking: exact phrase in name > every token somewhere
+            # > strong majority (any-token, kept honest by the AND gate) > n/a.
+            rank_expr = f"""CASE
+                WHEN p.name LIKE ? THEN 0
+                WHEN {all_tokens} THEN 1
+                WHEN {strong_tokens} THEN 2
+                ELSE 3 END"""
+            params.append(phrase_pattern)
+            params.extend(token_params)  # all_tokens inline in CASE
+            params.extend(token_params)  # strong_tokens inline in CASE
+
+            sql += f" ORDER BY {rank_expr}, p.is_featured DESC, p.id ASC LIMIT 40"
+        else:
+            # No usable tokens (single-char query etc.) — fall back to the
+            # whole-string phrase match against the same fields.
             sql += """ AND (
                 p.name LIKE ? OR c.name LIKE ? OR p.category LIKE ?
                 OR EXISTS (SELECT 1 FROM product_discovery pd
@@ -4153,22 +4210,59 @@ def search_products():
                              AND (pd.search_keywords LIKE ?
                                   OR pd.product_tags LIKE ?
                                   OR pd.search_synonyms LIKE ?))
-            )"""
-            params.extend([search_pattern, search_pattern, search_pattern,
-                           search_pattern, search_pattern, search_pattern])
-            
+            ) ORDER BY p.is_featured DESC, p.id ASC LIMIT 40"""
+            params.extend([phrase_pattern] * 6)
+
+        # Category filter must land with the WHERE conditions — i.e. as the
+        # LAST placeholder of the WHERE block, before the rank CASE's phrase
+        # param. Placeholder order in the final SQL:
+        #   [token gate (N×9)] [category?] [rank phrase] [all-tokens N×9] [strong N×9]
         if category_id:
-            sql += " AND p.category_id = ?"
-            params.append(category_id)
-            
-        sql += " LIMIT 20"
-        
+            # Insert " AND p.category_id = ?" right before the rank CASE's
+            # first param position = immediately after the gate params. The
+            # gate ends where the rank params begin, so split on the phrase
+            # pattern value: count gate params as everything appended before
+            # the phrase. We track that index explicitly instead.
+            gate_len = len(token_params) if tokens else len(params)
+            insert_at = gate_len
+            marker = " ORDER BY"
+            idx = sql.find(marker)
+            if idx != -1:
+                sql = sql[:idx] + " AND p.category_id = ?" + sql[idx:]
+                params.insert(insert_at, category_id)
+
         cursor.execute(sql, params)
         products = [normalize_product_row(row) for row in cursor.fetchall()]
         conn.close()
         return jsonify(products)
     except Exception as e:
         return error_response(str(e), 500)
+
+
+@app.route('/api/search/trends', methods=['GET'])
+def search_trends():
+    """Public trending searches for the storefront's SearchPage chips.
+
+    Serves the most-searched recent phrases from the search_demand rollup
+    (fed by /api/analytics/search). To avoid echoing someone's typo or a
+    one-off query to thousands of customers, a term must have been searched
+    at least 3 times to trend. Best-effort: an empty/failed rollup just means
+    no chips render — the search page works exactly as before.
+    """
+    try:
+        conn = get_db()
+        try:
+            rows = conn.execute(
+                """SELECT term FROM search_demand
+                   WHERE search_count >= 3
+                   ORDER BY search_count DESC, last_searched_at DESC
+                   LIMIT 10"""
+            ).fetchall()
+            return jsonify({"success": True, "data": [r['term'] if not isinstance(r, tuple) else r[0] for r in rows]})
+        finally:
+            conn.close()
+    except Exception:
+        return jsonify({"success": True, "data": []})
 
 
 @app.route('/api/products', methods=['GET'])
@@ -4387,10 +4481,8 @@ def get_recommendations():
         products = [normalize_product_row(row) for row in cursor.fetchall()]
         conn.close()
         
-        for p in products:
-            if not p.get('delivery_time'):
-                p['delivery_time'] = "10-20 mins"
-                
+        # NOTE: no per-product delivery_time fallback here — the platform
+        # promise (scheduled_delivery_time) is the customer-facing ETA.
         return success_response(products, "Recommendations retrieved successfully")
     except Exception as e:
         import traceback
@@ -8719,7 +8811,9 @@ def admin_add_product():
     price = data.get('price')
     stock = data.get('stock', 0)
     category = data.get('category')
-    delivery_time = data.get('delivery_time', '30-120 mins')
+    # Default EMPTY — platform-level promise is the customer-facing ETA.
+    # (Quick-delivery era defaults like '30-120 mins' are retired.)
+    delivery_time = data.get('delivery_time', '')
     images = data.get('images')
     offline_price = _normalize_offline_price(data.get('offline_price'))
     
@@ -9022,7 +9116,7 @@ def admin_update_product(product_id):
                                     return_policy, prepaid_only, share_token, seo_slug, has_variants, is_parent, variant_group_id, variant_name)
                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)""",
                                 (f"{current['name']} - {v_name}", v_price, v_offline_price, v_stock, current['category'], 
-                                 data.get('delivery_time', '30-120 mins'), v_images,
+                                 data.get('delivery_time', ''), v_images,
                                  v_barcode, v_sku, data.get('return_policy'), data.get('prepaid_only', 0),
                                  v_share_token, v_seo_slug, product_id, v_name)
                             )
@@ -10685,7 +10779,10 @@ def warehouse_availability():
                 "cod_advance_amount": max(0, safe_float(settings.get('cod_advance_amount'), 49)),
                 "cod_alert_text": settings.get('cod_alert_text', "Standard COD charges apply."),
                 "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
-                "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true'
+                "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true',
+                # Platform-wide delivery promise (quick delivery is retired;
+                # this replaces stale per-product strings like "10-30 mins")
+                "delivery_time": settings.get('platform_delivery_promise', '2-4 days')
             }, "Availability checked")
 
         # Check user-specific COD restriction if logged in (cookie or Bearer)
@@ -10723,7 +10820,10 @@ def warehouse_availability():
             "prepaid_recommendation_enabled": settings.get('prepaid_recommendation_enabled', 'true').lower() == 'true',
             "priority_dispatch_badge_enabled": settings.get('priority_dispatch_badge_enabled', 'true').lower() == 'true',
             "scheduled_delivery_time": settings.get('scheduled_delivery_time', 'Tomorrow'),
-            "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.')
+            "scheduled_delivery_note": settings.get('scheduled_delivery_note', 'Reliable fulfillment from our central warehouse.'),
+            # Platform-wide delivery promise (quick delivery is retired;
+            # this replaces stale per-product strings like "10-30 mins")
+            "delivery_time": settings.get('platform_delivery_promise', '2-4 days')
         }, "Availability checked")
     except Exception as e:
         return success_response({
@@ -10732,7 +10832,8 @@ def warehouse_availability():
             "weather_status": "clear",
             "message": "Unable to check availability.",
             "scheduled_delivery_time": "Tomorrow",
-            "scheduled_delivery_note": "Reliable fulfillment from our central warehouse."
+            "scheduled_delivery_note": "Reliable fulfillment from our central warehouse.",
+            "delivery_time": "2-4 days"
         }, "Error checking availability")
 
 

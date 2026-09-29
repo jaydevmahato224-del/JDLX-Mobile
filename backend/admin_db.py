@@ -592,6 +592,71 @@ def admin_update_report(report_id):
         conn.close()
 
 # =============================================================================
+# SEARCH DEMAND — what customers search for, especially when they find NOTHING
+# =============================================================================
+
+@admin_db_bp.route('/api/admin/search-demand', methods=['GET'])
+@require_admin()
+def admin_search_demand():
+    """Ranked search-demand rollup for the admin Search Demand page.
+
+    Query:
+      ?filter=unmet|all|hot   unmet = only terms with zero-result searches
+                              hot   = most-searched overall
+      ?limit=N                default 100, max 300
+    Each row: term, search_count, unmet_count, last_searched_at. Terms are
+    aggregated from the storefront by /api/analytics/search (best-effort
+    upsert into search_demand).
+    """
+    flt = (request.args.get('filter') or 'unmet').strip().lower()
+    try:
+        limit = max(1, min(int(request.args.get('limit', 100)), 300))
+    except (TypeError, ValueError):
+        limit = 100
+    conn = get_db()
+    try:
+        if flt == 'unmet':
+            where, order = "WHERE s.unmet_count > 0", "ORDER BY s.unmet_count DESC, s.search_count DESC, s.last_searched_at DESC"
+        elif flt == 'hot':
+            where, order = "", "ORDER BY s.search_count DESC, s.last_searched_at DESC"
+        else:
+            where, order = "", "ORDER BY s.last_searched_at DESC"
+        rows = conn.execute(
+            f"""SELECT s.term, s.search_count, s.unmet_count, s.last_searched_at
+                FROM search_demand s {where} {order} LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        stats = conn.execute(
+            """SELECT COALESCE(SUM(search_count), 0) AS total_searches,
+                      COALESCE(SUM(unmet_count), 0) AS total_unmet,
+                      COUNT(*) AS distinct_terms
+               FROM search_demand"""
+        ).fetchone()
+        return success_response({
+            "items": [dict(r) for r in rows],
+            "stats": dict(stats) if stats else {},
+        })
+    finally:
+        conn.close()
+
+
+@admin_db_bp.route('/api/admin/search-demand/<int:demand_id>', methods=['DELETE'])
+@require_admin()
+def admin_delete_search_demand(demand_id):
+    """Dismiss a demand row after it has been handled (product stocked, etc)."""
+    conn = get_db()
+    try:
+        exists = conn.execute("SELECT id FROM search_demand WHERE id = ?", (demand_id,)).fetchone()
+        if not exists:
+            return error_response("Demand row not found", 404)
+        conn.execute("DELETE FROM search_demand WHERE id = ?", (demand_id,))
+        conn.commit()
+        return success_response({"deleted": demand_id})
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # CATALOG APPROVAL — warehouse-created products go live only after admin approval
 # =============================================================================
 

@@ -166,6 +166,28 @@ def post_search():
             session_id, user_id, query, results_count, clicked_product_id
         ))
         conn.commit()
+
+        # Search-demand rollup (best-effort — must never break the tracking
+        # API): one aggregate row per normalized phrase. terms_unmet counts
+        # zero-result searches so admins can see WHAT customers want but
+        # can't find, and stock it.
+        try:
+            normalized = ' '.join(str(query).lower().split())
+            if normalized:
+                is_unmet = 1 if (results_count or 0) == 0 else 0
+                cursor.execute(
+                    '''INSERT INTO search_demand (term, terms_normalized, search_count, unmet_count, last_searched_at)
+                       VALUES (?, ?, 1, ?, CURRENT_TIMESTAMP)
+                       ON CONFLICT(term) DO UPDATE SET
+                           search_count = search_count + 1,
+                           unmet_count = unmet_count + ?,
+                           last_searched_at = CURRENT_TIMESTAMP''',
+                    (normalized, normalized, is_unmet, is_unmet),
+                )
+                conn.commit()
+        except Exception:
+            pass
+
         return jsonify({"ok": True}), 200
     finally:
         conn.close()

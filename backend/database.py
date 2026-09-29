@@ -277,7 +277,7 @@ def init_db():
         ('return_policy', 'TEXT'), 
         ('prepaid_only', 'INTEGER DEFAULT 0'), 
         ('low_stock_threshold', 'INTEGER DEFAULT 5'), 
-        ('delivery_time', "TEXT DEFAULT '12-25 mins'"), 
+        ('delivery_time', "TEXT DEFAULT ''"), 
         ('status', "TEXT DEFAULT 'available'"), 
         ('images', 'TEXT'), 
         ('offline_price', 'REAL'), 
@@ -1817,11 +1817,30 @@ def init_db():
       FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    # Search-demand rollup: one row per normalized search phrase, bumped on
+    # every storefront search. terms_unmet counts searches that returned zero
+    # products — the admin "Search Demand" page ranks these so the team can
+    # stock what customers are actually looking for, and trends_query powers
+    # the storefront's "Trending searches" chips. Raw search_queries rows keep
+    # the full audit trail; this table is the fast aggregate.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS search_demand (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      term TEXT NOT NULL UNIQUE,
+      terms_normalized TEXT NOT NULL,
+      search_count INTEGER DEFAULT 0,
+      unmet_count INTEGER DEFAULT 0,
+      last_searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_demand_unmet ON search_demand(unmet_count DESC, search_count DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_demand_hot ON search_demand(search_count DESC, last_searched_at DESC)")
+
     # --- Seeding & Defaults ---
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('platform_fee', '7')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('free_delivery_threshold', '499')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('cod_enabled', 'true')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('ticker_text', 'Free delivery on orders above ₹499')")
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('platform_delivery_promise', '2-4 days')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('construction_mode', 'false')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('construction_mode_message', 'Our website is currently undergoing scheduled maintenance and upgrades. JDLX Mobile will be back online with exciting new premium products soon. Thank you for your patience!')")
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_cod_protection', 'true')")
@@ -1834,6 +1853,24 @@ def init_db():
     # Settlement window (days) — mirrors the return policy. Falls back to
     # referral_reward_window_days, then 7 (the refund flow's default window).
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('vendor_settlement_window_days', '7')")
+
+    # --- One-time quick-delivery era repair ---
+    # Quick delivery was retired system-wide, but products created before
+    # that carried per-product windows like '10-30 mins' / '10-20 mins' /
+    # '30-120 mins' (defaults injected by old create paths). Those strings
+    # still leak into any UI that reads products.delivery_time (e.g. the
+    # admin review modal), contradicting the platform promise. Clear them
+    # once — warehouses can still set a REAL custom window per product.
+    cursor.execute("SELECT value FROM system_settings WHERE key = 'quick_era_delivery_time_cleared'")
+    if not cursor.fetchone():
+        cursor.execute(
+            """UPDATE products SET delivery_time = ''
+               WHERE delivery_time IN ('10-30 mins', '10-20 mins', '12-25 mins', '30-120 mins')"""
+        )
+        cursor.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('quick_era_delivery_time_cleared', 'true')"
+        )
+        print("[migrate] Cleared quick-delivery-era delivery_time defaults from products")
 
     # --- One-time legacy timestamp migration (UTC → IST) ---
     # Every DB default (CURRENT_TIMESTAMP) writes UTC; the site operates in IST

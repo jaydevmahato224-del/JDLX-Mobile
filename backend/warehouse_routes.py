@@ -2896,7 +2896,12 @@ def warehouse_create_product():
     images = data.get('images')
     if isinstance(images, list):
         images = json.dumps(images)
-    delivery_time = data.get('delivery_time', '10-30 mins')
+    # Default EMPTY — the platform-level promise (scheduled_delivery_time,
+    # default 'Tomorrow') is the customer-facing ETA. A per-product window is
+    # only set when the warehouse explicitly overrides it. The old quick-
+    # delivery era default ('10-30 mins') leaked into listings after the
+    # quick-delivery system was retired.
+    delivery_time = data.get('delivery_time', '')
     initial_stock = data.get('stock_quantity', 0)
     sku = data.get('sku')
     barcode = data.get('barcode', '').strip() or None

@@ -122,6 +122,7 @@ const Analytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminComplaints = lazy(() => import('./pages/admin/AdminComplaints'))
 const OrderReports = lazy(() => import('./pages/admin/OrderReports'))
 const ProductReview = lazy(() => import('./pages/admin/ProductReview'))
+const SearchDemand = lazy(() => import('./pages/admin/SearchDemand'))
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center bg-gray-50/50">
@@ -268,6 +269,11 @@ function App() {
             <Route path="product-review" element={
               <AdminRoute allowedRoles={['super_admin', 'admin']}>
                 <ProductReview />
+              </AdminRoute>
+            } />
+            <Route path="search-demand" element={
+              <AdminRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_admin']}>
+                <SearchDemand />
               </AdminRoute>
             } />
             <Route path="shipments" element={

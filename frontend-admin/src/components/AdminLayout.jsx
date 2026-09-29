@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet, Gauge, MapPin, ShieldAlert, UserCog, Flag, PackageCheck } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Search, AlertCircle, Settings, Users, ArrowLeft, LogOut, Bell, FileText, Database, Shield, RefreshCcw, Activity, Brain, Warehouse, Truck, Server, MessageSquare, FolderTree, Smartphone, BadgePercent, BarChart2, Star, Gift, Wallet, Gauge, MapPin, ShieldAlert, UserCog, Flag, PackageCheck, TrendingUp } from 'lucide-react'
 
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
@@ -31,6 +31,7 @@ function AdminLayout({ children }) {
         { path: '/admin/complaints', icon: MessageSquare, label: 'Complaints', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/order-reports', icon: Flag, label: 'Order Reports', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-rose-500 font-bold' },
         { path: '/admin/product-review', icon: PackageCheck, label: 'Product Review', allowedRoles: ['super_admin', 'admin'] },
+        { path: '/admin/search-demand', icon: TrendingUp, label: 'Search Demand', allowedRoles: ['super_admin', 'admin', 'manager', 'inventory_admin'], extraStyle: 'text-emerald-400 font-bold' },
         { path: '/admin/shipments', icon: Truck, label: 'Shipments', allowedRoles: ['super_admin', 'admin', 'delivery_admin'], extraStyle: 'text-indigo-400 font-bold' },
         { path: '/admin/notifications', icon: Bell, label: 'Notifications', allowedRoles: ['super_admin', 'admin', 'manager'], extraStyle: 'text-amber-500 font-bold' },
         { path: '/admin/app-reviews', icon: Star, label: 'App Reviews', allowedRoles: ['super_admin', 'admin', 'support_admin'], extraStyle: 'text-amber-400 font-bold' },

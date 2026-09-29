@@ -88,6 +88,17 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
     emit()
   }, [emit])
 
+  // Paste as PLAIN TEXT: rich paste (from ChatGPT/Docs/Word) smuggles in
+  // inline styles — most visibly dark text colors that made the description
+  // unreadable on the dark panel. This editor only supports B/I/U/lists,
+  // so pasting the text content (formatting re-appliable via the toolbar)
+  // keeps both the DOM and the stored HTML clean.
+  const onPaste = useCallback((e) => {
+    e.preventDefault()
+    const text = (e.clipboardData || window.clipboardData)?.getData('text/plain')
+    if (text) document.execCommand('insertText', false, text)
+  }, [])
+
   return (
     <div className={`relative ${className}`}>
       <div className="flex flex-wrap items-center gap-1 mb-2 p-1.5 bg-slate-950/50 border border-white/10 rounded-2xl">
@@ -117,8 +128,9 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
           data-placeholder={placeholder}
           onInput={emit}
           onBlur={emit}
+          onPaste={onPaste}
           style={{ minHeight }}
-          className="w-full max-h-72 overflow-y-auto bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all whitespace-pre-wrap break-words [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-slate-600 [&:empty]:before:pointer-events-none"
+          className="w-full max-h-72 overflow-y-auto bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 focus:ring-4 focus:ring-amber-400/5 transition-all whitespace-pre-wrap break-words [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-slate-600 [&:empty]:before:pointer-events-none [&_*]:!text-inherit"
         />
       </div>
     </div>

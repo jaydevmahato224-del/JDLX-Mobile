@@ -182,7 +182,7 @@ function SuggestionDropdown({ open, options, onSelect, highlight }) {
 }
 
 const INITIAL_PRODUCT_STATE = {
-    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
+    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, is_perishable: false, expiry_date: '', brand: '', delivery_time: '', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
 const WarehouseInventory = () => {
@@ -354,6 +354,12 @@ const WarehouseInventory = () => {
         };
     }, [brandMenuOpen, subCatMenuOpen]);
     const [isWarehouseImageUploading, setIsWarehouseImageUploading] = useState(false)
+    // Progressive image-upload model: every picked file becomes a tile in the
+    // grid IMMEDIATELY (with its own spinner) — the merchant sees one box per
+    // selected image and each flips to the uploaded preview as it finishes.
+    // Final URLs land in newProductData.images (business shape unchanged);
+    // this list is purely the UI staging area.
+    const [uploadingImages, setUploadingImages] = useState([]) // { id, previewUrl, done }
     const fileInputRef = useRef(null)
 
     // Create Category Modal
@@ -626,6 +632,9 @@ const WarehouseInventory = () => {
             description: item.description || '',
             units_per_pack: item.units_per_pack || '',
             material_type: item.material_type || '',
+            // Load the product's real promise — the state default is empty,
+            // so a missing value here would silently keep '' (not a fake one).
+            delivery_time: item.delivery_time || '',
             weight: item.weight || '',
             dimensions: item.dimensions || '',
             is_fragile: !!item.is_fragile,
@@ -853,32 +862,62 @@ const WarehouseInventory = () => {
         }
 
         setIsWarehouseImageUploading(true);
+
+        // Progressive UI: instantly stage one placeholder tile per picked file
+        // (local blob preview + spinner). Each tile flips to "done" as its
+        // upload finishes; failed tiles are removed with a notification.
+        const staged = files.map((file, i) => ({
+            id: `${Date.now()}-${i}-${file.name}`,
+            previewUrl: URL.createObjectURL(file),
+            file,
+            done: false,
+        }));
+        setUploadingImages(prev => [...prev, ...staged]);
+        const removeStaged = (id) => setUploadingImages(prev => prev.filter(t => t.id !== id));
+
         const uploadedUrls = [];
+        let failures = 0;
 
         try {
-            for (const file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
+            for (const tile of staged) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', tile.file);
 
-                const response = await fetch(`${API_BASE_URL}/warehouse/upload`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${warehouseToken}`
-                    },
-                    body: formData
-                });
+                    const response = await fetch(`${API_BASE_URL}/warehouse/upload`, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${warehouseToken}`
+                        },
+                        body: formData
+                    });
 
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || 'Upload failed');
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || 'Upload failed');
 
-                uploadedUrls.push(result.data.url);
+                    // Success: URL joins the REAL business state, tile flips to
+                    // its preview (spinner keeps spinning until this lands).
+                    uploadedUrls.push(result.data.url);
+                    setUploadingImages(prev => prev.map(t => (t.id === tile.id ? { ...t, done: true } : t)));
+                } catch {
+                    failures += 1;
+                    removeStaged(tile.id);
+                }
             }
 
-            setNewProductData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
-            showNotification(`${uploadedUrls.length} image(s) uploaded successfully`);
-        } catch (err) {
-            showNotification(err.message, 'error');
+            if (uploadedUrls.length) {
+                setNewProductData(prev => ({ ...prev, images: [...prev.images, ...uploadedUrls] }));
+            }
+            if (failures) {
+                showNotification(`${failures} image(s) failed to upload — remove & retry`, 'error');
+            } else if (uploadedUrls.length) {
+                showNotification(`${uploadedUrls.length} image(s) uploaded successfully`);
+            }
         } finally {
+            // Drop every staged tile now that the real previews render from
+            // newProductData.images (success) or the tile was removed (fail).
+            staged.forEach(t => URL.revokeObjectURL(t.previewUrl));
+            setUploadingImages(prev => prev.filter(t => !staged.some(s => s.id === t.id)));
             setIsWarehouseImageUploading(false);
             if (e.target) e.target.value = '';
         }
@@ -1274,11 +1313,22 @@ const WarehouseInventory = () => {
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                {/* UPLOADED images. Index 0 = MAIN image — this is
+                                                    the picture customers see on the storefront
+                                                    (cards + detail page gallery start from it).
+                                                    Star badge marks it; arrow buttons move an image
+                                                    to front. Remove/delete buttons per tile. */}
                                                 {newProductData.images.map((imgUrl, idx) => {
                                                     const src = resolveMediaUrl(imgUrl);
+                                                    const isMain = idx === 0;
                                                     return (
-                                                        <div key={idx} className="relative aspect-square rounded-2xl bg-slate-950 border border-white/10 flex items-center justify-center overflow-hidden group shadow-inner">
+                                                        <div key={imgUrl || idx} className={`relative aspect-square rounded-2xl flex items-center justify-center overflow-hidden group shadow-inner border transition-all ${isMain ? 'border-amber-400/60 ring-2 ring-amber-400/30' : 'bg-slate-950 border-white/10'}`}>
                                                             <img src={src} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                            {isMain && (
+                                                                <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-amber-400 text-slate-950 text-[8px] font-black uppercase tracking-widest shadow-lg">
+                                                                    <Star size={9} className="fill-slate-950" /> Main
+                                                                </span>
+                                                            )}
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setNewProductData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
@@ -1286,10 +1336,38 @@ const WarehouseInventory = () => {
                                                             >
                                                                 <X size={12} />
                                                             </button>
+                                                            {/* Make-main: only on non-main tiles; moves the
+                                                                image to index 0 (previous images shift back). */}
+                                                            {!isMain && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setNewProductData(prev => {
+                                                                        const next = [...prev.images];
+                                                                        const [picked] = next.splice(idx, 1);
+                                                                        next.unshift(picked);
+                                                                        return { ...prev, images: next };
+                                                                    })}
+                                                                    title="Set as main image"
+                                                                    className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-950/80 text-amber-400 text-[8px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all hover:bg-amber-400 hover:text-slate-950"
+                                                                >
+                                                                    <Star size={9} /> Set Main
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )
                                                 })}
-                                                {newProductData.images.length < 10 && (
+                                                {/* UPLOADING tiles — one box per picked file, each
+                                                    with its own spinner until its upload completes. */}
+                                                {uploadingImages.map(tile => (
+                                                    <div key={tile.id} className="relative aspect-square rounded-2xl bg-slate-950 border border-amber-400/30 flex items-center justify-center overflow-hidden">
+                                                        <img src={tile.previewUrl} alt="Uploading" className="w-full h-full object-cover opacity-30" />
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                                            <Loader2 size={22} className="text-amber-400 animate-spin" />
+                                                            <span className="text-[8px] font-black uppercase tracking-widest text-amber-400/80">Uploading…</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {newProductData.images.length + uploadingImages.length < 10 && (
                                                     <button
                                                         type="button"
                                                         onClick={() => fileInputRef.current?.click()}
@@ -1300,6 +1378,7 @@ const WarehouseInventory = () => {
                                                     </button>
                                                 )}
                                             </div>
+                                            <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest ml-1">★ Main image = storefront pe customers ko sabse pehle dikhne wali photo. Hover karke "Set Main" se badlo.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -2003,18 +2082,17 @@ const WarehouseInventory = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="space-y-2 md:col-span-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Promised Delivery Window</label>
+                                                <div className="space-y-2 md:col-span-2">                                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Delivery Promise (optional override)</label>
                                                     <div className="relative">
                                                         <Zap className="absolute left-6 top-1/2 -translate-y-1/2 text-amber-500" size={16} />
                                                         <input
                                                             type="text"
-                                                            placeholder="e.g. 10-30 mins or 2-4 Hours"
+                                                            placeholder="e.g. 2-4 days (blank = platform promise)"
                                                             value={newProductData.delivery_time}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, delivery_time: e.target.value }))}
                                                             className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-sm text-white font-black focus:outline-none focus:border-amber-400/50 transition-all outline-none"
                                                         />
-                                                        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-2 ml-1">Used for storefront "Instant Delivery" badges</p>
+                                                        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-2 ml-1">Blank = platform-wide promise (admin settings). Only override for special cases.</p>
                                                     </div>
                                                 </div>
                                             </div>

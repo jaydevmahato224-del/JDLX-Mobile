@@ -1,8 +1,29 @@
-import { ShieldAlert, ArrowLeft } from 'lucide-react'
+import { ShieldAlert, ArrowLeft, ReceiptText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useStore } from '../store/useStore'
 
+/**
+ * Access Denied — shown by WarehouseRoute when the logged-in user's role is
+ * not in the route's whitelist.
+ *
+ * The "Return to Dashboard" button used to send EVERYONE to
+ * /warehouse/dashboard — including billing/staff agents, who have no
+ * dashboard permission. They'd land on this exact screen again: an
+ * access-denied loop with no exit. Now the destination is role-aware:
+ *   - billing/staff agents → Counter Billing (POS) — the only screen they
+ *     have access to (mirrors the post-login redirect in WarehouseLogin)
+ *   - everyone else → /warehouse/dashboard as before
+ */
 function AccessDenied() {
     const navigate = useNavigate();
+    const user = useStore((state) => state.warehouseUser);
+
+    const rawRole = (user?.role || user?.role_name || '').toLowerCase();
+    // Mirror WarehouseRoute/WarehouseLayout normalization: any role_name
+    // containing "billing"/"staff" (e.g. "Billing Agent") is a POS-only user.
+    const isPosOnlyUser = rawRole.includes('billing') || rawRole.includes('staff');
+    const fallbackPath = isPosOnlyUser ? '/warehouse/billing' : '/warehouse/dashboard';
+    const fallbackLabel = isPosOnlyUser ? 'Return to Counter Billing (POS)' : 'Return to Dashboard';
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-3xl border border-red-100 shadow-sm relative overflow-hidden">
@@ -18,11 +39,11 @@ function AccessDenied() {
             </p>
 
             <button
-                onClick={() => navigate('/warehouse/dashboard')}
+                onClick={() => navigate(fallbackPath)}
                 className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20"
             >
-                <ArrowLeft className="w-4 h-4" />
-                Return to Dashboard
+                {isPosOnlyUser ? <ReceiptText className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+                {fallbackLabel}
             </button>
         </div>
     )

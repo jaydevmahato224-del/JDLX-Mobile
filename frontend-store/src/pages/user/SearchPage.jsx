@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ChevronRight, RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Star, ShieldCheck } from 'lucide-react'
+import { RefreshCw, Search, ShoppingBag, Plus, Minus, SlidersHorizontal, Package, CheckCircle2, XCircle, Star, ShieldCheck, TrendingUp } from 'lucide-react'
 
 import BlurImage from '../../components/BlurImage'
 import PaginationLoader from '../../components/PaginationLoader'
@@ -269,7 +269,8 @@ function FiltersBar({ inputRef, query, onQueryChange, stockFilter, onStockFilter
 }
 
 export default function SearchPage() {
-  const navigate = useNavigate()
+  // (navigate removed — the in-page back arrow it served is gone; the app
+  //  shell's floating back button owns back navigation now.)
   const observerRef = useRef(null)
   const searchInputRef = useRef(null)
   const addToCart = useStore((state) => state.addToCart)
@@ -301,6 +302,15 @@ export default function SearchPage() {
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [stockFilter, setStockFilter] = useState('all')
   const [sortBy, setSortBy] = useState('recommended')
+  // Trending searches — most-searched phrases from the backend demand
+  // rollup. Purely additive: empty list = nothing renders.
+  const [trending, setTrending] = useState([])
+  useEffect(() => {
+    apiFetch('/search/trends')
+      .then(res => res.json())
+      .then(json => { if (json?.success && Array.isArray(json.data)) setTrending(json.data.slice(0, 8)) })
+      .catch(() => {})
+  }, [])
 
   const [debouncedQuery, setDebouncedQuery] = useState(query)
 
@@ -385,12 +395,9 @@ export default function SearchPage() {
     <div className="space-y-8 pb-20 reveal-staggered">
       <section className="space-y-6">
         <div className="flex items-center gap-4">
-           <button 
-             onClick={() => navigate('/')}
-             className="p-2 rounded-xl bg-[var(--color-surface-high)] hover:bg-[var(--color-surface-white)] transition-all active:scale-90 text-[var(--color-on-surface)]"
-           >
-             <ChevronRight size={20} className="rotate-180" />
-           </button>
+           {/* (In-page back arrow removed — the app shell's floating back
+               button handles back navigation on every sub-page; this one
+               stacked with it and showed two arrows.) */}
            <div className="space-y-1">
              <h1 className="text-3xl font-black tracking-tight text-[var(--color-on-surface)]">Explore Catalog</h1>
              <p className="text-sm text-[var(--color-on-surface)]/60 font-medium">
@@ -412,6 +419,23 @@ export default function SearchPage() {
         />
 
         <CategoryChips categories={categories} selected={selectedCategory} onSelect={setSelectedCategory} />
+
+        {trending.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 -mt-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-on-surface)]/40 shrink-0 flex items-center gap-1">
+              <TrendingUp size={12} /> Trending
+            </span>
+            {trending.map(term => (
+              <button
+                key={term}
+                onClick={() => setQuery(term)}
+                className="px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap border border-[var(--color-surface-high)] bg-[var(--color-surface-card)] text-[var(--color-on-surface)]/70 hover:text-primary hover:border-primary/40 transition-all active:scale-95"
+              >
+                {term}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="space-y-8">

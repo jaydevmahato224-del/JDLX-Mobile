@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Shield, Eye, Database, Lock, UserCheck, Globe, Bell, ChevronRight } from 'lucide-react'
+import { Shield, Eye, Database, Lock, UserCheck, Globe, Bell } from 'lucide-react'
 
 function PrivacyPolicy() {
   const sections = useMemo(() => [
@@ -84,13 +84,8 @@ function PrivacyPolicy() {
             How JDLX MOBILE handles and protects your data.
           </p>
         </div>
-        <Link
-          to="/profile"
-          className="glass-icon-btn p-3 rounded-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-lg border border-[var(--color-surface-high)]"
-          aria-label="Back to Account"
-        >
-          <ChevronRight className="w-5 h-5 rotate-180 text-primary" />
-        </Link>
+        {/* (Back-to-Account icon removed — the app shell's floating back
+            button handles back navigation; this stacked with it.) */}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

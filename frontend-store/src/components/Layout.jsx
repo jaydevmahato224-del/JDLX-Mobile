@@ -42,6 +42,25 @@ function Layout({ children }) {
   const [backButtonVisible, setBackButtonVisible] = useState(true)
   const lastScrollYRef = useRef(0)
 
+  // App-journey depth: how many in-app navigations happened since the app
+  // booted (cold load = 0). The floating back button uses this instead of a
+  // blind navigate(-1): on a fresh tab / shared link / refresh there is no
+  // in-app history to go back to, so back routes home instead of doing
+  // nothing or dropping the user out of the site. Pages' own back buttons
+  // were removed — this is the single back control now.
+  const historyDepthRef = useRef(0)
+  const prevPathRef = useRef(null)
+  useEffect(() => {
+    if (prevPathRef.current === null) {
+      // First mount = the app's entry route (cold load / refresh / shared
+      // link) — there is no in-app history behind it.
+      historyDepthRef.current = 0
+    } else if (prevPathRef.current !== location.pathname) {
+      historyDepthRef.current += 1
+    }
+    prevPathRef.current = location.pathname
+  }, [location.pathname])
+
   useEffect(() => {
     const handleScroll = () => {
       const currentY = window.scrollY
@@ -188,10 +207,22 @@ function Layout({ children }) {
 
       {/* Floating Back Button — sits over the page below the header, fades and
           slides away on scroll down, and returns with the opposite animation
-          on scroll up. Only rendered on sub-pages (never on the home page). */}
+          on scroll up. Only rendered on sub-pages (never on the home page).
+          SINGLE source of back navigation: pages must not render their own
+          in-page back arrows (they stacked with this one). Cold-load guard:
+          on a fresh tab/share-link open there is no history to go back to —
+          navigate(-1) would do nothing and strand the user, so the button
+          routes home instead. */}
       {hasBackButton && (
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            if (historyDepthRef.current > 0) {
+              historyDepthRef.current -= 1;
+              navigate(-1);
+            } else {
+              navigate('/');
+            }
+          }}
           aria-label="Go back"
           className={`fixed left-4 z-40 grid h-11 w-11 place-items-center rounded-2xl border border-[var(--color-surface-high)] bg-[var(--color-surface-white)]/95 text-[var(--color-on-surface)] shadow-lg shadow-black/5 backdrop-blur-md transition-all duration-300 ease-out hover:bg-[var(--color-surface-low)] dark:hover:bg-white/5 active:scale-90 ${
             backButtonVisible

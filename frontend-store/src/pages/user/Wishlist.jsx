@@ -6,6 +6,7 @@ import BlurImage from '../../components/BlurImage'
 import { resolveMediaUrl } from '../../config'
 import toast from 'react-hot-toast'
 import { getProductUrl } from '../../utils/productSlug'
+import { PageLoader } from '../../components/Loading'
 
 export default function Wishlist() {
     const navigate = useNavigate();
@@ -50,12 +51,7 @@ export default function Wishlist() {
     };
 
     if (loading) {
-        return (
-            <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 space-y-4">
-                <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-                <p className="text-[var(--color-on-surface-variant)] font-bold animate-pulse">Syncing your favorites...</p>
-            </div>
-        );
+        return <PageLoader label="Syncing your favorites" className="min-h-[70vh]" />;
     }
 
     return (

@@ -4,6 +4,7 @@ import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
 import { BadgePercent, Copy, CheckCircle2, Clock, ShoppingBag, Sparkles, Tag, Gift, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { PageLoader } from '../../components/Loading'
 
 function Coupons() {
     const user = useStore(state => state.user);
@@ -69,14 +70,7 @@ function Coupons() {
     };
 
     if (loading) {
-        return (
-            <div className="container-standard py-12">
-                <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-                    <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Loading offers...</p>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Loading offers" className="min-h-[50vh]" />;
     }
 
     return (

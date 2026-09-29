@@ -6,6 +6,7 @@ import { apiFetch } from '../../utils/apiFetch'
 import { loadRazorpay } from '../../utils/loadRazorpay'
 import { downloadOrderInvoice, invoiceUnlocked, invoiceAvailable } from '../../utils/downloadInvoice'
 import { toast } from 'react-hot-toast'
+import { PageLoader } from '../../components/Loading'
 
 function OrderTracking() {
     const { orderId } = useParams();
@@ -279,7 +280,7 @@ function OrderTracking() {
         return first || '';
     };
 
-    if (loading) return <div className="p-10 text-center text-[var(--color-on-surface-variant)]">Tracking your order...</div>;
+    if (loading) return <PageLoader label="Tracking your order" className="min-h-[50vh]" />;
     if (error) return (
         <div className="p-10 text-center flex flex-col items-center gap-4 text-[var(--color-on-surface-variant)]">
             <p>{error}</p>

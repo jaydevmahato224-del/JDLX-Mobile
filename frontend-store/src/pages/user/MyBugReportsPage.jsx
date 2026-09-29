@@ -7,12 +7,12 @@ import {
     Clock, 
     Bug, 
     AlertCircle, 
-    History,
     Terminal,
     Layout,
     ArrowLeft
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function MyBugReportsPage() {
     const user = useStore(state => state.user);
@@ -68,14 +68,7 @@ function MyBugReportsPage() {
     };
 
     if (loading) {
-        return (
-            <div className="container-standard py-20 flex justify-center">
-                <div className="flex flex-col items-center gap-3">
-                    <History className="w-10 h-10 text-primary animate-spin" />
-                    <p className="text-sm font-black uppercase tracking-widest text-gray-400">Fetching bug history...</p>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Fetching bug history" />;
     }
 
     return (

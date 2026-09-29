@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
-import { ChevronRight, Clock, MessageSquare, AlertCircle, CheckCircle2, History } from 'lucide-react'
+import { ChevronRight, Clock, MessageSquare, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function MyRequestsPage() {
     const user = useStore(state => state.user);
@@ -44,14 +45,7 @@ function MyRequestsPage() {
     };
 
     if (loading) {
-        return (
-            <div className="container-standard py-20 flex justify-center">
-                <div className="flex flex-col items-center gap-3">
-                    <History className="w-10 h-10 text-primary animate-spin" />
-                    <p className="text-sm font-black uppercase tracking-widest text-gray-400">Loading your requests...</p>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Loading your requests" />;
     }
 
     return (

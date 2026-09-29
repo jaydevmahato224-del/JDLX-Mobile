@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Plus, Trash2, Edit3, CheckCircle2, ChevronRight, X, Navigation, RefreshCw } from 'lucide-react'
+import { MapPin, Plus, Trash2, Edit3, CheckCircle2, ChevronRight, X, Navigation } from 'lucide-react'
 import MapPicker from '../../components/MapPicker'
 import toast from 'react-hot-toast'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function Addresses() {
     const user = useStore(state => state.user);
@@ -254,9 +255,8 @@ function Addresses() {
             {/* List Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {loading ? (
-                   <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-[var(--color-on-surface)]/20">
-                      <RefreshCw className="animate-spin" size={40} />
-                      <p className="text-sm font-black uppercase tracking-widest">Loading Addresses...</p>
+                   <div className="col-span-full py-20 flex items-center justify-center">
+                      <PageLoader label="Loading addresses" />
                    </div>
                 ) : addresses.length === 0 ? (
                     <div className="col-span-full py-20 glass-card flex flex-col items-center justify-center gap-6 border-dashed border-2">

@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronRight, Camera, AlertCircle, CheckCircle2, Loader2, PackageSearch, ChevronDown, Check } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { InlineLoader } from '../../components/Loading'
 
 function OrderReportPage() {
     const user = useStore(state => state.user);
@@ -180,7 +181,7 @@ function OrderReportPage() {
                         </span>
                         {!isReadOnly && <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${orderDropdownOpen ? 'rotate-180' : ''}`} />}
                     </button>
-                    {loadingOrders && <p className="text-[10px] text-primary animate-pulse ml-1">Checking your recent orders...</p>}
+                    {loadingOrders && <InlineLoader label="Checking your recent orders" className="ml-1" />}
 
                     {orderDropdownOpen && (
                         <>

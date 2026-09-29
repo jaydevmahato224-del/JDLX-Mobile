@@ -10,6 +10,7 @@ import { trackViewItem, trackAddToCart } from '../../utils/analytics';
 import { shareProduct } from '../../utils/share';
 import SEO from '../../components/SEO';
 import ProductReviews from '../../components/ProductReviews';
+import { PageLoader } from '../../components/Loading';
 import ShareModal from '../../components/ShareModal';
 import DeviceModelSelector from '../../components/DeviceModelSelector';
 import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustomization';
@@ -557,8 +558,7 @@ export default function ProductDetails() {
   if (loadingToken) return (
     <div className="container-standard py-20 text-center">
       <div className="glass-card px-6 py-20">
-        <div className="flex justify-center mb-8"><div className="h-16 w-16 rounded-3xl border-4 border-primary/20 border-t-primary animate-spin" /></div>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Loading Premium Selection...</p>
+        <PageLoader label="Loading premium selection" />
       </div>
     </div>
   );

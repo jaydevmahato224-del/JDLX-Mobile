@@ -4,6 +4,7 @@ import { useStore } from '../../store/useStore'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { ChevronDown, Check } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function ProfileSettings() {
     const navigate = useNavigate();
@@ -85,7 +86,7 @@ function ProfileSettings() {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <PageLoader label="Loading settings" />;
     if (!profile) return <div>Error loading profile</div>;
 
     return (

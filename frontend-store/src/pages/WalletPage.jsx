@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, ShoppingBag } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { apiFetch } from '../utils/apiFetch'
+import { PageLoader } from '../components/Loading';
 
 // Shared wallet implementation. `endpoint` lets both routes reuse this UI
 // while keeping their original data source (business logic unchanged):
@@ -31,7 +32,7 @@ const WalletPage = ({ endpoint = '/wallet/balance' }) => {
     if (user) fetchWallet();
   }, [user, endpoint]);
 
-  if (loading) return <div className="flex justify-center items-center min-h-[60vh] animate-pulse text-slate-400 font-bold">Accessing Secure Wallet...</div>;
+  if (loading) return <PageLoader label="Accessing secure wallet" className="min-h-[60vh]" />;
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">

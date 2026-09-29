@@ -9,6 +9,7 @@ import ReferralSuccessPopup from '../../components/ReferralSuccessPopup'
 import toast from 'react-hot-toast'
 import { API_BASE_URL, resolveMediaUrl } from '../../config'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function Profile() {
     const navigate = useNavigate();
@@ -294,9 +295,8 @@ function Profile() {
                 )}
 
                 {loading ? (
-                    <div className="glass-card p-12 flex flex-col items-center gap-4">
-                        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                        <span className="text-[11px] font-black uppercase tracking-[0.2em] opacity-40">Fetching Logistics</span>
+                    <div className="glass-card p-12 flex items-center justify-center">
+                        <PageLoader label="Fetching logistics" />
                     </div>
                 ) : orders.length > 0 ? (
                     <div className="flex flex-col gap-3">

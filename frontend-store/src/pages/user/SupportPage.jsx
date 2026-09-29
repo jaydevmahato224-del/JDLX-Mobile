@@ -15,6 +15,7 @@ import {
     AlertCircle
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function SupportPage() {
     const user = useStore(state => state.user);
@@ -186,9 +187,8 @@ function SupportPage() {
                 </div>
 
                 {loadingTickets ? (
-                    <div className="glass-card p-12 flex flex-col items-center gap-4">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Loading Tickets</span>
+                    <div className="glass-card p-12 flex items-center justify-center">
+                        <PageLoader label="Loading tickets" />
                     </div>
                 ) : tickets.length === 0 ? (
                     <div className="glass-card p-12 text-center flex flex-col items-center">

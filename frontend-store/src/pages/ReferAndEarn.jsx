@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { API_BASE_URL } from '../config';
 import { useStore } from '../store/useStore';
 import { apiFetch } from '../utils/apiFetch'
+import { PageLoader } from '../components/Loading';
 
 const ReferAndEarn = () => {
   const [refData, setRefData] = useState(null);
@@ -47,7 +48,7 @@ const ReferAndEarn = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   };
 
-  if (loading) return <div className="flex justify-center items-center min-h-[60vh] animate-pulse text-slate-400 font-bold">Loading Referral Program...</div>;
+  if (loading) return <PageLoader label="Loading referral program" className="min-h-[60vh]" />;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">

@@ -15,6 +15,7 @@ import {
     Lock
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import { PageLoader } from '../../components/Loading'
 
 function TicketDetailPage() {
     const { ticketId } = useParams();
@@ -97,12 +98,7 @@ function TicketDetailPage() {
     };
 
     if (loading) {
-        return (
-            <div className="container-standard py-20 flex flex-col items-center justify-center">
-                <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Opening Conversation Thread</p>
-            </div>
-        );
+        return <PageLoader label="Opening conversation thread" />;
     }
 
     if (!data || !data.ticket) return null;

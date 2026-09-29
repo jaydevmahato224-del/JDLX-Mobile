@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Truck, Undo2, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronDown, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Truck, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -426,6 +426,16 @@ export default function ProductDetails() {
   // and sold-out none of this matter — the effect simply no-ops.
   const [autoIndex, setAutoIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  // Per-image load tracking: while a slide's bitmap is still downloading we
+  // show a gentle shimmer placeholder in its frame, so the gallery never
+  // looks like an empty white box on slow connections.
+  const [loadedImages, setLoadedImages] = useState({});
+  const handleImageLoaded = (idx) => setLoadedImages((prev) => (prev[idx] ? prev : { ...prev, [idx]: true }));
+  // Long descriptions read like an article dumped on the page — clamp to a
+  // short preview with a Read more/less toggle (full text stays in the DOM
+  // semantics via the toggle, nothing is cut from the data).
+  const [descExpanded, setDescExpanded] = useState(false);
+  const DESCRIPTION_CLAMP_CHARS = 320;
   const autoIndexRef = useRef(0);
   const pauseRef = useRef(false);
   const lastManualNavRef = useRef(0);
@@ -438,6 +448,10 @@ export default function ProductDetails() {
   if (lastImagesSet !== productImages) {
     setLastImagesSet(productImages);
     setAutoIndex(0);
+    // New product's images start unloaded, and its description preview
+    // collapses again — a previously-expanded read-more must not leak over.
+    setLoadedImages({});
+    setDescExpanded(false);
   }
   useEffect(() => {
     if (productImages.length <= 1 || isPaused) return undefined;
@@ -638,15 +652,22 @@ export default function ProductDetails() {
                   style={{ transform: `translateX(-${activeImageIndex * 100}%)` }}
                 >
                   {productImages.map((img, idx) => (
-                    <img
-                      key={`${img}-${idx}`}
-                      src={img}
-                      data-original-src={img}
-                      alt={product.name}
-                      loading={idx === 0 ? 'eager' : 'lazy'}
-                      onError={handleImageError}
-                      className="h-full w-full shrink-0 grow-0 basis-full object-contain"
-                    />
+                    <div key={`${img}-${idx}`} className="relative h-full w-full shrink-0 grow-0 basis-full">
+                      {!loadedImages[idx] && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface-low)] animate-pulse" aria-hidden="true">
+                          <div className="h-12 w-12 rounded-2xl border-4 border-primary/15 border-t-primary animate-spin" />
+                        </div>
+                      )}
+                      <img
+                        src={img}
+                        data-original-src={img}
+                        alt={product.name}
+                        loading={idx === 0 ? 'eager' : 'lazy'}
+                        onError={handleImageError}
+                        onLoad={() => handleImageLoaded(idx)}
+                        className={`h-full w-full object-contain transition-opacity duration-500 ${loadedImages[idx] ? 'opacity-100' : 'opacity-0'}`}
+                      />
+                    </div>
                   ))}
                 </div>
                 {/* Dots — current slide highlight; click se jump. */}
@@ -782,11 +803,28 @@ export default function ProductDetails() {
             </div>
             <div className="mt-8 space-y-4">
               <h3 className="ui-label text-slate-400">Description</h3>
-              {activeProduct.description && descriptionToPlainText(activeProduct.description) ? (
-                <p className="text-[16px] md:text-lg font-bold text-[var(--color-on-surface)] leading-relaxed whitespace-pre-line">{descriptionToPlainText(activeProduct.description)}</p>
-              ) : (
-                <p className="text-[16px] md:text-lg font-bold text-[var(--color-on-surface)] leading-relaxed">Premium daily essential from the JDLX collection.</p>
-              )}
+              {(() => {
+                const fullText = (activeProduct.description && descriptionToPlainText(activeProduct.description))
+                  || 'Premium daily essential from the JDLX collection.';
+                const isLong = fullText.length > DESCRIPTION_CLAMP_CHARS;
+                const shownText = !isLong || descExpanded ? fullText : `${fullText.slice(0, DESCRIPTION_CLAMP_CHARS).trimEnd()}…`;
+                return (
+                  <>
+                    <p className="text-[16px] md:text-lg font-bold text-[var(--color-on-surface)] leading-relaxed whitespace-pre-line">{shownText}</p>
+                    {isLong && (
+                      <button
+                        type="button"
+                        onClick={() => setDescExpanded((v) => !v)}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-black uppercase tracking-widest text-primary active:scale-95 transition-transform"
+                        aria-expanded={descExpanded}
+                      >
+                        {descExpanded ? 'Show less' : 'Read more'}
+                        <ChevronDown size={14} className={`transition-transform duration-300 ${descExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             <div className="mt-8 overflow-hidden rounded-[2.5rem] border border-[var(--color-surface-high)] bg-[var(--color-surface-low)]">
               <div className="flex items-center justify-between bg-[var(--color-surface-card)] px-6 py-5 border-b border-[var(--color-surface-high)]">

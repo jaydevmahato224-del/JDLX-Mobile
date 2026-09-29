@@ -119,7 +119,12 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         </div>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col gap-3">
+      {/* Whole info section opens the product page — inner buttons below
+          stopPropagation so add/stepper keep working without navigating. */}
+      <div
+        onClick={() => navigate(getProductUrl(product))}
+        className="p-4 flex-1 flex flex-col gap-3 cursor-pointer"
+      >
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
@@ -153,7 +158,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
           {quantity > 0 ? (
             <div className="flex items-center bg-[var(--color-surface-container)] rounded-lg p-0.5">
               <button
-                onClick={(e) => { e.preventDefault(); updateQuantity(product.id, quantity - 1); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateQuantity(product.id, quantity - 1); }}
                 className="h-7 w-7 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-card)] rounded-md transition-colors"
               >
                 <Minus size={14} />
@@ -163,7 +168,7 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
               </span>
               <button
                 disabled={quantity >= availableStock}
-                onClick={(e) => { e.preventDefault(); updateQuantity(product.id, quantity + 1); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateQuantity(product.id, quantity + 1); }}
                 className="h-7 w-7 flex items-center justify-center text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-card)] rounded-md disabled:opacity-30 transition-colors"
               >
                 <Plus size={14} />

@@ -403,14 +403,11 @@ function App() {
   const { showPrompt, promptReason, dismissPrompt } = useAppReview()
   
   const [showSplash, setShowSplash] = useState(() => {
-    // Show splash only if:
-    // 1. App is running in standalone (PWA) mode
-    // 2. Device is mobile (Phone/Tablet)
-    // 3. Not already shown in this session
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    return isStandalone && isMobile && !sessionStorage.getItem('jdlx_splash_shown')
+    // Splash is the brand's first impression — show it on EVERY surface
+    // (normal browser, desktop, installed PWA), once per session.
+    // Previously it was gated to standalone-PWA + mobile only, so regular
+    // browser loads never saw it and it looked like the animation vanished.
+    return !sessionStorage.getItem('jdlx_splash_shown')
   })
 
   const [dataReady, setDataReady] = useState(false)

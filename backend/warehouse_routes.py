@@ -3577,14 +3577,16 @@ def warehouse_patch_inventory(item_id):
             prev_title = (prev["meta_title"] if prev else None) or ""
             prev_desc = (prev["meta_description"] if prev else None) or ""
             # The edit payload's name/description (if sent) now back the SEO
-            # copy — the panel no longer has dedicated SEO inputs.
-            eff_name = data.get("name") or inv["name"]
+            # copy — the panel no longer has dedicated SEO inputs. `inv` only
+            # carries product_id/sku, so fall back to the products row itself
+            # (never assume `name` exists on the payload).
+            row = conn.execute(
+                "SELECT name, description FROM products WHERE id = ?", (product_id,)
+            ).fetchone()
+            eff_name = data.get("name") or (row["name"] if row else "") or ""
             eff_desc = data.get("description")
             if eff_desc is None:
-                row_desc = conn.execute(
-                    "SELECT description FROM products WHERE id = ?", (product_id,)
-                ).fetchone()
-                eff_desc = (row_desc["description"] if row_desc else "") or ""
+                eff_desc = (row["description"] if row else "") or ""
             disco = _autofill_discovery_meta(disco, eff_name, eff_desc, prev_title, prev_desc)
             conn.execute("DELETE FROM product_discovery WHERE product_id = ?", (product_id,))
             conn.execute(

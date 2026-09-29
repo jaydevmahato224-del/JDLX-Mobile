@@ -229,7 +229,13 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
         </div>
       </div>
 
-      <div className="p-4 md:p-8 flex-1 flex flex-col gap-2 md:gap-4">
+      {/* Whole info section opens the product page — previously only the image
+          was tappable, so tapping near the price/cart area did nothing. Inner
+          cart/wishlist buttons stopPropagation, so they keep their own action. */}
+      <div
+        onClick={() => navigate(getProductUrl(product))}
+        className="p-4 md:p-8 flex-1 flex flex-col gap-2 md:gap-4 cursor-pointer"
+      >
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-primary/60">

@@ -18,6 +18,8 @@ import { isStickerProduct } from '../../utils/stickerCustomization'
 import { getProductUrl } from '../../utils/productSlug'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
+// Low-stock FILTER (utility) uses this threshold — the low-stock BADGE was
+// removed from cards by product decision, filtering by stock stays useful.
 const LOW_STOCK_LIMIT = 2
 
 function getProductImage(product) {
@@ -80,13 +82,18 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
       >
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">
+          {/* Backend-managed merchandising badges — same feed as Home cards. */}
+          {Array.isArray(product.badges) && product.badges.length > 0 && product.badges.slice(0, 2).map((b) => (
+            <span
+              key={b}
+              className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest shadow-xl border border-white/10"
+            >
+              {String(b).replace(/_/g, ' ')}
+            </span>
+          ))}
           {outOfStock ? (
             <span className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">
               Sold Out
-            </span>
-          ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
-              Low Stock
             </span>
           ) : (Number(product.is_featured) === 1 || product.is_featured === true) ? (
             <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-soft-glow">

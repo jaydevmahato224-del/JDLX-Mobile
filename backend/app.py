@@ -419,6 +419,60 @@ def normalize_product_row(row):
     return product
 
 
+def _bump_product_analytics(product_id, field, amount=1):
+    """Increment a counter in product_analytics (creating the row if missing).
+
+    The warehouse panel's "Product Performance Analytics" section reads these
+    counters via GET /api/products/<id>, but NOTHING ever wrote them — the
+    section showed permanent zeros for every product. Real storefront events
+    now feed it: views (detail page), cart additions, purchases, wishlist adds.
+    Best-effort: any failure is swallowed so tracking can never break the
+    main flow (cart/checkout/wishlist).
+    """
+    if not product_id:
+        return
+    allowed = {'view_count', 'cart_add_count', 'purchase_count', 'wishlist_count'}
+    if field not in allowed or not amount:
+        return
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                f"""INSERT INTO product_analytics (product_id, {field}, last_updated)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(product_id) DO UPDATE SET
+                        {field} = {field} + ?, last_updated = CURRENT_TIMESTAMP""",
+                (product_id, amount, amount),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        # Telemetry must never break the user-facing flow.
+        pass
+
+
+def _group_analytics_root(product_id):
+    """Return the product id whose analytics row represents this product.
+
+    Linked variants are separate product rows sharing one storefront listing;
+    their engagement all belongs to the PARENT (variant_group_id root), so
+    the panel's numbers add up for the product the warehouse actually added.
+    """
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(NULLIF(variant_group_id, 0), id) AS root FROM products WHERE id = ?",
+                (product_id,),
+            ).fetchone()
+            return row['root'] if row else product_id
+        finally:
+            conn.close()
+    except Exception:
+        return product_id
+
+
 def is_sticker_category(product_row):
     category_name = (product_row.get('category_name') or product_row.get('category') or '').strip().lower()
     customization_enabled = int(product_row.get('device_customization_enabled') or 0) == 1
@@ -3836,6 +3890,11 @@ def update_server_cart():
                     cursor.execute("INSERT INTO cart (user_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?)", (user_id, product_id, variant_id, new_qty))
                 else:
                     cursor.execute("INSERT INTO cart (session_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?)", (session_id, product_id, variant_id, new_qty))
+            # Real analytics feed (best-effort): a NEW line item counts as one
+            # cart addition for the product's group. Quantity edits on an
+            # existing line don't re-count.
+            if not existing:
+                _bump_product_analytics(_group_analytics_root(product_id), 'cart_add_count', 1)
         elif action == 'update':
             if quantity > available:
                 return error_response(f"Only {available} items available in total", 400)
@@ -3973,8 +4032,13 @@ def add_to_wishlist():
                 return error_response("Variant not found for this product", 404)
         
         cursor.execute("INSERT OR IGNORE INTO wishlist (user_id, product_id, variant_id) VALUES (?, ?, ?)", (user_id, product_id, variant_id))
+        inserted = cursor.rowcount or 0
         conn.commit()
         conn.close()
+        # Real analytics feed (best-effort): only a NEW wishlist entry counts
+        # (rowcount 0 means it was already there).
+        if inserted:
+            _bump_product_analytics(_group_analytics_root(int(product_id)), 'wishlist_count', 1)
         return success_response(None, "Product added to wishlist")
     except Exception as e:
         return error_response(str(e), 500)
@@ -4078,8 +4142,20 @@ def search_products():
         
         if query:
             search_pattern = f"%{query}%"
-            sql += " AND (p.name LIKE ? OR c.name LIKE ? OR p.category LIKE ?)"
-            params.extend([search_pattern, search_pattern, search_pattern])
+            # Discovery fields (keywords/tags/synonyms from the warehouse
+            # panel's SEO section) now participate in search — merchants who
+            # fill them get real findability, e.g. synonym "mobile" finds
+            # "phone cover" products.
+            sql += """ AND (
+                p.name LIKE ? OR c.name LIKE ? OR p.category LIKE ?
+                OR EXISTS (SELECT 1 FROM product_discovery pd
+                           WHERE pd.product_id = p.id
+                             AND (pd.search_keywords LIKE ?
+                                  OR pd.product_tags LIKE ?
+                                  OR pd.search_synonyms LIKE ?))
+            )"""
+            params.extend([search_pattern, search_pattern, search_pattern,
+                           search_pattern, search_pattern, search_pattern])
             
         if category_id:
             sql += " AND p.category_id = ?"
@@ -4200,6 +4276,7 @@ def get_products():
         # the card-level policy matches the detail page (one query, no N+1).
         product_ids = [r['id'] for r in rows]
         window_by_pid = {}
+        badges_by_pid = {}
         if product_ids:
             placeholders = ','.join('?' * len(product_ids))
             try:
@@ -4210,6 +4287,20 @@ def get_products():
                     window_by_pid[wr['product_id']] = wr['return_window']
             except Exception:
                 window_by_pid = {}  # fulfillment table missing on very old DBs
+            # Batch-fetch storefront badges (same no-N+1 pattern). The panel's
+            # "Storefront Badges" toggles used to save here with zero effect —
+            # no storefront surface ever read them on lists. Cards now show
+            # up to 2 badges, ordered by priority.
+            try:
+                for br in cursor.execute(
+                    f"""SELECT product_id, badge_type FROM product_badges
+                        WHERE product_id IN ({placeholders}) AND is_active = 1
+                        ORDER BY priority DESC""",
+                    tuple(product_ids),
+                ).fetchall():
+                    badges_by_pid.setdefault(br['product_id'], []).append(br['badge_type'])
+            except Exception:
+                badges_by_pid = {}
 
         products = []
         for row in rows:
@@ -4236,6 +4327,8 @@ def get_products():
                     p_dict.get("category_return_policy") or global_policy
                 )
             p_dict["return_window_days"] = window_days
+            if badges_by_pid.get(p_dict['id']):
+                p_dict["badges"] = badges_by_pid[p_dict['id']][:2]
             products.append(p_dict)
         
         total_count = None
@@ -4526,6 +4619,14 @@ def get_product(product_id):
             conn.close()
             return error_response("Product not found", 404)
 
+        # Real analytics feed (best-effort): every public detail-page view
+        # counts for the product's group. Runs on a SEPARATE connection after
+        # the read above so the detail response can never be blocked by it.
+        try:
+            _bump_product_analytics(_group_analytics_root(product_id), 'view_count', 1)
+        except Exception:
+            pass
+
         cursor.execute("SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews FROM product_reviews WHERE product_id = ?", (product_id,))
         stats = cursor.fetchone()
         
@@ -4761,6 +4862,15 @@ def get_product(product_id):
                         discovery_dict[json_field] = []
                 else:
                     discovery_dict[json_field] = []
+            # Merchant-authored SEO copy beats the raw product description for
+            # meta tags — the warehouse panel's SEO section was decorative
+            # until now. Empty merchant fields fall back to the description.
+            merchant_meta = (discovery_dict.get('meta_description') or '').strip()
+            if merchant_meta:
+                product_dict['seo_description'] = merchant_meta
+            merchant_title = (discovery_dict.get('meta_title') or '').strip()
+            if merchant_title:
+                product_dict['seo_title'] = merchant_title
             product_dict['discovery'] = discovery_dict
         else:
             product_dict['discovery'] = None
@@ -5649,6 +5759,12 @@ def checkout():
                 """INSERT INTO order_items (order_id, product_id, product_name, variant_id, quantity, price, subtotal, device_model, fitting_charge, variant_name, variant_options, variant_mrp, variant_sku, variant_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (order_id, item['id'], product_name, v_id, item['qty'], item['price'], item_subtotal, item.get('device_model'), item.get('fitting_charge', 0), variant_name, variant_options, variant_mrp, variant_sku, variant_image)
             )
+            # Real analytics feed (best-effort): purchases tally UNITS sold for
+            # the product's group (variant buys roll up to the parent).
+            try:
+                _bump_product_analytics(_group_analytics_root(int(item['id'])), 'purchase_count', int(item['qty']) or 1)
+            except Exception:
+                pass
 
             # Note: Inventory stock is NOT decremented here during placement anymore.
             # Stock will be decremented and synced only when payment is verified and order is confirmed.

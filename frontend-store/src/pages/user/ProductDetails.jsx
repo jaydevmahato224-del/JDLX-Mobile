@@ -17,7 +17,6 @@ import { getDeviceModelValue, isStickerProduct } from '../../utils/stickerCustom
 import { getProductUrl } from '../../utils/productSlug';
 import { useAnalyticsContext } from '../../context/AnalyticsContext';
 
-const LOW_STOCK_LIMIT = 2;
 const FALLBACK_IMAGE = 'https://placehold.co/800x800/f8fafc/0f172a?text=JDLX';
 
 // One shared retry handler for every product <img>: when the direct cloud URL
@@ -523,8 +522,8 @@ export default function ProductDetails() {
         }
       `}</style>
       <SEO 
-        title={product.name}
-        description={product.description}
+        title={product.seo_title || product.name}
+        description={product.seo_description || product.description}
         price={product.price}
         image={seoImage}
         url={shareUrl}
@@ -543,7 +542,6 @@ export default function ProductDetails() {
             <div className="relative overflow-hidden md:rounded-[28px] bg-[var(--color-surface-card)] md:bg-transparent">
               <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 md:hidden">
                 <span className="bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-white/10">{product.category || 'General'}</span>
-                {stock <= LOW_STOCK_LIMIT && stock > 0 && <span className="bg-primary text-slate-900 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-500/20 shadow-lg">Only {stock} Left</span>}
                 {stock <= 0 && <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-red-600 shadow-lg animate-pulse">Sold Out</span>}
               </div>
 
@@ -689,11 +687,11 @@ export default function ProductDetails() {
             <div className="mt-8 rounded-[2rem] bg-[var(--color-surface-low)] border border-[var(--color-surface-high)] overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-5">
                 <span className="relative flex h-3 w-3 shrink-0">
-                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 ${stock <= 0 ? 'bg-red-500' : stock <= LOW_STOCK_LIMIT ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-ping'}`}></span>
-                  <span className={`relative inline-flex rounded-full h-3 w-3 ${stock <= 0 ? 'bg-red-500' : stock <= LOW_STOCK_LIMIT ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 ${stock <= 0 ? 'bg-red-500' : 'bg-emerald-500 animate-ping'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${stock <= 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[15px] font-black tracking-tight text-[var(--color-on-surface)]">{stock <= 0 ? 'Out of Stock' : stock <= LOW_STOCK_LIMIT ? `Only ${stock} left in stock` : 'In Stock'}</div>
+                  <div className="text-[15px] font-black tracking-tight text-[var(--color-on-surface)]">{stock <= 0 ? 'Out of Stock' : 'In Stock'}</div>
                   <p className="text-[12px] font-bold text-[var(--color-on-surface-variant)]">{stock > 0 ? 'Ready for fulfillment · Ships from JDLX warehouse' : 'Restocking soon — get notified below'}</p>
                 </div>
               </div>

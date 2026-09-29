@@ -671,6 +671,26 @@ def admin_approve_product(product_id):
                 WHERE id = ? OR variant_group_id = ?""",
             (admin_id, note, product_id, group_id),
         )
+
+        # SMART BADGES (replaces the warehouse panel's manual badge toggles):
+        # new warehouse submissions get an evidence-based "new_arrival" badge
+        # at approval time — valid for 14 days, then the detail endpoint's
+        # date filter stops serving it automatically. Best-effort: badge
+        # failure must never block approval.
+        try:
+            already = conn.execute(
+                "SELECT 1 FROM product_badges WHERE product_id = ? AND badge_type = 'new_arrival' LIMIT 1",
+                (product_id,),
+            ).fetchone()
+            if not already:
+                conn.execute(
+                    """INSERT INTO product_badges (product_id, badge_type, priority, start_date, end_date, is_active)
+                       VALUES (?, 'new_arrival', 5, CURRENT_TIMESTAMP,
+                               datetime('now', '+14 days'), 1)""",
+                    (product_id,),
+                )
+        except Exception:
+            pass
         conn.commit()
 
         if product['approval_warehouse_id']:

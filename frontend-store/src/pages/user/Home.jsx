@@ -20,7 +20,6 @@ import { refreshRecentlyViewed } from '../../utils/recentlyViewedSync'
 import { getProductUrl } from '../../utils/productSlug'
 import { useAnalyticsContext } from '../../context/AnalyticsContext'
 
-const LOW_STOCK_LIMIT = 2
 
 function getFirstName(user) {
   const name = user?.name || 'Guest'
@@ -183,13 +182,20 @@ const ProductCard = memo(({ product, onAddToCart, disabled }) => {
       >
         {/* Dynamic Badges Overlay */}
         <div className="absolute top-2 left-2 md:top-4 md:left-4 z-20 flex flex-col gap-1 md:gap-2">
+          {/* Backend-managed merchandising badges (admin approval auto-issues
+              14-day New Arrival; more types can join later). Up to 2, priority
+              ordered — served by the list endpoint. */}
+          {Array.isArray(product.badges) && product.badges.length > 0 && product.badges.slice(0, 2).map((b) => (
+            <span
+              key={b}
+              className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-xl border border-white/10"
+            >
+              {String(b).replace(/_/g, ' ')}
+            </span>
+          ))}
           {outOfStock ? (
             <span className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-xl">
               Sold Out
-            </span>
-          ) : availableStock <= LOW_STOCK_LIMIT ? (
-            <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-red-500/20 animate-pulse">
-              Low Stock
             </span>
           ) : (Number(product.is_featured) === 1 || product.is_featured === true) ? (
             <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 md:px-2.5 md:py-1 rounded-full uppercase tracking-widest shadow-lg shadow-primary/30 animate-soft-glow">

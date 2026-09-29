@@ -119,7 +119,7 @@ const generateSkuFromOptions = (baseSku, options, existingSkus = new Set()) => {
 };
 
 const INITIAL_PRODUCT_STATE = {
-    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, gst_pct: null, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, supplier_name: '', contact_info: '', purchase_date: '',    is_active: true, is_visible: true, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
+    product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
 const WarehouseInventory = () => {
@@ -672,6 +672,12 @@ const WarehouseInventory = () => {
                             product_tags: discovery.product_tags || [],
                             search_synonyms: discovery.search_synonyms || []
                         } : prev.discovery,
+                        // Active Status toggle maps to the REAL products.status
+                        // column ('available'/'unavailable') — storefront list &
+                        // search filter on it. Previously this toggle saved
+                        // nothing: flipping it was pure decoration.
+                        is_active: (data.data?.status === 'unavailable') ? false : prev.is_active,
+                        is_visible: prev.is_visible,
                         analytics: analytics ? {
                             view_count: analytics.view_count || 0,
                             cart_add_count: analytics.cart_add_count || 0,
@@ -854,6 +860,17 @@ const WarehouseInventory = () => {
                 category_id: parseInt(newProductData.category_id) || null,
                 stock_quantity: parseInt(newProductData.stock_quantity) || 0,
                 low_stock_threshold: parseInt(newProductData.low_stock_threshold) || 2,
+                // REAL storefront status: the Active toggle previously saved
+                // nothing (products has no is_active column). It now maps to
+                // products.status, which every storefront list/search filters on.
+                status: newProductData.is_active ? 'available' : 'unavailable',
+                // Structured location (rack/shelf/bin) flattened into the one
+                // bin_location field the DB + panel detail view actually read,
+                // instead of being dropped on submit.
+                bin_location: [newProductData.rack_no, newProductData.shelf_no, newProductData.bin_id]
+                    .map(s => (s || '').trim())
+                    .filter(Boolean)
+                    .join('-') || newProductData.bin_location || '',
                 cost_price: parseFloat(newProductData.cost_price) || 0,
                 selling_price: parseFloat(newProductData.price) || 0,
                 price: parseFloat(newProductData.price) || 0,
@@ -863,7 +880,7 @@ const WarehouseInventory = () => {
                 mrp: parseFloat(newProductData.mrp) || 0,
                 discount_pct: parseFloat(newProductData.discount_pct) || 0,
                 discount_amt: parseFloat(newProductData.discount_amt) || 0,
-                gst_pct: newProductData.apply_gst ? (parseFloat(newProductData.gst_pct) || 0) : null,
+                gst_pct: newProductData.apply_gst ? (parseFloat(newProductData.gst_pct) || 0) : 0,
                 brand: newProductData.brand,
                 units_per_pack: newProductData.units_per_pack,
                 material_type: newProductData.material_type,
@@ -895,6 +912,8 @@ const WarehouseInventory = () => {
                 badges: newProductData.badges,
                 lifecycle_state: newProductData.lifecycle_state,
                 discovery: newProductData.discovery,
+                // Product page SEO now uses these when the merchant typed them
+                // (backend prefers discovery.meta_description over raw description).
                 fulfillment: {
                     ...newProductData.fulfillment,
                     package_weight: parseFloat(newProductData.fulfillment.package_weight) || 0,
@@ -2035,15 +2054,20 @@ const WarehouseInventory = () => {
                                             <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
                                                 <div>
                                                     <div className="text-[10px] font-black text-white uppercase tracking-widest">Store Visibility</div>
-                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Visible to customers</div>
+                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Derived from status & lifecycle</div>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setNewProductData(prev => ({ ...prev, is_visible: !prev.is_visible }))}
-                                                    className={`w-12 h-7 rounded-full p-1 transition-all ${newProductData.is_visible ? 'bg-amber-400' : 'bg-slate-800'}`}
-                                                >
-                                                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${newProductData.is_visible ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                </button>
+                                                {/* DERIVED indicator, not a fake toggle: the old
+                                                    switch saved nothing (products has no is_visible
+                                                    column). Real visibility = Active AND approved AND
+                                                    lifecycle live/coming_soon — what the storefront
+                                                    list actually filters on. */}
+                                                <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                                                    newProductData.is_active && (newProductData.lifecycle_state === 'live' || newProductData.lifecycle_state === 'coming_soon')
+                                                        ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20'
+                                                        : 'bg-slate-800 text-slate-500 border border-white/5'
+                                                }`}>
+                                                    {newProductData.is_active && (newProductData.lifecycle_state === 'live' || newProductData.lifecycle_state === 'coming_soon') ? 'Visible' : 'Hidden'}
+                                                </span>
                                             </div>
                                         </div>
 
@@ -2357,85 +2381,15 @@ const WarehouseInventory = () => {
                                     </div>
                                 </div>
 
-                                {/* SECTION 8: STOREFRONT BADGES */}
-                                <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 rounded-2xl bg-amber-400/10 text-amber-500">
-                                            <Tag size={22} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Storefront Badges</h3>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Dynamic merchandising labels</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                                        {[
-                                            { label: 'Best Seller', type: 'best_seller', color: 'bg-amber-500' },
-                                            { label: 'Trending', type: 'trending', color: 'bg-indigo-500' },
-                                            { label: 'New Arrival', type: 'new_arrival', color: 'bg-emerald-500' },
-                                            { label: 'Premium Pick', type: 'premium', color: 'bg-purple-500' },
-                                            { label: 'Limited Deal', type: 'limited_deal', color: 'bg-rose-500' },
-                                            { label: 'Staff Choice', type: 'staff_choice', color: 'bg-blue-500' },
-                                            { label: 'Verified', type: 'verified', color: 'bg-sky-500' }
-                                        ].map((badge) => {
-                                            const activeBadge = newProductData.badges.find(b => b.type === badge.type);
-                                            return (
-                                                <div key={badge.type} className={`p-4 rounded-3xl border transition-all ${activeBadge ? 'bg-white/5 border-white/10' : 'bg-slate-950/20 border-white/5'}`}>
-                                                    <div className="flex items-center justify-between mb-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={`w-2 h-2 rounded-full ${badge.color}`} />
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-white">{badge.label}</span>
-                                                        </div>
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="sr-only peer"
-                                                                checked={!!activeBadge}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) {
-                                                                        setNewProductData(prev => ({
-                                                                            ...prev,
-                                                                            badges: [...prev.badges, { type: badge.type, priority: 1, is_active: true }]
-                                                                        }))
-                                                                    } else {
-                                                                        setNewProductData(prev => ({
-                                                                            ...prev,
-                                                                            badges: prev.badges.filter(b => b.type !== badge.type)
-                                                                        }))
-                                                                    }
-                                                                }}
-                                                            />
-                                                            <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                                                        </label>
-                                                    </div>
-
-                                                    {activeBadge && (
-                                                        <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                            <div className="flex items-center justify-between">
-                                                                <label className="text-[9px] font-black uppercase tracking-tighter text-slate-500">Priority</label>
-                                                                <span className="text-[10px] font-black text-white">{activeBadge.priority}</span>
-                                                            </div>
-                                                            <input
-                                                                type="range"
-                                                                min="1"
-                                                                max="10"
-                                                                value={activeBadge.priority}
-                                                                onChange={(e) => {
-                                                                    const newBadges = [...newProductData.badges];
-                                                                    const idx = newBadges.findIndex(b => b.type === badge.type);
-                                                                    newBadges[idx].priority = parseInt(e.target.value);
-                                                                    setNewProductData(prev => ({ ...prev, badges: newBadges }));
-                                                                }}
-                                                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                {/* SECTION 8 (Storefront Badges) — removed by product
+                                    decision: manual badge toggles had zero storefront
+                                    effect (nothing rendered them). Badges are now
+                                    managed by the BACKEND: admin approval auto-issues
+                                    an evidence-based 14-day "New Arrival" badge, and
+                                    the list/detail endpoints serve active badges to
+                                    the storefront cards. The badges state field stays
+                                    in INITIAL_PRODUCT_STATE (sent as []) so the
+                                    create/update payload shape is unchanged. */}
 
                                 {/* SECTION 9: FULFILLMENT CONFIGURATION */}
                                 <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
@@ -2683,7 +2637,14 @@ const WarehouseInventory = () => {
                                     </div>
                                 </div>
 
-                                {/* SECTION 11: PRODUCT ANALYTICS (READ-ONLY) */}
+                                {/* SECTION 11: PRODUCT ANALYTICS (READ-ONLY)
+                                    Add mode me chhupa hua hai: naye product ka koi
+                                    engagement data hota hi nahi, aur yahan ke counters
+                                    product_analytics table se aate hain jo sirf EDIT
+                                    fetch (GET /products/<id>) populate karta hai.
+                                    Ab WO counters REAL hain — cart add / wishlist /
+                                    purchase / detail views backend se bump hote hain. */}
+                                {editingItemId && (
                                 <div className="warehouse-panel p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 border-white/5 bg-slate-900/40 backdrop-blur-xl group col-span-1 lg:col-span-2">
                                     <div className="flex items-center gap-4">
                                         <div className="p-3 rounded-2xl bg-indigo-400/10 text-indigo-400">
@@ -2726,6 +2687,7 @@ const WarehouseInventory = () => {
                                         </div>
                                     </div>
                                 </div>
+                                )}
                             </div>
 
                             {/* ACTION BAR — in-flow (not floating) so it can never

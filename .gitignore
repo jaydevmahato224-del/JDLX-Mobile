@@ -24,3 +24,6 @@ backups/
 # Agent/workspace tooling — local only, never commit (89MB+ of session data)
 .claude/
 JDLX-Watch/
+
+# One-off DB cleanup backups (contain live product data, local only)
+backend/*_backup.json

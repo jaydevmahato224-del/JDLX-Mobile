@@ -211,11 +211,11 @@ function Cart() {
                                             <div className="flex items-center gap-3">
                                                 <p className={`font-black text-xl text-primary ${isUnavailable ? 'opacity-50' : ''}`}>₹{item.price}</p>
                                                 
-                                                {!isUnavailable && stockCount > 0 && stockCount <= 3 && (
-                                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-colors ${atMaxStock ? 'bg-red-50 border-red-100 text-red-600' : 'bg-amber-50 border-amber-100 text-amber-600'}`}>
-                                                        <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${atMaxStock ? 'bg-red-500' : 'bg-amber-500'}`} />
+                                                {!isUnavailable && atMaxStock && (
+                                                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border bg-red-50 border-red-100 text-red-600">
+                                                        <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-red-500" />
                                                         <span className="text-[10px] font-black uppercase tracking-wider">
-                                                            {atMaxStock ? 'Max Stock Reached' : `Only ${stockCount} Left`}
+                                                            Max Stock Reached
                                                         </span>
                                                     </div>
                                                 )}

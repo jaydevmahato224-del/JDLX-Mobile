@@ -3334,11 +3334,19 @@ def warehouse_patch_inventory(item_id):
     data = request.get_json(silent=True) or {}
     
     allowed = {
-        "stock_quantity", "low_stock_threshold", "bin_location", "sku", 
+        "stock_quantity", "low_stock_threshold", "bin_location", "sku",
         "brand", "unit", "cost_price", "selling_price", "status",
         "mrp", "discount_pct", "discount_amt", "gst_pct", "is_featured"
     }
     updates = {k: v for k, v in data.items() if k in allowed}
+    # "status" coming from the panel's Active toggle means the STOREFRONT
+    # status (products.status: available/unavailable), NOT the inventory-line
+    # status column. Route it to the product meta update so the toggle takes
+    # real effect on the storefront; the inventory line keeps 'active'.
+    if "status" in updates:
+        storefront_status = updates.pop("status")
+        if storefront_status in ("available", "unavailable"):
+            data["__storefront_status"] = storefront_status
     
     # Composite objects count as valid updates too (each is handled further
     # below): fulfillment (dispatch SLA / return window / toggles), variants,
@@ -3367,8 +3375,8 @@ def warehouse_patch_inventory(item_id):
             
         # Update product metadata (images, description, brand, etc) if provided
         product_meta_fields = [
-            "name", "images", "description", "brand", "units_per_pack", "material_type", 
-            "color", "category_id", "sub_category", "weight", "dimensions", "is_fragile", 
+            "name", "images", "description", "brand", "units_per_pack", "material_type",
+            "color", "category_id", "sub_category", "weight", "dimensions", "is_fragile",
             "is_temp_sensitive", "is_perishable", "expiry_date", "is_featured",
             "recommendation_priority", "recommendation_weight", "lifecycle_state",
             "offline_price", "usage_instructions", "return_policy"
@@ -3388,6 +3396,19 @@ def warehouse_patch_inventory(item_id):
         if meta_updates:
             meta_values.append(inv["product_id"])
             conn.execute(f"UPDATE products SET {', '.join(meta_updates)} WHERE id = ?", meta_values)
+
+        # Storefront status routed from the inventory "status" field (see the
+        # allowed-set handling above): the Active toggle now really hides a
+        # product from the storefront list/search (both filter on
+        # products.status = 'available'). Applied for the product AND its
+        # variant group so parents/children never disagree.
+        if data.get("__storefront_status"):
+            conn.execute(
+                """UPDATE products SET status = ?
+                   WHERE id = ? OR (variant_group_id = (SELECT variant_group_id FROM products WHERE id = ?)
+                                    AND variant_group_id IS NOT NULL)""",
+                (data["__storefront_status"], inv["product_id"], inv["product_id"]),
+            )
 
         # Handle Recommendations if provided
         if "recommendations" in data:

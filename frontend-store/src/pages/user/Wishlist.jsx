@@ -95,7 +95,6 @@ export default function Wishlist() {
                 <div className="grid gap-4">
                     {wishlist.map((product) => {
                         const stock = Math.max(0, Number(product.stock ?? 0) - Number(product.hard_reserved ?? product.reserved_stock ?? 0));
-                        const isLowStock = stock > 0 && stock <= 2;
                         const isOutOfStock = stock <= 0;
 
                         return (
@@ -141,12 +140,7 @@ export default function Wishlist() {
 
                                     {/* Stock Status */}
                                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-                                        {isLowStock && (
-                                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-wider border border-amber-100">
-                                                <Zap size={10} fill="currentColor" /> Only {stock} left
-                                            </div>
-                                        )}
-                                        {!isOutOfStock && !isLowStock && (
+                                        {!isOutOfStock && (
                                             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-wider border border-emerald-100">
                                                 <Package size={10} /> In Stock
                                             </div>

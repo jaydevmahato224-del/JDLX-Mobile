@@ -2661,48 +2661,11 @@ const WarehouseInventory = () => {
                                         </div>
                                         <div>
                                             <h3 className="text-xl font-black text-white uppercase tracking-tight">Search & Discovery</h3>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">SEO and storefront findability</p>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Storefront findability — SEO copy auto-generates from the title & description above</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                                        <div className="space-y-5 sm:space-y-8">
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between ml-1">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meta Title (SEO)</label>
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${newProductData.discovery.meta_title.length > 60 ? 'text-rose-400' : 'text-slate-600'}`}>{newProductData.discovery.meta_title.length}/60</span>
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Focus keyword included title..."
-                                                    value={newProductData.discovery.meta_title}
-                                                    onChange={(e) => setNewProductData(prev => ({
-                                                        ...prev,
-                                                        discovery: { ...prev.discovery, meta_title: e.target.value }
-                                                    }))}
-                                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-emerald-400/50 transition-all outline-none"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between ml-1">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Meta Description</label>
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${newProductData.discovery.meta_description.length > 160 ? 'text-rose-400' : 'text-slate-600'}`}>{newProductData.discovery.meta_description.length}/160</span>
-                                                </div>
-                                                <textarea
-                                                    rows="4"
-                                                    placeholder="Compelling summary for search results..."
-                                                    value={newProductData.discovery.meta_description}
-                                                    onChange={(e) => setNewProductData(prev => ({
-                                                        ...prev,
-                                                        discovery: { ...prev.discovery, meta_description: e.target.value }
-                                                    }))}
-                                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-xs text-white font-medium focus:outline-none focus:border-emerald-400/50 transition-all resize-none outline-none leading-relaxed"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-5 sm:space-y-8">
+                                    <div className="space-y-5 sm:space-y-8">
                                             {[
                                                 { label: 'Search Keywords', key: 'search_keywords', placeholder: 'Add search term...', color: 'text-emerald-400' },
                                                 { label: 'Product Tags', key: 'product_tags', placeholder: 'Add tag...', color: 'text-blue-400' },
@@ -2760,7 +2723,6 @@ const WarehouseInventory = () => {
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
                                 </div>
 
                                 {/* SECTION 11: PRODUCT ANALYTICS (READ-ONLY)

@@ -2685,6 +2685,55 @@ def match_products_from_text(text, conn):
     return extracted_items
 
 
+def _autofill_discovery_meta(disco, name, description, prev_title="", prev_desc=""):
+    """Derive product_discovery SEO copy from the product's own title/description.
+
+    The Add/Edit Product panel no longer shows Meta Title / Meta Description
+    inputs — merchants type one title and one description, and the SEO fields
+    fill themselves. Existing (previously authored) values always win: this
+    only fills the gaps, never overwrites human copy.
+
+    Order of precedence for each field:
+      1. what the caller explicitly sent in `disco` (non-empty)
+      2. what was already stored in product_discovery (prev_title/prev_desc)
+      3. derived fallback:
+         - meta_title       = product name, capped at 60 chars on a word boundary
+         - meta_description = plain-text description, capped at 160 chars
+    """
+    disco = dict(disco or {})
+
+    def _clean(text):
+        # Descriptions may be rich-text/HTML — tags carry no SEO value and
+        # would pollute the meta tag. Collapse all whitespace runs.
+        return re.sub(r"<[^>]+>", " ", str(text or ""))
+
+    def _cap_on_word(text, limit):
+        text = " ".join(text.split())  # normalize whitespace
+        if len(text) <= limit:
+            return text
+        cut = text[:limit]
+        if " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+        # A title ending on a dangling connector reads broken — drop it too.
+        while cut:
+            last = cut.rsplit(" ", 1)[-1].lower().strip(" ,.-:")
+            if last in {"with", "and", "for", "the", "a", "an", "of", "in", "on", "to", "&", "-"}:
+                cut = cut.rsplit(" ", 1)[0]
+            else:
+                break
+        return cut.rstrip(" ,.-:")
+
+    raw_name = _clean(name).strip()
+    raw_desc = _clean(description).strip()
+
+    if not (disco.get("meta_title") or "").strip():
+        disco["meta_title"] = prev_title.strip() or _cap_on_word(raw_name, 60)
+    if not (disco.get("meta_description") or "").strip():
+        disco["meta_description"] = prev_desc.strip() or _cap_on_word(raw_desc, 160)
+
+    return disco
+
+
 @warehouse_bp.route("/api/warehouse/inventory", methods=["GET"])
 @require_warehouse_auth
 def warehouse_get_inventory():
@@ -3117,6 +3166,9 @@ def warehouse_create_product():
         # Save Discovery
         disco = data.get('discovery', {})
         if disco:
+            # The panel no longer asks the merchant for SEO copy — derive it
+            # from the product title/description they already typed.
+            disco = _autofill_discovery_meta(disco, name, description)
             cursor.execute(
                 """INSERT INTO product_discovery (
                     product_id, meta_title, meta_description, 
@@ -3516,6 +3568,24 @@ def warehouse_patch_inventory(item_id):
         if "discovery" in data:
             product_id = inv["product_id"]
             disco = data["discovery"]
+            # Keep any merchant-authored SEO copy that already exists unless
+            # this edit explicitly carries its own (autofill only fills gaps).
+            prev = conn.execute(
+                "SELECT meta_title, meta_description FROM product_discovery WHERE product_id = ?",
+                (product_id,),
+            ).fetchone()
+            prev_title = (prev["meta_title"] if prev else None) or ""
+            prev_desc = (prev["meta_description"] if prev else None) or ""
+            # The edit payload's name/description (if sent) now back the SEO
+            # copy — the panel no longer has dedicated SEO inputs.
+            eff_name = data.get("name") or inv["name"]
+            eff_desc = data.get("description")
+            if eff_desc is None:
+                row_desc = conn.execute(
+                    "SELECT description FROM products WHERE id = ?", (product_id,)
+                ).fetchone()
+                eff_desc = (row_desc["description"] if row_desc else "") or ""
+            disco = _autofill_discovery_meta(disco, eff_name, eff_desc, prev_title, prev_desc)
             conn.execute("DELETE FROM product_discovery WHERE product_id = ?", (product_id,))
             conn.execute(
                 """INSERT INTO product_discovery (

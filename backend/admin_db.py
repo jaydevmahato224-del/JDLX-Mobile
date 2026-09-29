@@ -3,6 +3,7 @@ from database import get_db
 from auth.role_guard import require_super_admin, require_admin
 from utils.response_utils import success_response, error_response
 from utils.activity_logger import log_admin_action
+import json
 import re
 import sqlite3
 
@@ -609,7 +610,12 @@ def admin_list_pending_products():
                    p.description, p.brand, p.stock, p.lifecycle_state, p.approval_status,
                    p.approval_source, p.approval_warehouse_id, p.approval_requested_at,
                    p.approval_decided_at, p.approval_decided_by, p.approval_note,
-                   p.has_variants, p.is_parent,
+                   p.has_variants, p.is_parent, p.variant_name, p.variant_group_id,
+                   p.sub_category, p.color, p.weight, p.dimensions,
+                   p.units_per_pack, p.material_type, p.barcode, p.global_sku_code,
+                   p.delivery_time, p.return_policy, p.prepaid_only,
+                   p.low_stock_threshold, p.status, p.is_featured,
+                   p.is_fragile, p.is_temp_sensitive, p.is_perishable, p.expiry_date,
                    w.warehouse_name AS submitted_by_warehouse,
                    c.name AS category_name
             FROM products p
@@ -635,6 +641,57 @@ def admin_list_pending_products():
                 "SELECT COUNT(*) FROM products WHERE variant_group_id = ? AND id != ?",
                 (d['id'], d['id']),
             ).fetchone()[0]
+            # Variant children summary (name, price, stock, sku) — the admin
+            # should see what they are approving without leaving the modal.
+            if d.get('variant_count'):
+                d['variants'] = [
+                    dict(v) for v in conn.execute(
+                        """SELECT id, name, variant_name, price, mrp, stock,
+                                  global_sku_code AS sku
+                           FROM products WHERE variant_group_id = ? AND id != ?
+                           ORDER BY id""",
+                        (d['id'], d['id']),
+                    ).fetchall()
+                ]
+            else:
+                d['variants'] = []
+            # Warehouse inventory line for THIS product — SKU, bin, GST,
+            # thresholds and live/available stock live here, not in products.
+            inv = conn.execute(
+                """SELECT sku, stock_quantity, available_stock, reserved_stock,
+                          low_stock_threshold, bin_location, gst_pct, unit,
+                          cost_price, status
+                   FROM warehouse_inventory
+                   WHERE product_id = ? ORDER BY warehouse_id LIMIT 1""",
+                (d['id'],),
+            ).fetchone()
+            d['inventory'] = dict(inv) if inv else None
+            # SEO discovery row (meta title/description, keywords, tags,
+            # synonyms) — JSON text columns are decoded for the review modal.
+            disc = conn.execute(
+                "SELECT meta_title, meta_description, search_keywords, product_tags, search_synonyms FROM product_discovery WHERE product_id = ?",
+                (d['id'],),
+            ).fetchone()
+            if disc:
+                dd = dict(disc)
+                for json_field in ('search_keywords', 'product_tags', 'search_synonyms'):
+                    if dd.get(json_field):
+                        try:
+                            dd[json_field] = json.loads(dd[json_field])
+                        except (TypeError, ValueError):
+                            dd[json_field] = []
+                d['discovery'] = dd
+            else:
+                d['discovery'] = None
+            # All uploaded images (modal gallery), not just the first one.
+            if d.get('images'):
+                try:
+                    parsed = json.loads(d['images']) if isinstance(d['images'], str) else d['images']
+                    d['images_list'] = parsed if isinstance(parsed, list) else [parsed]
+                except (TypeError, ValueError):
+                    d['images_list'] = [d['images']]
+            else:
+                d['images_list'] = []
             items.append(d)
         pending, _reports = _admin_approval_counts()
         return success_response({"items": items, "pending": pending})

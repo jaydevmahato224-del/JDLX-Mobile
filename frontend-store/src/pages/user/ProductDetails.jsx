@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowLeft, ArrowRight, BadgePercent, Bell, CheckCircle2, ChevronRight, Clock, Heart, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Star, Truck, Undo2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -82,7 +82,8 @@ export default function ProductDetails() {
   const [remoteProducts, setRemoteProducts] = useState([]);
   const [tokenProduct, setTokenProduct] = useState(null);
   const [loadingToken, setLoadingToken] = useState(!!(token || slugToken));
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  // Image index is owned by the auto-slide carousel state below (autoIndex);
+  // the old separate useState was removed to keep one source of truth.
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [deviceModel, setDeviceModel] = useState('');
   const [isNotified, setIsNotified] = useState(false);
@@ -416,6 +417,66 @@ export default function ProductDetails() {
   const requiresDeviceModel = isStickerProduct(activeProduct);
   
   const productImages = useMemo(() => getProductImages(activeProduct), [activeProduct]);
+
+  // Auto-sliding gallery: cycles through product images every 4s. Pauses while
+  // the user hovers/touches the image or the tab is hidden, and holds off for
+  // a few seconds after any manual interaction (thumb click / swipe / arrows)
+  // so the carousel never fights the user for control. Single-image products
+  // and sold-out none of this matter — the effect simply no-ops.
+  const [autoIndex, setAutoIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const autoIndexRef = useRef(0);
+  const pauseRef = useRef(false);
+  const lastManualNavRef = useRef(0);
+  useEffect(() => { autoIndexRef.current = autoIndex; }, [autoIndex]);
+  useEffect(() => { pauseRef.current = isPaused; }, [isPaused]);
+  // Reset to the first image whenever the product/variant (and thus the
+  // image set) changes — an auto-advancing stale index would flash wrong art.
+  // Done via the React-endorsed render-time reset (no effect, no cascades).
+  const [lastImagesSet, setLastImagesSet] = useState(productImages);
+  if (lastImagesSet !== productImages) {
+    setLastImagesSet(productImages);
+    setAutoIndex(0);
+  }
+  useEffect(() => {
+    if (productImages.length <= 1 || isPaused) return undefined;
+    const timer = setInterval(() => {
+      if (pauseRef.current) return;
+      if (document.hidden) return;
+      // 6s cool-down after a manual swipe/click — resume the tour afterwards.
+      if (Date.now() - lastManualNavRef.current < 6000) return;
+      setAutoIndex((i) => (i + 1) % productImages.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [productImages.length, isPaused]);
+  const activeImageIndex = Math.min(autoIndex, productImages.length - 1);
+  const goToImage = useCallback((idx) => {
+    lastManualNavRef.current = Date.now();
+    setAutoIndex(((idx % productImages.length) + productImages.length) % productImages.length);
+  }, [productImages.length]);
+
+  // Touch swipe for the gallery (mobile): track a horizontal drag and switch
+  // images on release; a mostly-vertical drag (scroll) never changes slides.
+  const touchStartRef = useRef(null);
+  const onGalleryTouchStart = useCallback((e) => {
+    const t = e.touches?.[0];
+    if (!t) return;
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+    setIsPaused(true);
+  }, []);
+  const onGalleryTouchEnd = useCallback((e) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    setIsPaused(false);
+    lastManualNavRef.current = Date.now();
+    if (!start || productImages.length <= 1) return;
+    const t = e.changedTouches?.[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    goToImage(autoIndexRef.current + (dx < 0 ? 1 : -1));
+  }, [productImages.length, goToImage]);
   
   // Real dispatching hub for THIS product — resolved from warehouse_inventory
   // with the same priority the checkout assignment uses, so the highlight
@@ -563,20 +624,69 @@ export default function ProductDetails() {
               >
                 <Heart size={20} fill={isInWishlist ? 'currentColor' : 'none'} className="transition-transform duration-300" />
               </button>
-              <div className="overflow-hidden bg-[var(--color-surface-card)]">
-                <img
-                  src={productImages[activeImageIndex]}
-                  data-original-src={productImages[activeImageIndex]}
-                  alt={product.name}
-                  onError={handleImageError}
-                  className="h-[400px] w-full object-contain transition-all duration-700 sm:h-[540px] md:rounded-[28px]"
-                />
+              {/* Auto-sliding gallery — images track translate-x karta hai, har
+                  slide full-width; swipe/arrows/thumbs sab synced. */}
+              <div
+                className="overflow-hidden bg-[var(--color-surface-card)] touch-pan-y"
+                onMouseEnter={() => setIsPaused(true)}
+                onMouseLeave={() => setIsPaused(false)}
+                onTouchStart={onGalleryTouchStart}
+                onTouchEnd={onGalleryTouchEnd}
+              >
+                <div
+                  className="flex h-[400px] sm:h-[540px] transition-transform duration-500 ease-out"
+                  style={{ transform: `translateX(-${activeImageIndex * 100}%)` }}
+                >
+                  {productImages.map((img, idx) => (
+                    <img
+                      key={`${img}-${idx}`}
+                      src={img}
+                      data-original-src={img}
+                      alt={product.name}
+                      loading={idx === 0 ? 'eager' : 'lazy'}
+                      onError={handleImageError}
+                      className="h-full w-full shrink-0 grow-0 basis-full object-contain"
+                    />
+                  ))}
+                </div>
+                {/* Dots — current slide highlight; click se jump. */}
+                {productImages.length > 1 && (
+                  <div className="absolute inset-x-0 top-4 z-10 flex justify-center gap-1.5">
+                    {productImages.map((img, idx) => (
+                      <button
+                        key={`dot-${idx}`}
+                        onClick={() => goToImage(idx)}
+                        aria-label={`Go to image ${idx + 1}`}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${activeImageIndex === idx ? 'w-5 bg-amber-400' : 'w-1.5 bg-white/60 hover:bg-white'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Desktop arrows */}
+                {productImages.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => goToImage(activeImageIndex - 1)}
+                      aria-label="Previous image"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 z-10 hidden md:flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-slate-800 shadow-lg backdrop-blur transition-all hover:bg-white hover:scale-105 active:scale-95"
+                    >
+                      <ArrowRight size={16} className="rotate-180" />
+                    </button>
+                    <button
+                      onClick={() => goToImage(activeImageIndex + 1)}
+                      aria-label="Next image"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-10 hidden md:flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-slate-800 shadow-lg backdrop-blur transition-all hover:bg-white hover:scale-105 active:scale-95"
+                    >
+                      <ArrowRight size={16} />
+                    </button>
+                  </>
+                )}
               </div>
               {productImages.length > 1 && (
                 <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center gap-2 px-6">
                   <div className="flex gap-2 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10">
                     {productImages.map((img, idx) => (
-                      <button key={idx} onClick={() => setActiveImageIndex(idx)} className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${activeImageIndex === idx ? 'border-amber-400 scale-105' : 'border-transparent opacity-60'}`}><img src={img} data-original-src={img} alt="" onError={handleImageError} className="h-full w-full object-cover" /></button>
+                      <button key={idx} onClick={() => goToImage(idx)} className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 transition-all ${activeImageIndex === idx ? 'border-amber-400 scale-105' : 'border-transparent opacity-60'}`}><img src={img} data-original-src={img} alt="" onError={handleImageError} className="h-full w-full object-cover" /></button>
                     ))}
                   </div>
                 </div>

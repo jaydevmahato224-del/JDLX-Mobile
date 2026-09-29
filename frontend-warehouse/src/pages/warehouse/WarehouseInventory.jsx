@@ -12,6 +12,7 @@ import {
     Trash2,
     CheckCircle2,
     XCircle,
+    ChevronDown,
     ChevronRight,
     Loader2,
     MapPin,
@@ -117,6 +118,68 @@ const generateSkuFromOptions = (baseSku, options, existingSkus = new Set()) => {
     }
     return finalSku;
 };
+
+// Draft persistence for the Add Product form: an accidental refresh / back-
+// swipe / tab close while filling the form used to lose EVERYTHING. The full
+// form state now auto-saves to localStorage (debounced) while the create form
+// is open, and is restored with a Continue-or-Discard banner on the next
+// visit. Edit sessions and catalog-linked drafts are excluded from
+// persistence — those flows own their lifecycle.
+const DRAFT_KEY = 'jdlx_wh_new_product_draft_v1';
+const draftJsonSafe = (value) => {
+    try { return JSON.parse(JSON.stringify(value)); } catch { return null; }
+};
+const readProductDraft = () => {
+    try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch { return null; }
+};
+const writeProductDraft = (data) => {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved_at: Date.now(), data })); } catch { /* quota/private mode — draft is best-effort */ }
+};
+const clearProductDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* noop */ }
+};
+// A draft with nothing typed in it is not worth a banner — check the fields
+// that represent actual human input.
+const draftHasContent = (d) => {
+    if (!d || typeof d !== 'object') return false;
+    const scalar = [d.name, d.description, d.price, d.mrp, d.sku, d.barcode, d.brand, d.offline_price, d.cost_price, d.weight, d.dimensions, d.expiry_date, d.return_policy, d.units_per_pack, d.material_type, d.rack_no, d.shelf_no, d.bin_id, d.bin_location].some(
+        (v) => v !== '' && v !== null && v !== undefined && v !== 0
+    );
+    const list = Array.isArray(d.images) && d.images.length > 0;
+    const variants = Array.isArray(d.variants) && d.variants.some(v => (v.name || v.sku || v.price) !== undefined && (v.name || v.sku || String(v.price || '')) !== '');
+    const discovery = d.discovery && [d.discovery.meta_title, d.discovery.meta_description].some(v => v && String(v).trim() !== '');
+    const hasGst = d.apply_gst === true;
+    return Boolean(scalar || list || variants || discovery || hasGst);
+};
+
+// Tappable suggestion dropdown — native <datalist> is unreliable on phones
+// (tiny/untappable popup, broken in several mobile WebViews), so Brand Name
+// and Sub-Category render their suggestions as a real button list under the
+// input: tap = choose, or keep typing a brand-new value. Desktop typing still
+// works normally; onMouseDown preventDefault keeps the input's focus.
+function SuggestionDropdown({ open, options, onSelect, highlight }) {
+    if (!open || !options.length) return null;
+    return (
+        <div className="absolute z-40 left-0 right-0 top-full mt-2 max-h-56 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
+            {options.map((opt) => (
+                <button
+                    key={opt}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onSelect(opt)}
+                    className={`w-full text-left px-5 py-3.5 text-sm font-bold transition-colors ${opt === highlight ? 'text-amber-400 bg-amber-400/10' : 'text-white hover:bg-white/5 active:bg-amber-400/10'}`}
+                >
+                    {opt}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 const INITIAL_PRODUCT_STATE = {
     product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, is_perishable: false, expiry_date: '', brand: '', delivery_time: '10-30 mins', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
@@ -237,6 +300,26 @@ const WarehouseInventory = () => {
     const [showAddProductView, setShowAddProductView] = useState(false)
     const [editingItemId, setEditingItemId] = useState(null)
     const [newProductData, setNewProductData] = useState(INITIAL_PRODUCT_STATE)
+    // Draft autosave: while the CREATE form is open (no edit session, no
+    // catalog-linked product), form state mirrors into localStorage debounced.
+    // Restored on mount with a Continue-or-Discard banner (see list view).
+    const [restoredDraft, setRestoredDraft] = useState(null) // { saved_at, data }
+    const [draftRestoredInForm, setDraftRestoredInForm] = useState(false) // chip in form header
+    const draftSaveTimerRef = useRef(null)
+    useEffect(() => {
+        const inCreateMode = showAddProductView && !editingItemId && !newProductData.product_id;
+        if (!inCreateMode) return undefined;
+        const t = setTimeout(() => {
+            if (draftHasContent(newProductData)) writeProductDraft(newProductData);
+        }, 600);
+        draftSaveTimerRef.current = t;
+        return () => clearTimeout(t);
+    }, [newProductData, showAddProductView, editingItemId]);
+    // Restore once on mount — before the user can click "ADD NEW PRODUCT".
+    useEffect(() => {
+        const d = readProductDraft();
+        if (d && draftHasContent(d.data)) setRestoredDraft(d);
+    }, []);
     // The pristine inventory row being edited — "Discard Changes" (edit mode
     // only) re-runs the SAME load path (handleEditItem) with it, so the form
     // is rebuilt from source with zero drift (deep metadata included).
@@ -245,14 +328,31 @@ const WarehouseInventory = () => {
     // races (see the editSession check below).
     const editSessionRef = useRef(0)
 
-    const [productSearch, setProductSearch] = useState('')
-    const [foundProducts, setFoundProducts] = useState([])
-    const [isSearchingProducts, setIsSearchingProducts] = useState(false)
+    // Global-catalog search state REMOVED with the section (product decision —
+    // the Add Product form is fresh-create only). Kept vars are gone entirely.
     const [categories, setCategories] = useState([])
-    const [selectedCategoryId, setSelectedCategoryId] = useState(null)
-    const [hasSubCategory, setHasSubCategory] = useState(false)
     const [showLocationMapping, setShowLocationMapping] = useState(false)
     const [showLogistics, setShowLogistics] = useState(false)
+    const [hasSubCategory, setHasSubCategory] = useState(false)
+    // Mobile-tappable suggestion dropdowns for Brand / Sub-Category (replaces
+    // the phone-unreliable native <datalist> popups).
+    const [brandMenuOpen, setBrandMenuOpen] = useState(false)
+    const [subCatMenuOpen, setSubCatMenuOpen] = useState(false)
+    const brandFieldRef = useRef(null)
+    const subCatFieldRef = useRef(null)
+    useEffect(() => {
+        if (!brandMenuOpen && !subCatMenuOpen) return undefined;
+        const onPointerDown = (e) => {
+            if (brandMenuOpen && brandFieldRef.current && !brandFieldRef.current.contains(e.target)) setBrandMenuOpen(false);
+            if (subCatMenuOpen && subCatFieldRef.current && !subCatFieldRef.current.contains(e.target)) setSubCatMenuOpen(false);
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('touchstart', onPointerDown);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('touchstart', onPointerDown);
+        };
+    }, [brandMenuOpen, subCatMenuOpen]);
     const [isWarehouseImageUploading, setIsWarehouseImageUploading] = useState(false)
     const fileInputRef = useRef(null)
 
@@ -410,42 +510,11 @@ const WarehouseInventory = () => {
                     ...prev,
                     name: location.state.productName
                 }))
-                // Also set the catalog search to the same name
-                setProductSearch(location.state.productName)
             }
             // Clear location state to prevent re-opening on manual refresh
             window.history.replaceState({}, document.title)
         }
     }, [location.state])
-
-    // Global Catalog Search with Debounce
-    useEffect(() => {
-        if (!productSearch.trim() && !selectedCategoryId) {
-            setFoundProducts([])
-            return
-        }
-
-        const timer = setTimeout(async () => {
-            setIsSearchingProducts(true)
-            try {
-                const params = new URLSearchParams()
-                if (productSearch.trim()) params.append('q', productSearch.trim())
-                if (selectedCategoryId) params.append('category_id', selectedCategoryId)
-
-                const response = await fetch(`${API_BASE_URL}/products/search?${params.toString()}`)
-                if (!response.ok) throw new Error('Search failed')
-                const data = await response.json()
-                setFoundProducts(data)
-            } catch (err) {
-                console.error('Catalog search error:', err)
-                setFoundProducts([])
-            } finally {
-                setIsSearchingProducts(false)
-            }
-        }, 500)
-
-        return () => clearTimeout(timer)
-    }, [productSearch, selectedCategoryId])
 
     const openStockAdjust = (item, mode) => {
         setStockAdjustModal({ item, mode })
@@ -721,11 +790,39 @@ const WarehouseInventory = () => {
     // session together with the view flag — otherwise the next "ADD NEW
     // PRODUCT" click reopened the form still bound to the last-edited product
     // and its save UPDATED that product instead of creating a new one.
+    // Draft note: closing does NOT clear the autosaved draft — the banner on
+    // the inventory list is the only place that discards it deliberately. The
+    // banner state is re-synced from storage here, so closing the form without
+    // saving brings the Continue option straight back.
     const closeProductForm = () => {
         setShowAddProductView(false);
         setEditingItemId(null);
         setEditSnapshot(null);
+        setDraftRestoredInForm(false);
         setNewProductData(INITIAL_PRODUCT_STATE);
+        const d = readProductDraft();
+        setRestoredDraft(d && draftHasContent(d.data) ? d : null);
+    };
+
+    // Banner actions: continue the saved draft in a clean create session, or
+    // throw it away for good.
+    const continueDraft = () => {
+        if (!restoredDraft) return;
+        editSessionRef.current++; // invalidate any in-flight edit fetch
+        setEditingItemId(null);
+        setEditSnapshot(null);
+        // product_id is stripped — a restored draft must always enter as a
+        // fresh CREATE, never silently ride the catalog-linked flow.
+        const { product_id: _strippedPid, ...draftData } = draftJsonSafe(restoredDraft.data) || {};
+        setNewProductData({ ...INITIAL_PRODUCT_STATE, ...draftData });
+        setRestoredDraft(null);
+        setDraftRestoredInForm(true);
+        setShowAddProductView(true);
+    };
+    const discardDraft = () => {
+        clearProductDraft();
+        setRestoredDraft(null);
+        showNotification('Draft discarded', 'info');
     };
 
     const handleDeleteItem = async (id) => {
@@ -942,9 +1039,11 @@ const WarehouseInventory = () => {
             // notifications fired back-to-back and the second overwrote the
             // first — the admin-approval message never reached the user.
             closeProductForm()
-            setProductSearch('')
-            setFoundProducts([])
-            setSelectedCategoryId(null)
+            // The product is registered — its draft has served its purpose.
+            // Clearing here (not in closeProductForm) keeps a deliberately
+            // closed form restorable from the banner.
+            clearProductDraft();
+            setRestoredDraft(null);
             setHasSubCategory(false)
             setShowLocationMapping(false)
             setShowLogistics(false)
@@ -1049,97 +1148,21 @@ const WarehouseInventory = () => {
                                 </div>
                                 <div>
                                     <h2 className="text-4xl font-black text-white tracking-tight">{editingItemId ? 'Edit Product' : 'Register Product'}</h2>
-                                    <p className="text-slate-400 mt-2 font-medium">{editingItemId ? 'Update product details' : 'Search global catalog or create a brand new product.'}</p>
+                                    <p className="text-slate-400 mt-2 font-medium">{editingItemId ? 'Update product details' : 'Create a brand new product and register it in inventory.'}</p>
+                                    {!editingItemId && draftRestoredInForm && (
+                                        <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                                            <CheckCircle2 size={11} /> Draft restored — form auto-saves while you type
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Unified Search Section */}
-                    {!editingItemId && (
-                        <div className="warehouse-panel p-4 sm:p-6 lg:p-8 border-amber-400/20 bg-amber-400/[0.02]">
-                            <div className="space-y-4 sm:space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-px flex-1 bg-gradient-to-r from-amber-400/20 to-transparent" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500/80">Search Global Catalog</span>
-                                    <div className="h-px flex-1 bg-gradient-to-l from-amber-400/20 to-transparent" />
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                                        {categories.map(cat => (
-                                            <button
-                                                key={cat.id}
-                                                type="button"
-                                                onClick={() => setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id)}
-                                                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${selectedCategoryId === cat.id
-                                                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-lg shadow-amber-400/20'
-                                                        : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/10'
-                                                    }`}
-                                            >
-                                                {cat.emoji} &nbsp; {cat.name}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div className="relative group">
-                                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-amber-400 transition-colors" size={20} />
-                                        <input
-                                            type="text"
-                                            placeholder="Start typing product name to search catalog..."
-                                            value={productSearch}
-                                            onChange={(e) => setProductSearch(e.target.value)}
-                                            className="w-full bg-slate-950 border border-white/5 rounded-[20px] py-5 pl-14 pr-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all shadow-inner"
-                                        />
-                                        {isSearchingProducts && (
-                                            <Loader2 className="absolute right-6 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" size={20} />
-                                        )}
-                                    </div>
-
-                                    {foundProducts.length > 0 && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                                            {foundProducts.map(p => (
-                                                <button
-                                                    key={p.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const generatedSku = newProductData.sku || (100000 + Math.floor(Math.random() * 900000)).toString();
-                                                        setNewProductData(prev => ({
-                                                            ...prev,
-                                                            product_id: p.id,
-                                                            name: p.name,
-                                                            description: p.description || '',
-                                                            price: p.price,
-                                                            category_id: p.category_id,
-                                                            category: p.category_name || p.category,
-                                                            images: p.images || '',
-                                                            sku: generatedSku
-                                                        }))
-                                                        setProductSearch(p.name)
-                                                        setFoundProducts([])
-                                                        showNotification(`Linked to: ${p.name}`, 'info')
-                                                    }}
-                                                    className={`flex items-start gap-4 p-4 rounded-3xl border transition-all text-left group/item ${newProductData.product_id === p.id
-                                                            ? 'bg-amber-400/10 border-amber-400/40 shadow-xl shadow-amber-400/5'
-                                                            : 'bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.05]'
-                                                        }`}
-                                                >
-                                                    <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-500 shrink-0">
-                                                        <Package size={24} />
-                                                    </div>
-                                                    <div className="min-w-0 pr-4">
-                                                        <div className="text-sm font-black text-white group-hover/item:text-amber-400 truncate transition-colors">{p.name}</div>
-                                                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{p.category_name || p.category}</div>
-                                                        <div className="text-sm font-black text-amber-400 mt-2">₹{p.price}</div>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* Global-catalog search section REMOVED (product decision):
+                        this form is fresh-create only now. The linked-SKU flow
+                        (`product_id` set via catalog pick) is gone from the UI;
+                        backend route still accepts it for API compatibility. */}
 
                     <div className="relative">
                         <form onSubmit={handleAddProduct} className="space-y-5 sm:space-y-8 pb-32">
@@ -1295,22 +1318,35 @@ const WarehouseInventory = () => {
 
                                     <div className="space-y-4 sm:space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                                            <div className="space-y-2">
+                                            <div className="space-y-2 relative" ref={brandFieldRef}>
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Brand Name</label>
                                                 <input
                                                     type="text"
-                                                    list="brand-options"
                                                     placeholder="Select or type brand (e.g. Realme, Xiaomi)"
                                                     value={newProductData.brand}
                                                     onChange={(e) => setNewProductData(prev => ({ ...prev, brand: e.target.value }))}
+                                                    onFocus={() => setBrandMenuOpen(true)}
                                                     className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all outline-none"
                                                 />
-                                                <datalist id="brand-options">
-                                                    <option value="None" />
-                                                    {brands.map(b => (
-                                                        <option key={b.id} value={b.name} />
-                                                    ))}
-                                                </datalist>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBrandMenuOpen(o => !o)}
+                                                    aria-label="Toggle brand suggestions"
+                                                    className="absolute right-3 top-[34px] h-8 w-8 flex items-center justify-center text-slate-500 hover:text-amber-400 transition-colors"
+                                                >
+                                                    <ChevronDown size={16} className={`transition-transform ${brandMenuOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                <SuggestionDropdown
+                                                    open={brandMenuOpen}
+                                                    highlight={newProductData.brand}
+                                                    options={['None', ...brands.map(b => b.name)].filter(name =>
+                                                        !newProductData.brand || name.toLowerCase().includes(newProductData.brand.toLowerCase())
+                                                    ).slice(0, 30)}
+                                                    onSelect={(name) => {
+                                                        setNewProductData(prev => ({ ...prev, brand: name === 'None' ? '' : name }));
+                                                        setBrandMenuOpen(false);
+                                                    }}
+                                                />
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowCreateBrandModal(true)}
@@ -1370,29 +1406,41 @@ const WarehouseInventory = () => {
                                                         <Plus size={14} className="group-hover:rotate-90 transition-transform" /> Add Sub-Category
                                                     </button>
                                                 ) : (
-                                                    <div className="relative group/sub">
+                                                    <div className="relative group/sub" ref={subCatFieldRef}>
                                                         <input
                                                             type="text"
-                                                            list="subcat-options"
                                                             placeholder="Select or type (e.g. Wired Headphones)"
                                                             value={newProductData.sub_category}
                                                             onChange={(e) => setNewProductData(prev => ({ ...prev, sub_category: e.target.value }))}
+                                                            onFocus={() => setSubCatMenuOpen(true)}
                                                             className="w-full bg-slate-950/50 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white font-bold focus:outline-none focus:border-amber-400/50 transition-all outline-none pr-12"
                                                         />
-                                                        {uniqueSubCategories.length > 0 && (
-                                                            <datalist id="subcat-options">
-                                                                {uniqueSubCategories.map((sub, idx) => (
-                                                                    <option key={idx} value={sub} />
-                                                                ))}
-                                                            </datalist>
-                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSubCatMenuOpen(o => !o)}
+                                                            aria-label="Toggle sub-category suggestions"
+                                                            className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-slate-500 hover:text-amber-400 transition-colors"
+                                                        >
+                                                            <ChevronDown size={16} className={`transition-transform ${subCatMenuOpen ? 'rotate-180' : ''}`} />
+                                                        </button>
+                                                        <SuggestionDropdown
+                                                            open={subCatMenuOpen}
+                                                            highlight={newProductData.sub_category}
+                                                            options={uniqueSubCategories.filter(sub =>
+                                                                !newProductData.sub_category || sub.toLowerCase().includes(newProductData.sub_category.toLowerCase())
+                                                            ).slice(0, 30)}
+                                                            onSelect={(sub) => {
+                                                                setNewProductData(prev => ({ ...prev, sub_category: sub }));
+                                                                setSubCatMenuOpen(false);
+                                                            }}
+                                                        />
                                                         <button
                                                             type="button"
                                                             onClick={() => {
                                                                 setNewProductData(prev => ({ ...prev, sub_category: '' }))
                                                                 setHasSubCategory(false)
                                                             }}
-                                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 hover:text-rose-400 opacity-0 group-hover/sub:opacity-100 transition-all"
+                                                            className="absolute right-12 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-slate-600 hover:text-rose-400 transition-all"
                                                         >
                                                             <X size={14} />
                                                         </button>
@@ -2709,7 +2757,6 @@ const WarehouseInventory = () => {
                                                 onClick={() => {
                                                     // Re-run the exact load path so the form is
                                                     // rebuilt from source (incl. deep metadata).
-                                                    setProductSearch('');
                                                     handleEditItem(editSnapshot);
                                                     showNotification('Changes discarded — original details restored');
                                                 }}
@@ -2782,6 +2829,43 @@ const WarehouseInventory = () => {
                             </button>
                         </div>
                     </div>
+
+                    {/* Unfinished draft banner — an accidental refresh/back-swipe
+                        mid-form no longer loses the entry; restore it from here. */}
+                    {restoredDraft && (
+                        <div className="warehouse-panel p-4 sm:p-5 border border-amber-400/30 bg-amber-400/[0.06] flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-amber-400/15 text-amber-400 shrink-0">
+                                    <FileText size={18} />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-black text-white">
+                                        Unfinished product draft{restoredDraft.data?.name ? `: ${restoredDraft.data.name}` : ''}
+                                    </p>
+                                    <p className="text-xs text-slate-400 mt-0.5">
+                                        Auto-saved {restoredDraft.saved_at ? new Date(restoredDraft.saved_at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''} — page refresh hone par bhi form ka data safe tha.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={discardDraft}
+                                    className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                                >
+                                    Discard
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={continueDraft}
+                                    className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 text-[10px] font-black uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+                                >
+                                    <RotateCcw size={13} />
+                                    Continue Draft
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Stats Row */}
                     <div className="flex gap-3 overflow-x-auto pb-1">

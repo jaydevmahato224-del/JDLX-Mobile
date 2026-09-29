@@ -482,7 +482,7 @@ def assign_order_to_warehouse_partner(order_id, conn=None):
 
     cursor.execute(
         '''
-        SELECT id, delivery_address, delivery_latitude, delivery_longitude
+        SELECT id, order_number, delivery_address, delivery_latitude, delivery_longitude
         FROM orders
         WHERE id = ?
         ''',
@@ -551,7 +551,7 @@ def assign_order_to_warehouse_partner(order_id, conn=None):
         cursor,
         selected["id"],
         "New order assigned",
-        f"Order #{order_id} has been assigned to your warehouse.",
+        f"Order #{order['order_number'] or order_id} has been assigned to your warehouse.",
         metadata={"order_id": order_id},
         send_email=True,
     )
@@ -628,9 +628,9 @@ def sync_warehouse_order_with_root_status(order_id, root_status, conn=None):
     cursor = connection.cursor()
     cursor.execute(
         '''
-        SELECT id, warehouse_partner_id, assignment_status
-        FROM warehouse_orders
-        WHERE order_id = ?
+        SELECT wo.id, wo.order_id, wo.warehouse_partner_id, wo.assignment_status, o.order_number
+        FROM warehouse_orders wo LEFT JOIN orders o ON o.id = wo.order_id
+        WHERE wo.order_id = ?
         ''',
         (order_id,),
     )
@@ -657,7 +657,7 @@ def sync_warehouse_order_with_root_status(order_id, root_status, conn=None):
                 cursor,
                 warehouse_order["warehouse_partner_id"],
                 "Order cancelled",
-                f"Order #{order_id} was cancelled and warehouse reservations were released.",
+                f"Order #{warehouse_order['order_number'] or order_id} was cancelled and warehouse reservations were released.",
                 metadata={"order_id": order_id},
             )
     elif root_status == "delivered":
@@ -698,9 +698,9 @@ def update_warehouse_order_status(cursor, warehouse_order_id, warehouse_partner_
 
     cursor.execute(
         '''
-        SELECT id, order_id, warehouse_partner_id, assignment_status
-        FROM warehouse_orders
-        WHERE id = ? AND warehouse_partner_id = ?
+        SELECT wo.id, wo.order_id, wo.warehouse_partner_id, wo.assignment_status, o.order_number
+        FROM warehouse_orders wo LEFT JOIN orders o ON o.id = wo.order_id
+        WHERE wo.id = ? AND wo.warehouse_partner_id = ?
         ''',
         (warehouse_order_id, warehouse_partner_id),
     )
@@ -764,7 +764,7 @@ def update_warehouse_order_status(cursor, warehouse_order_id, warehouse_partner_
         cursor,
         warehouse_partner_id,
         WAREHOUSE_STATUS_TITLES[new_status],
-        f"Order #{warehouse_order['order_id']} moved to {new_status.replace('_', ' ')}.",
+        f"Order #{warehouse_order['order_number'] or warehouse_order['order_id']} moved to {new_status.replace('_', ' ')}.",
         metadata={"order_id": warehouse_order["order_id"], "status": new_status},
     )
 

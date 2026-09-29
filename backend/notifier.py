@@ -162,7 +162,10 @@ def send_order_email(to_email, order_details):
     # Check if payment is prepaid or COD
     pm_type = order_details.get('payment_type', 'PREPAID')
     subject_status = "Confirmed" if pm_type == 'PREPAID' else "Confirmed (COD)"
-    msg['Subject'] = f"JDLX Mobile: Order #{order_details['order_id']} {subject_status}!"
+    # Show the real order number (ORD-XXXXXXXX) in the subject — the body
+    # already uses order_number. Fall back to the numeric id only if missing.
+    subject_order_ref = order_details.get('order_number') or order_details['order_id']
+    msg['Subject'] = f"JDLX Mobile: Order #{subject_order_ref} {subject_status}!"
 
     # Format items
     items_list = "".join([f"<li>{_esc(item['name'])} x {item['qty']} - ₹{item['price'] * item['qty']}</li>" for item in order_details['items']])

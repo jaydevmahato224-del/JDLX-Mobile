@@ -184,10 +184,39 @@ class NotificationService:
             return
         print(f"[PUSH INFO] Ignoring {len(tokens)} legacy FCM token(s) — VAPID web push is used instead.")
 
+    def _resolve_order_number(self, order_id):
+        """Best-effort lookup of the human-facing order number (ORD-XXXXXXXX).
+
+        Notifications must show the SAME number customers see on their tracking
+        page and invoices — not the internal numeric row id. Falls back to the
+        numeric id if the row is missing or the lookup fails (never blocks the
+        notification itself).
+        """
+        conn = None
+        try:
+            conn = self._get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT order_number FROM orders WHERE id = ?", (order_id,))
+            row = cursor.fetchone()
+            if row and row['order_number']:
+                return row['order_number']
+        except Exception as e:
+            print(f"[NOTIFY WARNING] order_number lookup failed for order {order_id}: {e}")
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        return order_id
+
     def send_order_notification(self, user_id, order_id, status):
         """
         Sends status-specific notifications for orders using database templates.
         """
+        # Show the real order number (ORD-XXXXXXXX), not the internal row id
+        order_number = self._resolve_order_number(order_id)
+
         # Mapping statuses to template keys
         status_tpl_map = {
             'PLACED': 'order_placed_app',
@@ -208,26 +237,28 @@ class NotificationService:
                 conn.close()
 
                 if tpl and tpl['is_active']:
-                    title = tpl['title'].format(order_id=order_id)
-                    message = tpl['message'].format(order_id=order_id)
-                    return self.notify_user_internal(user_id, title, message, 'ORDER', url=f"/order-tracking/{order_id}")
+                    # Templates carry {order_id} placeholders — feed them the
+                    # order number so admin-edited templates stay correct too.
+                    title = tpl['title'].format(order_id=order_number)
+                    message = tpl['message'].format(order_id=order_number)
+                    return self.notify_user_internal(user_id, title, message, 'ORDER', url=f"/track/{order_id}")
             except Exception as e:
                 print(f"Error fetching template for {status}: {e}")
 
         # Fallback to hardcoded messages if template not found or error
         messages = {
-            'PLACED': f"Your order #{order_id} has been placed successfully!",
-            'PACKING': f"We are packing your items for order #{order_id}.",
-            'READY_FOR_PICKUP': f"Order #{order_id} is ready for pickup!",
-            'SHIPPED': f"Your order #{order_id} has been shipped! Track it live from the Orders page.",
-            'OUT_FOR_DELIVERY': f"Order #{order_id} is out for delivery! Track it live.",
-            'DELIVERED': f"Order #{order_id} has been delivered. Enjoy!",
-            'PENDING_PAYMENT': f"Complete your payment for order #{order_id} to confirm.",
-            'CANCELLED': f"Your order #{order_id} has been cancelled."
+            'PLACED': f"Your order #{order_number} has been placed successfully!",
+            'PACKING': f"We are packing your items for order #{order_number}.",
+            'READY_FOR_PICKUP': f"Order #{order_number} is ready for pickup!",
+            'SHIPPED': f"Your order #{order_number} has been shipped! Track it live from the Orders page.",
+            'OUT_FOR_DELIVERY': f"Order #{order_number} is out for delivery! Track it live.",
+            'DELIVERED': f"Order #{order_number} has been delivered. Enjoy!",
+            'PENDING_PAYMENT': f"Complete your payment for order #{order_number} to confirm.",
+            'CANCELLED': f"Your order #{order_number} has been cancelled."
         }
 
-        msg = messages.get(status, f"Update on your order #{order_id}")
-        return self.notify_user_internal(user_id, "Order Update", msg, 'ORDER', url=f"/order-tracking/{order_id}")
+        msg = messages.get(status, f"Update on your order #{order_number}")
+        return self.notify_user_internal(user_id, "Order Update", msg, 'ORDER', url=f"/track/{order_id}")
 
     def send_offer_notification(self, user_id, title, message):
         """

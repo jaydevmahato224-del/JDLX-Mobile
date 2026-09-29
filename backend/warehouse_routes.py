@@ -4225,7 +4225,7 @@ def _manual_delivery_eligibility(conn, assignment_id, wh_id):
     return assignment, order, None
 
 
-def _push_manual_delivery_code(order_id, user_id, code):
+def _push_manual_delivery_code(order_id, user_id, code, order_number=None):
     """Notify the customer their delivery code (in-app + VAPID web push).
     Fire-and-forget — a push failure must never block the delivery flow.
     code=None means "re-nudge": the code itself is hashed server-side and
@@ -4233,14 +4233,16 @@ def _push_manual_delivery_code(order_id, user_id, code):
     if not user_id:
         return
     try:
+        # Show the real order number (ORD-XXXXXXXX), not the internal row id
+        display_no = order_number or order_id
         if code:
             message = (
-                f"Order #{order_id}: share code {code} with the delivery person "
+                f"Order #{display_no}: share code {code} with the delivery person "
                 "to receive your order. Do NOT share it with anyone else."
             )
         else:
             message = (
-                f"Order #{order_id}: the delivery person re-requested your delivery "
+                f"Order #{display_no}: the delivery person re-requested your delivery "
                 "code. Open this order's tracking page to view it."
             )
         notification_service.notify_user_internal(
@@ -4280,7 +4282,7 @@ def warehouse_manual_delivery_start(assignment_id):
             conn.commit()
             Thread(
                 target=_push_manual_delivery_code,
-                args=(order["id"], order["user_id"], None),
+                args=(order["id"], order["user_id"], None, order["order_number"]),
                 daemon=True,
             ).start()
             return success_response({
@@ -4319,7 +4321,7 @@ def warehouse_manual_delivery_start(assignment_id):
 
         Thread(
             target=_push_manual_delivery_code,
-            args=(order["id"], order["user_id"], code),
+            args=(order["id"], order["user_id"], code, order["order_number"]),
             daemon=True,
         ).start()
 

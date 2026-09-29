@@ -5209,7 +5209,7 @@ def trigger_order_email(order_id):
         cursor = conn.cursor()
         # Fetch order details
         order = cursor.execute("""
-            SELECT id, user_id, customer_name, delivery_address, total_amount, 
+            SELECT id, order_number, user_id, customer_name, delivery_address, total_amount, 
                    platform_fee, delivery_fee, fitting_charge, payment_type, 
                    estimated_delivery 
             FROM orders WHERE id = ?
@@ -5244,6 +5244,7 @@ def trigger_order_email(order_id):
         
         order_details = {
             "order_id": order_id,
+            "order_number": order['order_number'],
             "customer_name": order['customer_name'],
             "subtotal": subtotal,
             "platform_fee": order['platform_fee'],
@@ -10450,7 +10451,11 @@ def update_refund_status(request_id):
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT order_id, user_id, status, source FROM refund_requests WHERE id = ?", (request_id,))
+        cursor.execute('''
+            SELECT rr.order_id, rr.user_id, rr.status, rr.source, o.order_number
+            FROM refund_requests rr LEFT JOIN orders o ON o.id = rr.order_id
+            WHERE rr.id = ?
+        ''', (request_id,))
         rr = cursor.fetchone()
         
         if not rr:
@@ -10472,7 +10477,7 @@ def update_refund_status(request_id):
         
         if new_status == 'PROCESSED':
             cursor.execute("UPDATE orders SET order_status = 'REFUNDED' WHERE id = ?", (rr['order_id'],))
-            notification_service.notify_user_internal(rr['user_id'], "Refund Processed", f"Refund for order #{rr['order_id']} has been processed.", "SYSTEM")
+            notification_service.notify_user_internal(rr['user_id'], "Refund Processed", f"Refund for order #{rr['order_number'] or rr['order_id']} has been processed.", "SYSTEM")
             
             # Wallet refund credit (only on transition to PROCESSED)
             if rr['status'] != 'PROCESSED':
@@ -10488,9 +10493,9 @@ def update_refund_status(request_id):
                     cursor.execute('''
                         INSERT INTO wallet_transactions (user_id, amount, type, reason, reference_id)
                         VALUES (?, ?, 'credit', ?, ?)
-                    ''', (rr['user_id'], refund_amount, f"Refund for order #{rr['order_id']}", str(rr['order_id'])))
+                    ''', (rr['user_id'], refund_amount, f"Refund for order #{rr['order_number'] or rr['order_id']}", str(rr['order_id'])))
         elif new_status == 'APPROVED':
-            notification_service.notify_user_internal(rr['user_id'], "Refund Approved", f"Your refund request for order #{rr['order_id']} has been approved.", "SYSTEM")
+            notification_service.notify_user_internal(rr['user_id'], "Refund Approved", f"Your refund request for order #{rr['order_number'] or rr['order_id']} has been approved.", "SYSTEM")
         elif new_status == 'REJECTED':
             cursor.execute("UPDATE orders SET order_status = 'DELIVERED' WHERE id = ?", (rr['order_id'],))
             # The order just returned to DELIVERED — settle its COD payment if
@@ -10501,7 +10506,7 @@ def update_refund_status(request_id):
                 settle_cod_payment(cursor, rr['order_id'])
             except Exception:
                 pass  # never break the refund decision flow
-            notification_service.notify_user_internal(rr['user_id'], "Refund Rejected", f"Your refund request for order #{rr['order_id']} has been rejected.", "SYSTEM")
+            notification_service.notify_user_internal(rr['user_id'], "Refund Rejected", f"Your refund request for order #{rr['order_number'] or rr['order_id']} has been rejected.", "SYSTEM")
             
             # Referral reward check (additive). The refund was REJECTED, so the
             # user's return/exchange window is closed for this order — settle

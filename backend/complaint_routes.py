@@ -137,7 +137,7 @@ def post_complaint():
     try:
         # Verify order belongs to user
         order = conn.execute(
-            """SELECT id, order_status, status_delivered_at, created_at
+            """SELECT id, order_number, order_status, status_delivered_at, created_at
                FROM orders WHERE id = ? AND user_id = ?""",
             (order_id, user_id),
         ).fetchone()
@@ -238,15 +238,17 @@ def post_complaint():
         conn.commit()
 
         # ---- Notifications (never break the submit) ----
+        # Show the real order number (ORD-XXXXXXXX), not the internal row id
+        order_number = order['order_number'] or order_id
         _notify_warehouse(
             conn, warehouse_id,
             "New product issue raised",
-            f"Order #{order_id}: {issue_type}"
+            f"Order #{order_number}: {issue_type}"
             + (f" — customer requested {requested_action.upper()}" if requested_action else ""),
         )
         _notify_user(
             user_id, "Request received",
-            f"Your {requested_action + ' ' if requested_action else ''}request for order #{order_id} "
+            f"Your {requested_action + ' ' if requested_action else ''}request for order #{order_number} "
             "has been sent to the warehouse. We'll update you shortly.",
             complaint_id,
         )

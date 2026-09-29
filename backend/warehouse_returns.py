@@ -46,10 +46,14 @@ def _now():
     return ist_now_str()
 
 
-def _user_notification(conn_unused, user_id, title, message, order_id):
+def _user_notification(conn_unused, user_id, title, message, order_id, order_number=None):
     try:
+        # Rewrite "order #<id>" to the real order number when available so the
+        # customer always sees the same reference as on tracking/invoices.
+        if order_number and order_id is not None:
+            message = str(message).replace(f"#{order_id}", f"#{order_number}")
         notification_service.notify_user_internal(
-            user_id, title, message, 'ORDER', url=f"/order-tracking/{order_id}"
+            user_id, title, message, 'ORDER', url=f"/track/{order_id}"
         )
     except Exception:
         current_app.logger.warning("User notification failed", exc_info=True)
@@ -310,7 +314,8 @@ def decide_return_request(complaint_id):
                       + (f" Note: {notes}" if notes else ""),
         }[decision]
         _user_notification(conn, complaint['customer_user_id'],
-                           f"Request {'Approved' if decision != 'reject' else 'Rejected'}", msg, complaint['order_id'])
+                           f"Request {'Approved' if decision != 'reject' else 'Rejected'}", msg, complaint['order_id'],
+                           complaint['order_number'])
 
         return success_response({
             "complaint_id": complaint_id,
@@ -417,9 +422,10 @@ def trigger_pickup(complaint_id):
         _user_notification(
             conn, complaint['customer_user_id'],
             "Pickup scheduled",
-            f"Pickup for your order #{complaint['order_id']} return is scheduled.{sr_note} "
+            f"Pickup for your order #{complaint['order_number']} return is scheduled.{sr_note} "
             f"Share this code with the pickup rider: {pickup_code}",
             complaint['order_id'],
+            complaint['order_number'],
         )
 
         return success_response({
@@ -478,8 +484,9 @@ def confirm_picked_up(complaint_id):
 
         _user_notification(
             conn, complaint['customer_user_id'], "Item picked up",
-            f"Your item for order #{complaint['order_id']} has been collected and is on its way to the warehouse for verification.",
+            f"Your item for order #{complaint['order_number']} has been collected and is on its way to the warehouse for verification.",
             complaint['order_id'],
+            complaint['order_number'],
         )
 
         return success_response({
@@ -554,10 +561,11 @@ def verify_returned_item(complaint_id):
             conn.commit()
             _user_notification(
                 conn, complaint['customer_user_id'], "Item verified",
-                f"Your returned item for order #{complaint['order_id']} passed verification."
+                f"Your returned item for order #{complaint['order_number']} passed verification."
                 + (" Your replacement will be dispatched shortly." if decision == 'accept-exchange'
                    else " Your refund is being processed."),
                 complaint['order_id'],
+                complaint['order_number'],
             )
             return success_response({
                 "complaint_id": complaint_id,
@@ -582,9 +590,10 @@ def verify_returned_item(complaint_id):
             conn.commit()
             _user_notification(
                 conn, complaint['customer_user_id'], "Verification failed",
-                f"The returned item for order #{complaint['order_id']} did not pass verification."
+                f"The returned item for order #{complaint['order_number']} did not pass verification."
                 + (f" Reason: {notes}" if notes else ""),
                 complaint['order_id'],
+                complaint['order_number'],
             )
             return success_response({
                 "complaint_id": complaint_id,
@@ -843,9 +852,10 @@ def trigger_refund(complaint_id):
 
         _user_notification(
             conn, complaint['user_id'], "Refund approved",
-            f"Refund of ₹{refund_amount:g} for order #{complaint['order_id']} has been approved by the warehouse "
+            f"Refund of ₹{refund_amount:g} for order #{complaint['order_number']} has been approved by the warehouse "
             "and will be credited to your wallet shortly.",
             complaint['order_id'],
+            complaint['order_number'],
         )
 
         return success_response({
@@ -933,7 +943,10 @@ def act_on_transferred_report(report_id):
     conn = get_db()
     try:
         report = conn.execute(
-            "SELECT id, warehouse_id, status, action_taken, order_id, user_id, action_required FROM order_reports WHERE id = ?",
+            """SELECT r.id, r.warehouse_id, r.status, r.action_taken, r.order_id, r.user_id,
+                      r.action_required, o.order_number
+               FROM order_reports r LEFT JOIN orders o ON o.id = r.order_id
+               WHERE r.id = ?""",
             (report_id,),
         ).fetchone()
         if not report:
@@ -982,9 +995,10 @@ def act_on_transferred_report(report_id):
         try:
             _user_notification(
                 conn, report['user_id'], "Report processed",
-                f"Your report #{report_id} has been processed by the warehouse"
+                f"Your report #{report_id} for order #{report['order_number']} has been processed by the warehouse"
                 + (f": {notes}" if notes else "."),
                 report['order_id'],
+                report['order_number'],
             )
         except Exception:
             pass

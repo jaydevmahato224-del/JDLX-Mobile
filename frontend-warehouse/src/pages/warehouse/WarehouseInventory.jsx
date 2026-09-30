@@ -330,6 +330,36 @@ const WarehouseInventory = () => {
 
     // Global-catalog search state REMOVED with the section (product decision —
     // the Add Product form is fresh-create only). Kept vars are gone entirely.
+
+    // ── Scroll-reset on form open/close ────────────────────────────────────
+    // The inventory page is a tall list inside the layout's scroll container.
+    // Opening ADD/EDIT swaps this view in place — without a reset the next
+    // view mounts at the same scroll offset (deep form / list bottom), and
+    // the user lands "at the end" and must scroll up. Both views register a
+    // ref; on every open/close transition we walk up from the ref to the
+    // scrollable ancestor (the layout's <main>) and reset it to top.
+    const listViewRef = useRef(null)
+    const formViewRef = useRef(null)
+    const prevFormViewRef = useRef(false)
+    useEffect(() => {
+        if (prevFormViewRef.current === showAddProductView) return
+        prevFormViewRef.current = showAddProductView
+        // rAF: let the new view mount/paint before measuring.
+        const raf = requestAnimationFrame(() => {
+            const anchor = (showAddProductView ? formViewRef : listViewRef).current
+            let el = anchor?.parentElement
+            while (el) {
+                const cs = window.getComputedStyle(el)
+                if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight) {
+                    el.scrollTop = 0
+                    break
+                }
+                el = el.parentElement
+            }
+            window.scrollTo({ top: 0 }) // body-scroll fallback (small viewports)
+        })
+        return () => cancelAnimationFrame(raf)
+    }, [showAddProductView])
     const [categories, setCategories] = useState([])
     const [showLocationMapping, setShowLocationMapping] = useState(false)
     const [showLogistics, setShowLogistics] = useState(false)
@@ -1158,7 +1188,7 @@ const WarehouseInventory = () => {
     }
 
     const mainUI = (
-        <div className="space-y-5 sm:space-y-8 animate-in fade-in duration-700">
+        <div ref={listViewRef} className="space-y-5 sm:space-y-8 animate-in fade-in duration-700">
             {/* Notification Toast */}
             {notification && (
                 <div className={`fixed top-24 right-8 z-[110] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 fade-in border ${notification.type === 'error'
@@ -1171,7 +1201,7 @@ const WarehouseInventory = () => {
             )}
 
             {showAddProductView ? (
-                <div className="space-y-5 sm:space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                <div ref={formViewRef} className="space-y-5 sm:space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                         <div>
                             <button

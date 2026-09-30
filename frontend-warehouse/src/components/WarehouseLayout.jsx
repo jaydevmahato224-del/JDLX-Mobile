@@ -251,7 +251,7 @@ export default function WarehouseLayout() {
                     </button>
                 </div>
 
-                <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                     <p className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Core Engine</p>
                     {visibleNavLinks.map((link, idx) => {
                         const Icon = link.icon;

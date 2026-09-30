@@ -200,7 +200,7 @@ def require_agent_session(f):
         try:
             payload = jwt.decode(auth.split(" ", 1)[1], get_jwt_secret(), algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
-            return error_response("Agent session expired — manager se naya OTP lein", 401)
+            return error_response("Agent session expired — ask the manager for a new OTP", 401)
         except Exception:
             return error_response("Invalid agent token", 401)
         if payload.get("type") != "add_product_agent":
@@ -250,7 +250,7 @@ def require_agent_session(f):
                 (sess["agent_id"],),
             ).fetchone()
             if not agent:
-                return error_response("Agent account inactive hai", 403)
+                return error_response("Agent account is inactive", 403)
 
             request.agent_payload = payload
             request.agent_row = agent
@@ -274,7 +274,7 @@ def agent_login():
     otp = (data.get("otp") or "").strip()
 
     if not identifier or not otp:
-        return error_response("Email/phone aur OTP dono zaroori hain", 400)
+        return error_response("Both email/phone and OTP are required", 400)
     if not (len(otp) == 6 and otp.isdigit()):
         return error_response("OTP 6 digits ka hona chahiye", 400)
 
@@ -292,7 +292,7 @@ def agent_login():
             (identifier, identifier),
         ).fetchall()
         if not candidates:
-            return error_response("Agent nahi mila ya account inactive hai — manager se register karwayen", 404)
+            return error_response("Agent not found or inactive — ask the manager to register you", 404)
 
         computed = None  # computed lazily per session (salt differs)
         matched = None   # (agent_row, session_row)
@@ -318,7 +318,7 @@ def agent_login():
                 live.append((cand, sess))
         conn.commit()
         if not live:
-            return error_response("Galat OTP ki limit khatam — manager se naya OTP lein", 401)
+            return error_response("Too many wrong OTP attempts — ask the manager for a new OTP", 401)
 
         matched = None
         for cand, sess in live:
@@ -339,7 +339,7 @@ def agent_login():
                 )
             conn.commit()
             left = min(sess["attempts_left"] for _, sess in live) - 1
-            return error_response(f"Galat OTP ({max(0, left)} attempts bache)", 401)
+            return error_response(f"Wrong OTP ({max(0, left)} attempts left)", 401)
 
         agent, sess = matched
 
@@ -426,7 +426,7 @@ def agent_break_start():
         used, remaining_allowance, open_break = _break_state(cur, sess)
 
         if open_break:
-            return error_response("Break pehle se chal raha hai — use end karen", 409)
+            return error_response("A break is already running — end it first", 409)
         if remaining_allowance <= 0:
             return error_response(
                 f"Is hour ka {BREAK_ALLOWANCE_MINUTES}-minute break allowance already use ho gaya — "
@@ -463,7 +463,7 @@ def agent_break_end():
         sess = request.agent_session
         _, _, open_break = _break_state(cur, sess)
         if not open_break:
-            return error_response("Koi break active nahi hai", 409)
+            return error_response("No break is active right now", 409)
 
         started = _parse_dt(open_break["started_at"])
         elapsed = (_now() - started).total_seconds() / 60.0 if started else 0.0
@@ -484,7 +484,7 @@ def agent_break_end():
         fresh = cur.execute("SELECT * FROM add_agent_otp_sessions WHERE id = ?", (sess["id"],)).fetchone()
         return success_response(
             {**_session_snapshot(cur, request.agent_row, fresh), "break_taken_minutes": recorded},
-            f"Break over ({recorded} min) — session {recorded} min extend ho gaya", 200,
+            f"Break over ({recorded} min) — session extended by {recorded} min", 200,
         )
     finally:
         conn.close()
@@ -567,7 +567,7 @@ def agent_upload_image():
         return success_response({"url": f"/static/uploads/product_images/{final_name}"}, "Image uploaded successfully", 201)
     except Exception as e:
         current_app.logger.error(f"Agent image upload failed: {str(e)}")
-        return error_response("Image upload fail ho gaya — dobara try karen", 500)
+        return error_response("Image upload failed — please try again", 500)
 
 
 @add_agent_bp.route("/api/agent/products", methods=["POST"])
@@ -593,9 +593,9 @@ def agent_create_product():
     if not name or len(name) < 3:
         return error_response("Product title kam se kam 3 letters ka hona chahiye", 400)
     if not description:
-        return error_response("Description zaroori hai", 400)
+        return error_response("Description is required", 400)
     if not category_id:
-        return error_response("Category select karna zaroori hai", 400)
+        return error_response("Please select a category", 400)
 
     # NOTE: data.get('price') / 'mrp' / 'stock' / 'sku' are deliberately NOT
     # read anywhere in this function — pricing stays manager-only.
@@ -605,7 +605,7 @@ def agent_create_product():
         cur = conn.cursor()
         cat = cur.execute("SELECT id, name FROM categories WHERE id = ?", (category_id,)).fetchone()
         if not cat:
-            return error_response("Category valid nahi hai", 400)
+            return error_response("Category is not valid", 400)
 
         # Sanitize image URLs (only uploads from our own pipeline or http(s)).
         clean_images = []
@@ -616,7 +616,7 @@ def agent_create_product():
             if img.startswith(("http://", "https://", "/static/")):
                 clean_images.append(img)
         if not clean_images:
-            return error_response("Kam se kam 1 product image upload karen", 400)
+            return error_response("Upload at least 1 product image", 400)
 
         clean_tags = [str(t).strip()[:60] for t in tags if str(t).strip()][:20]
 
@@ -668,11 +668,11 @@ def agent_create_product():
             "product_id": product_id,
             "agent_code": agent["agent_code"],
             "approval_status": "agent_draft",
-            "message": "Draft save ho gaya — manager price/details complete karke admin ko bhejega",
+            "message": "Draft saved — the manager will complete the remaining fields and send it for admin approval",
         }, "Product draft saved", 201)
     except Exception as e:
         current_app.logger.error(f"agent_create_product failed: {e}", exc_info=True)
-        return error_response("Product save nahi hua — dobara try karen", 500)
+        return error_response("Product could not be saved — please try again", 500)
     finally:
         conn.close()
 
@@ -761,12 +761,12 @@ def register_add_agent():
                 return error_response(str(ve), 400)
 
     if not name or not email or not phone:
-        return error_response("Name, email aur phone teeno zaroori hain", 400)
+        return error_response("Name, email and phone are all required", 400)
     if not ("@" in email and "." in email):
-        return error_response("Valid email enter karen", 400)
+        return error_response("Please enter a valid email", 400)
     digits = "".join(ch for ch in phone if ch.isdigit())
     if len(digits) < 10:
-        return error_response("Valid 10-digit mobile number enter karen", 400)
+        return error_response("Please enter a valid 10-digit mobile number", 400)
 
     conn = get_db()
     try:
@@ -776,7 +776,7 @@ def register_add_agent():
             (wh_id, email, phone),
         ).fetchone()
         if dup:
-            return error_response("Is email/phone pe agent already registered hai", 409)
+            return error_response("An agent is already registered with this email/phone", 409)
 
         # Permanent unique agent code — stamped on every product the agent creates.
         while True:
@@ -872,7 +872,7 @@ def generate_agent_otp(agent_id):
             (agent_id, wh_id),
         ).fetchone()
         if not agent:
-            return error_response("Agent nahi mila ya inactive hai", 404)
+            return error_response("Agent not found or inactive", 404)
 
         # One live session per agent: supersede older active OTPs/sessions.
         cur.execute(
@@ -894,7 +894,7 @@ def generate_agent_otp(agent_id):
             "duration_minutes": duration,
             "agent_code": agent["agent_code"],
             "agent_name": agent["name"],
-            "note": "OTP agent ke saath securely share karen — ye dobara nahi dikhega",
+            "note": "Share the OTP with the agent securely — it will not be shown again",
         }, "OTP generated", 201)
     finally:
         conn.close()
@@ -915,7 +915,7 @@ def list_agent_drafts():
                       p.return_policy, p.approval_status, p.agent_submitted_at,
                       p.added_by_agent_id, p.added_by_agent_code,
                       a.name AS agent_name, a.warehouse_id AS agent_warehouse_id,
-                      d.product_tags
+                      d.product_tags, d.search_keywords, d.search_synonyms
                FROM products p
                LEFT JOIN add_product_agents a ON a.id = p.added_by_agent_id
                LEFT JOIN product_discovery d ON d.product_id = p.id
@@ -930,10 +930,24 @@ def list_agent_drafts():
                 item["images"] = json.loads(r["images"]) if r["images"] else []
             except Exception:
                 item["images"] = []
-            try:
-                item["product_tags"] = json.loads(r["product_tags"]) if r["product_tags"] else []
-            except Exception:
-                item["product_tags"] = []
+            for json_field in ("product_tags", "search_keywords", "search_synonyms"):
+                try:
+                    item[json_field] = json.loads(r[json_field]) if r[json_field] else []
+                except Exception:
+                    item[json_field] = []
+            # Content (compatibility/box/warranty — incl. the case-category
+            # auto-default) + fulfillment (return window) rows written at
+            # completion, so the panel shows what will go live.
+            content = conn.execute(
+                "SELECT compatibility, box_contents, warranty_info FROM product_content WHERE product_id = ?",
+                (item["id"],),
+            ).fetchone()
+            item["content"] = dict(content) if content else None
+            ful = conn.execute(
+                "SELECT return_window FROM product_fulfillment WHERE product_id = ?",
+                (item["id"],),
+            ).fetchone()
+            item["return_window"] = ful["return_window"] if ful else None
             items.append(item)
         return success_response(items, "Agent drafts", 200)
     finally:
@@ -956,7 +970,7 @@ def complete_agent_draft(product_id):
     except (TypeError, ValueError):
         price = None
     if price is None or price <= 0:
-        return error_response("Price 0 se bada hona chahiye — yehi manager ka kaam hai", 400)
+        return error_response("Price must be greater than 0 — that is the manager's job", 400)
 
     mrp = data.get("mrp")
     try:
@@ -982,13 +996,20 @@ def complete_agent_draft(product_id):
             "SELECT * FROM products WHERE id = ? AND added_by_agent_id IS NOT NULL",
             (product_id,),
         ).fetchone()
+
+        # Retire quick-delivery-era ETA strings on agent drafts too: the
+        # boot-time cleanse only covers rows that existed before the flag,
+        # but a draft completed EARLIER could carry '30-120 mins' (legacy
+        # column default) and re-introduce it on approval.
+        legacy_eta = ("10-30 mins", "10-20 mins", "12-25 mins", "30-120 mins")
+        if (product["delivery_time"] or "") in legacy_eta:
+            cur.execute("UPDATE products SET delivery_time = '' WHERE id = ?", (product_id,))
         if not product:
-            return error_response("Agent draft nahi mila", 404)
+            return error_response("Agent draft not found", 404)
         # Only a raw draft can be completed — once the manager has pushed it
         # into the pending/approval pipeline, re-completing would wipe the
         # admin's decision state.
-        if product["approval_status"] != "agent_draft":
-            return error_response("Ye draft already complete ho chuka hai (ab admin flow me hai)", 409)
+        if product["approval_status"] != "agent_draft":                return error_response("This draft is already complete (now in the admin flow)", 409)
 
         # SKU: manager-provided (strictly unique) or auto-generated.
         final_sku = (data.get("sku") or data.get("global_sku_code") or "").strip()
@@ -997,7 +1018,7 @@ def complete_agent_draft(product_id):
                 "SELECT id FROM products WHERE global_sku_code = ? LIMIT 1", (final_sku,)
             ).fetchone()
             if owner and owner["id"] != product_id:
-                return error_response(f"SKU '{final_sku}' pehle se product #{owner['id']} ke paas hai — doosra SKU chunen", 409)
+                return error_response(f"SKU '{final_sku}' already belongs to product #{owner['id']} — choose a different SKU", 409)
         if not final_sku:
             final_sku = f"AP-{secrets.randbelow(900000) + 100000}"
             while cur.execute(
@@ -1011,7 +1032,7 @@ def complete_agent_draft(product_id):
             (wh_id, final_sku, product_id),
         ).fetchone()
         if collision:
-            return error_response(f"SKU '{final_sku}' aapki inventory me already use ho raha hai", 409)
+            return error_response(f"SKU '{final_sku}' is already used in your inventory", 409)
 
         try:
             selling_price = float(data.get("selling_price")) if data.get("selling_price") not in (None, "") else price
@@ -1028,6 +1049,66 @@ def complete_agent_draft(product_id):
         unit = (data.get("unit") or "pcs").strip() or "pcs"
         delivery_time = (data.get("delivery_time") or "").strip() or None
 
+        # ── Extended fields (parity with warehouse_create_product) ─────────
+        # Discount: client bhej ya sirf MRP/price — amt/pct dono taraf se
+        # consistent recompute hote hain (same math as the inventory panel).
+        try:
+            mrp_eff = float(mrp)
+        except (TypeError, ValueError):
+            mrp_eff = price
+        try:
+            discount_amt = float(data.get("discount_amt")) if data.get("discount_amt") not in (None, "") else None
+        except (TypeError, ValueError):
+            discount_amt = None
+        try:
+            discount_pct = float(data.get("discount_pct")) if data.get("discount_pct") not in (None, "") else None
+        except (TypeError, ValueError):
+            discount_pct = None
+        if discount_amt is not None and discount_amt > 0:
+            discount_pct = round((discount_amt / mrp_eff) * 100, 2) if mrp_eff > 0 else 0.0
+        elif discount_pct is not None and discount_pct > 0:
+            discount_amt = round(mrp_eff * (discount_pct / 100), 2)
+        else:
+            discount_amt = 0.0
+            discount_pct = 0.0
+        if discount_amt >= mrp_eff and mrp_eff > 0:
+            discount_amt = 0.0
+            discount_pct = 0.0
+
+        units_per_pack = str(data.get("units_per_pack") or "").strip()[:20] or None
+        material_type = str(data.get("material_type") or "").strip()[:120] or None
+        # Offline (POS) price: empty/invalid → NULL (POS falls back to online price).
+        offline_price = None
+        if data.get("offline_price") not in (None, ""):
+            try:
+                off_val = float(data.get("offline_price"))
+                offline_price = off_val if off_val > 0 else None
+            except (TypeError, ValueError):
+                offline_price = None
+        # Active status maps to products.status exactly like the panel toggle
+        # ('available' / 'unavailable' — products has no is_active column).
+        is_active = data.get("is_active")
+        active_status = "available" if (is_active is None or is_active) else "unavailable"
+
+        # Content defaults (compatibility / box / warranty) — manager can
+        # override; mobile-case categories get the standard no-warranty text.
+        CASE_CATS = ("case", "cover", "back cover", "skin", "pouch", "sleeve")
+        cat_name = str(product["category"] or "").lower()
+        is_case_like = any(k in cat_name for k in CASE_CATS)
+        DEFAULT_WARRANTY_TEXT = "No warranty available in mobile cases"
+        compatibility = str(data.get("compatibility") or "").strip()[:300] or None
+        box_contents = str(data.get("box_contents") or "").strip()[:300] or None
+        warranty_info = str(data.get("warranty_info") or "").strip()[:300] or (
+            DEFAULT_WARRANTY_TEXT if is_case_like else None
+        )
+
+        # Return window: reuse the same allowed-set as the regular flow.
+        from warehouse_routes import _sanitize_return_window
+        try:
+            return_window = _sanitize_return_window(data.get("return_window"))
+        except Exception:
+            return_window = 0
+
         # Update the product row (title/desc fixes optional) and enter the
         # standard pending-approval state EXACTLY like warehouse_create_product does.
         cur.execute(
@@ -1035,12 +1116,19 @@ def complete_agent_draft(product_id):
                    name = ?, description = ?, price = ?, mrp = ?, stock = ?,
                    brand = ?, delivery_time = COALESCE(?, delivery_time),
                    global_sku_code = ?,
+                   units_per_pack = COALESCE(?, units_per_pack),
+                   material_type = COALESCE(?, material_type),
+                   offline_price = ?,
+                   status = ?,
                    approval_status = 'pending', approval_source = 'warehouse',
                    approval_warehouse_id = ?, approval_requested_at = CURRENT_TIMESTAMP
                WHERE id = ?""",
             (
                 (name or product["name"]), (description or product["description"]),
                 price, mrp, stock, brand, delivery_time, final_sku,
+                units_per_pack, material_type,
+                offline_price,
+                active_status,
                 wh_id, product_id,
             ),
         )
@@ -1050,12 +1138,34 @@ def complete_agent_draft(product_id):
         cur.execute(
             """INSERT INTO warehouse_inventory
                (warehouse_id, product_id, product_name, sku, stock_quantity, available_stock,
-                low_stock_threshold, cost_price, selling_price, mrp, brand, unit)
-               VALUES (?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, ?)""",
+                low_stock_threshold, cost_price, selling_price, mrp, discount_pct, discount_amt,
+                gst_pct, brand, unit)
+               VALUES (?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 wh_id, product_id, (name or product["name"]), final_sku, stock, stock,
-                cost_price, selling_price, mrp, brand, unit,
+                cost_price, selling_price, mrp, discount_pct, discount_amt,
+                gst_pct, brand, unit,
             ),
+        )
+
+        # Product content (compatibility / box / warranty) — same table the
+        # regular create-flow writes, so the storefront tabs render unchanged.
+        if compatibility or box_contents or warranty_info:
+            cur.execute(
+                """INSERT INTO product_content
+                   (product_id, compatibility, box_contents, warranty_info)
+                   VALUES (?, ?, ?, ?)""",
+                (product_id, compatibility, box_contents, warranty_info),
+            )
+
+        # Fulfillment row — only return_window comes from the manager here;
+        # the rest keep the same platform defaults the regular flow uses.
+        cur.execute(
+            """INSERT INTO product_fulfillment
+               (product_id, package_weight, length, width, height, shipping_tier,
+                dispatch_sla, is_cod_eligible, is_fragile, is_express_eligible, return_window)
+               VALUES (?, 0, 0, 0, 0, 'standard', 24, 1, 0, 1, ?)""",
+            (product_id, return_window),
         )
 
         # Parity with warehouse_create_product: the recommendation engine
@@ -1075,9 +1185,9 @@ def complete_agent_draft(product_id):
             "sku": final_sku,
             "approval_status": "pending",
             "agent_code": product["added_by_agent_code"],
-        }, "Product completed — ab admin approval ke liye pending hai", 200)
+        }, "Product completed — now pending admin approval", 200)
     except Exception as e:
         current_app.logger.error(f"complete_agent_draft failed: {e}", exc_info=True)
-        return error_response("Complete nahi hua — dobara try karen", 500)
+        return error_response("Completion failed — please try again", 500)
     finally:
         conn.close()

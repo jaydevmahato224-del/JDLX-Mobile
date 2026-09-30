@@ -221,16 +221,85 @@ check("approval_status now 'pending' (existing flow)", row["approval_status"] ==
 check("agent attribution KEPT after completion", row["added_by_agent_code"] == agent_code)
 inv = conn.execute("SELECT * FROM warehouse_inventory WHERE product_id = ?", (product_id,)).fetchone()
 check("inventory row created with SKU", inv is not None and inv["sku"] == final_sku, str(inv and inv["sku"]))
+check("inventory defaults: discount 0 when no discount sent", (inv["discount_pct"] or 0) == 0 and (inv["discount_amt"] or 0) == 0)
 conn.close()
 
 # Duplicate SKU guard
 r = client.post(f"/api/warehouse/add-agent-drafts/{product_id}/complete", headers=SH, json={"price": 1})
 check("re-complete rejected (already pending/approved path)", r.status_code in (400, 409), str(r.status_code))
 
+print("== 7b. Extended completion fields (case-category auto-warranty) ==")
+conn = get_db()
+conn.execute("INSERT OR IGNORE INTO categories (id, name) VALUES (6, 'Phone Cases')")
+conn.commit()
+conn.close()
+
+r = client.post("/api/agent/products", headers=AG, json={
+    "name": "Orange Silicone Case", "description": "Soft silicone back cover",
+    "category_id": 6, "images": ["https://example.com/case.jpg"],
+    "tags": ["case", "silicone"],
+})
+body = r.get_json()
+check("case draft saved", r.status_code == 201, str(body)[:80])
+case_pid = (body.get("data") or {}).get("product_id")
+
+r = client.post(f"/api/warehouse/add-agent-drafts/{case_pid}/complete", headers=SH, json={
+    "price": 189, "mrp": 699, "stock": 40, "sku": "", "unit": "pcs",
+    "units_per_pack": "2", "material_type": "Silicone",
+    "discount_pct": 10,
+    "gst_pct": 18,
+    "offline_price": 175,
+    "is_active": False,
+    "compatibility": "iPhone 12 / 12 Pro",
+    "box_contents": "1 Back Cover",
+    "return_window": 3,
+})
+body = r.get_json()
+check("extended completion 200", r.status_code == 200, str(body)[:120])
+
+conn = get_db()
+prow = conn.execute("SELECT * FROM products WHERE id = ?", (case_pid,)).fetchone()
+check("units_per_pack applied", prow["units_per_pack"] == "2", str(prow["units_per_pack"]))
+check("material_type applied", prow["material_type"] == "Silicone", str(prow["material_type"]))
+check("offline_price applied", prow["offline_price"] == 175, str(prow["offline_price"]))
+check("is_active=false -> status 'unavailable'", prow["status"] == "unavailable", str(prow["status"]))
+inv = conn.execute("SELECT * FROM warehouse_inventory WHERE product_id = ?", (case_pid,)).fetchone()
+check("discount pct applied", inv is not None and inv["discount_pct"] == 10.0, str(inv and inv["discount_pct"]))
+check("discount amt auto-calc (mrp*10%)", inv is not None and abs(inv["discount_amt"] - 69.9) < 0.01, str(inv and inv["discount_amt"]))
+check("landing cost -> cost_price", inv is not None and inv["cost_price"] == 0.0)
+content = conn.execute("SELECT * FROM product_content WHERE product_id = ?", (case_pid,)).fetchone()
+check("case warranty auto-default (locked text)", content is not None
+      and content["warranty_info"] == "No warranty available in mobile cases", str(content and content["warranty_info"]))
+check("compatibility stored", content is not None and content["compatibility"] == "iPhone 12 / 12 Pro")
+check("box_contents stored", content is not None and content["box_contents"] == "1 Back Cover")
+ful = conn.execute("SELECT * FROM product_fulfillment WHERE product_id = ?", (case_pid,)).fetchone()
+check("return_window applied (3 days)", ful is not None and ful["return_window"] == 3, str(ful and ful["return_window"]))
+conn.close()
+
+print("== 7c. First draft (no new fields) got platform defaults ==")
+conn = get_db()
+ful1 = conn.execute("SELECT * FROM product_fulfillment WHERE product_id = ?", (product_id,)).fetchone()
+check("first draft fulfillment row exists", ful1 is not None)
+no_content = conn.execute("SELECT 1 FROM product_content WHERE product_id = ?", (product_id,)).fetchone()
+check("non-case draft: no auto-warranty row", no_content is None)
+prow1 = conn.execute("SELECT status, offline_price FROM products WHERE id = ?", (product_id,)).fetchone()
+check("default active status 'available'", prow1["status"] == "available", str(prow1["status"]))
+check("offline_price NULL when not sent", prow1["offline_price"] is None)
+conn.close()
+
 print("== 8. Drafts list for manager ==")
 r = client.get("/api/warehouse/add-agent-drafts", headers=SH)
 items = r.get_json().get("data") or []
 check("manager sees the agent draft history", r.status_code == 200 and any(i["id"] == product_id for i in items), str(len(items)))
+case_item = next((i for i in items if i["id"] == case_pid), None)
+check("drafts list carries agent tags (storefront discovery)",
+      case_item is not None and any(t in (case_item.get("product_tags") or []) for t in ("case", "silicone")),
+      str(case_item and case_item.get("product_tags")))
+check("drafts list includes search_keywords + synonyms", case_item is not None
+      and "search_keywords" in case_item and "search_synonyms" in case_item)
+check("drafts list includes return_window", case_item is not None and case_item.get("return_window") == 3)
+legacy_item = next((i for i in items if i["id"] == product_id), None)
+check("completed draft re-listed without legacy ETA (already '')", legacy_item is not None)
 
 print("== 9. Logout kills session ==")
 r = client.post("/api/agent/logout", headers=AG, json={})

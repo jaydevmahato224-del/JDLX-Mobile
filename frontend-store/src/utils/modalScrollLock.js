@@ -25,7 +25,9 @@
  *      embedded scroll areas) where a body freeze alone does nothing.
  *   2. Event guard — while locked, wheel/touchmove/scroll-keys are
  *      preventDefault-ed at the window unless the event originates INSIDE a
- *      detected overlay. This deterministically freezes every scroll path.
+ *      detected overlay or inside a floating scrollable (a sidebar/drawer
+ *      sitting beside the backdrop, never covered by the overlay itself).
+ *      This deterministically freezes every scroll path.
  */
 
 let locked = false
@@ -34,6 +36,7 @@ let observer = null
 let rafPending = false
 let currentOverlays = new Set()
 let taggedOverlays = new Set()
+let floatingScrollables = new Set()
 
 function isModalOverlay(el) {
   const cs = window.getComputedStyle(el)
@@ -65,8 +68,52 @@ function evaluate() {
     if (isModalOverlay(el)) next.add(el)
   })
   currentOverlays = next
+  // Floating scrollables: sidebars/drawers that sit BESIDE a modal backdrop
+  // instead of inside it — e.g. the panel sidebars, whose 100%-viewport
+  // backdrop qualifies as an overlay while the 288px drawer itself does not.
+  // They must stay interactive while the lock is on.
+  floatingScrollables = new Set()
+  if (next.size > 0) {
+    document.querySelectorAll(
+      '[class*="overflow-y-auto"], [class*="overflow-auto"], [class*="overflow-y-scroll"], [class*="overflow-scroll"]'
+    ).forEach((el) => {
+      if (!isScrollableArea(el)) return
+      // Only scrollables that float ABOVE every overlay (a sidebar/drawer
+      // sitting on top of the backdrop) stay interactive. The page's own
+      // scroll containers sit BELOW the backdrop and must stay frozen —
+      // otherwise modals would leak background scrolling again.
+      if (stacksAboveAllOverlays(el, next)) floatingScrollables.add(el)
+    })
+  }
   if (next.size > 0) lock()
   else unlock()
+}
+
+function isScrollableArea(el) {
+  const cs = window.getComputedStyle(el)
+  if (!/(auto|scroll)/.test(cs.overflowY)) return false
+  // Only actually-scrollable elements (content taller than the box) count —
+  // keeps the allowlist tight so the background stays fully frozen.
+  return el.scrollHeight > el.clientHeight + 1
+}
+
+function stacksAboveAllOverlays(el, overlays) {
+  // Highest explicit z-index on the element's own stacking chain.
+  let z = 0
+  let node = el
+  while (node && node !== document.body) {
+    const nodeZ = parseInt(window.getComputedStyle(node).zIndex, 10)
+    if (!Number.isNaN(nodeZ) && nodeZ > z) z = nodeZ
+    node = node.parentElement
+  }
+  // The element must strictly beat EVERY overlay's z-index; ties and
+  // un-numbered overlays resolve conservatively to "frozen" (DOM order
+  // decides those, and a modal rendered above the drawer must win).
+  for (const ov of overlays) {
+    const ovZ = parseInt(window.getComputedStyle(ov).zIndex, 10)
+    if (Number.isNaN(ovZ) || ovZ >= z) return false
+  }
+  return true
 }
 
 function lock() {
@@ -120,9 +167,21 @@ function originatesInsideOverlay(e) {
 
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '])
 
+function originatesInsideScrollable(e) {
+  const target = e.target
+  if (!(target instanceof Element)) return false
+  for (const el of floatingScrollables) {
+    if (el.contains(target)) return true
+  }
+  return false
+}
+
 function guardWheelAndTouch(e) {
   if (!locked) return
   if (originatesInsideOverlay(e)) return
+  // Panel sidebars/drawers floating beside a full-viewport backdrop stay
+  // scrollable — only the true background behind them is frozen.
+  if (originatesInsideScrollable(e)) return
   // Background interaction while a popup is open — freeze it.
   e.preventDefault()
 }
@@ -130,6 +189,7 @@ function guardWheelAndTouch(e) {
 function guardScrollKeys(e) {
   if (!locked || !SCROLL_KEYS.has(e.key)) return
   if (originatesInsideOverlay(e)) return
+  if (originatesInsideScrollable(e)) return
   const target = e.target
   if (target instanceof HTMLElement && target.isContentEditable) return
   e.preventDefault()

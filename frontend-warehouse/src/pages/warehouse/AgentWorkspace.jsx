@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   PackagePlus, KeyRound, Timer, Coffee, Play, Square, LogOut, Upload,
-  Trash2, Image as ImageIcon, Loader2, ShieldCheck, AlertTriangle
+  Trash2, Image as ImageIcon, Loader2, ShieldCheck, AlertTriangle,
+  Share2, Download, Smartphone
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { resolveMediaUrl } from '../../config'
+import { shareAgentLink, agentLoginUrl } from '../../utils/agentShare'
 
 // Uploads may return cloud URLs or local /static paths (backend origin) —
 // resolve both against the right host for preview thumbnails.
@@ -25,6 +27,74 @@ const toImgUrl = (u) => (u ? resolveMediaUrl(String(u)) : u)
 
 const AGENT_TOKEN_KEY = 'addAgentToken'
 
+// ── Installable PWA (this route ONLY — injected at runtime) ──────────────────
+// index.html is shared by the whole panel; a static manifest tag would turn
+// the ENTIRE warehouse panel into "JDLX Agent". So the tag, the service
+// worker and the install prompt live strictly inside this page component.
+function useAgentPwa() {
+  const [installEvt, setInstallEvt] = useState(null)
+  const [installed, setInstalled] = useState(
+    () => window.matchMedia?.('(display-mode: standalone)').matches
+      || window.navigator.standalone === true
+  )
+
+  useEffect(() => {
+    // Manifest + SW inject karo (idempotent — StrictMode double-mount safe).
+    if (!document.getElementById('agent-manifest-link')) {
+      const link = document.createElement('link')
+      link.id = 'agent-manifest-link'
+      link.rel = 'manifest'
+      link.href = '/agent-manifest.json'
+      document.head.appendChild(link)
+    }
+    let theme = document.getElementById('agent-theme-meta')
+    if (!theme) {
+      theme = document.createElement('meta')
+      theme.id = 'agent-theme-meta'
+      theme.name = 'theme-color'
+      theme.content = '#0f172a'
+      document.head.appendChild(theme)
+    }
+    if ('serviceWorker' in navigator) {
+      // Narrow scope: SW sirf /warehouse/agent pages ko control karta hai —
+      // panel ke baaki pages uske fetch events me aate hi nahi.
+      navigator.serviceWorker
+        .register('/agent-sw.js', { scope: '/warehouse/agent' })
+        .catch(() => { /* SW optional */ })
+    }
+
+    const onPrompt = (e) => {
+      e.preventDefault()
+      setInstallEvt(e)
+    }
+    const onInstalled = () => {
+      setInstalled(true)
+      setInstallEvt(null)
+      toast.success('App installed 🎉')
+    }
+    window.addEventListener('beforeinstallprompt', onPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+      // Unmount par manifest/theme hatao — warna panel ke baaki pages bhi
+      // "JDLX Agent" install offer karne lagenge (head pollution).
+      document.getElementById('agent-manifest-link')?.remove()
+      document.getElementById('agent-theme-meta')?.remove()
+    }
+  }, [])
+
+  const promptInstall = async () => {
+    if (!installEvt) return
+    installEvt.prompt()
+    await installEvt.userChoice?.catch(() => {})
+    setInstallEvt(null)
+  }
+  return { canInstall: !!installEvt && !installed, promptInstall, installed }
+}
+
+
+
 // apiFetch prefixes API_BASE_URL (no Vite proxy in this project, so relative
 // fetch would hit the dev server and 404) — but it attaches the WAREHOUSE
 // owner token by default. The agent token is a DIFFERENT credential, so every
@@ -39,12 +109,12 @@ const agentFetch = (path, options = {}) =>
   })
 
 const TERMS = [
-  'Main sirf product ki listing details (image, category, title, description, tags, return policy) bharunga.',
-  'Mujhe price ya stock set karne ka koi access nahi hai — wo warehouse manager karega.',
-  'Mera session utna hi rahega jitna manager ne OTP dete waqt chuna (max 8 hours).',
-  'Har hour me sirf 15 minute ka break milta hai — ek saath ya tukdon me, jab chahein.',
-  'Har product par mera unique agent ID save hota hai, isliye kaam ki accountability meri hai.',
-  'Galat/ghumawa content dalne par mera access manager kabhi bhi revoke kar sakta hai.',
+  'I will only fill in the product listing details (image, category, title, description, tags, return policy).',
+  'I have no access to set the price or stock — that is handled by the warehouse manager.',
+  'My session lasts only as long as the manager chose while generating my OTP (max 8 hours).',
+  'I get a 15-minute break for every hour — all at once or in smaller parts, whenever I choose.',
+  'My unique agent ID is recorded on every product I add, so I am accountable for my work.',
+  'If I enter wrong or misleading content, the manager can revoke my access at any time.',
 ]
 
 function fmtCountdown(totalSeconds) {
@@ -58,6 +128,7 @@ function fmtCountdown(totalSeconds) {
 }
 
 export default function AgentWorkspace() {
+  const pwa = useAgentPwa()
   const [token, setToken] = useState(() => localStorage.getItem(AGENT_TOKEN_KEY) || '')
   const [phase, setPhase] = useState(token ? 'boot' : 'login') // login | boot | app
   const [me, setMe] = useState(null)
@@ -113,7 +184,7 @@ export default function AgentWorkspace() {
         if (res.status === 401 || res.status === 403) {
           localStorage.removeItem(AGENT_TOKEN_KEY)
           setToken(''); setPhase('login')
-          toast.error('Session khatam — manager se naya OTP lein')
+          toast.error('Session over — ask the manager for a new OTP')
           return
         }
         if (res.ok) {
@@ -155,7 +226,7 @@ export default function AgentWorkspace() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
-    if (!agreed) { toast.error('Pehle Terms & Conditions accept karen'); return }
+    if (!agreed) { toast.error('Please accept the Terms & Conditions first'); return }
     setLoggingIn(true)
     try {
       const res = await apiFetch('/agent/login', {
@@ -163,14 +234,14 @@ export default function AgentWorkspace() {
         body: JSON.stringify({ identifier: identifier.trim(), otp: otp.trim() }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || json.message || 'Login fail hua')
+      if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
       const d = json.data || {}
       localStorage.setItem(AGENT_TOKEN_KEY, d.token)
       setToken(d.token)
       setMe(d.agent)
       setSession(d.session)
       setPhase('app')
-      toast.success(`Welcome ${d.agent?.name || ''} — session shuru!`)
+      toast.success(`Welcome ${d.agent?.name || ''} — session started!`)
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -182,7 +253,7 @@ export default function AgentWorkspace() {
     try { await agentFetch('/agent/logout', { method: 'POST' }) } catch { /* ignore */ }
     localStorage.removeItem(AGENT_TOKEN_KEY)
     setToken(''); setMe(null); setSession(null); setPhase('login')
-    toast.success('Logged out — apna shift complete kiya? 🎉')
+    toast.success('Logged out — shift complete? 🎉')
   }
 
   // ── break actions ──
@@ -190,10 +261,10 @@ export default function AgentWorkspace() {
     try {
       const res = await agentFetch('/agent/break/start', { method: 'POST' })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || json.message || 'Break start nahi hua')
+      if (!res.ok) throw new Error(json.error || json.message || 'Could not start the break')
       const sessRes = await agentFetch('/agent/session')
       if (sessRes.ok) setSession((await sessRes.json()).data)
-      toast.success('Break chalu — countdown paused')
+      toast.success('Break started — countdown paused')
     } catch (err) { toast.error(err.message) }
   }
 
@@ -201,10 +272,10 @@ export default function AgentWorkspace() {
     try {
       const res = await agentFetch('/agent/break/end', { method: 'POST' })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || json.message || 'Break end nahi hua')
+      if (!res.ok) throw new Error(json.error || json.message || 'Could not end the break')
       const sessRes = await agentFetch('/agent/session')
       if (sessRes.ok) setSession((await sessRes.json()).data)
-      toast.success(`Break over — session ${json.data?.break_taken_minutes ?? ''} min extend hua`)
+      toast.success(`Break over — session extended by ${json.data?.break_taken_minutes ?? ''} min`)
     } catch (err) { toast.error(err.message) }
   }
 
@@ -243,7 +314,7 @@ export default function AgentWorkspace() {
   const handleSave = async (e) => {
     e.preventDefault()
     if (!title.trim() || !description.trim() || !categoryId || images.length === 0) {
-      toast.error('Image, category, title aur description sab zaroori hain')
+      toast.error('Image, category, title and description are all required')
       return
     }
     setSaving(true)
@@ -259,7 +330,7 @@ export default function AgentWorkspace() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || json.message || 'Save fail hua')
-      toast.success('Draft save ho gaya ✅ Manager baaki fields bhar ke admin ko bhejega')
+      toast.success('Draft saved ✅ The manager will complete the rest and send it for admin approval')
       setTitle(''); setDescription(''); setTagsInput(''); setReturnPolicy('')
       setImages([]); setCategoryId('')
       loadWorkspaceData()
@@ -278,7 +349,7 @@ export default function AgentWorkspace() {
             <div className="text-center">
               <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mx-auto text-2xl shadow-lg shadow-amber-500/20">📦</div>
               <h1 className="text-2xl font-black mt-3">Add-Product Agent Login</h1>
-              <p className="text-sm text-slate-400 mt-1">Warehouse manager se mila OTP aur apni email/phone enter karen</p>
+              <p className="text-sm text-slate-400 mt-1">Enter the OTP from your warehouse manager along with your email/phone</p>
             </div>
 
             {/* T&C — clearly shown at login time (user requirement) */}
@@ -296,13 +367,13 @@ export default function AgentWorkspace() {
               <label className="flex items-start gap-2 mt-3 cursor-pointer">
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)}
                   className="mt-0.5 h-4 w-4 accent-amber-500" />
-                <span className="text-xs font-bold text-slate-300">Main in terms ko accept karta/karti hoon</span>
+                <span className="text-xs font-bold text-slate-300">I accept these terms &amp; conditions</span>
               </label>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-3">
               <input value={identifier} onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="Email ya Mobile number" autoComplete="username"
+                placeholder="Email or mobile number" autoComplete="username"
                 className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm outline-none focus:border-amber-500" />
               <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="6-digit OTP" inputMode="numeric" autoComplete="one-time-code"
@@ -314,9 +385,32 @@ export default function AgentWorkspace() {
               </button>
             </form>
             <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-              Password yahan hota hi nahi — har din manager naya OTP banata hai.<br />
-              Session duration manager choose karta hai (1–8 hours).
+              There is no password — the manager creates a fresh OTP every day.<br />
+              The manager chooses the session duration (1–8 hours).
             </p>
+
+            {/* Install (PWA) + share — agents ise phone me app ki tarah rakh sakte hain */}
+            <div className="flex flex-col gap-2">
+              {pwa.canInstall && (
+                <button type="button" onClick={pwa.promptInstall}
+                  className="w-full py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold text-sm flex items-center justify-center gap-2">
+                  <Smartphone size={15} /> Install App on Phone
+                </button>
+              )}
+              {pwa.installed && (
+                <p className="text-[11px] text-emerald-400 font-bold text-center flex items-center justify-center gap-1.5">
+                  <Download size={12} /> Installed — opens from the home screen
+                </p>
+              )}
+              <button type="button"
+                onClick={async () => {
+                  const how = await shareAgentLink(agentLoginUrl())
+                  if (how === 'copied') toast.success('Link copy ho gaya')
+                }}
+                className="w-full py-2.5 rounded-xl border border-slate-700 hover:border-slate-500 text-slate-300 font-bold text-sm flex items-center justify-center gap-2">
+                <Share2 size={15} /> Share login link with an agent
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -351,6 +445,12 @@ export default function AgentWorkspace() {
               {fmtCountdown(remainingSec)}
             </p>
           </div>
+          {pwa.canInstall && (
+            <button onClick={pwa.promptInstall} title="Phone me install karen"
+              className="p-2.5 rounded-xl border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
+              <Smartphone size={16} />
+            </button>
+          )}
           <button onClick={handleLogout} title="Logout"
             className="p-2.5 rounded-xl border border-slate-700 text-slate-400 hover:text-red-400">
             <LogOut size={16} />
@@ -362,8 +462,8 @@ export default function AgentWorkspace() {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center gap-3">
         <Coffee size={18} className="text-amber-400" />
         <div className="text-sm">
-          <p className="font-bold">Break allowance: <span className="text-emerald-400">{breakRemainingAllowance} min</span> / 15 min (is hour)</p>
-          <p className="text-[11px] text-slate-500">Ek saath ya 2-2 min me — jab chahein lo. Break me countdown pause hota hai.</p>
+          <p className="font-bold">Break allowance: <span className="text-emerald-400">{breakRemainingAllowance} min</span> / 15 min (this hour)</p>
+          <p className="text-[11px] text-slate-500">All at once or in small chunks — whenever you like. The countdown pauses during breaks.</p>
         </div>
         {onBreak ? (
           <div className="ml-auto flex items-center gap-3">
@@ -386,7 +486,7 @@ export default function AgentWorkspace() {
         <div className="flex items-center justify-between">
           <h2 className="font-black flex items-center gap-2"><PackagePlus size={18} className="text-amber-400" /> Add Product</h2>
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full">
-            Price: manager set karega
+            Price: set by the manager
           </span>
         </div>
 
@@ -433,7 +533,7 @@ export default function AgentWorkspace() {
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">Description *</label>
           <textarea value={description} rows={5} maxLength={4000} onChange={(e) => setDescription(e.target.value)}
-            placeholder="Condition, box contents, specifications — jo bhi customer ko pata hona chahiye"
+            placeholder="Condition, box contents, specifications — anything a customer should know"
             className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500 resize-y" />
         </div>
 
@@ -449,7 +549,7 @@ export default function AgentWorkspace() {
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">Return Policy</label>
           <textarea value={returnPolicy} rows={2} maxLength={500} onChange={(e) => setReturnPolicy(e.target.value)}
-            placeholder="e.g. 7 din replacement warranty — badalne ke liye box + bill zaroori"
+            placeholder="e.g. 7-day replacement warranty — original box + bill required for claims"
             className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500 resize-y" />
         </div>
 
@@ -463,7 +563,7 @@ export default function AgentWorkspace() {
       {/* My drafts */}
       {myDrafts.length > 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <h3 className="font-black mb-3 text-sm">Mere Drafts ({myDrafts.length})</h3>
+          <h3 className="font-black mb-3 text-sm">My Drafts ({myDrafts.length})</h3>
           <div className="space-y-2">
             {myDrafts.slice(0, 10).map((d) => (
               <div key={d.id} className="flex items-center gap-3 text-sm">
@@ -481,7 +581,7 @@ export default function AgentWorkspace() {
       )}
 
       <p className="text-[11px] text-slate-600 flex items-center gap-1.5 justify-center pb-4">
-        <AlertTriangle size={11} /> Har draft par aapka agent ID ({me?.agent_code}) record hota hai.
+        <AlertTriangle size={11} /> Your agent ID ({me?.agent_code}) is recorded on every draft.
       </p>
     </div>
   )

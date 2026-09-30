@@ -1,0 +1,49 @@
+<!doctype html>
+<!--
+  Scroll-lock harness: replicates the panel layout structure (fixed backdrop
+  z-40, fixed sidebar z-50 with an overflow-y-auto nav, below-backdrop main
+  scroll container, above-everything modal with inner scroll) so the REAL
+  production modalScrollLock module can be exercised in a browser.
+  Served by Vite in dev; imports /src/utils/modalScrollLock.js directly.
+-->
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: sans-serif; }
+  .fixed { position: fixed; }
+  #backdrop { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.6); display:none; }
+  aside { position:fixed; top:0; bottom:0; left:0; width:288px; z-index:50; background:#0f172a; display:flex; flex-direction:column; }
+  #nav { flex:1 1 0%; min-height:0; overflow-y:auto; padding:16px; }
+  #nav a { display:block; padding:16px; color:#cbd5e1; }
+  #main-scroll { overflow-y:auto; height:100vh; padding:24px; background:#f8fafc; }
+  #main-scroll p { height:48px; }
+  #modal { position:fixed; inset:0; z-index:10050; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; }
+  #modal-inner { width:320px; height:300px; overflow-y:auto; background:#fff; border-radius:16px; padding:16px; }
+  #modal-inner p { height:48px; }
+</style></head>
+<body>
+  <div id="backdrop" class="fixed"></div>
+  <aside>
+    <div style="height:80px"></div>
+    <nav id="nav" class="overflow-y-auto"></nav>
+  </aside>
+  <div id="main-scroll" class="overflow-y-auto"></div>
+  <div id="modal" class="fixed"><div id="modal-inner" class="overflow-y-auto"></div></div>
+  <script>
+    // Class-based candidates mirror the real app (Tailwind overflow-y-auto),
+    // and lookups go through getElementById because hyphenated ids are not
+    // exposed as window globals.
+    const byId = (id) => document.getElementById(id)
+    for (let i = 1; i <= 60; i++) {
+      byId('nav').insertAdjacentHTML('beforeend', `<a href="#">Nav item ${i}</a>`)
+      byId('main-scroll').insertAdjacentHTML('beforeend', `<p>Main row ${i}</p>`)
+      byId('modal-inner').insertAdjacentHTML('beforeend', `<p>Modal row ${i}</p>`)
+    }
+  </script>
+  <script type="module">
+    import { initGlobalModalScrollLock } from '/src/utils/modalScrollLock.js'
+    initGlobalModalScrollLock()
+    window.__harnessReady = true
+  </script>
+</body>
+</html>

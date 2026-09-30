@@ -1912,23 +1912,16 @@ def init_db():
     # referral_reward_window_days, then 7 (the refund flow's default window).
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('vendor_settlement_window_days', '7')")
 
-    # --- One-time quick-delivery era repair ---
-    # Quick delivery was retired system-wide, but products created before
-    # that carried per-product windows like '10-30 mins' / '10-20 mins' /
-    # '30-120 mins' (defaults injected by old create paths). Those strings
-    # still leak into any UI that reads products.delivery_time (e.g. the
-    # admin review modal), contradicting the platform promise. Clear them
-    # once — warehouses can still set a REAL custom window per product.
-    cursor.execute("SELECT value FROM system_settings WHERE key = 'quick_era_delivery_time_cleared'")
-    if not cursor.fetchone():
-        cursor.execute(
-            """UPDATE products SET delivery_time = ''
-               WHERE delivery_time IN ('10-30 mins', '10-20 mins', '12-25 mins', '30-120 mins')"""
-        )
-        cursor.execute(
-            "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('quick_era_delivery_time_cleared', 'true')"
-        )
-        print("[migrate] Cleared quick-delivery-era delivery_time defaults from products")
+    # --- Quick-delivery era repair (runs EVERY boot — idempotent) ---
+    # Quick delivery was retired system-wide, but legacy databases carry a
+    # column default of '30-120 mins' on products.delivery_time (old
+    # migration schemas), so any INSERT that omits the field (e.g. agent
+    # drafts) silently re-introduces the retired ETA. Only the exact legacy
+    # strings are matched — real custom windows are never touched.
+    cursor.execute(
+        """UPDATE products SET delivery_time = ''
+           WHERE delivery_time IN ('10-30 mins', '10-20 mins', '12-25 mins', '30-120 mins')"""
+    )
 
     # --- One-time legacy timestamp migration (UTC → IST) ---
     # Every DB default (CURRENT_TIMESTAMP) writes UTC; the site operates in IST

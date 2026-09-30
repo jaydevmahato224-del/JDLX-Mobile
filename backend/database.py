@@ -306,7 +306,14 @@ def init_db():
         # warehouse panel edits warehouse_inventory.mrp; both are kept in
         # sync (see warehouse PATCH) — this column is the storefront's
         # source of truth, matching how products.price works.
-        ('mrp', 'REAL')
+        ('mrp', 'REAL'),
+        # Add-Product agent attribution: which listing agent created the
+        # discovery content for this product, and when the manager completed
+        # + submitted it for approval. Audit only — never affects pricing or
+        # approval logic itself.
+        ('added_by_agent_id', 'INTEGER'),
+        ('added_by_agent_code', 'TEXT'),
+        ('agent_submitted_at', 'TIMESTAMP')
     ])
     # Admin security audit trail (admin_auth_routes.py) — auto-provisioned so
     # deploys never need the standalone migrate_admin_auth.py step.
@@ -621,6 +628,57 @@ def init_db():
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS warehouses (id INTEGER PRIMARY KEY AUTOINCREMENT, warehouse_name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     ensure_columns('warehouses', [('partner_id', 'TEXT'), ('application_id', 'INTEGER'), ('owner_name', 'TEXT'), ('phone', 'TEXT'), ('address', 'TEXT'), ('pincode', 'TEXT'), ('warehouse_capacity', 'INTEGER'), ('warehouse_type', "TEXT DEFAULT 'micro_fulfillment'"), ('warehouse_role', "TEXT DEFAULT 'owner'"), ('operations_status', "TEXT DEFAULT 'open'"), ('weather_status', "TEXT DEFAULT 'clear'"), ('account_status', "TEXT DEFAULT 'active'"), ('profile_kyc_status', "TEXT DEFAULT 'verified'"), ('kyc_notice_sent', 'INTEGER DEFAULT 0'), ('kyc_notice_sent_at', 'TIMESTAMP'), ('service_radius_km', 'REAL DEFAULT 4'), ('quick_mode_enabled', 'INTEGER DEFAULT 0'), ('google_id', 'TEXT')])
+
+    # --- Add-Product Agents (listing agents) ---
+    # Limited-access agents who only fill the discovery side of a product
+    # (images, category, title, description, tags, return policy). They can
+    # NEVER set pricing — the warehouse manager completes the product and
+    # pushes it through the existing admin-approval flow. Login is OTP-based:
+    # the manager generates a 6-digit OTP bound to a session duration
+    # (1–8 hours); there are no agent passwords at all.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS add_product_agents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL,
+        agent_code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        photo_url TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+        UNIQUE(warehouse_id, email),
+        UNIQUE(warehouse_id, phone)
+    )''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_add_agents_wh ON add_product_agents(warehouse_id)')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS add_agent_otp_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        warehouse_id INTEGER NOT NULL,
+        agent_id INTEGER NOT NULL,
+        otp_hash TEXT NOT NULL,
+        duration_minutes INTEGER NOT NULL,
+        max_duration_minutes INTEGER NOT NULL DEFAULT 480,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'expired', 'revoked')),
+        attempts_left INTEGER NOT NULL DEFAULT 5,
+        session_started_at TIMESTAMP,
+        session_ends_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+        FOREIGN KEY(agent_id) REFERENCES add_product_agents(id)
+    )''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_add_otp_agent ON add_agent_otp_sessions(agent_id)')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS add_agent_breaks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        agent_id INTEGER NOT NULL,
+        duration_minutes REAL,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(session_id) REFERENCES add_agent_otp_sessions(id)
+    )''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_add_breaks_session ON add_agent_breaks(session_id)')
 
     # --- Vendor Staff Roles & Billing Agents ---
     cursor.execute('''CREATE TABLE IF NOT EXISTS roles (

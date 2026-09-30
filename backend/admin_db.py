@@ -781,6 +781,15 @@ def admin_approve_product(product_id):
             return error_response("Product not found", 404)
         if product['approval_status'] == 'approved':
             return error_response("Product is already approved", 409)
+        # Add-Product agent drafts (approval_status 'agent_draft') must go
+        # through the warehouse MANAGER first (price/stock/SKU completion —
+        # agents have no pricing access). Approving a draft directly would
+        # publish a price-0 product to the storefront.
+        if product['approval_status'] == 'agent_draft':
+            return error_response(
+                "Ye agent draft hai — pehle warehouse manager use complete karega (price/stock), tab approve hoga",
+                409,
+            )
 
         now = "CURRENT_TIMESTAMP"
         # Approve the product and (when it is a parent) its whole variant group

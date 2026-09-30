@@ -342,3 +342,141 @@ def _draw_payment_stamp(pdf, order):
 
     pdf.set_text_color(*INK)
     pdf.set_line_width(0.2)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  OFFLINE counter-sale receipt (warehouse POS bills)
+# ══════════════════════════════════════════════════════════════════════════════
+# Separate from the online-order tax invoice above: counter bills are simple
+# payment receipts on a narrow (80mm-ish) canvas that also prints cleanly on
+# regular A4. Same brand theme, same font pipeline, pure read-only rendering.
+
+def generate_offline_receipt_pdf(order, items, vendor=None):
+    """Build the counter-sale receipt PDF and return the raw bytes.
+
+    order : dict with order_number, created_at, payment_type/payment_mode,
+            payment_status, customer_name, customer_phone
+    items : list of dicts with product_name, quantity, subtotal (+optional price)
+    vendor: optional dict with warehouse_name/address/phone for the header
+    """
+    from fpdf import FPDF
+
+    pdf = FPDF(orientation="P", unit="mm", format=(80, 297))  # 80mm roll width
+    _register_fonts(pdf)
+    pdf.set_auto_page_break(auto=True, margin=8)
+    pdf.add_page()
+    pdf.set_margins(5, 5, 5)
+
+    W = 70  # usable width
+    x0 = 5
+
+    def line_ln(h=0.4):
+        y = pdf.get_y()
+        pdf.set_draw_color(*LINE)
+        pdf.set_line_width(0.25)
+        pdf.line(x0, y, x0 + W, y)
+        pdf.set_y(y + h + 0.8)
+
+    def kv(label, value, bold_value=False):
+        pdf.set_font("dejavu", "", 7.5)
+        pdf.set_text_color(*MUTED)
+        pdf.set_x(x0)
+        pdf.cell(22, 4, str(label or ""), align="L")
+        pdf.set_font("dejavu", "B" if bold_value else "", 7.5)
+        pdf.set_text_color(*INK)
+        pdf.multi_cell(W - 22, 4, str(value if value not in (None, "") else "-"), align="R")
+
+    # ── Header ──
+    pdf.set_xy(x0, 6)
+    pdf.set_font("dejavu", "B", 12)
+    pdf.set_text_color(*AMBER_DARK)
+    pdf.cell(W, 5.5, BRAND_NAME, align="C")
+    pdf.ln(5.5)
+    pdf.set_font("dejavu", "", 6.5)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(W, 3.2, BRAND_TAGLINE, align="C")
+    pdf.ln(3.6)
+    if vendor:
+        pdf.set_font("dejavu", "", 6.5)
+        pdf.multi_cell(W, 3, str(vendor.get("warehouse_name") or ""), align="C")
+        if vendor.get("phone"):
+            pdf.multi_cell(W, 3, f"Ph: {vendor['phone']}", align="C")
+    pdf.ln(0.5)
+    line_ln()
+
+    # ── Receipt meta ──
+    pdf.set_font("dejavu", "B", 8.5)
+    pdf.set_text_color(*INK)
+    pdf.cell(W, 4.5, "COUNTER SALE RECEIPT", align="C")
+    pdf.ln(5.5)
+    created = order.get("created_at")
+    if isinstance(created, str):
+        date_str = created[:16]
+    elif isinstance(created, datetime.datetime):
+        date_str = created.strftime("%Y-%m-%d %H:%M")
+    else:
+        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    kv("Receipt No:", order.get("order_number") or "-", bold_value=True)
+    kv("Date:", date_str)
+    kv("Customer:", order.get("customer_name") or "Counter Customer")
+    if order.get("customer_phone"):
+        kv("Phone:", order["customer_phone"])
+    payment = order.get("payment_type") or order.get("payment_mode") or "CASH"
+    kv("Payment:", str(payment))
+    line_ln()
+
+    # ── Items ──
+    pdf.set_font("dejavu", "B", 7)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(W - 22, 3.6, "ITEM", align="L")
+    pdf.cell(22, 3.6, "AMOUNT", align="R")
+    pdf.ln(4.4)
+    pdf.set_text_color(*INK)
+    for it in (items or []):
+        try:
+            qty = float(it.get("quantity") or it.get("qty") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            continue
+        name = str(it.get("product_name") or it.get("name") or "Item")
+        try:
+            line_total = float(it.get("subtotal") or 0)
+        except (TypeError, ValueError):
+            line_total = 0.0
+        pdf.set_font("dejavu", "", 7)
+        pdf.multi_cell(W - 20, 3.4, f"{name} x{int(qty) if qty == int(qty) else qty}", align="L")
+        pdf.set_font("dejavu", "B", 7)
+        pdf.set_xy(x0 + W - 20, pdf.get_y() - 3.4)
+        pdf.cell(20, 3.4, f"Rs {line_total:.2f}", align="R")
+        pdf.ln(1.2)
+    line_ln()
+
+    # ── Totals ──
+    def money(v):
+        try:
+            return f"Rs {float(v or 0):.2f}"
+        except (TypeError, ValueError):
+            return "Rs 0.00"
+
+    kv("Subtotal:", money(order.get("subtotal_amount") or order.get("subtotal")))
+    if float(order.get("tax_amount") or 0) > 0:
+        gst_rate = order.get("gst_rate")
+        kv(f"GST{(f' ({gst_rate}%)' if gst_rate else '')}:", money(order.get("tax_amount")))
+    if float(order.get("discount_amount") or 0) > 0:
+        kv("Discount:", f"-{money(order.get('discount_amount'))}")
+    pdf.set_font("dejavu", "B", 9)
+    pdf.set_text_color(*AMBER_DARK)
+    pdf.set_x(x0)
+    pdf.cell(26, 5.5, "TOTAL PAID", align="L")
+    pdf.cell(W - 26, 5.5, money(order.get("total_amount")), align="R")
+    pdf.ln(6.5)
+    line_ln()
+
+    # ── Footer ──
+    pdf.set_font("dejavu", "", 6.3)
+    pdf.set_text_color(*MUTED)
+    pdf.multi_cell(W, 3, "Thank you for shopping with JDLX Mobile!", align="C")
+    pdf.multi_cell(W, 3, "This is a computer-generated receipt.", align="C")
+
+    return bytes(pdf.output())

@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus, Wallet, Undo2 } from 'lucide-react'
+import { LayoutDashboard, Package, MapPin, LogOut, Bell, FileText, Activity, Warehouse, Menu, X, Users, ChevronDown, ChevronUp, CheckCheck, ShoppingBag, Truck, BadgePercent, ReceiptText, UserPlus, Wallet, Undo2, PackagePlus } from 'lucide-react'
 import { readLastSeenId, ORDERS_SEEN_EVENT } from '../utils/ordersSeen'
 import { useStore } from '../store/useStore'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -201,18 +201,19 @@ export default function WarehouseLayout() {
             children: [
                 { path: '/warehouse/billing-agents', icon: UserPlus, label: 'Billing Agents' },
                 { path: '/warehouse/billing', icon: ShoppingBag, label: 'Counter Billing (POS)' },
+                { path: '/warehouse/add-agents', icon: PackagePlus, label: 'Add-Product Agents' },
             ]
         },
     ];
 
-    // Staff / billing agents only see the POS entry; agent management stays
-    // owner-only in the UI too.
+    // Staff / billing agents only see the POS entry; agent management (both
+    // billing agents and add-product agents) stays owner-only in the UI too.
     const visibleNavLinks = isStaffUser
         ? navLinks
             .filter((l) => l.label === 'Billing & POS')
             .map((l) => ({
                 ...l,
-                children: (l.children || []).filter((c) => c.path !== '/warehouse/billing-agents'),
+                children: (l.children || []).filter((c) => c.path !== '/warehouse/billing-agents' && c.path !== '/warehouse/add-agents'),
             }))
         : navLinks;
 

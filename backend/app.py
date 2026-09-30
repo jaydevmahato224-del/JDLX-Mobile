@@ -370,6 +370,9 @@ app.register_blueprint(admin_db_bp)
 app.register_blueprint(complaint_bp)
 app.register_blueprint(warehouse_returns_bp)
 app.register_blueprint(support_bp)
+# Add-Product agents: OTP-session listing agents (separate from billing staff).
+from add_product_agent_routes import add_agent_bp
+app.register_blueprint(add_agent_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(refund_bp)
 app.register_blueprint(bug_bp)

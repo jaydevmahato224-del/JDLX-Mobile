@@ -36,7 +36,7 @@ from urllib.parse import quote
 # Third-party imports
 import jwt
 import pdfplumber
-from flask import Blueprint, jsonify, request, redirect, session, url_for, current_app, abort
+from flask import Blueprint, jsonify, request, redirect, session, url_for, current_app, abort, Response
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from google.oauth2 import id_token as google_id_token
@@ -6581,6 +6581,55 @@ def upload_billing_damage_image():
     except Exception as e:
         current_app.logger.error(f"Damage image upload failed: {str(e)}")
         return error_response("Something went wrong. Please try again or contact support if the issue persists.", 500)
+
+
+@warehouse_bp.route("/api/warehouse/billing/<int:order_id>/receipt", methods=["GET"])
+@require_warehouse_staff_permission("billing")
+def download_offline_bill_receipt(order_id):
+    """PDF receipt for an OFFLINE counter-sale bill (owner/staff with the
+    billing permission). Vendor-scoped: only THIS warehouse's own bills are
+    downloadable — the same ownership rule as the billing history list.
+    Rendered read-only on demand, never stored server-side."""
+    vendor_id = request.vendor_id
+    conn = get_db()
+    try:
+        order = conn.execute(
+            """SELECT id, order_number, customer_name, customer_phone, payment_type,
+                      payment_status, subtotal_amount, tax_amount, gst_rate,
+                      discount_amount, total_amount, created_at
+               FROM orders WHERE id = ? AND source = 'OFFLINE' AND vendor_id = ?""",
+            (order_id, vendor_id),
+        ).fetchone()
+        if not order:
+            return error_response("Bill not found for this warehouse", 404)
+
+        items = conn.execute(
+            """SELECT product_name, quantity, price, subtotal
+               FROM order_items WHERE order_id = ? ORDER BY id ASC""",
+            (order_id,),
+        ).fetchall()
+
+        vendor = conn.execute(
+            "SELECT warehouse_name, phone FROM warehouses WHERE id = ?", (vendor_id,)
+        ).fetchone()
+
+        from invoice_generator import generate_offline_receipt_pdf
+        pdf_bytes = generate_offline_receipt_pdf(dict(order), [dict(i) for i in items], vendor=dict(vendor) if vendor else None)
+
+        filename = f"{order['order_number'] or ('OFF-' + str(order_id))}-receipt.pdf"
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+    except Exception as e:
+        current_app.logger.error(f"Offline bill receipt failed for order {order_id}: {e}", exc_info=True)
+        return error_response("Receipt generate nahi hua — dobara try karen", 500)
+    finally:
+        conn.close()
 
 
 @warehouse_bp.route("/api/warehouse/billing/history", methods=["GET"])

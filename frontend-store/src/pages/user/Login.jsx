@@ -4,6 +4,10 @@ import toast from "react-hot-toast"
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import FirstLoginSheet from '../../components/FirstLoginSheet'
+// Home renders BEHIND the first-run login sheet — without it the sheet's dark
+// backdrop sat over an empty route, which read as a broken gray/blank screen
+// (the reported bug). Regular (non-first-run) login page is untouched.
+import HomePage from './Home'
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -49,7 +53,21 @@ function Login() {
     // bottom sheet with a "Skip for now" escape so nobody gets stuck here.
     // Every other arrival (header login button, ProtectedRoute bounce) renders
     // the existing full login page exactly as before — auth logic unchanged.
-    const [firstRunSheet, setFirstRunSheet] = useState(() => Boolean(location.state?.firstRun))
+    //
+    // ONE-SHOT ACROSS SESSIONS: the sheet kept re-appearing because
+    // location.state survives refreshes and back/forward restores on /login —
+    // every reload re-presented it. The flag below is written the moment the
+    // sheet is first presented, so it can never auto-appear twice. The regular
+    // login page and every auth flow stay exactly as before.
+    const FIRST_RUN_SHEET_FLAG = 'jdlx_first_login_sheet_shown'
+    const [firstRunSheet, setFirstRunSheet] = useState(() => {
+        if (localStorage.getItem(FIRST_RUN_SHEET_FLAG)) return false
+        if (location.state?.firstRun && !user) {
+            try { localStorage.setItem(FIRST_RUN_SHEET_FLAG, '1') } catch { /* private mode */ }
+            return true
+        }
+        return false
+    })
 
     // Auth-restore redirect guard.
     //
@@ -109,11 +127,17 @@ function Login() {
         window.location.href = `${origin}/login/google?flow=user&frontend_url=${frontendUrl}${refQuery}`
     }
 
-    // Skip closes the sheet AND leaves the login page (back to guest home) —
-    // otherwise closing the sheet would just reveal this same login page.
-    // Guest browsing, header login buttons and ProtectedRoute keep working.
+    // Skip closes the sheet AND lands on guest home — Home was already
+    // rendering behind the sheet, so the dismissal feels seamless instead of
+    // revealing an empty route. Guest browsing, header login buttons and
+    // ProtectedRoute keep working exactly as before.
     if (firstRunSheet && !user) {
-        return <FirstLoginSheet onSkip={() => { setFirstRunSheet(false); navigate('/', { replace: true }) }} />
+        return (
+            <>
+                <HomePage />
+                <FirstLoginSheet onSkip={() => { setFirstRunSheet(false); navigate('/', { replace: true }) }} />
+            </>
+        )
     }
 
     return (

@@ -418,7 +418,14 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('jdlx_onboarding_done'))
   const [postOnboarding, setPostOnboarding] = useState(false)
 
+  // onComplete can fire twice (guide's Get Started tap racing the guard's
+  // auto-complete when every permission is already granted). The once-guard
+  // keeps the post-onboarding login handoff a single, deterministic event.
+  const onboardingDoneRef = useRef(false)
+
   const handleOnboardingComplete = () => {
+    if (onboardingDoneRef.current) return
+    onboardingDoneRef.current = true
     localStorage.setItem('jdlx_onboarding_done', '1')
     setShowOnboarding(false)
     if (!user) setPostOnboarding(true)

@@ -100,6 +100,8 @@ const WarehouseEarnings = lazy(() => import('./pages/warehouse/WarehouseEarnings
 const StaffBilling = lazy(() => import('./pages/warehouse/StaffBilling'))
 const StaffSetupPassword = lazy(() => import('./pages/warehouse/StaffSetupPassword'))
 const BillingAgents = lazy(() => import('./pages/warehouse/BillingAgents'))
+const AddProductAgents = lazy(() => import('./pages/warehouse/AddProductAgents'))
+const AgentWorkspace = lazy(() => import('./pages/warehouse/AgentWorkspace'))
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
@@ -154,6 +156,15 @@ function App() {
               <StaffSetupPassword />
             </Suspense>
           } />
+          {/* Add-Product agent workspace — PUBLIC route with its OWN OTP
+              auth (agent token separate from the warehouse owner token),
+              like /warehouse/staff/setup. Terms shown at login inside the
+              page itself. */}
+          <Route path="/warehouse/agent" element={
+            <Suspense fallback={<LoadingSpinner />}>
+              <AgentWorkspace />
+            </Suspense>
+          } />
           <Route path="/warehouse/request" element={<WarehouseRequest />} />
           <Route path="/warehouse/request-delivery" element={
             <Suspense fallback={<LoadingSpinner />}>
@@ -176,6 +187,11 @@ function App() {
             <Route path="/warehouse/billing-agents" element={
               <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']}>
                 <BillingAgents />
+              </WarehouseRoute>
+            } />
+            <Route path="/warehouse/add-agents" element={
+              <WarehouseRoute allowedRoles={['owner', 'warehouse_partner', 'admin', 'super_admin']}>
+                <AddProductAgents />
               </WarehouseRoute>
             } />
             <Route path="/warehouse/inventory" element={

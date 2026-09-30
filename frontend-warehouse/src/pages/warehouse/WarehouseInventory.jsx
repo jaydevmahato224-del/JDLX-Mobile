@@ -53,6 +53,7 @@ import { API_BASE_URL, resolveMediaUrl, mediaProxyUrl, markMediaProxyTried, hasM
 import { useStore } from '../../store/useStore'
 import VariantManager from './components/VariantManager'
 import RichTextEditor from '../../components/RichTextEditor'
+import FullscreenLoader from '../../components/FullscreenLoader'
 
 // Panel detail view renders the description as plain text — convert the
 // same simple HTML the editor emits (<br>, <strong>, <li>...) to readable
@@ -1179,12 +1180,7 @@ const WarehouseInventory = () => {
     }
 
     if (loading && inventory.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="w-10 h-10 text-amber-500 animate-spin mb-4" />
-                <p className="text-slate-400 font-medium">Loading inventory engine...</p>
-            </div>
-        )
+        return <FullscreenLoader message="Loading inventory engine..." icon={Package} />
     }
 
     const mainUI = (

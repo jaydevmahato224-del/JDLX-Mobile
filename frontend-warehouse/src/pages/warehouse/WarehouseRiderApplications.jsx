@@ -14,6 +14,7 @@ import {
     Filter
 } from 'lucide-react'
 import { API_BASE_URL } from '../../config'
+import FullscreenLoader from '../../components/FullscreenLoader'
 import { useStore } from '../../store/useStore'
 import { useNavigate, Link } from 'react-router-dom'
 import { apiFetch } from '../../utils/apiFetch'
@@ -79,10 +80,7 @@ const WarehouseRiderApplications = () => {
     )
 
     if (loading) return (
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-            <Loader2 className="w-10 h-10 text-teal-500 animate-spin" />
-            <p className="text-slate-400 font-medium italic animate-pulse">Fetching Rider Requests...</p>
-        </div>
+        <FullscreenLoader message="Fetching Rider Requests..." />
     )
 
     return (

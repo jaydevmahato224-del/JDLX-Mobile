@@ -29,6 +29,7 @@ import {
     Scan,
     FileUp
 } from 'lucide-react'
+import FullscreenLoader from '../../components/FullscreenLoader'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { useNavigate } from 'react-router-dom'
@@ -674,12 +675,7 @@ setSubmitting(true)
     }, [showCreateView, generateInvoiceNo, invoiceNo])
 
     if (loading && purchases.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="w-10 h-10 text-amber-500 animate-spin mb-4" />
-                <p className="text-slate-400 font-medium">Loading purchase records...</p>
-            </div>
-        )
+        return <FullscreenLoader message="Loading purchase records..." icon={Package} />
     }
 
     if (showCreateView) {

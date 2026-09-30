@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import {
     Activity,
     LayoutDashboard,
+    LoaderCircle,
     MapPin,
     Package,
     Radio,
-    Loader2,
 } from 'lucide-react'
+import FullscreenLoader from '../../components/FullscreenLoader'
 import { API_BASE_URL } from '../../config'
 import { useStore } from '../../store/useStore'
 import { apiClient } from '../../utils/apiClient'
@@ -130,12 +131,7 @@ const WarehouseDashboard = () => {
     const isTerminalOpen = (warehouseUser?.operations_status || 'open') === 'open'
 
     if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="w-10 h-10 text-amber-500 animate-spin mb-4" />
-                <p className="text-slate-400 font-medium tracking-tight">Syncing Operations Hub...</p>
-            </div>
-        )
+        return <FullscreenLoader message="Syncing Operations Hub..." icon={LoaderCircle} />
     }
 
     return (

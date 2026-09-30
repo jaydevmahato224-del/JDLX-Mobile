@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import AccessDenied from './AccessDenied'
 import { apiFetch } from '../utils/apiFetch'
-import { Loader2 } from 'lucide-react'
+import FullscreenLoader from './FullscreenLoader'
 
 // Default fallback if no specific roles are required (any valid warehouse partner or admin)
 const DEFAULT_ROLES = ['owner', 'warehouse_partner', 'delivery_partner', 'admin', 'super_admin']
@@ -55,11 +55,7 @@ function WarehouseRoute({ children, allowedRoles = DEFAULT_ROLES }) {
   }, [user])
 
   if (verifying) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
-        <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
-      </div>
-    )
+    return <FullscreenLoader message="Verifying access..." />
   }
 
   if (!verified || !user) {

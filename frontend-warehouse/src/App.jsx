@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, Outlet, Navigate } from 'react-router-dom'
 import { Suspense, lazy, useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import { GlobalErrorOverlay } from './components/ErrorScreens'
@@ -10,6 +9,7 @@ const WarehouseReturns = lazy(() => import('./pages/warehouse/WarehouseReturns')
 const WarehouseLogin = lazy(() => import('./pages/warehouse/WarehouseLogin'))
 import { useStore } from './store/useStore'
 import TopLoader from './components/TopLoader'
+import FullscreenLoader from './components/FullscreenLoader'
 import { useLoadingStore } from './store/useLoadingStore'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -103,11 +103,7 @@ const BillingAgents = lazy(() => import('./pages/warehouse/BillingAgents'))
 const AddProductAgents = lazy(() => import('./pages/warehouse/AddProductAgents'))
 const AgentWorkspace = lazy(() => import('./pages/warehouse/AgentWorkspace'))
 
-const LoadingSpinner = () => (
-  <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
-    <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
-  </div>
-)
+const LoadingSpinner = () => <FullscreenLoader message="Loading panel..." />
 
 function RouteChangeTracker() {
   const location = useLocation()

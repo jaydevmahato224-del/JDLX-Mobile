@@ -6,6 +6,14 @@ from database import get_db
 MAX_REQUESTS_PER_MINUTE = 100
 BLOCK_DURATION_MINUTES = 10
 
+# Expired-block cleanup used to run on EVERY request (a DELETE + commit on the
+# remote DB = two extra network round-trips per request). Expired rows are
+# harmless — the limiter ignores them — so sweeping once a minute per worker
+# keeps the table small with ~zero cost. Pure infrastructure change: limits,
+# blocks, and all return values are exactly as before.
+_CLEANUP_INTERVAL_S = 60
+_cleanup_state = {"last": 0.0}
+
 
 def _init_rate_limit_table():
     """Create rate_limits table if not exists."""
@@ -36,6 +44,10 @@ def _utc_now_ts():
 
 
 def _cleanup_expired_blocks():
+    now_mono = time.monotonic()
+    if now_mono - _cleanup_state["last"] < _CLEANUP_INTERVAL_S:
+        return
+    _cleanup_state["last"] = now_mono
     conn = get_db()
     try:
         now = _utc_now_ts()

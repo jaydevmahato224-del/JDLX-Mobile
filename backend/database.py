@@ -1,5 +1,7 @@
 import datetime
+import queue
 import sqlite3
+import threading
 import os
 from dotenv import load_dotenv
 
@@ -68,9 +70,20 @@ class LibsqlRow:
         return iter(zip(self._keys, self._tuple))
 
 class LibsqlCursorWrapper:
-    def __init__(self, cursor, row_factory=None):
+    # Statements that never open a write transaction. Everything else
+    # (INSERT/UPDATE/DELETE/CREATE/BEGIN/WITH-CTE-writes/...) marks the
+    # connection dirty so release-time rollback can clear any uncommitted
+    # work — matching the old behavior where close() implicitly discarded it.
+    _READ_ONLY_PREFIXES = ("SELECT", "PRAGMA", "EXPLAIN", "VALUES")
+
+    def __init__(self, cursor, row_factory=None, conn=None):
         self._cursor = cursor
         self.row_factory = row_factory
+        # Back-reference to the owning connection wrapper so a failed execute
+        # can mark the connection unhealthy (pool will destroy it instead of
+        # reusing a connection in an unknown state) and a write can mark it
+        # dirty (release-time rollback hygiene).
+        self._conn = conn
     def _wrap_row(self, row):
         if row is None: return None
         return self.row_factory(self._cursor, row) if self.row_factory else row
@@ -83,14 +96,20 @@ class LibsqlCursorWrapper:
         try:
             self._cursor.execute(sql, parameters)
         except Exception as e:
+            if self._conn is not None: self._conn._mark_unhealthy()
             _raise_turso_config_error(e)
+        if self._conn is not None and not sql.lstrip().upper().startswith(self._READ_ONLY_PREFIXES):
+            self._conn._dirty = True
         return self
     def executemany(self, sql, seq_of_parameters):
         seq_of_parameters = [tuple(p) if isinstance(p, list) else p for p in seq_of_parameters]
         try:
             self._cursor.executemany(sql, seq_of_parameters)
         except Exception as e:
+            if self._conn is not None: self._conn._mark_unhealthy()
             _raise_turso_config_error(e)
+        if self._conn is not None:
+            self._conn._dirty = True
         return self
     def __getattr__(self, name): return getattr(self._cursor, name)
     def __iter__(self):
@@ -100,16 +119,135 @@ class LibsqlConnectionWrapper:
     def __init__(self, conn):
         self._conn = conn
         self.row_factory = None
-    def cursor(self): return LibsqlCursorWrapper(self._conn.cursor(), self.row_factory)
+        # Pool bookkeeping (remote-DB connection reuse). ``_discarded`` marks a
+        # connection that hit an error and must never be handed out again;
+        # ``_in_pool`` is the single-release guard so a double close() can
+        # never enqueue the same connection twice (which would make two
+        # requests share one connection). ``_dirty`` is set once anything has
+        # executed on this connection, so a pristine connection can be
+        # returned to the pool without a pointless rollback round-trip.
+        self._discarded = False
+        self._in_pool = False
+        self._dirty = False
+
+    def _mark_unhealthy(self):
+        self._discarded = True
+
+    def cursor(self): return LibsqlCursorWrapper(self._conn.cursor(), self.row_factory, self)
     def execute(self, sql, parameters=()):
         cursor = self.cursor()
         cursor.execute(sql, parameters)
         return cursor
-    def commit(self): self._conn.commit()
+    def commit(self):
+        try:
+            self._conn.commit()
+        except Exception:
+            # A failed commit leaves the connection in an unknown state —
+            # never hand it to another request. The exception still
+            # propagates exactly as before.
+            self._discarded = True
+            raise
+        # Transaction fully committed — nothing left to roll back at release.
+        self._dirty = False
     def rollback(self): self._conn.rollback()
-    def close(self): self._conn.close()
+    def close(self):
+        # Releasing to the pool replaces the old hard close. Idempotent per
+        # ownership cycle; unhealthy connections are destroyed instead.
+        if self._in_pool:
+            return
+        self._in_pool = True
+        if self._discarded:
+            _destroy_raw_connection(self)
+            return
+        # Clear any open transaction before pooling. Previously a connection
+        # was destroyed on close, which implicitly discarded uncommitted
+        # writes; a pooled connection must do that explicitly so an
+        # uncommitted rollback path can never leak into the next request.
+        # Pristine connections (nothing ever executed) skip this entirely.
+        if self._dirty:
+            try:
+                self._conn.rollback()
+            except Exception:
+                _destroy_raw_connection(self)
+                return
+            # Reset so the next borrower's release doesn't repeat the
+            # rollback round-trip for work it never did.
+            self._dirty = False
+        _release_connection(self)
     def sync(self):
         if hasattr(self._conn, 'sync'): self._conn.sync()
+
+
+# ------------------------------------------------------------------------------
+# Remote-DB connection pool (infrastructure only — no query/semantic changes).
+#
+# Every request used to open a brand-new Turso connection: a network handshake
+# plus the PRAGMA round-trip, on top of every query. This pool keeps healthy
+# remote connections open between requests so a request reuses an already-open
+# one. Local SQLite is never pooled (opening it is effectively free). Any
+# connection error marks the connection unhealthy and it is destroyed instead
+# of being reused, so a poisoned connection can never serve two requests.
+# ------------------------------------------------------------------------------
+_POOL = None
+_POOL_LOCK = threading.Lock()
+# Upper bound matches gunicorn's 8 threads per worker (Procfile); idle keep is
+# small so quiet periods don't hold many open remote connections.
+_POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "16"))
+_POOL_IDLE_KEEP = int(os.environ.get("DB_POOL_IDLE_KEEP", "4"))
+
+def _get_pool():
+    global _POOL
+    with _POOL_LOCK:
+        if _POOL is None:
+            _POOL = queue.LifoQueue(maxsize=_POOL_MAX_SIZE)
+        return _POOL
+
+def _destroy_raw_connection(conn):
+    try:
+        conn._conn.close()
+    except Exception:
+        pass
+
+def _create_turso_connection():
+    try:
+        raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
+    except Exception as e:
+        _raise_turso_config_error(e)
+    conn = LibsqlConnectionWrapper(raw_conn)
+    conn.row_factory = LibsqlRow
+    # Enable foreign key constraints once per connection (was previously
+    # re-issued on every request, costing an extra network round-trip).
+    raw_conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+def _acquire_connection():
+    """Returns a live remote connection — reused from the pool when possible."""
+    pool = _get_pool()
+    while True:
+        try:
+            conn = pool.get_nowait()
+        except queue.Empty:
+            return _create_turso_connection()
+        conn._in_pool = False
+        if not conn._discarded:
+            return conn
+        # A stale/unhealthy entry somehow sitting in the pool — drop it.
+        _destroy_raw_connection(conn)
+
+def _release_connection(conn):
+    """Returns a healthy remote connection to the pool, trimming idle excess."""
+    pool = _get_pool()
+    with _POOL_LOCK:
+        while pool.qsize() >= _POOL_IDLE_KEEP:
+            try:
+                victim = pool.get_nowait()
+            except queue.Empty:
+                break
+            _destroy_raw_connection(victim)
+    try:
+        pool.put_nowait(conn)
+    except queue.Full:
+        _destroy_raw_connection(conn)
 
 if not FORCE_LOCAL_DB and TURSO_URL and TURSO_TOKEN:
     try:
@@ -121,21 +259,21 @@ else:
     USE_TURSO = False
 
 def _open_connection():
-    """Opens a brand-new DB connection (Turso in production, local SQLite in dev)."""
+    """Returns a DB connection.
+
+    Remote (Turso) connections are POOLED and reused across requests — opening
+    one costs a network handshake, so reusing them is the single biggest
+    latency win. Local SQLite connections are always fresh (opening is free
+    and per-call connections keep scratch scripts and tests isolated).
+    """
     if USE_TURSO:
-        try:
-            raw_conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
-        except Exception as e:
-            _raise_turso_config_error(e)
-        conn = LibsqlConnectionWrapper(raw_conn)
+        conn = _acquire_connection()
         conn.row_factory = LibsqlRow
-        # Enable foreign key constraints for libSQL as well
-        raw_conn.execute("PRAGMA foreign_keys = ON")
-    else:
-        conn = sqlite3.connect(DATABASE_PATH, timeout=30)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout = 10000")  # 10s retry on lock
-        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 10000")  # 10s retry on lock
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -1867,6 +2005,12 @@ def init_db():
       utm_source TEXT,
       FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
+    # Hot-path indexes for time-window analytics (system health probe, admin
+    # dashboards): sessions active in the last 24h and page views per day.
+    # Without these every probe full-scans both tables. Idempotent.
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_analytics_sessions_last_seen ON analytics_sessions(last_seen_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS search_queries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

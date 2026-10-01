@@ -5,6 +5,28 @@ import datetime
 analytics_bp = Blueprint('analytics', __name__)
 
 
+def _safe_user_id(data):
+    """Sanitizes the client-supplied user_id for analytics writes.
+
+    The storefront sends user_id from localStorage; after re-registrations or
+    account deletions a stale id can fail the users-FK (PRAGMA foreign_keys
+    is ON) and turn a fire-and-forget tracking call into an API 500 — the
+    recurring '/api/analytics/pageview' errors in client-error telemetry.
+    Any invalid/stale id is simply stored as NULL: analytics are optional,
+    never worth an error screen. Valid users keep full attribution."""
+    uid = data.get('user_id')
+    if uid in (None, '', 'null', 'undefined'):
+        return None
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return None
+    if uid <= 0:
+        return None
+    row = get_db().execute('SELECT 1 FROM users WHERE id = ?', (uid,)).fetchone()
+    return uid if row else None
+
+
 @analytics_bp.route('/api/user/interactions', methods=['POST'])
 def post_user_interaction():
     """Records a user interaction (view/click) on the storefront.
@@ -21,7 +43,7 @@ def post_user_interaction():
     if not interaction_type or not target_id:
         return jsonify({"error": "Missing interaction_type or target_id"}), 400
 
-    user_id = data.get('user_id')
+    user_id = _safe_user_id(data)
     category = data.get('category')
 
     conn = get_db()
@@ -51,7 +73,7 @@ def post_pageview():
     if not session_id or not page_path:
         return jsonify({"error": "Missing session_id or page_path"}), 400
 
-    user_id = data.get('user_id')
+    user_id = _safe_user_id(data)
     page_title = data.get('page_title')
     referrer = data.get('referrer')
     utm_source = data.get('utm_source')
@@ -120,7 +142,7 @@ def post_event():
     if event_type not in ALLOWED_EVENT_TYPES:
         return jsonify({"error": f"Invalid event_type. Allowed: {', '.join(ALLOWED_EVENT_TYPES)}"}), 400
 
-    user_id = data.get('user_id')
+    user_id = _safe_user_id(data)
     event_label = data.get('event_label')
     event_value = data.get('event_value')
     page_path = data.get('page_path')
@@ -151,7 +173,7 @@ def post_search():
     if not session_id or not query:
         return jsonify({"error": "Missing session_id or query"}), 400
 
-    user_id = data.get('user_id')
+    user_id = _safe_user_id(data)
     results_count = data.get('results_count', 0)
     clicked_product_id = data.get('clicked_product_id')
 

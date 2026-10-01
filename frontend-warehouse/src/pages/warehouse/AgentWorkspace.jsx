@@ -3,12 +3,11 @@ import toast from 'react-hot-toast'
 import {
   PackagePlus, KeyRound, Timer, Coffee, Play, Square, LogOut, Upload,
   Trash2, Image as ImageIcon, Loader2, ShieldCheck, AlertTriangle,
-  Share2, Download, Smartphone, Wallet, ClipboardList, Clock3, TrendingUp,
+  Download, Smartphone, Wallet, ClipboardList, Clock3, TrendingUp,
   BadgeCheck, PlayCircle
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { resolveMediaUrl } from '../../config'
-import { shareAgentLink, agentLoginUrl } from '../../utils/agentShare'
 
 // Uploads may return cloud URLs or local /static paths (backend origin) —
 // resolve both against the right host for preview thumbnails.
@@ -16,11 +15,11 @@ const toImgUrl = (u) => (u ? resolveMediaUrl(String(u)) : u)
 
 // ─── Add-Product Agent Workspace ─────────────────────────────────────────────
 // One file, three phases:
-//   LOGIN   — agent enters just their registered email-or-phone (NO OTP
-//             needed) and lands on their profile. The 6-digit OTP the manager
-//             generates is now OPTIONAL at login: entering it starts the paid
-//             shift immediately. Terms & conditions are shown CLEARLY on this
-//             screen (user requirement) before login.
+//   LOGIN   — agent enters just their registered email-or-phone (NO OTP, NO
+//             password) and lands on their profile. Terms & conditions are
+//             shown CLEARLY on this screen (user requirement) before login.
+//             The share-login-link button lives in the warehouse panel only —
+//             not here (user requirement).
 //   PROFILE — lifetime stats: entries made, time worked, break time taken,
 //             the manager-set per-entry rate (₹) and total earning. From here
 //             the agent can start a shift by entering the manager's OTP.
@@ -32,6 +31,20 @@ const toImgUrl = (u) => (u ? resolveMediaUrl(String(u)) : u)
 // warehouse owner token, so the two sessions never collide).
 
 const AGENT_TOKEN_KEY = 'addAgentToken'
+
+// ── Mobile app-feel (agent pages only — injected at runtime) ─────────────────
+// 16px form controls (iOS auto-zooms into any input with a smaller font on
+// focus), double-tap zoom + tap-highlight off, and the save-draft success
+// modal animations.
+const AGENT_MOBILE_CSS = `
+.agent-app { touch-action: pan-y; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+.agent-app input, .agent-app select, .agent-app textarea { font-size: 16px !important; }
+.agent-app button, .agent-app label, .agent-app a, .agent-app select { touch-action: manipulation; }
+@keyframes agentPopIn { from { transform: scale(.85) translateY(10px); opacity: 0 } to { transform: scale(1) translateY(0); opacity: 1 } }
+@keyframes agentCheckDraw { to { stroke-dashoffset: 0 } }
+@keyframes agentRingPulse { 0% { transform: scale(.55); opacity: .8 } 100% { transform: scale(1.55); opacity: 0 } }
+.agent-pop { animation: agentPopIn .3s cubic-bezier(.16,1,.3,1) both; }
+`
 
 // ── Installable PWA (this route ONLY — injected at runtime) ──────────────────
 // index.html is shared by the whole panel; a static manifest tag would turn
@@ -61,6 +74,19 @@ function useAgentPwa() {
       theme.content = '#0f172a'
       document.head.appendChild(theme)
     }
+    // App-feel: is route par page zoom off (pinch + double-tap) — runtime-only
+    // override; unmount par original viewport restore ho jata hai.
+    const vp = document.querySelector('meta[name="viewport"]')
+    if (vp) {
+      if (vp.dataset.agentPrev === undefined) vp.dataset.agentPrev = vp.getAttribute('content') || ''
+      vp.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover')
+    }
+    if (!document.getElementById('agent-mobile-style')) {
+      const st = document.createElement('style')
+      st.id = 'agent-mobile-style'
+      st.textContent = AGENT_MOBILE_CSS
+      document.head.appendChild(st)
+    }
     if ('serviceWorker' in navigator) {
       // Narrow scope: SW sirf /warehouse/agent pages ko control karta hai —
       // panel ke baaki pages uske fetch events me aate hi nahi.
@@ -83,10 +109,18 @@ function useAgentPwa() {
     return () => {
       window.removeEventListener('beforeinstallprompt', onPrompt)
       window.removeEventListener('appinstalled', onInstalled)
-      // Unmount par manifest/theme hatao — warna panel ke baaki pages bhi
-      // "JDLX Agent" install offer karne lagenge (head pollution).
+      // Unmount par manifest/theme/mobile-style hatao — warna panel ke baaki
+      // pages bhi "JDLX Agent" install offer karne lagenge (head pollution).
       document.getElementById('agent-manifest-link')?.remove()
       document.getElementById('agent-theme-meta')?.remove()
+      document.getElementById('agent-mobile-style')?.remove()
+      // Viewport original pe wapas (zoom override sirf agent route ke liye tha).
+      const vpNow = document.querySelector('meta[name="viewport"]')
+      if (vpNow && vpNow.dataset.agentPrev !== undefined) {
+        if (vpNow.dataset.agentPrev) vpNow.setAttribute('content', vpNow.dataset.agentPrev)
+        else vpNow.removeAttribute('content')
+        delete vpNow.dataset.agentPrev
+      }
     }
   }, [])
 
@@ -179,6 +213,8 @@ export default function AgentWorkspace() {
   const [returnPolicy, setReturnPolicy] = useState('')
   const [saving, setSaving] = useState(false)
   const [myDrafts, setMyDrafts] = useState([])
+  // Success popup after a draft saves — "Start New" begins the next entry.
+  const [savedProduct, setSavedProduct] = useState(null)
 
   // ── auth boot: token hai to profile se confirm karo (shift live ho to app me jao) ──
   const bootSession = useCallback(async () => {
@@ -276,49 +312,28 @@ export default function AgentWorkspace() {
     return () => clearInterval(id)
   }, [session?.break?.active?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── login: sirf email/phone → profile. OTP optional hai — diya to shift
-  // turant start ho jayegi (manager ne jo duration di wahi lagegi). ──
+  // ── login: sirf email/phone → profile. OTP yahan NAHI lagta (user
+  // requirement) — shift start sirf profile screen se hota hai. ──
   const handleLogin = async (e) => {
     e.preventDefault()
     if (!agreed) { toast.error('Please accept the Terms & Conditions first'); return }
-    if (!identifier.trim()) {      toast.error('Please enter your email or mobile number'); return }
+    if (!identifier.trim()) { toast.error('Please enter your email or mobile number'); return }
     setLoggingIn(true)
     try {
-      const otpVal = otp.trim()
-      if (otpVal) {
-        // OTP diya hai → seedha shift start (existing OTP flow, untouched).
-        const res = await apiFetch('/agent/login', {
-          method: 'POST',
-          body: JSON.stringify({ identifier: identifier.trim(), otp: otpVal }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
-        const d = json.data || {}
-        localStorage.setItem(AGENT_TOKEN_KEY, d.token)
-        setToken(d.token)
-        setMe(d.agent)
-        setSession(d.session)
-        const pRes = await agentFetch('/agent/profile')
-        if (pRes.ok) setStats(((await pRes.json()).data || {}).stats || null)
-        setPhase('app')
-        toast.success(`Welcome ${d.agent?.name || ''} — session started!`)
-      } else {
-        // Sirf email/phone → profile page (no OTP, no password).
-        const res = await apiFetch('/agent/login-self', {
-          method: 'POST',
-          body: JSON.stringify({ identifier: identifier.trim() }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
-        const d = json.data || {}
-        localStorage.setItem(AGENT_TOKEN_KEY, d.token)
-        setToken(d.token)
-        setMe(d.agent)
-        setStats(d.stats || null)
-        setSession(null)
-        setPhase('profile')
-        toast.success(`Welcome ${d.agent?.name || ''}!`)
-      }
+      const res = await apiFetch('/agent/login-self', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: identifier.trim() }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
+      const d = json.data || {}
+      localStorage.setItem(AGENT_TOKEN_KEY, d.token)
+      setToken(d.token)
+      setMe(d.agent)
+      setStats(d.stats || null)
+      setSession(null)
+      setPhase('profile')
+      toast.success(`Welcome ${d.agent?.name || ''}!`)
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -438,6 +453,13 @@ export default function AgentWorkspace() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || json.message || 'Could not save the draft')
+      const draft = json.data || json || {}
+      setSavedProduct({
+        id: draft.id,
+        name: title.trim(),
+        image: images[0] ? toImgUrl(images[0]) : null,
+        imageCount: images.length,
+      })
       toast.success('Draft saved ✅ The manager will complete the rest and send it for admin approval')
       setTitle(''); setDescription(''); setTagsInput(''); setReturnPolicy('')
       setImages([]); setCategoryId('')
@@ -449,15 +471,15 @@ export default function AgentWorkspace() {
   // ══════════════════ LOGIN PHASE ══════════════════
   if (phase === 'login' || phase === 'boot') {
     return (
-      <div className="min-h-screen bg-[#0f172a] text-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#0f172a] text-slate-100 flex justify-center p-4 agent-app">
         {phase === 'boot' ? (
           <Loader2 className="animate-spin text-amber-400" size={36} />
         ) : (
-          <div className="w-full max-w-md space-y-5">
+          <div className="w-full max-w-md space-y-5 my-auto">
             <div className="text-center">
               <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mx-auto text-2xl shadow-lg shadow-amber-500/20">📦</div>
               <h1 className="text-2xl font-black mt-3">Add-Product Agent Login</h1>
-              <p className="text-sm text-slate-400 mt-1">Registered agent? Enter just your email or mobile number — no OTP needed. An OTP, if you have one, starts your paid shift right away.</p>
+              <p className="text-sm text-slate-400 mt-1">Registered agent? Enter just your email or mobile number — your profile opens instantly, no password. The daily OTP for starting a shift is on your profile screen.</p>
             </div>
 
             {/* T&C — clearly shown at login time (user requirement) */}
@@ -482,10 +504,7 @@ export default function AgentWorkspace() {
             <form onSubmit={handleLogin} className="space-y-3">
               <input value={identifier} onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="Email or mobile number" autoComplete="username"
-                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm outline-none focus:border-amber-500" />
-              <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="6-digit OTP (optional)" inputMode="numeric" autoComplete="one-time-code"
-                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm tracking-[0.4em] font-black text-center outline-none focus:border-amber-500" />
+                className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-base outline-none focus:border-amber-500" />
               <button type="submit" disabled={loggingIn || !agreed}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm disabled:opacity-50 flex items-center justify-center gap-2">
                 {loggingIn ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
@@ -494,10 +513,11 @@ export default function AgentWorkspace() {
             </form>
             <p className="text-[11px] text-slate-500 text-center leading-relaxed">
               No password, no OTP needed to open your profile.<br />
-              To work a shift, enter the daily OTP your manager generates (1–8 hours).
+              To work a paid shift, start it with the daily OTP on your profile screen (1–8 hours).
             </p>
 
-            {/* Install (PWA) + share — agents ise phone me app ki tarah rakh sakte hain */}
+            {/* Install (PWA) — agents ise phone me app ki tarah rakh sakte hain.
+                Share login link SIRF warehouse panel me hai (user requirement). */}
             <div className="flex flex-col gap-2">
               {pwa.canInstall && (
                 <button type="button" onClick={pwa.promptInstall}
@@ -510,14 +530,6 @@ export default function AgentWorkspace() {
                   <Download size={12} /> Installed — opens from the home screen
                 </p>
               )}
-              <button type="button"
-                onClick={async () => {
-                  const how = await shareAgentLink(agentLoginUrl())
-                  if (how === 'copied') toast.success('Login link copied')
-                }}
-                className="w-full py-2.5 rounded-xl border border-slate-700 hover:border-slate-500 text-slate-300 font-bold text-sm flex items-center justify-center gap-2">
-                <Share2 size={15} /> Share login link with an agent
-              </button>
             </div>
           </div>
         )}
@@ -532,7 +544,7 @@ export default function AgentWorkspace() {
   if (phase === 'profile') {
     const s = stats || {}
     return (
-      <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-6 max-w-3xl mx-auto space-y-5">
+      <div className="agent-app min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-6 max-w-3xl mx-auto space-y-5">
         {/* Identity header */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
           {me?.photo_url
@@ -584,12 +596,13 @@ export default function AgentWorkspace() {
             Enter the 6-digit OTP your manager generated for today. The countdown runs only while you work —
             breaks pause it. No OTP today? Ask the manager to generate one (they choose 1–8 hours).
           </p>
-          <div className="flex gap-2">
+          {/* Stack vertically on phones — the row used to overflow the screen */}
+          <div className="flex flex-col sm:flex-row gap-2">
             <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="6-digit OTP" inputMode="numeric" autoComplete="one-time-code"
-              className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-sm tracking-[0.4em] font-black text-center outline-none focus:border-amber-500" />
+              className="w-full sm:flex-1 min-w-0 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-base tracking-[0.4em] font-black text-center outline-none focus:border-amber-500" />
             <button type="submit" disabled={loggingIn || otp.length !== 6}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm disabled:opacity-50 flex items-center gap-2">
+              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm disabled:opacity-50 flex items-center justify-center gap-2">
               {loggingIn ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} Start
             </button>
           </div>
@@ -615,7 +628,7 @@ export default function AgentWorkspace() {
   const breakRemainingAllowance = session?.break?.remaining_minutes ?? 0
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-6 max-w-3xl mx-auto space-y-5">
+    <div className="agent-app min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-6 max-w-3xl mx-auto space-y-5">
       {/* Session bar */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-3">
@@ -707,7 +720,7 @@ export default function AgentWorkspace() {
         <div>
           <label className="text-xs font-bold text-slate-400 block mb-1">Category *</label>
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500">
+            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-base outline-none focus:border-amber-500">
             <option value="">Select category…</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -718,7 +731,7 @@ export default function AgentWorkspace() {
           <label className="text-xs font-bold text-slate-400 block mb-1">Product Title * <span className="text-slate-500">({title.length}/120)</span></label>
           <input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. OnePlus Nord CE4 5G 8GB/128GB Celadon Marble"
-            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500" />
+            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-base outline-none focus:border-amber-500" />
         </div>
 
         {/* Description */}
@@ -726,7 +739,7 @@ export default function AgentWorkspace() {
           <label className="text-xs font-bold text-slate-400 block mb-1">Description *</label>
           <textarea value={description} rows={5} maxLength={4000} onChange={(e) => setDescription(e.target.value)}
             placeholder="Condition, box contents, specifications — anything a customer should know"
-            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500 resize-y" />
+            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-base outline-none focus:border-amber-500 resize-y" />
         </div>
 
         {/* Tags */}
@@ -734,7 +747,7 @@ export default function AgentWorkspace() {
           <label className="text-xs font-bold text-slate-400 block mb-1">Tags <span className="text-slate-500">(comma separated)</span></label>
           <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)}
             placeholder="oneplus, 5g, under 25000, nord"
-            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500" />
+            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-base outline-none focus:border-amber-500" />
         </div>
 
         {/* Return policy */}
@@ -742,7 +755,7 @@ export default function AgentWorkspace() {
           <label className="text-xs font-bold text-slate-400 block mb-1">Return Policy</label>
           <textarea value={returnPolicy} rows={2} maxLength={500} onChange={(e) => setReturnPolicy(e.target.value)}
             placeholder="e.g. 7-day replacement warranty — original box + bill required for claims"
-            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500 resize-y" />
+            className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-base outline-none focus:border-amber-500 resize-y" />
         </div>
 
         <button type="submit" disabled={saving}
@@ -768,6 +781,49 @@ export default function AgentWorkspace() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Save-draft success popup — "Start New" resets for the next entry */}
+      {savedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+          onClick={() => setSavedProduct(null)}>
+          <div className="agent-pop w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-6 text-center space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="relative mx-auto h-20 w-20">
+              <span className="absolute inset-0 rounded-full bg-emerald-500/25" style={{ animation: 'agentRingPulse 1.1s ease-out .25s both' }} />
+              <svg viewBox="0 0 52 52" className="relative h-20 w-20">
+                <circle cx="26" cy="26" r="24" fill="none" stroke="#10b981" strokeWidth="2" opacity=".35" />
+                <path d="M15 27l7.5 7.5L37 19" fill="none" stroke="#10b981" strokeWidth="4"
+                  strokeLinecap="round" strokeLinejoin="round" strokeDasharray="36" strokeDashoffset="36"
+                  style={{ animation: 'agentCheckDraw .45s ease-out .3s forwards' }} />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xl font-black text-emerald-400">Draft saved!</p>
+              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                The manager will set the price &amp; stock and send it for admin approval.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3">
+              {savedProduct.image
+                ? <img src={savedProduct.image} alt="" className="h-14 w-14 rounded-xl object-cover border border-slate-700" />
+                : <div className="h-14 w-14 rounded-xl bg-slate-700 flex items-center justify-center"><ImageIcon size={18} className="text-slate-400" /></div>}
+              <div className="min-w-0 text-left">
+                <p className="font-bold text-sm truncate">{savedProduct.name}</p>
+                <p className="text-[11px] text-slate-500">{savedProduct.imageCount} image{savedProduct.imageCount === 1 ? '' : 's'} attached</p>
+              </div>
+            </div>
+            <button type="button"
+              onClick={() => { setSavedProduct(null); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm flex items-center justify-center gap-2">
+              <PackagePlus size={16} /> Start New Product
+            </button>
+            <button type="button" onClick={() => setSavedProduct(null)}
+              className="text-xs font-bold text-slate-500 hover:text-slate-300">
+              Close
+            </button>
           </div>
         </div>
       )}

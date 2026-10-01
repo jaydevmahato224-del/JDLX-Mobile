@@ -4,8 +4,9 @@
  *   1. Manifest link injected into <head> at runtime (id=agent-manifest-link).
  *   2. Manifest JSON fetches and points at /warehouse/agent with icons.
  *   3. Service worker registers with the narrow /warehouse/agent scope.
- *   4. Share button present; T&C list + OTP form intact (no flow breakage).
- *   5. Navigating away removes the manifest tag (no head pollution).
+ *   4. Login screen intact: T&C list + identifier + Login (no OTP field, no
+ *      share button — both live on the profile / warehouse panel).
+ *   5. Navigating away removes the manifest tag + zoom override (no head pollution).
  */
 import puppeteer from 'puppeteer-core'
 import { spawn } from 'node:child_process'
@@ -73,28 +74,38 @@ const swScope = await page.evaluate(async () => {
 })
 check('3. service worker registered, scope = /warehouse/agent', swScope === APP + '/warehouse/agent', swScope || 'none')
 
-// 4. UI: share button, T&C list, OTP form all present (flow intact).
-check('4a. share-login-link button present', await page.evaluate(() =>
-  [...document.querySelectorAll('button')].some((b) => /share login link/i.test(b.textContent))))
+// 4. UI: T&C list + email/mobile login only (no OTP input, no share button).
+check('4a. share-login-link button NOT on agent login (panel-only now)', await page.evaluate(() =>
+  ![...document.querySelectorAll('button')].some((b) => /share login link/i.test(b.textContent))))
 check('4b. T&C shown at login (6 terms)', await page.evaluate(() =>
   /terms & conditions/i.test(document.body.textContent)
   && document.body.textContent.includes('I accept these terms & conditions')))
-check('4c. login form intact (identifier + optional OTP + login btn)', await page.evaluate(() => {
+check('4c. login form intact (identifier + login btn, NO OTP input)', await page.evaluate(() => {
   const btn = [...document.querySelectorAll('button')].find((b) => b.type === 'submit' && /^Login$/i.test(b.textContent.trim()))
   const inputs = [...document.querySelectorAll('input')]
   return !!btn && inputs.some((i) => i.placeholder === 'Email or mobile number')
-    && inputs.some((i) => i.placeholder === '6-digit OTP (optional)')
+    && !inputs.some((i) => /otp/i.test(i.placeholder))
+}))
+check('4e. zoom override active on agent route (viewport + 16px inputs)', await page.evaluate(() => {
+  const vp = document.querySelector('meta[name="viewport"]')?.getAttribute('content') || ''
+  const identifier = [...document.querySelectorAll('input')].find((i) => i.placeholder === 'Email or mobile number')
+  return /maximum-scale=1/.test(vp) && /user-scalable=no/.test(vp)
+    && !!identifier && parseFloat(getComputedStyle(identifier).fontSize) >= 16
 }))
 check('4d. login disabled until T&C accepted (business rule)', await page.evaluate(() => {
   const btn = [...document.querySelectorAll('button')].find((b) => b.type === 'submit' && /^Login$/i.test(b.textContent.trim()))
   return btn && btn.disabled === true
 }))
 
-// 5. Head pollution cleanup: navigate to another route → manifest removed.
+// 5. Head pollution cleanup: navigate to another route → manifest + zoom override removed.
 await page.goto(APP + '/warehouse/login', { waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {})
 await sleep(500)
 check('5. manifest tag removed after leaving agent route', await page.evaluate(() =>
   !document.getElementById('agent-manifest-link')))
+check('5b. viewport zoom restored after leaving agent route', await page.evaluate(() => {
+  const vp = document.querySelector('meta[name="viewport"]')?.getAttribute('content') || ''
+  return !/user-scalable=no/.test(vp) && !document.getElementById('agent-mobile-style')
+}))
 
 check('6. no page errors', pageErrors.length === 0, pageErrors.join(' | '))
 

@@ -13,6 +13,21 @@ import { resolveMediaUrl } from '../../config'
 // resolve both against the right host for preview thumbnails.
 const toImgUrl = (u) => (u ? resolveMediaUrl(String(u)) : u)
 
+// ── Double-tap guard ──────────────────────────────────────────────────────────
+// React ka disabled state agle RENDER par lagta hai — do turant taps (jaise
+// phone par double-tap) dono handlers chala dete hain aur do requests jaati
+// hain (duplicate draft, same OTP do baar, double break calls...). Ref sinc
+// flip hota hai: pehla hi click lock kar deta hai, render ka wait nahi.
+// Sirf guard hai — har handler ka business logic untouched.
+const guardDoubleClick = (fn) => {
+  let locked = false
+  return async (...args) => {
+    if (locked) return
+    locked = true
+    try { return await fn(...args) } finally { locked = false }
+  }
+}
+
 // ─── Add-Product Agent Workspace ─────────────────────────────────────────────
 // One file, three phases:
 //   LOGIN   — agent enters just their registered email-or-phone (NO OTP, NO
@@ -201,6 +216,7 @@ export default function AgentWorkspace() {
   // break
   const breakStartRef = useRef(null)
   const [breakElapsed, setBreakElapsed] = useState(0)
+  const [breakBusy, setBreakBusy] = useState(false) // button disable during break API call
 
   // product form
   const [categories, setCategories] = useState([])
@@ -314,7 +330,7 @@ export default function AgentWorkspace() {
 
   // ── login: sirf email/phone → profile. OTP yahan NAHI lagta (user
   // requirement) — shift start sirf profile screen se hota hai. ──
-  const handleLogin = async (e) => {
+  const handleLogin = guardDoubleClick(async (e) => {
     e.preventDefault()
     if (!agreed) { toast.error('Please accept the Terms & Conditions first'); return }
     if (!identifier.trim()) { toast.error('Please enter your email or mobile number'); return }
@@ -339,10 +355,10 @@ export default function AgentWorkspace() {
     } finally {
       setLoggingIn(false)
     }
-  }
+  })
 
   // ── profile se shift start: manager ka OTP yahan lagta hai ──
-  const startShiftFromProfile = async (e) => {
+  const startShiftFromProfile = guardDoubleClick(async (e) => {
     e.preventDefault()
     if (!otp.trim()) { toast.error('Enter the 6-digit OTP from your manager to start the shift'); return }
     setLoggingIn(true)
@@ -367,18 +383,19 @@ export default function AgentWorkspace() {
     } finally {
       setLoggingIn(false)
     }
-  }
+  })
 
   // Logout = shift khatam (agar live hai) + profile token gaya → login screen.
-  const handleLogout = async () => {
+  const handleLogout = guardDoubleClick(async () => {
     try { await agentFetch('/agent/logout', { method: 'POST' }) } catch { /* ignore */ }
     localStorage.removeItem(AGENT_TOKEN_KEY)
     setToken(''); setMe(null); setSession(null); setStats(null); setPhase('login')
     toast.success('Logged out — shift complete? 🎉')
-  }
+  })
 
   // ── break actions ──
-  const startBreak = async () => {
+  const startBreak = guardDoubleClick(async () => {
+    setBreakBusy(true)
     try {
       const res = await agentFetch('/agent/break/start', { method: 'POST' })
       const json = await res.json().catch(() => ({}))
@@ -386,10 +403,11 @@ export default function AgentWorkspace() {
       const sessRes = await agentFetch('/agent/session')
       if (sessRes.ok) setSession((await sessRes.json()).data)
       toast.success('Break started — countdown paused')
-    } catch (err) { toast.error(err.message) }
-  }
+    } catch (err) { toast.error(err.message) } finally { setBreakBusy(false) }
+  })
 
-  const endBreak = async () => {
+  const endBreak = guardDoubleClick(async () => {
+    setBreakBusy(true)
     try {
       const res = await agentFetch('/agent/break/end', { method: 'POST' })
       const json = await res.json().catch(() => ({}))
@@ -397,8 +415,8 @@ export default function AgentWorkspace() {
       const sessRes = await agentFetch('/agent/session')
       if (sessRes.ok) setSession((await sessRes.json()).data)
       toast.success(`Break over — session extended by ${json.data?.break_taken_minutes ?? ''} min`)
-    } catch (err) { toast.error(err.message) }
-  }
+    } catch (err) { toast.error(err.message) } finally { setBreakBusy(false) }
+  })
 
   // ── product form helpers ──
   const loadWorkspaceData = useCallback(async () => {
@@ -416,7 +434,7 @@ export default function AgentWorkspace() {
 
   useEffect(() => { if (phase === 'app') loadWorkspaceData() }, [phase, loadWorkspaceData])
 
-  const handleUpload = async (file) => {
+  const handleUpload = guardDoubleClick(async (file) => {
     if (!file) return
     if (images.length >= 8) { toast.error('Max 8 images'); return }
     setUploading(true)
@@ -430,11 +448,11 @@ export default function AgentWorkspace() {
       toast.success('Image uploaded')
     } catch (err) { toast.error(err.message) }
     finally { setUploading(false) }
-  }
+  })
 
   const removeImage = (idx) => setImages((prev) => prev.filter((_, i) => i !== idx))
 
-  const handleSave = async (e) => {
+  const handleSave = guardDoubleClick(async (e) => {
     e.preventDefault()
     if (!title.trim() || !description.trim() || !categoryId || images.length === 0) {
       toast.error('Image, category, title and description are all required')
@@ -466,7 +484,7 @@ export default function AgentWorkspace() {
       loadWorkspaceData()
     } catch (err) { toast.error(err.message) }
     finally { setSaving(false) }
-  }
+  })
 
   // ══════════════════ LOGIN PHASE ══════════════════
   if (phase === 'login' || phase === 'boot') {
@@ -673,13 +691,13 @@ export default function AgentWorkspace() {
         {onBreak ? (
           <div className="ml-auto flex items-center gap-3">
             <span className="text-red-400 font-black tabular-nums">{fmtCountdown(breakElapsed)}</span>
-            <button onClick={endBreak}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/90 hover:bg-red-500 text-white font-black text-sm">
+            <button onClick={endBreak} disabled={breakBusy}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/90 hover:bg-red-500 disabled:opacity-60 text-white font-black text-sm">
               <Square size={14} /> End Break
             </button>
           </div>
         ) : (
-          <button onClick={startBreak} disabled={breakRemainingAllowance <= 0}
+          <button onClick={startBreak} disabled={breakBusy || breakRemainingAllowance <= 0}
             className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 font-bold text-sm">
             <Play size={14} /> Start Break
           </button>

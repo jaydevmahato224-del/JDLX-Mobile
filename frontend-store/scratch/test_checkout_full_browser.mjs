@@ -93,6 +93,11 @@ await page.evaluateOnNewDocument(() => {
     setter.call(el, value)
     el.dispatchEvent(new Event('input', { bubbles: true }))
   }
+  // Returning-user flags: skip the ~6s splash animation (its waits would
+  // otherwise swallow the fixed page-load waits below). App's own flags —
+  // no app behavior is bypassed.
+  try { sessionStorage.setItem('jdlx_splash_shown', 'true') } catch {}
+  try { localStorage.setItem('jdlx_onboarding_done', '1') } catch {}
 })
 
 // ── 1. Login session + Home ──

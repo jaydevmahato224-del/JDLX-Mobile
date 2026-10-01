@@ -52,6 +52,17 @@ const browser = await puppeteer.launch({
 })
 const page = await browser.newPage()
 await page.setViewport({ width: 412, height: 915 })
+
+// Behave like a RETURNING user: skip the ~6s splash animation and the
+// first-run onboarding overlay so the flow checks exercise the pages
+// themselves. (The splash/onboarding surfaces are separate UI; this test
+// predates the splash-everywhere change and its 3.5s waits can never clear
+// a fresh-session splash.) sessionStorage/localStorage flags are what the
+// app itself checks — no app code is bypassed.
+await page.evaluateOnNewDocument(() => {
+  try { sessionStorage.setItem('jdlx_splash_shown', 'true') } catch {}
+  try { localStorage.setItem('jdlx_onboarding_done', '1') } catch {}
+})
 const pageErrors = []
 page.on('pageerror', (err) => pageErrors.push('pageerror: ' + err.toString().slice(0, 200)))
 page.on('console', (msg) => { if (msg.type() === 'error') pageErrors.push('console: ' + msg.text().slice(0, 160)) })
@@ -128,7 +139,9 @@ check('guest /profile redirects to login', page.url().includes('/login'))
 
 // ── 6. LOGIN: Google-OAuth-only (no password form) — verify OAuth entry renders ──
 await page.goto(`${APP}/login`, { waitUntil: 'domcontentloaded', timeout: 45000 })
-await new Promise(r => setTimeout(r, 1500))
+// Vite dev lazy-loads the Login chunk on first visit; 3s gives it time to
+// compile + mount (1.5s intermittently landed on an empty body).
+await new Promise(r => setTimeout(r, 3000))
 const loginForm = await page.evaluate(() => {
   const t = document.body.innerText.toLowerCase()
   const hasGoogle = t.includes('google') || !!document.querySelector('svg')

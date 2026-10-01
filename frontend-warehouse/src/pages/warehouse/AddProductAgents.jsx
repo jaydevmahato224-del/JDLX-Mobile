@@ -171,6 +171,11 @@ export default function AddProductAgents() {
   const isCaseLikeCategory = (cat) =>
     /case|cover|skin|pouch|sleeve/i.test(String(cat || ''))
 
+  // Discount base matches the backend's mrp_eff (complete endpoint): MRP when
+  // filled, else the selling price. Keeps the UI auto-calc identical to what
+  // gets stored.
+  const draftDiscountBase = (f) => parseFloat(f?.mrp) || parseFloat(f?.price) || 0
+
   const openComplete = (draft) => {
     setOpenDraft(draft.id)
     setDraftForm({
@@ -180,6 +185,7 @@ export default function AddProductAgents() {
       // Extended fields (parity with the regular add-product form)
       units_per_pack: '1', material_type: '',
       discount_amt: '', discount_pct: '', gst_pct: '',
+      apply_gst: true,
       offline_price: '', is_active: true,
       compatibility: draft.content?.compatibility || '',
       box_contents: draft.content?.box_contents || '',
@@ -204,7 +210,7 @@ export default function AddProductAgents() {
           units_per_pack: draftForm.units_per_pack,
           material_type: draftForm.material_type,
           discount_amt: draftForm.discount_amt, discount_pct: draftForm.discount_pct,
-          gst_pct: draftForm.gst_pct,
+          gst_pct: draftForm.apply_gst === false ? 0 : draftForm.gst_pct,
           offline_price: draftForm.offline_price,
           is_active: draftForm.is_active,
           compatibility: draftForm.compatibility,
@@ -302,7 +308,7 @@ export default function AddProductAgents() {
 
       {/* ── Agent login link — share + installable app info ── */}
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="min-w-0 flex-1">
             <h2 className="font-black flex items-center gap-2 text-sm">
               <ExternalLink size={16} className="text-amber-400" /> Agent Login Link
@@ -310,11 +316,11 @@ export default function AddProductAgents() {
             <p className="text-xs text-slate-500 mt-1 truncate">
               {agentLoginUrl()}
             </p>
-            <p className="text-[11px] text-slate-600 mt-1 flex items-center gap-1">
-              <Smartphone size={11} /> Agents can also install this as an app on their phone ("Install App" button on the login page).
+            <p className="text-[11px] text-slate-600 mt-1 flex items-start gap-1">
+              <Smartphone size={11} className="shrink-0 mt-0.5" /> <span>Agents can also install this as an app on their phone ("Install App" button on the login page).</span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <button onClick={copyLink}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-sm border border-slate-700">
               {linkCopied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
@@ -474,16 +480,16 @@ export default function AddProductAgents() {
           <div className="space-y-3">
             {draftList.map((d) => (
               <div key={d.id} className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {Array.isArray(d.images) && d.images[0]
                     ? <img src={toImgUrl(d.images[0])} alt="" className="h-12 w-12 rounded-lg object-cover border border-slate-700" />
                     : <div className="h-12 w-12 rounded-lg bg-slate-700" />}
-                  <div className="min-w-0 flex-1">
+                  <div className="flex-1 min-w-[10rem]">
                     <p className="font-bold text-sm truncate">{d.name}</p>
-                    <p className="text-xs text-slate-400">{d.category} · by <span className="text-amber-400 font-bold">{d.added_by_agent_code}</span> ({d.agent_name})</p>
+                    <p className="text-xs text-slate-400 truncate">{d.category} · by <span className="text-amber-400 font-bold">{d.added_by_agent_code}</span> ({d.agent_name})</p>
                   </div>
                   <button onClick={() => (openDraft === d.id ? setOpenDraft(null) : openComplete(d))}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm">
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm">
                     Complete & Submit {openDraft === d.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
                 </div>
@@ -510,11 +516,29 @@ export default function AddProductAgents() {
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <label className="text-xs font-bold text-slate-400">Price (₹) *
-                        <input type="number" min="1" value={draftForm.price} onChange={(e) => setDraftForm({ ...draftForm, price: e.target.value })}
+                        <input type="number" min="1" value={draftForm.price} onChange={(e) => setDraftForm((prev) => {
+                          const next = { ...prev, price: e.target.value }
+                          // Base changed — refresh whichever discount field is filled.
+                          const base = draftDiscountBase(next)
+                          const amt = parseFloat(prev.discount_amt) || 0
+                          const pct = parseFloat(prev.discount_pct) || 0
+                          if (amt > 0 && base > 0) next.discount_pct = ((amt / base) * 100).toFixed(2)
+                          else if (pct > 0 && base > 0) next.discount_amt = (base * (pct / 100)).toFixed(2)
+                          return next
+                        })}
                           className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
                       </label>
                       <label className="text-xs font-bold text-slate-400">MRP (₹)
-                        <input type="number" min="0" value={draftForm.mrp} onChange={(e) => setDraftForm({ ...draftForm, mrp: e.target.value })}
+                        <input type="number" min="0" value={draftForm.mrp} onChange={(e) => setDraftForm((prev) => {
+                          const next = { ...prev, mrp: e.target.value }
+                          // Base changed — refresh whichever discount field is filled.
+                          const base = draftDiscountBase(next)
+                          const amt = parseFloat(prev.discount_amt) || 0
+                          const pct = parseFloat(prev.discount_pct) || 0
+                          if (amt > 0 && base > 0) next.discount_pct = ((amt / base) * 100).toFixed(2)
+                          else if (pct > 0 && base > 0) next.discount_amt = (base * (pct / 100)).toFixed(2)
+                          return next
+                        })}
                           className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
                       </label>
                       <label className="text-xs font-bold text-slate-400">Stock
@@ -554,43 +578,67 @@ export default function AddProductAgents() {
                       </label>
                     </div>
 
-                    {/* ── Discount & GST — amt/pct two-way auto-calc, same as Inventory form ── */}
+                    {/* ── Discount & GST — amt/pct two-way auto-calc (base = MRP, else price — same as backend) ── */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
                       <label className="text-xs font-bold text-slate-400">Discount (₹)
                         <input type="number" min="0" value={draftForm.discount_amt}
                           onChange={(e) => {
-                            const m = parseFloat(draftForm.mrp) || 0
                             const amt = e.target.value
-                            setDraftForm((prev) => ({
-                              ...prev, discount_amt: amt,
-                              discount_pct: m > 0 && parseFloat(amt) > 0 ? ((parseFloat(amt) / m) * 100).toFixed(2) : '',
-                            }))
+                            setDraftForm((prev) => {
+                              const base = draftDiscountBase(prev)
+                              return {
+                                ...prev, discount_amt: amt,
+                                discount_pct: base > 0 && parseFloat(amt) > 0 ? ((parseFloat(amt) / base) * 100).toFixed(2) : '',
+                              }
+                            })
                           }}
                           className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
                       </label>
                       <label className="text-xs font-bold text-slate-400">Discount (%)
                         <input type="number" min="0" max="100" value={draftForm.discount_pct}
                           onChange={(e) => {
-                            const m = parseFloat(draftForm.mrp) || 0
                             const pct = e.target.value
-                            setDraftForm((prev) => ({
-                              ...prev, discount_pct: pct,
-                              discount_amt: m > 0 && parseFloat(pct) > 0 ? (m * (parseFloat(pct) / 100)).toFixed(2) : '',
-                            }))
+                            setDraftForm((prev) => {
+                              const base = draftDiscountBase(prev)
+                              return {
+                                ...prev, discount_pct: pct,
+                                discount_amt: base > 0 && parseFloat(pct) > 0 ? (base * (parseFloat(pct) / 100)).toFixed(2) : '',
+                              }
+                            })
                           }}
                           className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
                       </label>
-                      <label className="text-xs font-bold text-slate-400">GST Rate (%)
-                        <input type="number" min="0" max="28" value={draftForm.gst_pct} placeholder="18"
-                          onChange={(e) => setDraftForm({ ...draftForm, gst_pct: e.target.value })}
-                          className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
-                      </label>
+                      {/* GST toggle — non-GST-registered sellers can switch GST off entirely (stored as 0) */}
+                      <div className={`flex flex-col justify-between p-3 rounded-lg border transition-all ${draftForm.apply_gst ? 'border-amber-500/40 bg-amber-500/5' : 'border-slate-700 bg-slate-800/60'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-400">GST / TAX</span>
+                          <button type="button" onClick={() => setDraftForm((prev) => ({
+                            ...prev,
+                            apply_gst: !prev.apply_gst,
+                            gst_pct: !prev.apply_gst ? (prev.gst_pct === 0 ? '' : prev.gst_pct) : 0,
+                          }))}
+                            aria-label="Toggle GST on or off for this product"
+                            className={`w-9 h-5 rounded-full p-0.5 transition-all shrink-0 ${draftForm.apply_gst ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                            <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${draftForm.apply_gst ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </button>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-1">
+                          {draftForm.apply_gst ? 'Enabled' : 'Disabled — no GST on product'}
+                        </p>
+                      </div>
                       <label className="text-xs font-bold text-slate-400">Offline Sale Price (₹)
                         <input type="number" min="0" value={draftForm.offline_price} placeholder="blank = online price"
                           onChange={(e) => setDraftForm({ ...draftForm, offline_price: e.target.value })}
                           className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
                       </label>
                     </div>
+                    {draftForm.apply_gst && (
+                      <label className="text-xs font-bold text-slate-400 block">GST Rate (%)
+                        <input type="number" min="0" max="28" value={draftForm.gst_pct} placeholder="18"
+                          onChange={(e) => setDraftForm({ ...draftForm, gst_pct: e.target.value })}
+                          className="mt-1 w-full sm:w-40 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 outline-none focus:border-amber-500" />
+                      </label>
+                    )}
 
                     {/* ── Compatibility / Box / Warranty (case categories auto-locked) ── */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">

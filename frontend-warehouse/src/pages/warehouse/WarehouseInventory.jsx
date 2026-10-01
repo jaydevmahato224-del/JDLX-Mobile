@@ -652,8 +652,24 @@ const WarehouseInventory = () => {
             price: item.selling_price || item.global_price || 0,
             offline_price: item.offline_price || '',
             mrp: item.mrp || 0,
-            discount_pct: item.discount_pct || 0,
-            discount_amt: item.discount_amt || 0,
+            // Form invariant everywhere: discount = MRP − selling price (every
+            // MRP/price/discount edit recomputes it). Rows stored before this
+            // invariant carry 0/0 despite MRP above price — derive for display
+            // so the fields don't open stale; stored non-zero values are kept.
+            discount_pct: (() => {
+                const st = parseFloat(item.discount_pct) || 0
+                if (st > 0) return st
+                const m = parseFloat(item.mrp) || 0
+                const p = parseFloat(item.selling_price || item.global_price || 0) || 0
+                return m > 0 && m > p ? +(((m - p) / m) * 100).toFixed(2) : 0
+            })(),
+            discount_amt: (() => {
+                const st = parseFloat(item.discount_amt) || 0
+                if (st > 0) return st
+                const m = parseFloat(item.mrp) || 0
+                const p = parseFloat(item.selling_price || item.global_price || 0) || 0
+                return m > 0 && m > p ? +(m - p).toFixed(2) : 0
+            })(),
             gst_pct: item.gst_pct,
             apply_gst: item.gst_pct !== null && item.gst_pct !== undefined,
             brand: item.global_brand || item.local_brand || '',

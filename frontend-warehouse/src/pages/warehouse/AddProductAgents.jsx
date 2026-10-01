@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import {
   UserPlus, Copy, Check, KeyRound, Clock, Power, Trash2, PackagePlus,
   RefreshCw, Timer, Coffee, ShieldCheck, ChevronDown, ChevronUp,
-  Share2, ExternalLink, Smartphone
+  Share2, ExternalLink, Smartphone, Wallet, IndianRupee, ClipboardList, Clock3
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { resolveMediaUrl } from '../../config'
@@ -47,6 +47,9 @@ export default function AddProductAgents() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [photo, setPhoto] = useState(null)
+  const [perEntryRate, setPerEntryRate] = useState('')   // ₹ per entry (manager decides)
+  const [rateEditing, setRateEditing] = useState(null)   // agent_id being rate-edited
+  const [rateValue, setRateValue] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -81,7 +84,7 @@ export default function AddProductAgents() {
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast.error('Valid email enter karen')
+      toast.error('Please enter a valid email')
       return
     }
     setRegSubmitting(true)
@@ -90,12 +93,13 @@ export default function AddProductAgents() {
       fd.append('name', name.trim())
       fd.append('email', email.trim())
       fd.append('phone', phone.trim())
+      fd.append('per_entry_rate', perEntryRate || '0')
       if (photo) fd.append('photo', photo)
       const res = await apiFetch('/warehouse/add-agents', { method: 'POST', body: fd })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || json.message || 'Registration failed')
       toast.success(`Agent registered — ID: ${(json.data || {}).agent_code || ''}`)
-      setName(''); setEmail(''); setPhone(''); setPhoto(null)
+      setName(''); setEmail(''); setPhone(''); setPhoto(null); setPerEntryRate('')
       load()
     } catch (err) {
       toast.error(err.message)
@@ -122,6 +126,20 @@ export default function AddProductAgents() {
     }
   }
 
+  const saveAgentRate = async (agent) => {
+    try {
+      const res = await apiFetch(`/warehouse/add-agents/${agent.id}/rate`, {
+        method: 'PATCH',
+        body: JSON.stringify({ per_entry_rate: rateValue }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || json.message || 'Rate update failed')
+      toast.success(`Rate updated — ₹${json.data?.per_entry_rate ?? rateValue} per entry`)
+      setRateEditing(null); setRateValue('')
+      load()
+    } catch (err) { toast.error(err.message) }
+  }
+
   const toggleAgent = async (agent) => {
     try {
       const res = await apiFetch(`/warehouse/add-agents/${agent.id}`, {
@@ -138,10 +156,10 @@ export default function AddProductAgents() {
   }
 
   const deleteAgent = async (agent) => {
-    if (!window.confirm(`Delete agent ${agent.name} (${agent.agent_code})? Ye permanent hai.`)) return
+    if (!window.confirm(`Delete agent ${agent.name} (${agent.agent_code})? This is permanent.`)) return
     try {
       const res = await apiFetch(`/warehouse/add-agents/${agent.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete fail hua')
+      if (!res.ok) throw new Error('Delete failed')
       toast.success('Agent deleted')
       load()
     } catch (err) { toast.error(err.message) }
@@ -232,7 +250,7 @@ export default function AddProductAgents() {
   const shareOtpOnWhatsApp = () => {
     if (!lastOtp) return
     const url = agentLoginUrl()
-    const msg = `JDLX Agent login:\nID: ${lastOtp.agent_name}\nOTP: ${lastOtp.otp}\nSession: ${fmtMin(lastOtp.duration_minutes)}\nLogin yahan karen: ${url}`
+    const msg = `JDLX Agent login:\nID: ${lastOtp.agent_name}\nOTP: ${lastOtp.otp}\nSession: ${fmtMin(lastOtp.duration_minutes)}\nLogin here: ${url}`
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener')
   }
 
@@ -270,6 +288,11 @@ export default function AddProductAgents() {
             <input type="file" accept="image/*" className="hidden"
               onChange={(e) => setPhoto(e.target.files?.[0] || null)} />
           </label>
+          <input value={perEntryRate} onChange={(e) => setPerEntryRate(e.target.value)} placeholder="Pay per entry (₹) — e.g. 10" type="number" min="0" step="0.5"
+            className="md:col-span-2 px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500" />
+          <p className="md:col-span-2 text-[11px] text-slate-500 self-center">
+            The agent will see their earning calculated at this rate on their profile. You can change it later.
+          </p>
           <button type="submit" disabled={regSubmitting}
             className="md:col-span-4 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm disabled:opacity-50">
             {regSubmitting ? 'Registering…' : 'Register Agent — gets a unique ID'}
@@ -359,8 +382,50 @@ export default function AddProductAgents() {
                   </span>
                 </div>
 
-                {/* OTP generator: flexible duration dropdown (60–480, max 8h) */}
+                {/* Work + payout snapshot — entries, time worked, break, earning */}
+                {a.stats && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                    <div className="rounded-lg bg-slate-950/60 border border-slate-800 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1"><ClipboardList size={10} /> Entries</p>
+                      <p className="text-sm font-black text-slate-100">{a.stats.entries} <span className="text-slate-500 font-bold">({a.stats.approved_entries} approved)</span></p>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/60 border border-slate-800 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1"><Clock3 size={10} /> Worked</p>
+                      <p className="text-sm font-black text-slate-100">{fmtMin(Math.round(a.stats.minutes_worked || 0))}</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/60 border border-slate-800 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1"><Coffee size={10} /> Break</p>
+                      <p className="text-sm font-black text-slate-100">{fmtMin(Math.round(a.stats.break_minutes || 0))}</p>
+                    </div>
+                    <div className="rounded-lg bg-emerald-950/40 border border-emerald-900/60 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 flex items-center gap-1"><Wallet size={10} /> Payable</p>
+                      <p className="text-sm font-black text-emerald-300">₹{a.stats.total_earning} <span className="text-emerald-600/80 font-bold">@ ₹{a.stats.per_entry_rate}/entry</span></p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rate edit + OTP generator row */}
                 <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-800">
+                  {rateEditing === a.id ? (
+                    <span className="flex items-center gap-1.5">
+                      <IndianRupee size={14} className="text-amber-400" />
+                      <input type="number" min="0" step="0.5" value={rateValue} autoFocus
+                        onChange={(e) => setRateValue(e.target.value)} placeholder="₹ per entry"
+                        className="w-28 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm outline-none focus:border-amber-500" />
+                      <button onClick={() => saveAgentRate(a)}
+                        className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs">Save</button>
+                      <button onClick={() => { setRateEditing(null); setRateValue('') }}
+                        className="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs">Cancel</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => { setRateEditing(a.id); setRateValue(String(a.per_entry_rate ?? 0)) }}
+                      title="Change the per-entry payout rate"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs">
+                      <IndianRupee size={13} className="text-amber-400" /> ₹{a.per_entry_rate ?? 0} / entry
+                    </button>
+                  )}
+
+                  {/* OTP generator: flexible duration dropdown (60–480, max 8h) */}
                   <select
                     id={`dur-${a.id}`}
                     defaultValue={240}

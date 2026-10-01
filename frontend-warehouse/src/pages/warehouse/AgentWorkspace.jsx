@@ -3,7 +3,8 @@ import toast from 'react-hot-toast'
 import {
   PackagePlus, KeyRound, Timer, Coffee, Play, Square, LogOut, Upload,
   Trash2, Image as ImageIcon, Loader2, ShieldCheck, AlertTriangle,
-  Share2, Download, Smartphone
+  Share2, Download, Smartphone, Wallet, ClipboardList, Clock3, TrendingUp,
+  BadgeCheck, PlayCircle
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { resolveMediaUrl } from '../../config'
@@ -14,11 +15,16 @@ import { shareAgentLink, agentLoginUrl } from '../../utils/agentShare'
 const toImgUrl = (u) => (u ? resolveMediaUrl(String(u)) : u)
 
 // ─── Add-Product Agent Workspace ─────────────────────────────────────────────
-// One file, two phases:
-//   LOGIN  — agent enters email-or-phone + the 6-digit OTP the warehouse
-//            manager generated for them today. Terms & conditions are shown
-//            CLEARLY on this screen (user requirement) before login.
-//   APP    — session countdown (flexible, manager-chosen duration), break
+// One file, three phases:
+//   LOGIN   — agent enters just their registered email-or-phone (NO OTP
+//             needed) and lands on their profile. The 6-digit OTP the manager
+//             generates is now OPTIONAL at login: entering it starts the paid
+//             shift immediately. Terms & conditions are shown CLEARLY on this
+//             screen (user requirement) before login.
+//   PROFILE — lifetime stats: entries made, time worked, break time taken,
+//             the manager-set per-entry rate (₹) and total earning. From here
+//             the agent can start a shift by entering the manager's OTP.
+//   APP     — session countdown (flexible, manager-chosen duration), break
 //            control (15 min per rolling hour, splittable — pause the
 //            countdown), and the add-product form with ONLY the allowed
 //            fields. No price/stock input exists here at all.
@@ -127,12 +133,30 @@ function fmtCountdown(totalSeconds) {
     : `${m}:${String(sec).padStart(2, '0')}`
 }
 
+const fmtMinutes = (m) => {
+  const total = Math.round(Number(m) || 0)
+  const h = Math.floor(total / 60)
+  return h ? `${h}h ${total % 60}m` : `${total}m`
+}
+
+function StatCard({ icon: IconComp, label, value, accent }) {
+  const Icon = IconComp
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <Icon size={16} className="text-amber-400 mb-2" />
+      <p className={`text-xl font-black ${accent || 'text-slate-100'}`}>{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-0.5">{label}</p>
+    </div>
+  )
+}
+
 export default function AgentWorkspace() {
   const pwa = useAgentPwa()
   const [token, setToken] = useState(() => localStorage.getItem(AGENT_TOKEN_KEY) || '')
-  const [phase, setPhase] = useState(token ? 'boot' : 'login') // login | boot | app
+  const [phase, setPhase] = useState(token ? 'boot' : 'login') // login | boot | profile | app
   const [me, setMe] = useState(null)
   const [session, setSession] = useState(null)
+  const [stats, setStats] = useState(null)
 
   // login form
   const [identifier, setIdentifier] = useState('')
@@ -156,22 +180,50 @@ export default function AgentWorkspace() {
   const [saving, setSaving] = useState(false)
   const [myDrafts, setMyDrafts] = useState([])
 
-  // ── auth boot: token hai to session validate karo ──
+  // ── auth boot: token hai to profile se confirm karo (shift live ho to app me jao) ──
   const bootSession = useCallback(async () => {
     try {
-      const res = await agentFetch('/agent/session')
+      const res = await agentFetch('/agent/profile')
       if (!res.ok) throw new Error('session dead')
       const json = await res.json()
       const d = json.data || json
       setMe(d.agent)
-      setSession(d)
-      setPhase('app')
+      setStats(d.stats || null)
+      if (d.session) {
+        setSession(d.session)
+        setPhase('app')
+      } else {
+        setSession(null)
+        setPhase('profile')
+      }
     } catch {
       localStorage.removeItem(AGENT_TOKEN_KEY)
       setToken('')
       setPhase('login')
     }
   }, [])
+
+  // Shift khatam → profile pe wapas. Profile-scope token fresh login-self se
+  // banta hai (shift token us se zyada powerful hota hai — down-swap nahi).
+  const backToProfile = useCallback(async () => {
+    const ident = (me?.email || me?.phone || '').trim().toLowerCase()
+    if (!ident) { setPhase('login'); return }
+    try {
+      const res = await apiFetch('/agent/login-self', { method: 'POST', body: JSON.stringify({ identifier: ident }) })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error('re-login failed')
+      const d = json.data || {}
+      localStorage.setItem(AGENT_TOKEN_KEY, d.token)
+      setToken(d.token)
+      setMe(d.agent)
+      setStats(d.stats || null)
+      setSession(null)
+      setPhase('profile')
+    } catch {
+      localStorage.removeItem(AGENT_TOKEN_KEY)
+      setToken(''); setMe(null); setSession(null); setStats(null); setPhase('login')
+    }
+  }, [me?.email, me?.phone])
 
   useEffect(() => { if (phase === 'boot' && token) bootSession() }, [phase, token, bootSession])
 
@@ -182,9 +234,9 @@ export default function AgentWorkspace() {
       try {
         const res = await agentFetch('/agent/session')
         if (res.status === 401 || res.status === 403) {
-          localStorage.removeItem(AGENT_TOKEN_KEY)
-          setToken(''); setPhase('login')
-          toast.error('Session over — ask the manager for a new OTP')
+          // Shift khatam/revoke → profile page (stats ke saath), login nahi.
+          toast('Shift over — profile updated', { icon: '⏱️' })
+          backToProfile()
           return
         }
         if (res.ok) {
@@ -195,7 +247,7 @@ export default function AgentWorkspace() {
     }
     const id = setInterval(tick, 30000)
     return () => clearInterval(id)
-  }, [phase, token])
+  }, [phase, token, backToProfile])
 
   // ── local 1s countdown between heartbeats ──
   useEffect(() => {
@@ -224,24 +276,49 @@ export default function AgentWorkspace() {
     return () => clearInterval(id)
   }, [session?.break?.active?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── login: sirf email/phone → profile. OTP optional hai — diya to shift
+  // turant start ho jayegi (manager ne jo duration di wahi lagegi). ──
   const handleLogin = async (e) => {
     e.preventDefault()
     if (!agreed) { toast.error('Please accept the Terms & Conditions first'); return }
+    if (!identifier.trim()) {      toast.error('Please enter your email or mobile number'); return }
     setLoggingIn(true)
     try {
-      const res = await apiFetch('/agent/login', {
-        method: 'POST',
-        body: JSON.stringify({ identifier: identifier.trim(), otp: otp.trim() }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
-      const d = json.data || {}
-      localStorage.setItem(AGENT_TOKEN_KEY, d.token)
-      setToken(d.token)
-      setMe(d.agent)
-      setSession(d.session)
-      setPhase('app')
-      toast.success(`Welcome ${d.agent?.name || ''} — session started!`)
+      const otpVal = otp.trim()
+      if (otpVal) {
+        // OTP diya hai → seedha shift start (existing OTP flow, untouched).
+        const res = await apiFetch('/agent/login', {
+          method: 'POST',
+          body: JSON.stringify({ identifier: identifier.trim(), otp: otpVal }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
+        const d = json.data || {}
+        localStorage.setItem(AGENT_TOKEN_KEY, d.token)
+        setToken(d.token)
+        setMe(d.agent)
+        setSession(d.session)
+        const pRes = await agentFetch('/agent/profile')
+        if (pRes.ok) setStats(((await pRes.json()).data || {}).stats || null)
+        setPhase('app')
+        toast.success(`Welcome ${d.agent?.name || ''} — session started!`)
+      } else {
+        // Sirf email/phone → profile page (no OTP, no password).
+        const res = await apiFetch('/agent/login-self', {
+          method: 'POST',
+          body: JSON.stringify({ identifier: identifier.trim() }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error || json.message || 'Login failed')
+        const d = json.data || {}
+        localStorage.setItem(AGENT_TOKEN_KEY, d.token)
+        setToken(d.token)
+        setMe(d.agent)
+        setStats(d.stats || null)
+        setSession(null)
+        setPhase('profile')
+        toast.success(`Welcome ${d.agent?.name || ''}!`)
+      }
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -249,10 +326,39 @@ export default function AgentWorkspace() {
     }
   }
 
+  // ── profile se shift start: manager ka OTP yahan lagta hai ──
+  const startShiftFromProfile = async (e) => {
+    e.preventDefault()
+    if (!otp.trim()) { toast.error('Enter the 6-digit OTP from your manager to start the shift'); return }
+    setLoggingIn(true)
+    try {
+      const res = await apiFetch('/agent/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: (me?.email || me?.phone || '').trim().toLowerCase(), otp: otp.trim() }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || json.message || 'Could not start the shift')
+      const d = json.data || {}
+      // Shift token replaces the profile token (narrower→fuller scope swap).
+      localStorage.setItem(AGENT_TOKEN_KEY, d.token)
+      setToken(d.token)
+      setMe(d.agent)
+      setSession(d.session)
+      setPhase('app')
+      setOtp('')
+      toast.success('Session started — all the best! 🎉')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
+  // Logout = shift khatam (agar live hai) + profile token gaya → login screen.
   const handleLogout = async () => {
     try { await agentFetch('/agent/logout', { method: 'POST' }) } catch { /* ignore */ }
     localStorage.removeItem(AGENT_TOKEN_KEY)
-    setToken(''); setMe(null); setSession(null); setPhase('login')
+    setToken(''); setMe(null); setSession(null); setStats(null); setPhase('login')
     toast.success('Logged out — shift complete? 🎉')
   }
 
@@ -282,12 +388,14 @@ export default function AgentWorkspace() {
   // ── product form helpers ──
   const loadWorkspaceData = useCallback(async () => {
     try {
-      const [cRes, dRes] = await Promise.all([
+      const [cRes, dRes, pRes] = await Promise.all([
         agentFetch('/agent/categories'),
         agentFetch('/agent/products'),
+        agentFetch('/agent/profile'),
       ])
       if (cRes.ok) { const j = await cRes.json(); setCategories(j.data || j || []) }
       if (dRes.ok) { const j = await dRes.json(); setMyDrafts(j.data || j || []) }
+      if (pRes.ok) { const j = await pRes.json(); setStats(((j.data || j) || {}).stats || null) }
     } catch { /* non-fatal */ }
   }, [])
 
@@ -329,7 +437,7 @@ export default function AgentWorkspace() {
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || json.message || 'Save fail hua')
+      if (!res.ok) throw new Error(json.error || json.message || 'Could not save the draft')
       toast.success('Draft saved ✅ The manager will complete the rest and send it for admin approval')
       setTitle(''); setDescription(''); setTagsInput(''); setReturnPolicy('')
       setImages([]); setCategoryId('')
@@ -349,7 +457,7 @@ export default function AgentWorkspace() {
             <div className="text-center">
               <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center mx-auto text-2xl shadow-lg shadow-amber-500/20">📦</div>
               <h1 className="text-2xl font-black mt-3">Add-Product Agent Login</h1>
-              <p className="text-sm text-slate-400 mt-1">Enter the OTP from your warehouse manager along with your email/phone</p>
+              <p className="text-sm text-slate-400 mt-1">Registered agent? Enter just your email or mobile number — no OTP needed. An OTP, if you have one, starts your paid shift right away.</p>
             </div>
 
             {/* T&C — clearly shown at login time (user requirement) */}
@@ -376,17 +484,17 @@ export default function AgentWorkspace() {
                 placeholder="Email or mobile number" autoComplete="username"
                 className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm outline-none focus:border-amber-500" />
               <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="6-digit OTP" inputMode="numeric" autoComplete="one-time-code"
+                placeholder="6-digit OTP (optional)" inputMode="numeric" autoComplete="one-time-code"
                 className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm tracking-[0.4em] font-black text-center outline-none focus:border-amber-500" />
               <button type="submit" disabled={loggingIn || !agreed}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm disabled:opacity-50 flex items-center justify-center gap-2">
                 {loggingIn ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
-                {loggingIn ? 'Logging in…' : 'Login with OTP'}
+                {loggingIn ? 'Logging in…' : 'Login'}
               </button>
             </form>
             <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-              There is no password — the manager creates a fresh OTP every day.<br />
-              The manager chooses the session duration (1–8 hours).
+              No password, no OTP needed to open your profile.<br />
+              To work a shift, enter the daily OTP your manager generates (1–8 hours).
             </p>
 
             {/* Install (PWA) + share — agents ise phone me app ki tarah rakh sakte hain */}
@@ -405,7 +513,7 @@ export default function AgentWorkspace() {
               <button type="button"
                 onClick={async () => {
                   const how = await shareAgentLink(agentLoginUrl())
-                  if (how === 'copied') toast.success('Link copy ho gaya')
+                  if (how === 'copied') toast.success('Login link copied')
                 }}
                 className="w-full py-2.5 rounded-xl border border-slate-700 hover:border-slate-500 text-slate-300 font-bold text-sm flex items-center justify-center gap-2">
                 <Share2 size={15} /> Share login link with an agent
@@ -413,6 +521,90 @@ export default function AgentWorkspace() {
             </div>
           </div>
         )}
+      </div>
+    )
+  }
+
+  // ══════════════════ PROFILE PHASE ══════════════════
+  // Registered agent ka home: identity + lifetime work stats + shift start
+  // (manager OTP). Draft form iske NEECHE hi hai — koi business flow change
+  // nahi, sirf shift-start alag screen pe hai.
+  if (phase === 'profile') {
+    const s = stats || {}
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-6 max-w-3xl mx-auto space-y-5">
+        {/* Identity header */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
+          {me?.photo_url
+            ? <img src={toImgUrl(me.photo_url)} alt="" className="h-14 w-14 rounded-full object-cover border border-slate-700" />
+            : <div className="h-14 w-14 rounded-full bg-slate-700 flex items-center justify-center text-xl font-black">{me?.name?.[0]?.toUpperCase() || '?'}</div>}
+          <div className="min-w-0 flex-1">
+            <p className="font-black text-lg">{me?.name} <span className="text-amber-400 ml-1">{me?.agent_code}</span></p>
+            <p className="text-xs text-slate-400 truncate">{me?.email} · {me?.phone}</p>
+          </div>
+          <button onClick={handleLogout} title="Logout"
+            className="p-2.5 rounded-xl border border-slate-700 text-slate-400 hover:text-red-400">
+            <LogOut size={16} />
+          </button>
+        </div>
+
+        {/* Work stats — entries, time worked, break time, earning */}
+        <div>
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-2">
+            <ClipboardList size={13} className="text-amber-400" /> My Work
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard icon={PackagePlus} label="Entries" value={s.entries ?? 0} />
+            <StatCard icon={Clock3} label="Time worked" value={fmtMinutes(s.minutes_worked)} />
+            <StatCard icon={Coffee} label="Break taken" value={fmtMinutes(s.break_minutes)} />
+            <StatCard icon={Wallet} label="Total earning" value={`₹${s.total_earning ?? 0}`} accent="text-emerald-400" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
+              <TrendingUp size={16} className="text-amber-400" />
+              <div>
+                <p className="font-black text-sm">₹{s.per_entry_rate ?? 0} <span className="text-slate-400 font-bold">/ entry</span></p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Rate set by your manager</p>
+              </div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
+              <BadgeCheck size={16} className="text-emerald-400" />
+              <div>
+                <p className="font-black text-sm">{s.approved_entries ?? 0}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Entries approved by admin</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Shift start — manager's OTP */}
+        <form onSubmit={startShiftFromProfile} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <h2 className="font-black flex items-center gap-2"><PlayCircle size={18} className="text-amber-400" /> Start your shift</h2>
+          <p className="text-xs text-slate-400">
+            Enter the 6-digit OTP your manager generated for today. The countdown runs only while you work —
+            breaks pause it. No OTP today? Ask the manager to generate one (they choose 1–8 hours).
+          </p>
+          <div className="flex gap-2">
+            <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit OTP" inputMode="numeric" autoComplete="one-time-code"
+              className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-sm tracking-[0.4em] font-black text-center outline-none focus:border-amber-500" />
+            <button type="submit" disabled={loggingIn || otp.length !== 6}
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-sm disabled:opacity-50 flex items-center gap-2">
+              {loggingIn ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} Start
+            </button>
+          </div>
+        </form>
+
+        {/* Drafts sirf SHIFT me bante hain (security: profile token read-only hai) */}
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center">
+          <PackagePlus size={20} className="text-amber-400 mx-auto mb-2" />
+          <p className="text-sm font-bold">Product entries are made during a shift</p>
+          <p className="text-xs text-slate-400 mt-1">Start your shift with the OTP above — then the Add Product form opens right here.</p>
+        </div>
+
+        <p className="text-[11px] text-slate-600 flex items-center gap-1.5 justify-center pb-4">
+          <AlertTriangle size={11} /> Your agent ID ({me?.agent_code}) is recorded on every draft.
+        </p>
       </div>
     )
   }
@@ -446,7 +638,7 @@ export default function AgentWorkspace() {
             </p>
           </div>
           {pwa.canInstall && (
-            <button onClick={pwa.promptInstall} title="Phone me install karen"
+            <button onClick={pwa.promptInstall} title="Install this app on your phone"
               className="p-2.5 rounded-xl border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
               <Smartphone size={16} />
             </button>

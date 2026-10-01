@@ -79,14 +79,14 @@ check('4a. share-login-link button present', await page.evaluate(() =>
 check('4b. T&C shown at login (6 terms)', await page.evaluate(() =>
   /terms & conditions/i.test(document.body.textContent)
   && document.body.textContent.includes('I accept these terms & conditions')))
-check('4c. OTP form intact (identifier + 6-digit + login btn)', await page.evaluate(() => {
-  const btn = [...document.querySelectorAll('button')].find((b) => /Login with OTP/i.test(b.textContent))
+check('4c. login form intact (identifier + optional OTP + login btn)', await page.evaluate(() => {
+  const btn = [...document.querySelectorAll('button')].find((b) => b.type === 'submit' && /^Login$/i.test(b.textContent.trim()))
   const inputs = [...document.querySelectorAll('input')]
   return !!btn && inputs.some((i) => i.placeholder === 'Email or mobile number')
-    && inputs.some((i) => i.placeholder === '6-digit OTP')
+    && inputs.some((i) => i.placeholder === '6-digit OTP (optional)')
 }))
 check('4d. login disabled until T&C accepted (business rule)', await page.evaluate(() => {
-  const btn = [...document.querySelectorAll('button')].find((b) => /Login with OTP/i.test(b.textContent))
+  const btn = [...document.querySelectorAll('button')].find((b) => b.type === 'submit' && /^Login$/i.test(b.textContent.trim()))
   return btn && btn.disabled === true
 }))
 

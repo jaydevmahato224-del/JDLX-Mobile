@@ -652,6 +652,10 @@ def init_db():
         UNIQUE(warehouse_id, phone)
     )''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_add_agents_wh ON add_product_agents(warehouse_id)')
+    # Per-entry payout rate (₹ per product entry), decided by the manager at
+    # registration time and editable later. Powers the agent profile earnings
+    # display; does not affect any pricing/approval logic.
+    ensure_columns('add_product_agents', [('per_entry_rate', 'REAL NOT NULL DEFAULT 0')])
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS add_agent_otp_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

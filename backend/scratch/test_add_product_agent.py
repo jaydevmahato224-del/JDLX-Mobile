@@ -307,6 +307,68 @@ check("logout 200", r.status_code == 200)
 r = client.get("/api/agent/session", headers=AG)
 check("token dead after logout", r.status_code in (401, 403), str(r.status_code))
 
+print("== 9b. Profile / no-OTP login / per-entry rate ==")
+# OTP-free login with the registered email lands on the profile.
+r = client.post("/api/agent/login-self", json={"identifier": "ramesh@test.com"})
+body = r.get_json()
+check("login-self (no OTP) 200", r.status_code == 200, str(r.status_code))
+profile_token = (body.get("data") or {}).get("token", "")
+PH = {"Authorization": f"Bearer {profile_token}"}
+check("login-self returns stats block", "stats" in (body.get("data") or {}))
+check("stats entries match drafts created", (body["data"]["stats"]["entries"] if "stats" in body["data"] else 0) >= 2,
+      str((body.get("data") or {}).get("stats", {}).get("entries")))
+
+# Profile page with the profile token.
+r = client.get("/api/agent/profile", headers=PH)
+body = r.get_json()
+prof = body.get("data") or {}
+check("profile endpoint 200", r.status_code == 200, str(r.status_code))
+check("profile has no live session after logout", prof.get("session") is None)
+check("profile carries per-entry rate", "per_entry_rate" in (prof.get("agent") or {}))
+
+# SECURITY: the profile token must NOT be able to do shift work.
+r = client.post("/api/agent/products", headers=PH, json={
+    "name": "Hacked Draft", "description": "x", "category_id": 5, "images": ["https://x/y.jpg"]})
+check("profile-only token CANNOT create drafts", r.status_code in (401, 403), str(r.status_code))
+r = client.post("/api/agent/break/start", headers=PH, json={})
+check("profile-only token CANNOT start breaks", r.status_code in (401, 403), str(r.status_code))
+
+# Profile token CANNOT resume a dead shift, but CAN resume a live one.
+r = client.post("/api/agent/session/resume", headers=PH)
+check("resume without live shift 409", r.status_code == 409, str(r.status_code))
+r = client.post(f"/api/warehouse/add-agents/{agent_id}/otp", headers=SH, json={"duration_minutes": 60})
+otp4 = (r.get_json().get("data") or {}).get("otp", "")
+r = client.post("/api/agent/login", json={"identifier": "ramesh@test.com", "otp": otp4})
+check("OTP shift login still works", r.status_code == 200, str(r.status_code))
+r = client.post("/api/agent/session/resume", headers=PH)
+check("profile token resumes live shift", r.status_code == 200, str(r.status_code))
+shift_token = (r.get_json().get("data") or {}).get("token", "")
+SG = {"Authorization": f"Bearer {shift_token}"}
+r = client.get("/api/agent/session", headers=SG)
+check("resumed shift token heartbeat OK", r.status_code == 200, str(r.status_code))
+client.post("/api/agent/logout", headers=SG, json={})
+
+# Manager revises the per-entry rate; profile reflects it.
+r = client.patch(f"/api/warehouse/add-agents/{agent_id}/rate", headers=SH, json={"per_entry_rate": 25})
+check("manager rate update 200", r.status_code == 200, str(r.status_code))
+r = client.get("/api/agent/profile", headers=PH)
+prof = (r.get_json().get("data") or {})
+check("profile reflects new rate", (prof.get("agent") or {}).get("per_entry_rate") == 25.0,
+      str((prof.get("agent") or {}).get("per_entry_rate")))
+check("earning = entries x rate", prof.get("stats", {}).get("total_earning")
+      == round(prof.get("stats", {}).get("entries", 0) * 25, 2),
+      str(prof.get("stats", {})))
+
+# Manager list carries the stats snapshot for every agent.
+r = client.get("/api/warehouse/add-agents", headers=SH)
+agent_row = next((a for a in (r.get_json().get("data") or []) if a["id"] == agent_id), None)
+check("manager list has agent stats", agent_row is not None and "stats" in agent_row)
+check("manager list rate present", agent_row is not None and agent_row.get("per_entry_rate") == 25.0)
+
+# Wrong identifier still 404s (no info leak).
+r = client.post("/api/agent/login-self", json={"identifier": "ghost@nowhere.com"})
+check("login-self unknown identifier 404", r.status_code == 404, str(r.status_code))
+
 print("== 10. Agent disable revokes live session ==")
 r = client.post(f"/api/warehouse/add-agents/{agent_id}/otp", headers=SH, json={"duration_minutes": 60})
 otp3 = (r.get_json().get("data") or {}).get("otp", "")

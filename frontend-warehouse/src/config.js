@@ -22,12 +22,13 @@ function getDefaultApiBaseUrl() {
   return `${protocol}//${resolvedHost}:5000/api`;
 }
 
-const PROD_BACKEND_URL = "https://jdlx-mobile.onrender.com/api";
-
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? getDefaultApiBaseUrl() 
-    : PROD_BACKEND_URL);
+// Always resolve through getDefaultApiBaseUrl(): it already routes production
+// hosts (vercel.app / jdlxmobile.in) to the SAME-ORIGIN /api path, which Vercel
+// proxies to the Render backend (see vercel.json rewrites). The previous
+// ternary forced every non-localhost host onto the direct cross-origin Render
+// URL, so any backend hiccup surfaced as a CORS error and broke the panel.
+// Local dev (localhost/127.0.0.1, Android emulator) still resolves to :5000.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || getDefaultApiBaseUrl();
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 // DB-backed media proxy on the backend. When a product image fails to load

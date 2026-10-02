@@ -37,6 +37,16 @@ let _failureBatchCount = 0;
 let _lastFailureTimestamp = 0;
 const FAILURE_BATCH_WINDOW_MS = 2000; // Failures within 2s = same batch
 const FAILURE_THRESHOLD = 3; // Number of failure BATCHES before showing error overlay
+// OPTIONAL/BEACON endpoints: telemetry, review prompts and notification
+// polling. Their failure is invisible to shoppers (each caller degrades
+// gracefully), so they must NEVER contribute to — or fire — the full-screen
+// error overlay on the storefront. Failures are still reported to the admin
+// Error Center via reportClientError below.
+const isOptionalApi = (url) =>
+  url.includes('/api/analytics/') ||
+  url.includes('/api/app-review/') ||
+  url.includes('/api/notifications') ||
+  url.includes('/api/push/');
 
 // Guards the session re-validation below so a burst of simultaneous 401s only
 // triggers ONE verify-token round-trip (and one logout) instead of several.
@@ -134,23 +144,32 @@ window.fetch = async (...args) => {
     // Detection Logic for Server Errors - ONLY for our backend
     if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackgroundRequest) {
       const now = Date.now();
-      // Only increment batch count if this failure is from a NEW batch (>2s since last failure)
-      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
-        _failureBatchCount++;
-        // Telemetry: one event per failure batch (parallel calls within the
-        // 2s window collapse into a single report).
+      if (isOptionalApi(requestUrl)) {
+        // Beacons: telemetry only — never count toward the store takeover.
         reportClientError({
           kind: 'api_failure',
           message: `API ${response.status}: ${requestUrl}`,
-          context: { status: response.status, endpoint: requestUrl },
+          context: { status: response.status, endpoint: requestUrl, optional: true },
         });
-      }
-      _lastFailureTimestamp = now;
-      if (_failureBatchCount >= FAILURE_THRESHOLD) {
-        setGlobalError('server');
-        // Telemetry: backend is responding with server errors — surface the
-        // failing route in the admin Error Center.
-        captureApiFailure(requestUrl, `HTTP ${response.status}`);
+      } else {
+        // Only increment batch count if this failure is from a NEW batch (>2s since last failure)
+        if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
+          _failureBatchCount++;
+          // Telemetry: one event per failure batch (parallel calls within the
+          // 2s window collapse into a single report).
+          reportClientError({
+            kind: 'api_failure',
+            message: `API ${response.status}: ${requestUrl}`,
+            context: { status: response.status, endpoint: requestUrl },
+          });
+        }
+        _lastFailureTimestamp = now;
+        if (_failureBatchCount >= FAILURE_THRESHOLD) {
+          setGlobalError('server');
+          // Telemetry: backend is responding with server errors — surface the
+          // failing route in the admin Error Center.
+          captureApiFailure(requestUrl, `HTTP ${response.status}`);
+        }
       }
     } else if (isBackendUrl && response.ok) {
       // Successful response — reset failure counter immediately
@@ -176,26 +195,36 @@ window.fetch = async (...args) => {
     // ONLY trigger global error screens for our backend API failures
     if (isBackendUrl && !isBackgroundRequest) {
       const now = Date.now();
-      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
-        _failureBatchCount++;
-        // Telemetry: network-level API failure (fetch threw) — one event per batch.
+      if (isOptionalApi(requestUrl)) {
+        // Beacons: telemetry only — never count toward the store takeover.
         reportClientError({
           kind: 'api_failure',
           message: `API network failure: ${requestUrl}`,
           stack: error?.stack || '',
-          context: { endpoint: requestUrl, offline: !navigator.onLine },
+          context: { endpoint: requestUrl, offline: !navigator.onLine, optional: true },
         });
-      }
-      _lastFailureTimestamp = now;
-      if (_failureBatchCount >= FAILURE_THRESHOLD) {
-        if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          setGlobalError('network');
-        } else {
-          setGlobalError('server');
+      } else {
+        if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) {
+          _failureBatchCount++;
+          // Telemetry: network-level API failure (fetch threw) — one event per batch.
+          reportClientError({
+            kind: 'api_failure',
+            message: `API network failure: ${requestUrl}`,
+            stack: error?.stack || '',
+            context: { endpoint: requestUrl, offline: !navigator.onLine },
+          });
         }
-        // Telemetry: a failure BATCH (multiple consecutive backend failures)
-        // crossed the overlay threshold — surface it in the admin Error Center.
-        captureApiFailure(requestUrl, 'network/server failure batch');
+        _lastFailureTimestamp = now;
+        if (_failureBatchCount >= FAILURE_THRESHOLD) {
+          if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            setGlobalError('network');
+          } else {
+            setGlobalError('server');
+          }
+          // Telemetry: a failure BATCH (multiple consecutive backend failures)
+          // crossed the overlay threshold — surface it in the admin Error Center.
+          captureApiFailure(requestUrl, 'network/server failure batch');
+        }
       }
     }
     throw error;

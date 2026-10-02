@@ -3,6 +3,7 @@ import queue
 import sqlite3
 import threading
 import os
+import time
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -194,6 +195,14 @@ _POOL_LOCK = threading.Lock()
 # small so quiet periods don't hold many open remote connections.
 _POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "16"))
 _POOL_IDLE_KEEP = int(os.environ.get("DB_POOL_IDLE_KEEP", "4"))
+# Turso's Hrana server expires streams that sit idle for a while ("stream
+# expired due to inactivity" — tursodatabase/libsql-python#41). A connection
+# recycled from the pool after such an expiry fails its first execute, which
+# used to surface as a random one-off 500 that succeeded on retry. Discard
+# pooled connections that have been idle longer than this — re-handshaking on
+# quiet periods is exactly the pre-pool behavior (correct, just slower), while
+# burst traffic (the common case) still reuses warm sub-second-old connections.
+_POOL_MAX_IDLE_SECONDS = float(os.environ.get("DB_POOL_MAX_IDLE_SECONDS", "45"))
 
 def _get_pool():
     global _POOL
@@ -229,6 +238,13 @@ def _acquire_connection():
         except queue.Empty:
             return _create_turso_connection()
         conn._in_pool = False
+        # Idle-age guard: the Hrana stream of a long-idle pooled connection
+        # may already be expired server-side; reusing it fails the request's
+        # first execute (random one-off 500). Re-handshake instead — same as
+        # the pre-pool behavior for quiet periods.
+        if time.monotonic() - getattr(conn, "_released_at", 0.0) > _POOL_MAX_IDLE_SECONDS:
+            _destroy_raw_connection(conn)
+            continue
         if not conn._discarded:
             return conn
         # A stale/unhealthy entry somehow sitting in the pool — drop it.
@@ -244,6 +260,7 @@ def _release_connection(conn):
             except queue.Empty:
                 break
             _destroy_raw_connection(victim)
+    conn._released_at = time.monotonic()
     try:
         pool.put_nowait(conn)
     except queue.Full:

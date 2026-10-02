@@ -18,6 +18,14 @@ import { apiFetch } from './utils/apiFetch'
 
 // Global fetch interceptor to trigger TopLoader on API calls
 const originalFetch = window.fetch;
+// ─── Transient-failure batching for the global error overlay ────────────────
+// A single transient 5xx (e.g. one stale pooled DB connection that the server
+// already closed) must not blank the whole panel. The takeover fires only
+// after SUSTAINED failures — isolated blips recover on the next interaction.
+let _failureBatchCount = 0;
+let _lastFailureTimestamp = 0;
+const FAILURE_BATCH_WINDOW_MS = 2000; // failures within 2s = same batch
+const FAILURE_THRESHOLD = 3; // number of failure BATCHES before the takeover
 // Expose original fetch for internal security checks (e.g., AdminRoute token verification)
 window.__originalFetch = originalFetch;
 window.fetch = async (...args) => {
@@ -53,9 +61,19 @@ window.fetch = async (...args) => {
     // signal with a short re-entry lock, so a stale racing 401 can never
     // re-open the modal after recovery.
 
-    // Detection Logic for Server Errors - ONLY for our backend
+    // Detection Logic for Server Errors - ONLY for our backend.
+    // Threshold-gated: one 5xx never blanks the panel; sustained failures do.
     if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground && !skipGlobalError) {
-      setGlobalError('server');
+      const now = Date.now();
+      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) _failureBatchCount++;
+      _lastFailureTimestamp = now;
+      if (_failureBatchCount >= FAILURE_THRESHOLD) {
+        setGlobalError('server');
+      }
+    } else if (isBackendUrl && response.ok) {
+      // A healthy response resets the counter — isolated failures never stack up.
+      _failureBatchCount = 0;
+      _lastFailureTimestamp = 0;
     }
     return response;
   } catch (error) {
@@ -66,15 +84,20 @@ window.fetch = async (...args) => {
 
     // ONLY trigger global error screens for our backend API failures
     if (isBackendUrl && !isBackground && !skipGlobalError) {
-      // 'network' (No Internet screen + auto reload-on-reconnect) ONLY when
-      // the browser is actually offline. When online, a thrown fetch is a
-      // server/CORS/DNS problem: classifying it as 'network' caused the
-      // no-internet → connection-restored → reload → no-internet loop whenever
-      // the real issue was a blocked origin or backend downtime.
-      if (!navigator.onLine) {
-        setGlobalError('network');
-      } else {
-        setGlobalError('server');
+      const now = Date.now();
+      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) _failureBatchCount++;
+      _lastFailureTimestamp = now;
+      if (_failureBatchCount >= FAILURE_THRESHOLD) {
+        // 'network' (No Internet screen + auto reload-on-reconnect) ONLY when
+        // the browser is actually offline. When online, a thrown fetch is a
+        // server/CORS/DNS problem: classifying it as 'network' caused the
+        // no-internet → connection-restored → reload → no-internet loop whenever
+        // the real issue was a blocked origin or backend downtime.
+        if (!navigator.onLine) {
+          setGlobalError('network');
+        } else {
+          setGlobalError('server');
+        }
       }
     }
     throw error;

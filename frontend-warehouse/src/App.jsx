@@ -14,6 +14,15 @@ import { useLoadingStore } from './store/useLoadingStore'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// ─── Transient-failure batching for the global error overlay ────────────────
+// A single transient 5xx (e.g. one stale pooled DB connection that the server
+// already closed) must not blank the whole panel — the operator's next tap
+// recovers. The takeover fires only after SUSTAINED failures.
+let _failureBatchCount = 0;
+let _lastFailureTimestamp = 0;
+const FAILURE_BATCH_WINDOW_MS = 2000; // failures within 2s = same batch
+const FAILURE_THRESHOLD = 3; // number of failure BATCHES before the takeover
+
 // Global fetch interceptor
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
@@ -60,21 +69,39 @@ window.fetch = async (...args) => {
       window.location.replace('/warehouse/login?reason=session_expired');
     }
 
-    // Detection Logic for Server Errors - ONLY for our backend
+    // Detection Logic for Server Errors - ONLY for our backend.
+    // Threshold-gated: one 5xx never blanks the panel; sustained failures do.
     if (isBackendUrl && response.status >= 500 && response.status <= 504 && !isBackground && !skipGlobalError) {
-      setGlobalError('server');
+      const now = Date.now();
+      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) _failureBatchCount++;
+      _lastFailureTimestamp = now;
+      if (_failureBatchCount >= FAILURE_THRESHOLD) {
+        setGlobalError('server');
+      }
+    } else if (isBackendUrl && response.ok) {
+      // A healthy response resets the counter — isolated failures never stack up.
+      _failureBatchCount = 0;
+      _lastFailureTimestamp = 0;
     }
 
     return response;
   } catch (error) {
+    // Aborted requests are intentional (component cleanup / cancelled polling)
+    if (error && error.name === 'AbortError') throw error;
+
     console.error("Fetch Error:", error);
 
     // ONLY trigger global error screens for our backend API failures
     if (isBackendUrl && !isBackground && !skipGlobalError) {
-      if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        setGlobalError('network');
-      } else {
-        setGlobalError('server');
+      const now = Date.now();
+      if (now - _lastFailureTimestamp > FAILURE_BATCH_WINDOW_MS) _failureBatchCount++;
+      _lastFailureTimestamp = now;
+      if (_failureBatchCount >= FAILURE_THRESHOLD) {
+        if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          setGlobalError('network');
+        } else {
+          setGlobalError('server');
+        }
       }
     }
     throw error;

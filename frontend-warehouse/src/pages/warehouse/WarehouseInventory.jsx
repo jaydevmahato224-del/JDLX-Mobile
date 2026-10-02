@@ -183,6 +183,11 @@ function SuggestionDropdown({ open, options, onSelect, highlight }) {
 }
 
 const INITIAL_PRODUCT_STATE = {
+    // is_active backs the "ACTIVE STATUS" toggle and maps 1:1 to
+    // products.status ('available'/'unavailable') on save. Default ON:
+    // a newly created product is meant to be orderable — matches the
+    // backend default (products.status DEFAULT 'available').
+    is_active: true,
     product_id: '', name: '', description: '', price: '', offline_price: '', cost_price: 0, mrp: '', discount_pct: 0, discount_amt: 0, apply_gst: false, category: '', category_id: '', sub_category: '', sku: '', barcode: '', stock_quantity: 0, unit: 'pcs', low_stock_threshold: 2, bin_location: '', rack_no: '', shelf_no: '', bin_id: '', images: [], weight: '', dimensions: '', is_fragile: false, is_temp_sensitive: false, is_perishable: false, expiry_date: '', brand: '', delivery_time: '', units_per_pack: '', material_type: '', is_featured: false, return_policy: '', has_variants: false, variants: [], variant_options: [], recommendation_priority: 0, recommendation_weight: 1.0, recommendations: { related: [], upsell: [], cross_sell: [], frequent: [] }, content: { overview: '', highlights: [], specifications: {}, compatibility: '', box_contents: '', warranty_info: '', usage_instructions: '' }, badges: [], fulfillment: { package_weight: 0, length: 0, width: 0, height: 0, shipping_tier: 'standard', dispatch_sla: 24, is_cod_eligible: true, is_fragile: false, is_express_eligible: true, return_window: 0 }, lifecycle_state: 'live', discovery: { meta_title: '', meta_description: '', search_keywords: [], product_tags: [], search_synonyms: [] }, analytics: { view_count: 0, cart_add_count: 0, purchase_count: 0, wishlist_count: 0, conversion_rate: 0 }
 };
 
@@ -689,6 +694,12 @@ const WarehouseInventory = () => {
             is_perishable: !!item.is_perishable,
             expiry_date: item.expiry_date || '',
             is_featured: !!item.is_featured,
+            // Active Status toggle = the REAL storefront status. Prefill from
+            // products.status ('available'/'unavailable') — previously this
+            // key was never set on edit, so the toggle always opened OFF and
+            // a plain save flipped a live product to 'unavailable' (hidden
+            // from the store) without anyone touching the toggle.
+            is_active: (item.storefront_status ?? 'available') === 'available',
             material: item.material_type || '',
             images: parsedImages,
             return_policy: item.return_policy || '',
@@ -801,7 +812,9 @@ const WarehouseInventory = () => {
                         // column ('available'/'unavailable') — storefront list &
                         // search filter on it. Previously this toggle saved
                         // nothing: flipping it was pure decoration.
-                        is_active: (data.data?.status === 'unavailable') ? false : prev.is_active,
+                        // Deep fetch is authoritative for status too: missing
+                        // (legacy rows predate the column) → default 'available'.
+                        is_active: (data.data?.status ?? 'available') === 'available',
                         is_visible: prev.is_visible,
                         analytics: analytics ? {
                             view_count: analytics.view_count || 0,

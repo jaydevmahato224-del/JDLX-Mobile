@@ -2795,6 +2795,7 @@ def warehouse_get_inventory():
                       p.price as global_price,
                       p.offline_price as offline_price,
                       wi.status,
+                      p.status as storefront_status,
                       wi.variant_id,
                       pv.name as variant_name, pv.options as variant_options, pv.price as variant_price,
                       p.has_variants,
@@ -3413,7 +3414,10 @@ def warehouse_patch_inventory(item_id):
         "variant_options", "recommendations", "content", "badges", "discovery",
         "has_variants", "return_policy",
     ))
-    if not updates and not has_composite:
+    # A payload that ONLY carries the storefront Active toggle (routed out of
+    # "status" above) is still a valid update — previously it fell through to
+    # "No valid fields to update" 400 because the routed key wasn't counted.
+    if not updates and not has_composite and not data.get("__storefront_status"):
         return error_response("No valid fields to update", 400)
 
     conn = get_db()
